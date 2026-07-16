@@ -1,5 +1,9 @@
 # Budget
 
+> Este repositorio contiene dos proyectos: **Budget** (raíz, esta página) y
+> **[⚽ Predictor de Fútbol](football-predictor/README.md)** (`football-predictor/`),
+> una app web + API que predice resultados de fútbol con un modelo Poisson + Elo.
+
 A simple personal budget tracker built with React, TypeScript, and Tailwind CSS.
 
 ## Features
