@@ -117,9 +117,10 @@ def meta():
 @app.get("/api/leagues", tags=["ligas"])
 def list_leagues():
     conn = db.connect()
-    overview = db.leagues_overview(conn)
+    overview = {row["id"]: row for row in db.leagues_overview(conn)}
     conn.close()
-    return overview
+    # Se devuelven en el orden del config (es el orden de presentación).
+    return [overview[lg["id"]] for lg in config.leagues() if lg["id"] in overview]
 
 
 @app.get("/api/leagues/{league_id}/teams", tags=["ligas"])

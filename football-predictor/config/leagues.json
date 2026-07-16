@@ -22,7 +22,7 @@
       "id": "premier-league",
       "name": "Premier League",
       "country": "Inglaterra",
-      "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+      "flag": "🇬🇧",
       "sources": [
         {
           "adapter": "football_json",

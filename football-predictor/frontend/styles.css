@@ -1,0 +1,188 @@
+/* ==========================================================================
+   Tokens (paleta validada con el método dataviz; ver MODEL.md/README)
+   local=azul, empate=gris neutro (divergente), visita=naranja
+   ========================================================================== */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --hairline: #e1e0d9;
+  --ring: rgba(11, 11, 11, 0.10);
+  --home: #2a78d6;
+  --draw: #898781;
+  --away: #eb6834;
+  --good: #0ca30c;
+  --bad: #d03b3b;
+  --warn-bg: #fdf3e0;
+  --warn-ink: #7a5a12;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --hairline: #2c2c2a;
+    --ring: rgba(255, 255, 255, 0.10);
+    --home: #3987e5;
+    --draw: #6f6d66;
+    --away: #d95926;
+    --good: #0ca30c;
+    --bad: #e66767;
+    --warn-bg: #33290f;
+    --warn-ink: #ecc26a;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+a { color: var(--home); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ----- encabezado ----- */
+.site-header { padding: 22px 0 6px; }
+.site-header h1 { margin: 0; font-size: 24px; }
+.tagline { margin: 4px 0 0; color: var(--ink-2); }
+.badge-warn {
+  background: var(--warn-bg); color: var(--warn-ink);
+  padding: 1px 8px; border-radius: 999px; font-size: 12.5px; white-space: nowrap;
+}
+
+/* ----- selector de liga ----- */
+.leagues { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 14px; padding-bottom: 4px; }
+.league-chip {
+  border: 1px solid var(--ring); background: var(--surface); color: var(--ink);
+  border-radius: 999px; padding: 6px 14px; font-size: 14px; cursor: pointer;
+}
+.league-chip:hover { border-color: var(--muted); }
+.league-chip.active { background: var(--home); border-color: var(--home); color: #fff; }
+
+/* ----- paneles ----- */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-top: 12px; }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+.panel {
+  background: var(--surface); border: 1px solid var(--ring);
+  border-radius: 10px; padding: 16px;
+}
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.panel h2 { margin: 0 0 4px; font-size: 17px; }
+.meta { color: var(--muted); font-size: 12.5px; text-align: right; }
+
+/* ----- leyenda (una sola vez por panel) ----- */
+.legend { display: flex; gap: 14px; color: var(--ink-2); font-size: 12.5px; margin: 6px 0 10px; flex-wrap: wrap; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+.dot-home { background: var(--home); }
+.dot-draw { background: var(--draw); }
+.dot-away { background: var(--away); }
+
+/* ----- tarjeta de partido ----- */
+.match-card { border-top: 1px solid var(--hairline); padding: 12px 0 14px; }
+.match-card:first-child { border-top: 0; }
+.match-when { color: var(--muted); font-size: 12.5px; margin-bottom: 2px; }
+.match-teams { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; margin-bottom: 8px; }
+.match-teams .vs { color: var(--muted); font-weight: 400; }
+
+/* Barra apilada 100%: marcas finas, extremos redondeados (4px) y
+   separadores de 2px del color de la superficie entre segmentos. */
+.prob-bar {
+  display: flex; gap: 2px; height: 16px; border-radius: 4px; overflow: hidden;
+  background: var(--surface);
+}
+.prob-bar .seg { min-width: 3px; }
+.seg-home { background: var(--home); }
+.seg-draw { background: var(--draw); }
+.seg-away { background: var(--away); }
+
+/* Etiquetas directas bajo la barra: el texto usa tinta, nunca el color de serie. */
+.prob-caption {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-size: 13px; color: var(--ink-2); margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.prob-caption b { color: var(--ink); font-weight: 600; }
+
+.match-extra { color: var(--muted); font-size: 12.5px; margin-top: 5px; }
+.match-extra b { color: var(--ink-2); font-weight: 600; }
+
+.note {
+  margin-top: 6px; font-size: 12.5px; color: var(--warn-ink);
+  background: var(--warn-bg); border-radius: 6px; padding: 4px 8px;
+}
+
+/* ----- estado vacío ----- */
+.empty {
+  border: 1px dashed var(--hairline); border-radius: 8px;
+  padding: 18px; color: var(--ink-2); font-size: 14px; margin-top: 8px;
+}
+.empty h3 { margin: 0 0 6px; font-size: 14.5px; color: var(--ink); }
+.empty p { margin: 4px 0; }
+
+/* ----- simulador ----- */
+.sim-form { display: flex; gap: 8px; margin: 10px 0 4px; }
+.sim-form select {
+  flex: 1; min-width: 0; padding: 7px 8px; border-radius: 8px;
+  border: 1px solid var(--ring); background: var(--surface); color: var(--ink); font-size: 14px;
+}
+#sim-swap {
+  border: 1px solid var(--ring); background: var(--surface); color: var(--ink-2);
+  border-radius: 8px; width: 38px; cursor: pointer; font-size: 16px;
+}
+#sim-swap:hover { border-color: var(--muted); }
+
+/* componentes del modelo (poisson vs elo) */
+.components { margin-top: 10px; display: grid; gap: 6px; }
+.comp-row { display: grid; grid-template-columns: 64px 1fr; gap: 8px; align-items: center; }
+.comp-row .lbl { color: var(--muted); font-size: 12px; }
+.comp-row .prob-bar { height: 8px; border-radius: 3px; }
+
+/* ----- head to head ----- */
+#h2h h3 { font-size: 14.5px; margin: 18px 0 4px; }
+.h2h-summary { color: var(--ink-2); font-size: 13.5px; margin: 2px 0 8px; }
+.h2h-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.h2h-table td {
+  padding: 5px 6px; border-top: 1px solid var(--hairline);
+  color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+.h2h-table td.score { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.h2h-table td.when { color: var(--muted); white-space: nowrap; }
+
+/* forma reciente: W/D/L (estado, siempre con letra — nunca solo color) */
+.form-row { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 13px; color: var(--ink-2); }
+.form-chips { display: flex; gap: 3px; }
+.chip {
+  width: 20px; height: 20px; border-radius: 5px; color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11.5px; font-weight: 700;
+}
+.chip-W { background: var(--good); }
+.chip-D { background: var(--draw); }
+.chip-L { background: var(--bad); }
+
+/* ----- pie ----- */
+.site-footer { padding: 18px 16px 28px; color: var(--muted); font-size: 12.5px; }
+.site-footer code { background: var(--surface); border: 1px solid var(--hairline); border-radius: 4px; padding: 0 4px; }
+
+/* ----- tooltip ----- */
+.tip {
+  position: fixed; z-index: 10; pointer-events: none;
+  background: var(--ink); color: var(--page);
+  padding: 4px 9px; border-radius: 6px; font-size: 12.5px;
+  transform: translate(-50%, calc(-100% - 8px));
+  white-space: nowrap;
+}
+
+.error-box {
+  margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+  background: var(--warn-bg); color: var(--warn-ink); font-size: 13.5px;
+}

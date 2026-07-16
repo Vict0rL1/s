@@ -1,1 +1,63 @@
-<!-- placeholder: se construye en la fase 4 -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Predictor de Fútbol</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>⚽ Predictor de Fútbol</h1>
+      <p class="tagline">Probabilidades 1X2 con Poisson + Elo sobre historial real ·
+        <span class="badge-warn">estimación estadística — no apto para apostar</span>
+      </p>
+    </div>
+  </header>
+
+  <nav class="wrap leagues" id="league-nav" aria-label="Ligas"></nav>
+
+  <main class="wrap grid">
+    <section class="panel" id="fixtures-panel">
+      <div class="panel-head">
+        <h2>Próximos partidos</h2>
+        <span class="meta" id="fixtures-meta"></span>
+      </div>
+      <div class="legend" aria-hidden="true">
+        <span><i class="dot dot-home"></i>Victoria local</span>
+        <span><i class="dot dot-draw"></i>Empate</span>
+        <span><i class="dot dot-away"></i>Victoria visitante</span>
+      </div>
+      <div id="fixtures-list" aria-live="polite"></div>
+    </section>
+
+    <section class="panel" id="sim-panel">
+      <div class="panel-head">
+        <h2>Simulador de cruce</h2>
+        <span class="meta">elige cualquier par de equipos</span>
+      </div>
+      <form class="sim-form" id="sim-form">
+        <label class="sr-only" for="sim-home">Equipo local</label>
+        <select id="sim-home"></select>
+        <button type="button" id="sim-swap" title="Intercambiar local y visitante" aria-label="Intercambiar">⇄</button>
+        <label class="sr-only" for="sim-away">Equipo visitante</label>
+        <select id="sim-away"></select>
+      </form>
+      <div id="sim-result" aria-live="polite"></div>
+      <div id="h2h"></div>
+    </section>
+  </main>
+
+  <footer class="wrap site-footer">
+    <p id="footer-disclaimer"></p>
+    <p>Datos: <a href="https://github.com/openfootball/football.json" rel="noopener">openfootball/football.json</a>
+      y <a href="https://github.com/footballcsv" rel="noopener">footballcsv</a> (dominio público) ·
+      Modelo documentado en <code>MODEL.md</code> · API: <a href="/docs" rel="noopener">/docs</a></p>
+  </footer>
+
+  <div class="tip" id="tip" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
