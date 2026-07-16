@@ -1,0 +1,120 @@
+{
+  "_comentario": "Configuración de ligas y del modelo. Para AÑADIR UNA LIGA basta con agregar una entrada en 'leagues' (no hay que tocar código). Cada fuente indica el adapter (ver backend/sources.py), el código de liga en esa fuente y las temporadas a descargar. Las temporadas que aún no existen en la fuente (p.ej. la próxima) se toleran con un aviso, así el calendario nuevo aparece solo al correr update_data.",
+
+  "model": {
+    "_comentario": "Parámetros del modelo. Ver MODEL.md para la explicación completa.",
+    "blend_weight_poisson": 0.5,
+    "decay_half_life_days": 365,
+    "poisson": {
+      "prior_matches": 6,
+      "max_goals": 10
+    },
+    "elo": {
+      "k": 20,
+      "initial_rating": 1500,
+      "new_team_rating": 1450,
+      "season_regression": 0.1
+    }
+  },
+
+  "leagues": [
+    {
+      "id": "premier-league",
+      "name": "Premier League",
+      "country": "Inglaterra",
+      "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+      "sources": [
+        {
+          "adapter": "football_json",
+          "code": "en.1",
+          "seasons": ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
+        }
+      ],
+      "aliases": {}
+    },
+    {
+      "id": "la-liga",
+      "name": "La Liga",
+      "country": "España",
+      "flag": "🇪🇸",
+      "sources": [
+        {
+          "adapter": "football_json",
+          "code": "es.1",
+          "seasons": ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
+        }
+      ],
+      "aliases": {}
+    },
+    {
+      "id": "serie-a",
+      "name": "Serie A",
+      "country": "Italia",
+      "flag": "🇮🇹",
+      "sources": [
+        {
+          "adapter": "football_json",
+          "code": "it.1",
+          "seasons": ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
+        }
+      ],
+      "aliases": {}
+    },
+    {
+      "id": "bundesliga",
+      "name": "Bundesliga",
+      "country": "Alemania",
+      "flag": "🇩🇪",
+      "sources": [
+        {
+          "adapter": "football_json",
+          "code": "de.1",
+          "seasons": ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
+        }
+      ],
+      "aliases": {}
+    },
+    {
+      "id": "ligue-1",
+      "name": "Ligue 1",
+      "country": "Francia",
+      "flag": "🇫🇷",
+      "sources": [
+        {
+          "adapter": "football_json",
+          "code": "fr.1",
+          "seasons": ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
+        }
+      ],
+      "_aliases_comentario": "La fuente cambió su convención de nombres en 2023-24; unificamos al nombre actual.",
+      "aliases": {
+        "AS Monaco": "AS Monaco FC",
+        "Olympique Marseille": "Olympique de Marseille",
+        "Paris Saint-Germain": "Paris Saint-Germain FC",
+        "RC Lens": "Racing Club de Lens",
+        "RC Strasbourg": "RC Strasbourg Alsace",
+        "Stade Rennais": "Stade Rennais FC 1901"
+      }
+    },
+    {
+      "id": "liga-mx",
+      "name": "Liga MX",
+      "country": "México",
+      "flag": "🇲🇽",
+      "sources": [
+        {
+          "adapter": "footballcsv",
+          "repo": "mexico",
+          "code": "mx.1",
+          "seasons": ["2019-20", "2020-21", "2021-22", "2022-23", "2023-24"]
+        },
+        {
+          "adapter": "football_json",
+          "code": "mx.1",
+          "seasons": ["2024-25", "2025-26", "2026-27"]
+        }
+      ],
+      "aliases": {}
+    }
+  ]
+}
