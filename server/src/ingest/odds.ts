@@ -1,0 +1,253 @@
+// ===========================================================================
+// ODDS INGESTION  (bookmaker head-to-head odds for upcoming matches)
+// ===========================================================================
+// Provider abstraction with two backends:
+//   • theOddsApi  — live odds from The Odds API (needs ODDS_API_KEY)
+//   • fixtures    — locally generated odds from current Elo, so the dashboard
+//                   still works with no key / offline / out of season
+//
+// Get a FREE key at https://the-odds-api.com (500 requests/month on the free
+// plan). Configure it as ODDS_API_KEY in .env — never hardcode it.
+// ===========================================================================
+
+import { getDb } from '../db.ts';
+import { env, tournamentsConfig } from '../config.ts';
+import { expectedScore } from '../model/elo.ts';
+import type { Surface, TourId } from '../types.ts';
+
+const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
+
+interface AggregatedEvent {
+  id: string;
+  commence_time: string;
+  home: string;
+  away: string;
+  price: Record<string, number>; // player name -> consensus (median) decimal odds
+  books: number;
+}
+
+// ---------------------------------------------------------------------------
+// The Odds API backend
+// ---------------------------------------------------------------------------
+async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
+  const url =
+    `${ODDS_API_BASE}/sports/${sportKey}/odds/` +
+    `?apiKey=${encodeURIComponent(env.oddsApiKey)}` +
+    `&regions=${encodeURIComponent(env.oddsRegions)}` +
+    `&markets=h2h&oddsFormat=decimal`;
+  const res = await fetch(url);
+  if (res.status === 404 || res.status === 422) return []; // no such sport / out of season
+  if (!res.ok) {
+    throw new Error(`Odds API error for ${sportKey}: HTTP ${res.status} ${await res.text()}`);
+  }
+  const events = (await res.json()) as any[];
+  return events.map((ev) => {
+    const prices: Record<string, number[]> = {};
+    for (const bk of ev.bookmakers ?? []) {
+      const h2h = (bk.markets ?? []).find((m: any) => m.key === 'h2h');
+      if (!h2h) continue;
+      for (const o of h2h.outcomes ?? []) {
+        (prices[o.name] ??= []).push(o.price);
+      }
+    }
+    const price: Record<string, number> = {};
+    for (const [name, arr] of Object.entries(prices)) price[name] = median(arr);
+    return {
+      id: ev.id,
+      commence_time: ev.commence_time,
+      home: ev.home_team,
+      away: ev.away_team,
+      price,
+      books: (ev.bookmakers ?? []).length,
+    };
+  });
+}
+
+function median(xs: number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// ---------------------------------------------------------------------------
+// Player-name resolution (odds API names → Sackmann player ids)
+// ---------------------------------------------------------------------------
+function normalizeName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // strip accents (combining diacritics)
+    .toLowerCase()
+    .replace(/[.'-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildNameIndex(tour: TourId): Map<string, number> {
+  const rows = getDb()
+    .prepare('SELECT id, name FROM players WHERE tour = ?')
+    .all(tour) as unknown as { id: number; name: string }[];
+  const idx = new Map<string, number>();
+  for (const r of rows) idx.set(normalizeName(r.name), r.id);
+  return idx;
+}
+
+function resolve(idx: Map<string, number>, name: string): number | null {
+  return idx.get(normalizeName(name)) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Fixtures backend (Elo-derived odds when there is no live market)
+// ---------------------------------------------------------------------------
+interface RatedPlayer {
+  id: number;
+  name: string;
+  overall: number;
+  hard: number;
+  clay: number;
+  grass: number;
+}
+
+function topRated(tour: TourId, surface: Surface, limit: number): RatedPlayer[] {
+  const col = surface.toLowerCase(); // hard|clay|grass
+  return getDb()
+    .prepare(
+      `SELECT p.id, p.name, r.overall, r.hard, r.clay, r.grass
+       FROM player_ratings r JOIN players p ON p.tour = r.tour AND p.id = r.player_id
+       WHERE r.tour = ? AND r.matches_played > 0
+       ORDER BY (0.7 * r.${col} + 0.3 * r.overall) DESC
+       LIMIT ?`,
+    )
+    .all(tour, limit) as unknown as RatedPlayer[];
+}
+
+function generateFixtures(): number {
+  const db = getDb();
+  clearUpcoming();
+  const insert = db.prepare(
+    `INSERT INTO upcoming_matches (
+       id, tour, tournament_id, tournament_name, surface, commence_time,
+       p1_name, p2_name, p1_id, p2_id, p1_odds, p2_odds, books, source, updated_at
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  );
+  const now = Date.now();
+  let count = 0;
+  db.exec('BEGIN');
+  for (const t of tournamentsConfig.tournaments) {
+    for (const tour of t.tours) {
+      const surface = t.surface;
+      const players = topRated(tour, surface, 8);
+      if (players.length < 4) continue;
+      // Pair 1v3, 2v4, 5v7, 6v8 for competitive matchups.
+      const pairs: [RatedPlayer, RatedPlayer][] = [];
+      for (let i = 0; i + 2 < players.length && pairs.length < 3; i += 1) {
+        if (i % 2 === 0) pairs.push([players[i], players[i + 2]]);
+      }
+      pairs.forEach((pair, pi) => {
+        const [a, b] = pair;
+        const effA = 0.7 * a[surface.toLowerCase() as 'hard'] + 0.3 * a.overall;
+        const effB = 0.7 * b[surface.toLowerCase() as 'hard'] + 0.3 * b.overall;
+        const pa = expectedScore(effA, effB);
+        const margin = 1.05; // bookmaker overround (~5%): implied probs sum to >1
+        // tiny deterministic bias so market != model exactly
+        const bias = ((a.id + b.id) % 7) / 100 - 0.03;
+        const mp = Math.min(0.9, Math.max(0.1, pa + bias));
+        insert.run(
+          `fx-${tour}-${t.id}-${pi}`,
+          tour,
+          t.id,
+          t.name,
+          surface,
+          new Date(now + (pi + 1) * 8 * 3600 * 1000).toISOString(),
+          a.name,
+          b.name,
+          a.id,
+          b.id,
+          round2(1 / (mp * margin)),
+          round2(1 / ((1 - mp) * margin)),
+          0,
+          'fixture',
+          new Date().toISOString(),
+        );
+        count++;
+      });
+    }
+  }
+  db.exec('COMMIT');
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+export function clearUpcoming(): void {
+  getDb().exec('DELETE FROM upcoming_matches;');
+}
+
+export async function ingestOdds(): Promise<{ source: 'live' | 'fixture'; count: number }> {
+  if (!env.oddsApiKey) {
+    const count = generateFixtures();
+    return { source: 'fixture', count };
+  }
+
+  const db = getDb();
+  const insert = db.prepare(
+    `INSERT OR REPLACE INTO upcoming_matches (
+       id, tour, tournament_id, tournament_name, surface, commence_time,
+       p1_name, p2_name, p1_id, p2_id, p1_odds, p2_odds, books, source, updated_at
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  );
+
+  clearUpcoming();
+  let total = 0;
+  for (const t of tournamentsConfig.tournaments) {
+    for (const tour of t.tours) {
+      const sportKey = t.oddsSportKeys[tour];
+      if (!sportKey) continue;
+      const idx = buildNameIndex(tour);
+      let events: AggregatedEvent[] = [];
+      try {
+        events = await fetchLive(sportKey);
+      } catch (e) {
+        process.stderr.write(`  odds fetch failed for ${sportKey}: ${(e as Error).message}\n`);
+        continue;
+      }
+      db.exec('BEGIN');
+      for (const ev of events) {
+        const names = Object.keys(ev.price);
+        const p1 = ev.home ?? names[0];
+        const p2 = ev.away ?? names[1];
+        insert.run(
+          ev.id,
+          tour,
+          t.id,
+          t.name,
+          t.surface,
+          ev.commence_time,
+          p1,
+          p2,
+          resolve(idx, p1),
+          resolve(idx, p2),
+          ev.price[p1] ?? null,
+          ev.price[p2] ?? null,
+          ev.books,
+          'live',
+          new Date().toISOString(),
+        );
+        total++;
+      }
+      db.exec('COMMIT');
+      if (events.length) process.stdout.write(`  ${sportKey}: ${events.length} events\n`);
+    }
+  }
+
+  // Out of season / nothing live → keep a working demo with Elo-derived fixtures.
+  if (total === 0) {
+    const count = generateFixtures();
+    return { source: 'fixture', count };
+  }
+  return { source: 'live', count: total };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}

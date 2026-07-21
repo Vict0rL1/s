@@ -1,0 +1,171 @@
+// Read helpers over the SQLite store. Everything the API and the model need to
+// query lives here so the model modules stay pure and testable.
+
+import { getDb } from './db.ts';
+import { INITIAL_ELO } from './model/elo.ts';
+import type { FormResult } from './model/form.ts';
+import type { H2HMeeting } from './model/h2h.ts';
+import type { PlayerRow, RatingRow, TourId, UpcomingRow } from './types.ts';
+
+export interface PlayerProfile extends PlayerRow {
+  rating: RatingRow;
+  recent: RecentMatch[];
+}
+
+export interface RecentMatch {
+  date: string;
+  tourney_name: string | null;
+  surface: string | null;
+  round: string | null;
+  score: string | null;
+  won: boolean;
+  opponent_id: number;
+  opponent_name: string | null;
+}
+
+export function getPlayer(tour: TourId, id: number): PlayerRow | null {
+  return (
+    (getDb()
+      .prepare('SELECT id, tour, name, hand, country, birthdate FROM players WHERE tour = ? AND id = ?')
+      .get(tour, id) as unknown as PlayerRow | undefined) ?? null
+  );
+}
+
+export function searchPlayers(
+  tour: TourId,
+  q: string,
+  limit = 50,
+  offset = 0,
+): PlayerRow[] {
+  const like = `%${q.toLowerCase()}%`;
+  return getDb()
+    .prepare(
+      `SELECT p.id, p.tour, p.name, p.hand, p.country, p.birthdate
+       FROM players p
+       JOIN player_ratings r ON r.tour = p.tour AND r.player_id = p.id
+       WHERE p.tour = ? AND (? = '' OR lower(p.name) LIKE ?)
+       ORDER BY r.overall DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(tour, q, like, limit, offset) as unknown as PlayerRow[];
+}
+
+export function getRating(tour: TourId, id: number): RatingRow {
+  const row = getDb()
+    .prepare('SELECT * FROM player_ratings WHERE tour = ? AND player_id = ?')
+    .get(tour, id) as unknown as RatingRow | undefined;
+  if (row) return row;
+  // Unknown / brand-new player → default rating.
+  return {
+    player_id: id,
+    tour,
+    overall: INITIAL_ELO,
+    hard: INITIAL_ELO,
+    clay: INITIAL_ELO,
+    grass: INITIAL_ELO,
+    matches_played: 0,
+    last_date: null,
+  };
+}
+
+/** Recent win/loss outcomes for one player (most recent first). */
+export function getRecentForm(tour: TourId, id: number, limit = 10): FormResult[] {
+  return getDb()
+    .prepare(
+      `SELECT tourney_date AS date, (winner_id = ?) AS won
+       FROM matches
+       WHERE tour = ? AND (winner_id = ? OR loser_id = ?)
+       ORDER BY tourney_date DESC, id DESC
+       LIMIT ?`,
+    )
+    .all(id, tour, id, id, limit)
+    .map((r: any) => ({ date: String(r.date), won: !!r.won }));
+}
+
+/** Detailed recent matches for a player profile (most recent first). */
+export function getRecentMatches(tour: TourId, id: number, limit = 10): RecentMatch[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT m.tourney_date AS date, m.tourney_name, m.surface, m.round, m.score,
+              (m.winner_id = ?) AS won,
+              CASE WHEN m.winner_id = ? THEN m.loser_id ELSE m.winner_id END AS opponent_id
+       FROM matches m
+       WHERE m.tour = ? AND (m.winner_id = ? OR m.loser_id = ?)
+       ORDER BY m.tourney_date DESC, m.id DESC
+       LIMIT ?`,
+    )
+    .all(id, id, tour, id, id, limit) as any[];
+
+  const nameStmt = getDb().prepare('SELECT name FROM players WHERE tour = ? AND id = ?');
+  return rows.map((r) => {
+    const opp = nameStmt.get(tour, r.opponent_id) as unknown as { name: string } | undefined;
+    return {
+      date: String(r.date),
+      tourney_name: r.tourney_name,
+      surface: r.surface,
+      round: r.round,
+      score: r.score,
+      won: !!r.won,
+      opponent_id: r.opponent_id,
+      opponent_name: opp?.name ?? null,
+    };
+  });
+}
+
+/** Every meeting between two players. */
+export function getH2HMeetings(tour: TourId, p1: number, p2: number): H2HMeeting[] {
+  return getDb()
+    .prepare(
+      `SELECT tourney_date AS date, winner_id AS winnerId, tourney_name, surface, round, score
+       FROM matches
+       WHERE tour = ?
+         AND ((winner_id = ? AND loser_id = ?) OR (winner_id = ? AND loser_id = ?))
+       ORDER BY tourney_date DESC`,
+    )
+    .all(tour, p1, p2, p2, p1) as unknown as H2HMeeting[];
+}
+
+export function getProfile(tour: TourId, id: number): PlayerProfile | null {
+  const player = getPlayer(tour, id);
+  if (!player) return null;
+  return {
+    ...player,
+    rating: getRating(tour, id),
+    recent: getRecentMatches(tour, id, 10),
+  };
+}
+
+export function listUpcoming(filter: {
+  tour?: string;
+  tournament?: string;
+}): UpcomingRow[] {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (filter.tour) {
+    clauses.push('tour = ?');
+    params.push(filter.tour);
+  }
+  if (filter.tournament) {
+    clauses.push('tournament_id = ?');
+    params.push(filter.tournament);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  return getDb()
+    .prepare(`SELECT * FROM upcoming_matches ${where} ORDER BY commence_time ASC`)
+    .all(...params) as unknown as UpcomingRow[];
+}
+
+export function getUpcomingById(id: string): UpcomingRow | null {
+  return (
+    (getDb().prepare('SELECT * FROM upcoming_matches WHERE id = ?').get(id) as
+      | UpcomingRow
+      | undefined) ?? null
+  );
+}
+
+export function countRows(table: string): number {
+  const row = getDb().prepare(`SELECT COUNT(*) AS c FROM ${table}`).get() as unknown as {
+    c: number;
+  };
+  return row.c;
+}

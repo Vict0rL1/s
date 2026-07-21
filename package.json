@@ -1,29 +1,27 @@
 {
-  "name": "s",
+  "name": "tennis-predictor",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
+  "description": "Web app + REST API to predict ATP/WTA tennis match results using historical stats, surface-aware Elo ratings, and bookmaker odds.",
+  "engines": {
+    "node": ">=22.5.0"
   },
-  "dependencies": {
-    "@tailwindcss/vite": "^4.3.2",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev --workspace server",
+    "dev:web": "npm run dev --workspace web",
+    "seed": "npm run seed --workspace server",
+    "update-data": "npm run update-data --workspace server",
+    "build": "npm run build --workspace web && npm run typecheck --workspace server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {
-    "@types/node": "^24.13.2",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
-    "autoprefixer": "^10.5.2",
-    "oxlint": "^1.71.0",
-    "postcss": "^8.5.19",
-    "tailwindcss": "^4.3.2",
-    "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "concurrently": "^9.1.2"
   }
 }

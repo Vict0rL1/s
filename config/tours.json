@@ -1,0 +1,30 @@
+{
+  "$comment": "Circuits (tours) covered by the app. Add a tour by appending an entry — nothing in the model/API logic hardcodes these ids.",
+  "history": {
+    "$comment": "How much history to ingest by default and where the raw CSVs live. `startYear` is the earliest season pulled by `npm run update-data` (override with --from). Serve/break stats exist in Sackmann data from ~1991 onward.",
+    "startYear": 2015,
+    "rawBaseUrl": "https://raw.githubusercontent.com/{repo}/master/{file}"
+  },
+  "tours": [
+    {
+      "id": "atp",
+      "name": "ATP",
+      "label": "ATP · Men's singles",
+      "sackmann": {
+        "repo": "JeffSackmann/tennis_atp",
+        "matchesFile": "atp_matches_{year}.csv",
+        "playersFile": "atp_players.csv"
+      }
+    },
+    {
+      "id": "wta",
+      "name": "WTA",
+      "label": "WTA · Women's singles",
+      "sackmann": {
+        "repo": "JeffSackmann/tennis_wta",
+        "matchesFile": "wta_matches_{year}.csv",
+        "playersFile": "wta_players.csv"
+      }
+    }
+  ]
+}
