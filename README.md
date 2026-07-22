@@ -22,8 +22,12 @@ posible *value* cuando el modelo discrepa de las cuotas.
 - **Elo general + por superficie** (dura / arcilla / hierba) con K-factor dinámico.
 - **Forma reciente**, **head-to-head** y **comparación contra el mercado** (probabilidad
   implícita sin vig + detección de value).
+- **Desglose completo por partido**: explicación de *por qué* gana X (qué señal pesa más),
+  ranking por Elo, últimos 5 resultados, récord en la superficie, comparativa de saque/quiebre
+  (ace%, 1er saque, break points salvados) y marcador estimado.
 - **Dashboard** para elegir circuito y torneo, ver próximos partidos con barras
-  modelo-vs-mercado, perfil de jugador (Elo por superficie + últimos resultados) y H2H.
+  modelo-vs-mercado, perfil de jugador (Elo por superficie + saque/quiebre + últimos
+  resultados) y H2H.
 - Datos guardados localmente en **SQLite** (`data/tennis.db`) para no depender de llamadas
   repetidas a las APIs.
 

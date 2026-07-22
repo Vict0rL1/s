@@ -26,8 +26,16 @@ import {
   type MarketComparison,
   type MarketProbabilities,
 } from './market.ts';
-import { getH2HMeetings, getPlayer, getRating, getRecentForm } from '../repo.ts';
-import type { TourId } from '../types.ts';
+import {
+  getEloRank,
+  getH2HMeetings,
+  getPlayer,
+  getRating,
+  getRecentForm,
+  getServeStats,
+  getSurfaceRecord,
+} from '../repo.ts';
+import type { ServeStats, SurfaceRecord, TourId } from '../types.ts';
 
 const SURFACE_WEIGHT = 0.7; // weight on surface Elo vs overall Elo
 
@@ -51,16 +59,41 @@ export interface PlayerLite {
   country: string | null;
 }
 
+/** One driver of the verdict, expressed as Elo points in favour of p1 (signed). */
+export interface ReasoningFactor {
+  key: 'rating' | 'form' | 'h2h';
+  label: string;
+  pointsForP1: number;
+}
+
+export interface Reasoning {
+  factors: ReasoningFactor[];
+  topFactor: ReasoningFactor | null;
+  text: string; // plain-language summary (Spanish)
+}
+
+export interface ExpectedScore {
+  favoredSide: 1 | 2 | null;
+  likelySets: string; // e.g. "2-0", "3-1"
+  note: string;
+}
+
 export interface Prediction {
   tour: TourId;
   surface: string;
   players: { p1: PlayerLite; p2: PlayerLite };
   ratings: { p1: EffectiveRating; p2: EffectiveRating };
+  ranks: { p1: number; p2: number }; // rank by overall Elo within the tour
   form: { p1: FormSignal; p2: FormSignal };
+  last5: { p1: boolean[]; p2: boolean[] }; // most recent first (true = win)
+  surfaceRecord: { p1: SurfaceRecord; p2: SurfaceRecord };
+  serve: { p1: ServeStats; p2: ServeStats };
   h2h: H2HSignal; // deltas expressed from p1's perspective
   adjustedRatings: { p1: number; p2: number };
   model: { prob1: number; prob2: number };
   market: MarketComparison;
+  reasoning: Reasoning;
+  expectedScore: ExpectedScore;
   verdict: {
     favoredSide: 1 | 2 | null;
     favoredName: string | null;
@@ -97,6 +130,66 @@ function confidenceTier(prob1: number): ConfidenceTier {
 }
 
 /**
+ * Break the adjusted-rating gap into its drivers so we can explain WHY the model
+ * favours someone. Each factor is the points it contributes to the gap in p1's
+ * favour: gap = (rating) + (form) + (h2h).
+ */
+function buildReasoning(
+  p1Name: string,
+  p2Name: string,
+  ratingGap: number, // eff1 - eff2
+  formGap: number, // form1.delta - form2.delta
+  h2hGap: number, // 2 * h2h.delta
+): Reasoning {
+  const factors: ReasoningFactor[] = [
+    { key: 'rating', label: 'Elo (nivel + superficie)', pointsForP1: round1(ratingGap) },
+    { key: 'form', label: 'Forma reciente', pointsForP1: round1(formGap) },
+    { key: 'h2h', label: 'Head-to-head', pointsForP1: round1(h2hGap) },
+  ];
+  const ranked = [...factors].sort((a, b) => Math.abs(b.pointsForP1) - Math.abs(a.pointsForP1));
+  const top = ranked[0];
+  const totalGap = ratingGap + formGap + h2hGap;
+  const favored = totalGap >= 0 ? p1Name : p2Name;
+
+  let text: string;
+  if (!top || Math.abs(top.pointsForP1) < 1) {
+    text = 'Ambos jugadores están muy igualados en todas las señales.';
+  } else {
+    const driverName = top.pointsForP1 >= 0 ? p1Name : p2Name;
+    const agrees = driverName === favored;
+    text = agrees
+      ? `El modelo favorece a ${favored}; la señal que más pesa es su ventaja en ${top.label.toLowerCase()}.`
+      : `El modelo favorece ligeramente a ${favored}, aunque en ${top.label.toLowerCase()} ` +
+        `la ventaja es para ${driverName}.`;
+  }
+  return { factors, topFactor: top ?? null, text };
+}
+
+/** Rough scoreline estimate from the win probability. Honest: it's a heuristic. */
+function estimateScoreline(prob1: number, bestOf: number | null): ExpectedScore {
+  const favoredSide: 1 | 2 | null = prob1 === 0.5 ? null : prob1 > 0.5 ? 1 : 2;
+  const pWin = Math.max(prob1, 1 - prob1);
+  const setsToWin = bestOf === 5 ? 3 : 2;
+  let likelySets: string;
+  let note: string;
+  if (pWin >= 0.75) {
+    likelySets = `${setsToWin}-0`;
+    note = 'Probablemente en sets corridos.';
+  } else if (pWin >= 0.6) {
+    likelySets = `${setsToWin}-1`;
+    note = 'Favorito, pero puede ceder un set.';
+  } else {
+    likelySets = `${setsToWin}-${setsToWin - 1}`;
+    note = 'Muy parejo: puede irse a set decisivo.';
+  }
+  return { favoredSide, likelySets, note };
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+/**
  * Build a full, explainable prediction between two players on a given surface.
  * `market` is optional decimal odds {odds1, odds2} for the same p1/p2 order.
  */
@@ -106,6 +199,7 @@ export function buildPrediction(
   p2Id: number,
   surface: string,
   market?: { odds1: number | null; odds2: number | null } | null,
+  bestOf = 3,
 ): Prediction {
   const p1 = getPlayer(tour, p1Id);
   const p2 = getPlayer(tour, p2Id);
@@ -115,8 +209,10 @@ export function buildPrediction(
   const eff1 = effectiveRating(r1, surface);
   const eff2 = effectiveRating(r2, surface);
 
-  const form1 = computeForm(getRecentForm(tour, p1Id));
-  const form2 = computeForm(getRecentForm(tour, p2Id));
+  const form1Results = getRecentForm(tour, p1Id);
+  const form2Results = getRecentForm(tour, p2Id);
+  const form1 = computeForm(form1Results);
+  const form2 = computeForm(form2Results);
 
   const h2h = computeH2H(getH2HMeetings(tour, p1Id, p2Id), p1Id, p2Id);
 
@@ -136,19 +232,41 @@ export function buildPrediction(
   const favoredSide: 1 | 2 | null = prob1 === 0.5 ? null : prob1 > 0.5 ? 1 : 2;
   const favoredName = favoredSide === 1 ? p1?.name ?? null : favoredSide === 2 ? p2?.name ?? null : null;
 
+  const p1Name = p1?.name ?? `#${p1Id}`;
+  const p2Name = p2?.name ?? `#${p2Id}`;
+  const reasoning = buildReasoning(
+    p1Name,
+    p2Name,
+    eff1.effective - eff2.effective,
+    form1.delta - form2.delta,
+    2 * h2h.delta,
+  );
+
   return {
     tour,
     surface,
     players: {
-      p1: { id: p1Id, name: p1?.name ?? `#${p1Id}`, country: p1?.country ?? null },
-      p2: { id: p2Id, name: p2?.name ?? `#${p2Id}`, country: p2?.country ?? null },
+      p1: { id: p1Id, name: p1Name, country: p1?.country ?? null },
+      p2: { id: p2Id, name: p2Name, country: p2?.country ?? null },
     },
     ratings: { p1: eff1, p2: eff2 },
+    ranks: { p1: getEloRank(tour, p1Id), p2: getEloRank(tour, p2Id) },
     form: { p1: form1, p2: form2 },
+    last5: {
+      p1: form1Results.slice(0, 5).map((r) => r.won),
+      p2: form2Results.slice(0, 5).map((r) => r.won),
+    },
+    surfaceRecord: {
+      p1: getSurfaceRecord(tour, p1Id, surface),
+      p2: getSurfaceRecord(tour, p2Id, surface),
+    },
+    serve: { p1: getServeStats(tour, p1Id), p2: getServeStats(tour, p2Id) },
     h2h,
     adjustedRatings: { p1: Math.round(adj1 * 10) / 10, p2: Math.round(adj2 * 10) / 10 },
     model: { prob1: round3(prob1), prob2: round3(prob2) },
     market: marketComparison,
+    reasoning,
+    expectedScore: estimateScoreline(prob1, bestOf),
     verdict: {
       favoredSide,
       favoredName,

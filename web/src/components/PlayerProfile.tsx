@@ -31,9 +31,16 @@ export default function PlayerProfile({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between">
-          <h2 className="text-xl font-bold">
-            {profile ? `${flag(profile.country)} ${profile.name}` : 'Cargando…'}
-          </h2>
+          <div>
+            <h2 className="text-xl font-bold">
+              {profile ? `${flag(profile.country)} ${profile.name}` : 'Cargando…'}
+            </h2>
+            {profile && (
+              <div className="text-xs text-slate-400">
+                #{profile.eloRank} por Elo · {profile.rating.matches_played} partidos
+              </div>
+            )}
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
             ✕
           </button>
@@ -57,6 +64,22 @@ export default function PlayerProfile({
               <EloTile label="Arcilla" value={profile.rating.clay} color={surfaceColor('clay')} />
               <EloTile label="Hierba" value={profile.rating.grass} color={surfaceColor('grass')} />
             </div>
+
+            {profile.serve.matches > 0 && (
+              <>
+                <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+                  Saque y quiebre (promedio)
+                </div>
+                <div className="mb-6 grid grid-cols-2 gap-2 text-sm">
+                  <ServeStat label="Aces/partido" value={profile.serve.acesPerMatch} />
+                  <ServeStat label="Ace %" value={profile.serve.acePct} suffix="%" />
+                  <ServeStat label="1er saque dentro" value={profile.serve.firstInPct} suffix="%" />
+                  <ServeStat label="1er saque ganado" value={profile.serve.firstWonPct} suffix="%" />
+                  <ServeStat label="2do saque ganado" value={profile.serve.secondWonPct} suffix="%" />
+                  <ServeStat label="BP salvados" value={profile.serve.bpSavedPct} suffix="%" />
+                </div>
+              </>
+            )}
 
             <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">
               Últimos resultados
@@ -87,6 +110,25 @@ export default function PlayerProfile({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function ServeStat({
+  label,
+  value,
+  suffix = '',
+}: {
+  label: string;
+  value: number | null;
+  suffix?: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between rounded bg-slate-800/50 px-3 py-1.5">
+      <span className="text-xs text-slate-400">{label}</span>
+      <span className="font-semibold tabular-nums text-slate-200">
+        {value == null ? '—' : `${value}${suffix}`}
+      </span>
     </div>
   );
 }

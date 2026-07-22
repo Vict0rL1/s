@@ -80,7 +80,7 @@ const SEASON_EVENTS: { name: string; surface: Surface; month: number; bestOf: nu
   { name: 'US Open', surface: 'Hard', month: 9, bestOf: 5 },
 ];
 
-const START_YEAR = 2016;
+const START_YEAR = 2013;
 const END_YEAR = 2025;
 
 function skillOn(p: SeedPlayer, surface: Surface): number {
@@ -163,49 +163,69 @@ function simulateTour(tour: TourId, players: SeedPlayer[], rng: () => number): n
   );
 
   let count = 0;
-  const rounds = ['QF', 'SF', 'F'];
+
+  const playMatch = (
+    a: SeedPlayer,
+    b: SeedPlayer,
+    ev: (typeof SEASON_EVENTS)[number],
+    date: string,
+    round: string,
+  ): SeedPlayer => {
+    const pa = expectedScore(skillOn(a, ev.surface), skillOn(b, ev.surface));
+    const aWins = rng() < pa;
+    const winner = aWins ? a : b;
+    const loser = aWins ? b : a;
+    const winnerProb = aWins ? pa : 1 - pa;
+    const ws = makeStats(rng, skillOn(winner, ev.surface), true);
+    const ls = makeStats(rng, skillOn(loser, ev.surface), false);
+    matchInsert.run(
+      tour,
+      `${date.slice(0, 4)}-${ev.name.replace(/\s+/g, '')}`,
+      ev.name,
+      date,
+      ev.surface,
+      ev.bestOf === 5 ? 'G' : 'M',
+      round,
+      ev.bestOf,
+      winner.id,
+      loser.id,
+      makeScore(rng, ev.bestOf, winnerProb),
+      ws.ace, ws.df, ws.svpt, ws.in1, ws.won1, ws.won2, ws.bpSaved, ws.bpFaced,
+      ls.ace, ls.df, ls.svpt, ls.in1, ls.won1, ls.won2, ls.bpSaved, ls.bpFaced,
+    );
+    count++;
+    return winner;
+  };
 
   db.exec('BEGIN');
   for (let year = START_YEAR; year <= END_YEAR; year++) {
     for (const ev of SEASON_EVENTS) {
-      // Draw of 8: top players by (skill on surface + yearly noise).
-      const field = [...players]
-        .map((p) => ({ p, seed: skillOn(p, ev.surface) + (rng() - 0.5) * 120 }))
+      // 12-player bracket with byes for the top 4 seeds, so EVERY player plays
+      // each event → the ratings converge to real skill (no lucky outliers).
+      // Small selection noise keeps draws from being identical year to year.
+      const seeded = [...players]
+        .map((p) => ({ p, seed: skillOn(p, ev.surface) + (rng() - 0.5) * 60 }))
         .sort((a, b) => b.seed - a.seed)
-        .slice(0, 8)
         .map((x) => x.p);
 
       const date = `${year}${String(ev.month).padStart(2, '0')}01`;
-      let alive = field;
-      for (let r = 0; r < rounds.length; r++) {
+      const byes = seeded.slice(0, 4); // seeds 1–4
+      const prelim = seeded.slice(4); // seeds 5–12 (8 players)
+
+      // First round (R16): 5v12, 6v11, 7v10, 8v9.
+      const r16Winners: SeedPlayer[] = [];
+      for (let i = 0; i < prelim.length / 2; i++) {
+        const a = prelim[i];
+        const b = prelim[prelim.length - 1 - i];
+        r16Winners.push(playMatch(a, b, ev, date, 'R16'));
+      }
+
+      // Quarterfinals: 4 byes + 4 R16 winners.
+      let alive = [...byes, ...r16Winners];
+      for (const round of ['QF', 'SF', 'F']) {
         const next: SeedPlayer[] = [];
         for (let i = 0; i < alive.length; i += 2) {
-          const a = alive[i];
-          const b = alive[i + 1];
-          const pa = expectedScore(skillOn(a, ev.surface), skillOn(b, ev.surface));
-          const aWins = rng() < pa;
-          const winner = aWins ? a : b;
-          const loser = aWins ? b : a;
-          const winnerProb = aWins ? pa : 1 - pa;
-          const ws = makeStats(rng, skillOn(winner, ev.surface), true);
-          const ls = makeStats(rng, skillOn(loser, ev.surface), false);
-          matchInsert.run(
-            tour,
-            `${year}-${ev.name.replace(/\s+/g, '')}`,
-            ev.name,
-            date,
-            ev.surface,
-            ev.bestOf === 5 ? 'G' : 'M',
-            rounds[r],
-            ev.bestOf,
-            winner.id,
-            loser.id,
-            makeScore(rng, ev.bestOf, winnerProb),
-            ws.ace, ws.df, ws.svpt, ws.in1, ws.won1, ws.won2, ws.bpSaved, ws.bpFaced,
-            ls.ace, ls.df, ls.svpt, ls.in1, ls.won1, ls.won2, ls.bpSaved, ls.bpFaced,
-          );
-          count++;
-          next.push(winner);
+          next.push(playMatch(alive[i], alive[i + 1], ev, date, round));
         }
         alive = next;
       }
@@ -222,13 +242,24 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
   const db = getDb();
   const byName = new Map(players.map((p) => [p.name, p]));
 
-  // Two tournaments per tour so the tournament selector is meaningful.
-  const plan: { tournamentId: string; surface: Surface; pairs: [string, string][] }[] =
+  // Two tournaments per tour so the tournament selector is meaningful. `month`
+  // and `round` make the fixtures look calendar-coherent (a Roland Garros match
+  // is dated in June, Wimbledon in July, US Open in September).
+  type Block = {
+    tournamentId: string;
+    surface: Surface;
+    month: number;
+    round: string;
+    pairs: [string, string][];
+  };
+  const plan: Block[] =
     tour === 'atp'
       ? [
           {
             tournamentId: 'wimbledon',
             surface: 'Grass',
+            month: 7,
+            round: 'QF',
             pairs: [
               ['Carlos Alcaraz', 'Taylor Fritz'],
               ['Novak Djokovic', 'Hubert Hurkacz'],
@@ -239,6 +270,8 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
           {
             tournamentId: 'us_open',
             surface: 'Hard',
+            month: 9,
+            round: 'SF',
             pairs: [
               ['Jannik Sinner', 'Daniil Medvedev'],
               ['Carlos Alcaraz', 'Andrey Rublev'],
@@ -250,6 +283,8 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
           {
             tournamentId: 'wimbledon',
             surface: 'Grass',
+            month: 7,
+            round: 'QF',
             pairs: [
               ['Elena Rybakina', 'Iga Swiatek'],
               ['Aryna Sabalenka', 'Marketa Vondrousova'],
@@ -260,6 +295,8 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
           {
             tournamentId: 'roland_garros',
             surface: 'Clay',
+            month: 6,
+            round: 'SF',
             pairs: [
               ['Iga Swiatek', 'Aryna Sabalenka'],
               ['Coco Gauff', 'Jelena Ostapenko'],
@@ -276,10 +313,9 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
   );
 
   const tconf = (id: string) => tournamentsConfig.tournaments.find((t) => t.id === id);
-  const now = Date.now();
   let count = 0;
   db.exec('BEGIN');
-  plan.forEach((block, bi) => {
+  plan.forEach((block) => {
     const conf = tconf(block.tournamentId);
     block.pairs.forEach((pair, pi) => {
       const a = byName.get(pair[0])!;
@@ -291,14 +327,13 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
       const margin = 1.05; // bookmaker overround (~5%): implied probs sum to >1
       const odds1 = round2(1 / (mp * margin));
       const odds2 = round2(1 / ((1 - mp) * margin));
-      const commence = new Date(now + (bi * 4 + pi + 1) * 6 * 3600 * 1000).toISOString();
       insert.run(
         `seed-${tour}-${block.tournamentId}-${pi}`,
         tour,
         block.tournamentId,
         conf?.name ?? block.tournamentId,
         block.surface,
-        commence,
+        nextSeasonDateISO(block.month, pi),
         a.name,
         b.name,
         a.id,
@@ -314,6 +349,22 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
   });
   db.exec('COMMIT');
   return count;
+}
+
+/**
+ * Next future date in the tournament's month (this year if it hasn't passed,
+ * otherwise next year), so demo fixtures look calendar-coherent.
+ */
+function nextSeasonDateISO(month: number, dayOffset: number): string {
+  const now = new Date();
+  let year = now.getUTCFullYear();
+  const day = 8 + dayOffset * 2;
+  let d = new Date(Date.UTC(year, month - 1, day, 13, 0, 0));
+  if (d.getTime() < now.getTime()) {
+    year += 1;
+    d = new Date(Date.UTC(year, month - 1, day, 13, 0, 0));
+  }
+  return d.toISOString();
 }
 
 function round2(n: number): number {

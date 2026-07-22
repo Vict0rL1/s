@@ -125,3 +125,14 @@ joven) porque promedia el historial. Úsalo como una señal más, no como la ún
 **simulados** a partir de una habilidad latente por superficie usando la misma fórmula Elo del
 modelo. Sirven para probar la app end-to-end sin conexión; **no** son historial real. Usa
 `npm run update-data` para cargar datos reales de Jeff Sackmann.
+
+Detalles a tener en cuenta con el demo:
+
+- **Escala de Elo comprimida.** Como el demo es un grupo cerrado de 12 jugadores que solo
+  juegan entre sí, sus Elos se concentran (aprox. 1300–1750) en lugar de la escala real
+  (~1500 promedio, 2000+ el top), donde compiten miles de jugadores. Lo que importa es el
+  **orden relativo y la diferencia por superficie**, que sí son correctos. Con datos reales
+  (`update-data`) la escala se ve como el Elo de tenis habitual.
+- **Fechas y enfrentamientos ilustrativos.** Los próximos partidos del demo son ejemplos
+  (etiquetados como "odds demo") con fechas puestas en el mes real de cada torneo; no son el
+  calendario real. Los partidos futuros reales llegan de The Odds API.

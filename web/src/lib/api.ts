@@ -40,8 +40,26 @@ export interface Player {
   birthdate: string | null;
 }
 
+export interface ServeStats {
+  matches: number;
+  acePct: number | null;
+  dfPct: number | null;
+  firstInPct: number | null;
+  firstWonPct: number | null;
+  secondWonPct: number | null;
+  bpSavedPct: number | null;
+  acesPerMatch: number | null;
+}
+
+export interface SurfaceRecord {
+  wins: number;
+  losses: number;
+}
+
 export interface Profile extends Player {
   rating: Rating;
+  eloRank: number;
+  serve: ServeStats;
   recent: RecentMatch[];
 }
 
@@ -97,16 +115,40 @@ export interface PlayerLite {
   country: string | null;
 }
 
+export interface ReasoningFactor {
+  key: 'rating' | 'form' | 'h2h';
+  label: string;
+  pointsForP1: number;
+}
+
+export interface Reasoning {
+  factors: ReasoningFactor[];
+  topFactor: ReasoningFactor | null;
+  text: string;
+}
+
+export interface ExpectedScore {
+  favoredSide: 1 | 2 | null;
+  likelySets: string;
+  note: string;
+}
+
 export interface Prediction {
   tour: string;
   surface: string;
   players: { p1: PlayerLite; p2: PlayerLite };
   ratings: { p1: EffectiveRating; p2: EffectiveRating };
+  ranks: { p1: number; p2: number };
   form: { p1: FormSignal; p2: FormSignal };
+  last5: { p1: boolean[]; p2: boolean[] };
+  surfaceRecord: { p1: SurfaceRecord; p2: SurfaceRecord };
+  serve: { p1: ServeStats; p2: ServeStats };
   h2h: H2HSignal;
   adjustedRatings: { p1: number; p2: number };
   model: { prob1: number; prob2: number };
   market: MarketComparison;
+  reasoning: Reasoning;
+  expectedScore: ExpectedScore;
   verdict: {
     favoredSide: 1 | 2 | null;
     favoredName: string | null;

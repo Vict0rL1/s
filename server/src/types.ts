@@ -59,6 +59,24 @@ export interface RatingRow {
 }
 
 /** An upcoming match with market odds (from The Odds API or local fixtures). */
+/** Aggregated serve / return stats for a player (from stored match stats). */
+export interface ServeStats {
+  matches: number; // matches that had stats
+  acePct: number | null; // aces / service points
+  dfPct: number | null; // double faults / service points
+  firstInPct: number | null; // 1st serves in / service points
+  firstWonPct: number | null; // points won on 1st serve in / 1st serves in
+  secondWonPct: number | null; // points won on 2nd serve / 2nd serve points
+  bpSavedPct: number | null; // break points saved / faced
+  acesPerMatch: number | null;
+}
+
+/** Win/loss record on a given surface. */
+export interface SurfaceRecord {
+  wins: number;
+  losses: number;
+}
+
 export interface UpcomingRow {
   id: string;
   tour: TourId;

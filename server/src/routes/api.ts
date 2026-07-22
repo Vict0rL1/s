@@ -19,10 +19,17 @@ import type { UpcomingRow } from '../types.ts';
 /** Attach a full prediction to an upcoming-match row (null if players unknown). */
 function predictRow(row: UpcomingRow): Prediction | null {
   if (row.p1_id == null || row.p2_id == null) return null;
-  return buildPrediction(row.tour, row.p1_id, row.p2_id, row.surface, {
-    odds1: row.p1_odds,
-    odds2: row.p2_odds,
-  });
+  // Men's Grand Slam singles are best-of-5; everything else best-of-3.
+  const category = tournamentsConfig.tournaments.find((t) => t.id === row.tournament_id)?.category;
+  const bestOf = category === 'grand_slam' && row.tour === 'atp' ? 5 : 3;
+  return buildPrediction(
+    row.tour,
+    row.p1_id,
+    row.p2_id,
+    row.surface,
+    { odds1: row.p1_odds, odds2: row.p2_odds },
+    bestOf,
+  );
 }
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {

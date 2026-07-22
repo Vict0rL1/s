@@ -5,10 +5,19 @@ import { getDb } from './db.ts';
 import { INITIAL_ELO } from './model/elo.ts';
 import type { FormResult } from './model/form.ts';
 import type { H2HMeeting } from './model/h2h.ts';
-import type { PlayerRow, RatingRow, TourId, UpcomingRow } from './types.ts';
+import type {
+  PlayerRow,
+  RatingRow,
+  ServeStats,
+  SurfaceRecord,
+  TourId,
+  UpcomingRow,
+} from './types.ts';
 
 export interface PlayerProfile extends PlayerRow {
   rating: RatingRow;
+  eloRank: number;
+  serve: ServeStats;
   recent: RecentMatch[];
 }
 
@@ -125,12 +134,98 @@ export function getH2HMeetings(tour: TourId, p1: number, p2: number): H2HMeeting
     .all(tour, p1, p2, p2, p1) as unknown as H2HMeeting[];
 }
 
+/** Aggregated serve/return stats across all matches with recorded stats. */
+export function getServeStats(tour: TourId, id: number): ServeStats {
+  const row = getDb()
+    .prepare(
+      `SELECT
+         COUNT(*)      AS n,
+         SUM(ace)      AS ace,
+         SUM(df)       AS df,
+         SUM(svpt)     AS svpt,
+         SUM(in1)      AS in1,
+         SUM(won1)     AS won1,
+         SUM(won2)     AS won2,
+         SUM(bpSaved)  AS bpSaved,
+         SUM(bpFaced)  AS bpFaced
+       FROM (
+         SELECT w_ace ace, w_df df, w_svpt svpt, w_1stIn in1, w_1stWon won1,
+                w_2ndWon won2, w_bpSaved bpSaved, w_bpFaced bpFaced
+           FROM matches WHERE tour = ? AND winner_id = ? AND w_svpt IS NOT NULL
+         UNION ALL
+         SELECT l_ace, l_df, l_svpt, l_1stIn, l_1stWon,
+                l_2ndWon, l_bpSaved, l_bpFaced
+           FROM matches WHERE tour = ? AND loser_id = ? AND l_svpt IS NOT NULL
+       )`,
+    )
+    .get(tour, id, tour, id) as unknown as {
+    n: number;
+    ace: number | null;
+    df: number | null;
+    svpt: number | null;
+    in1: number | null;
+    won1: number | null;
+    won2: number | null;
+    bpSaved: number | null;
+    bpFaced: number | null;
+  };
+
+  const svpt = row.svpt ?? 0;
+  const in1 = row.in1 ?? 0;
+  const pct = (num: number | null, den: number): number | null =>
+    den > 0 && num != null ? Math.round((num / den) * 1000) / 10 : null;
+
+  return {
+    matches: row.n ?? 0,
+    acePct: pct(row.ace, svpt),
+    dfPct: pct(row.df, svpt),
+    firstInPct: pct(in1, svpt),
+    firstWonPct: pct(row.won1, in1),
+    secondWonPct: pct(row.won2, svpt - in1),
+    bpSavedPct: pct(row.bpSaved, row.bpFaced ?? 0),
+    acesPerMatch: row.n > 0 && row.ace != null ? Math.round((row.ace / row.n) * 10) / 10 : null,
+  };
+}
+
+/** Win/loss record on a specific surface. */
+export function getSurfaceRecord(tour: TourId, id: number, surface: string): SurfaceRecord {
+  const row = getDb()
+    .prepare(
+      `SELECT
+         SUM(CASE WHEN winner_id = ? THEN 1 ELSE 0 END) AS wins,
+         SUM(CASE WHEN loser_id  = ? THEN 1 ELSE 0 END) AS losses
+       FROM matches
+       WHERE tour = ? AND surface = ? AND (winner_id = ? OR loser_id = ?)`,
+    )
+    .get(id, id, tour, surface, id, id) as unknown as {
+    wins: number | null;
+    losses: number | null;
+  };
+  return { wins: row.wins ?? 0, losses: row.losses ?? 0 };
+}
+
+/** 1-based rank of a player by overall Elo within their tour (1 = highest). */
+export function getEloRank(tour: TourId, id: number): number {
+  const row = getDb()
+    .prepare(
+      `SELECT COUNT(*) + 1 AS rank
+       FROM player_ratings
+       WHERE tour = ? AND overall > (
+         SELECT overall FROM player_ratings WHERE tour = ? AND player_id = ?
+       )`,
+    )
+    .get(tour, tour, id) as unknown as { rank: number };
+  return row.rank;
+}
+
 export function getProfile(tour: TourId, id: number): PlayerProfile | null {
   const player = getPlayer(tour, id);
   if (!player) return null;
   return {
     ...player,
     rating: getRating(tour, id),
+    eloRank: getEloRank(tour, id),
+    serve: getServeStats(tour, id),
     recent: getRecentMatches(tour, id, 10),
   };
 }
