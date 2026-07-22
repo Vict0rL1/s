@@ -10,7 +10,7 @@
 
 import { getDb, resetData, setMeta } from '../db.ts';
 import { toursConfig } from '../config.ts';
-import { ingestTour, tourConfigs } from '../ingest/sackmann.ts';
+import { ingestTour, preflight, tourConfigs } from '../ingest/sackmann.ts';
 import { recomputeRatings } from '../ingest/ratings.ts';
 import { refreshOdds } from '../ingest/odds.ts';
 
@@ -42,14 +42,30 @@ async function main() {
   getDb();
   console.log(`\n⟳ Updating data ${fromYear}–${toYear}${onlyTour ? ` (${onlyTour})` : ''}…`);
 
+  const tours = tourConfigs().filter((t) => !onlyTour || t.id === onlyTour);
+  if (tours.length === 0) throw new Error(`Tour desconocido: ${onlyTour}`);
+
+  // Preflight: confirm we can reach the data source BEFORE wiping existing data.
+  console.log('\n▸ Comprobando conexión con la fuente de datos (GitHub)…');
+  const found = await preflight(tours[0]);
+  console.log(`  OK — ${found} jugadores disponibles.`);
+
   // Full rebuild keeps ratings correct and avoids duplicate matches.
   resetData();
 
-  const tours = tourConfigs().filter((t) => !onlyTour || t.id === onlyTour);
+  let totalMatches = 0;
   for (const tour of tours) {
     console.log(`\n▸ ${tour.label}`);
     const res = await ingestTour(tour, { fromYear, toYear });
     console.log(`  players: ${res.players}, matches: ${res.matches}`);
+    totalMatches += res.matches;
+  }
+
+  if (totalMatches === 0) {
+    throw new Error(
+      'No se descargó ningún partido. Puede ser un problema de red temporal con GitHub — ' +
+        'vuelve a ejecutar `npm run update-data`. Mientras tanto puedes usar `npm run seed`.',
+    );
   }
 
   console.log('\n▸ Computing Elo ratings…');

@@ -27,13 +27,33 @@ async function fetchCsvCached(repo: string, file: string): Promise<string | null
     return fs.readFileSync(cachePath, 'utf8');
   }
   const url = rawUrl(repo, file);
-  const res = await fetch(url);
+  let res: Response;
+  try {
+    res = await fetch(url, { signal: AbortSignal.timeout(45_000) });
+  } catch (e) {
+    throw new Error(
+      `No se pudo conectar con GitHub para descargar ${file} (${(e as Error).message}). ` +
+        `Revisa tu conexión a internet.`,
+    );
+  }
   if (res.status === 404) return null; // season file may not exist yet
-  if (!res.ok) throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Fallo al descargar ${url}: HTTP ${res.status}`);
   const text = await res.text();
   fs.mkdirSync(RAW_DIR, { recursive: true });
   fs.writeFileSync(cachePath, text);
   return text;
+}
+
+/**
+ * Check we can actually reach the data source before wiping anything. Returns
+ * the number of players found in the first tour's players file (throws a
+ * friendly error if unreachable).
+ */
+export async function preflight(tour: TourConfig): Promise<number> {
+  const csv = await fetchCsvCached(tour.sackmann.repo, tour.sackmann.playersFile);
+  if (!csv) throw new Error(`El archivo de jugadores de ${tour.id} no está disponible (404).`);
+  const rows = parse(csv, { columns: true, skip_empty_lines: true, relax_column_count: true });
+  return (rows as any[]).length;
 }
 
 function num(v: unknown): number | null {
