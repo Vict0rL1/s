@@ -119,5 +119,8 @@ export interface TournamentConfig {
 
 export interface TournamentsConfig {
   categories: Record<string, string>;
+  /** keyword (matched against a live event's key/title) → surface, for events
+   * discovered dynamically that aren't in the tournaments list. */
+  surfaceHints?: Record<string, Surface>;
   tournaments: TournamentConfig[];
 }

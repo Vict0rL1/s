@@ -221,6 +221,16 @@ function tourFromKey(sportKey: string): TourId | null {
   return null;
 }
 
+/** Best-effort surface for a live event, via config keyword hints (else ''). */
+function guessSurface(sportKey: string, title: string): string {
+  const hints = tournamentsConfig.surfaceHints ?? {};
+  const hay = `${sportKey} ${title}`.toLowerCase();
+  for (const [keyword, surface] of Object.entries(hints)) {
+    if (hay.includes(keyword.toLowerCase())) return surface;
+  }
+  return ''; // unknown → model uses overall Elo
+}
+
 export async function ingestOdds(): Promise<{ source: 'live' | 'fixture'; count: number }> {
   if (!env.oddsApiKey) {
     const count = generateFixtures();
@@ -267,7 +277,10 @@ export async function ingestOdds(): Promise<{ source: 'live' | 'fixture'; count:
     const conf = matchConfigTournament(sport.key);
     const tournamentId = conf?.id ?? sport.key;
     const tournamentName = conf?.name ?? sport.title;
-    const surface = conf?.surface ?? 'Hard'; // real events don't carry surface
+    // The Odds API doesn't report the surface. Use the config surface, else a
+    // keyword hint, else leave it unknown so the model predicts on overall Elo
+    // (never wrongly assume a surface).
+    const surface = conf?.surface ?? guessSurface(sport.key, sport.title);
 
     db.exec('BEGIN');
     for (const ev of events) {
