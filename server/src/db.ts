@@ -12,7 +12,13 @@ export function getDb(): DatabaseSync {
   if (db) return db;
   fs.mkdirSync(DATA_DIR, { recursive: true });
   db = new DatabaseSync(DB_PATH);
-  db.exec('PRAGMA journal_mode = WAL;');
+  // Default (rollback-journal) mode + a busy timeout keeps cross-process reads
+  // always up to date: if the running API and an external `update-data` process
+  // both touch the DB, each read sees the latest committed state (WAL can leave
+  // a long-lived writer connection with a stale view). Writes here are small and
+  // fast, so blocking briefly is fine for a local single-user app.
+  db.exec('PRAGMA journal_mode = DELETE;'); // convert any pre-existing WAL db back
+  db.exec('PRAGMA busy_timeout = 5000;');
   db.exec('PRAGMA foreign_keys = ON;');
   createSchema(db);
   return db;

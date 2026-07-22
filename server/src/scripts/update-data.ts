@@ -12,7 +12,7 @@ import { getDb, resetData, setMeta } from '../db.ts';
 import { toursConfig } from '../config.ts';
 import { ingestTour, tourConfigs } from '../ingest/sackmann.ts';
 import { recomputeRatings } from '../ingest/ratings.ts';
-import { ingestOdds } from '../ingest/odds.ts';
+import { refreshOdds } from '../ingest/odds.ts';
 
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
@@ -56,17 +56,14 @@ async function main() {
   const ratings = recomputeRatings();
   console.log(`  rated players: ${JSON.stringify(ratings)}`);
 
-  let oddsSource = 'skipped';
   if (!skipOdds) {
     console.log('\n▸ Fetching odds…');
-    const odds = await ingestOdds();
-    oddsSource = odds.source;
+    const odds = await refreshOdds();
     console.log(`  ${odds.source} odds for ${odds.count} upcoming matches`);
   }
 
   setMeta('data_source', 'sackmann');
   setMeta('updated_at', new Date().toISOString());
-  setMeta('odds_source', oddsSource);
 
   console.log('\n✅ Done. Start the app with:  npm run dev\n');
 }

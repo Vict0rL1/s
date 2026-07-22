@@ -200,11 +200,26 @@ export interface Meta {
   seededAt: string | null;
   updatedAt: string | null;
   oddsSource: string | null;
+  oddsRefreshedAt: string | null;
+  autoRefreshMinutes: number;
+  hasOddsKey: boolean;
   counts: { players: number; matches: number; ratings: number; upcoming: number };
+}
+
+export interface RefreshResult {
+  ok: boolean;
+  source: 'live' | 'fixture';
+  count: number;
 }
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`/api${path}`);
+  if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string): Promise<T> {
+  const res = await fetch(`/api${path}`, { method: 'POST' });
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -222,4 +237,5 @@ export const api = {
   },
   prediction: (id: string) => get<UpcomingWithPrediction>(`/predictions/${encodeURIComponent(id)}`),
   profile: (tour: string, id: number) => get<Profile>(`/players/${tour}/${id}`),
+  refresh: () => post<RefreshResult>('/refresh'),
 };

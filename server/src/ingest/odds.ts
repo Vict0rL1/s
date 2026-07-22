@@ -10,7 +10,7 @@
 // plan). Configure it as ODDS_API_KEY in .env — never hardcode it.
 // ===========================================================================
 
-import { getDb } from '../db.ts';
+import { getDb, setMeta } from '../db.ts';
 import { env, tournamentsConfig } from '../config.ts';
 import { expectedScore } from '../model/elo.ts';
 import type { Surface, TourId } from '../types.ts';
@@ -29,6 +29,30 @@ interface AggregatedEvent {
 // ---------------------------------------------------------------------------
 // The Odds API backend
 // ---------------------------------------------------------------------------
+
+interface TennisSport {
+  key: string; // e.g. "tennis_atp_wimbledon"
+  title: string; // e.g. "ATP Wimbledon"
+}
+
+/**
+ * Discover the tennis tournaments that are ACTIVE right now. The /sports listing
+ * is free (does not count against the odds quota), so we use it to find whatever
+ * is currently in season instead of hardcoding sport keys — that's how "today's"
+ * real matches show up automatically.
+ */
+async function fetchActiveTennisSports(): Promise<TennisSport[]> {
+  const url = `${ODDS_API_BASE}/sports/?apiKey=${encodeURIComponent(env.oddsApiKey)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Odds API /sports error: HTTP ${res.status} ${await res.text()}`);
+  }
+  const all = (await res.json()) as any[];
+  return all
+    .filter((s) => s.group === 'Tennis' && s.active && !s.has_outrights)
+    .map((s) => ({ key: s.key as string, title: s.title as string }));
+}
+
 async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
   const url =
     `${ODDS_API_BASE}/sports/${sportKey}/odds/` +
@@ -183,6 +207,20 @@ export function clearUpcoming(): void {
   getDb().exec('DELETE FROM upcoming_matches;');
 }
 
+/** Which config tournament (if any) a live sport key belongs to. */
+function matchConfigTournament(sportKey: string) {
+  return tournamentsConfig.tournaments.find((t) =>
+    Object.values(t.oddsSportKeys).includes(sportKey),
+  );
+}
+
+/** Derive the tour from a sport key: tennis_atp_* / tennis_wta_*. */
+function tourFromKey(sportKey: string): TourId | null {
+  if (sportKey.includes('_wta')) return 'wta';
+  if (sportKey.includes('_atp')) return 'atp';
+  return null;
+}
+
 export async function ingestOdds(): Promise<{ source: 'live' | 'fixture'; count: number }> {
   if (!env.oddsApiKey) {
     const count = generateFixtures();
@@ -197,55 +235,83 @@ export async function ingestOdds(): Promise<{ source: 'live' | 'fixture'; count:
      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   );
 
-  clearUpcoming();
-  let total = 0;
-  for (const t of tournamentsConfig.tournaments) {
-    for (const tour of t.tours) {
-      const sportKey = t.oddsSportKeys[tour];
-      if (!sportKey) continue;
-      const idx = buildNameIndex(tour);
-      let events: AggregatedEvent[] = [];
-      try {
-        events = await fetchLive(sportKey);
-      } catch (e) {
-        process.stderr.write(`  odds fetch failed for ${sportKey}: ${(e as Error).message}\n`);
-        continue;
-      }
-      db.exec('BEGIN');
-      for (const ev of events) {
-        const names = Object.keys(ev.price);
-        const p1 = ev.home ?? names[0];
-        const p2 = ev.away ?? names[1];
-        insert.run(
-          ev.id,
-          tour,
-          t.id,
-          t.name,
-          t.surface,
-          ev.commence_time,
-          p1,
-          p2,
-          resolve(idx, p1),
-          resolve(idx, p2),
-          ev.price[p1] ?? null,
-          ev.price[p2] ?? null,
-          ev.books,
-          'live',
-          new Date().toISOString(),
-        );
-        total++;
-      }
-      db.exec('COMMIT');
-      if (events.length) process.stdout.write(`  ${sportKey}: ${events.length} events\n`);
-    }
+  // Discover the tournaments that are live right now (free endpoint).
+  let sports: TennisSport[];
+  try {
+    sports = await fetchActiveTennisSports();
+  } catch (e) {
+    process.stderr.write(`  could not list tennis sports: ${(e as Error).message}\n`);
+    const count = generateFixtures();
+    return { source: 'fixture', count };
   }
 
-  // Out of season / nothing live → keep a working demo with Elo-derived fixtures.
+  const nameIndex: Partial<Record<TourId, Map<string, number>>> = {};
+  clearUpcoming();
+  let total = 0;
+
+  for (const sport of sports) {
+    const tour = tourFromKey(sport.key);
+    if (!tour) continue; // skip mixed / unknown circuits
+    const idx = (nameIndex[tour] ??= buildNameIndex(tour));
+
+    let events: AggregatedEvent[] = [];
+    try {
+      events = await fetchLive(sport.key);
+    } catch (e) {
+      process.stderr.write(`  odds fetch failed for ${sport.key}: ${(e as Error).message}\n`);
+      continue;
+    }
+
+    // Map to a configured tournament when possible; otherwise surface the real
+    // event under its own name so nothing is hidden.
+    const conf = matchConfigTournament(sport.key);
+    const tournamentId = conf?.id ?? sport.key;
+    const tournamentName = conf?.name ?? sport.title;
+    const surface = conf?.surface ?? 'Hard'; // real events don't carry surface
+
+    db.exec('BEGIN');
+    for (const ev of events) {
+      const names = Object.keys(ev.price);
+      const p1 = ev.home ?? names[0];
+      const p2 = ev.away ?? names[1];
+      if (!p1 || !p2) continue;
+      insert.run(
+        ev.id,
+        tour,
+        tournamentId,
+        tournamentName,
+        surface,
+        ev.commence_time,
+        p1,
+        p2,
+        resolve(idx, p1),
+        resolve(idx, p2),
+        ev.price[p1] ?? null,
+        ev.price[p2] ?? null,
+        ev.books,
+        'live',
+        new Date().toISOString(),
+      );
+      total++;
+    }
+    db.exec('COMMIT');
+    if (events.length) process.stdout.write(`  ${sport.key}: ${events.length} events\n`);
+  }
+
+  // Nothing live at all → keep a working demo with Elo-derived fixtures.
   if (total === 0) {
     const count = generateFixtures();
     return { source: 'fixture', count };
   }
   return { source: 'live', count: total };
+}
+
+/** Refresh odds and record when it happened. Used by the timer and /api/refresh. */
+export async function refreshOdds(): Promise<{ source: 'live' | 'fixture'; count: number }> {
+  const result = await ingestOdds();
+  setMeta('odds_source', result.source);
+  setMeta('odds_refreshed_at', new Date().toISOString());
+  return result;
 }
 
 function round2(n: number): number {

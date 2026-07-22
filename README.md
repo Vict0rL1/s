@@ -25,6 +25,9 @@ posible *value* cuando el modelo discrepa de las cuotas.
 - **Desglose completo por partido**: explicación de *por qué* gana X (qué señal pesa más),
   ranking por Elo, últimos 5 resultados, récord en la superficie, comparativa de saque/quiebre
   (ace%, 1er saque, break points salvados) y marcador estimado.
+- **Partidos próximos reales + auto-actualización:** con una API key, la app descubre los
+  torneos de tenis activos ahora, trae sus partidos y refresca las odds sola cada pocas horas
+  (o al pulsar *Actualizar*).
 - **Dashboard** para elegir circuito y torneo, ver próximos partidos con barras
   modelo-vs-mercado, perfil de jugador (Elo por superficie + saque/quiebre + últimos
   resultados) y H2H.
@@ -69,19 +72,31 @@ próximos partidos con la predicción del modelo y las odds lado a lado.
 
 ---
 
-## Odds reales (The Odds API)
+## Odds reales y partidos próximos (The Odds API)
+
+Los partidos próximos **reales** (los que se juegan hoy/esta semana) y sus cuotas vienen de
+The Odds API. Sin key, la app muestra un demo con partidos de ejemplo.
 
 1. Regístrate gratis en **https://the-odds-api.com** y copia tu API key (botón *Get API Key*).
-   El plan gratuito da 500 requests/mes, suficiente para refrescar odds periódicamente.
+   El plan gratuito da 500 requests/mes.
 2. En tu archivo `.env`:
 
    ```bash
-   ODDS_API_KEY=tu_clave_aqui      # NUNCA la subas al repo (.env está en .gitignore)
-   ODDS_REGIONS=eu,uk              # regiones de casas de apuestas
+   ODDS_API_KEY=tu_clave_aqui
+   ODDS_REGIONS=eu,uk
    ```
 
-3. Ejecuta `npm run update-data` (ver abajo). Si no hay key, la app genera odds de ejemplo a
-   partir del Elo para que el dashboard siga funcionando.
+   (NUNCA subas tu `.env` — está en `.gitignore`.)
+3. Ejecuta `npm run update-data`. La ingesta **descubre automáticamente los torneos de tenis
+   activos** en ese momento (Grand Slams, Masters/1000, 500…) y trae sus partidos, así aparece
+   lo que realmente se juega hoy — no una lista fija.
+
+### Que se actualice solo
+
+Con la key configurada, el servidor **refresca las odds automáticamente** mientras corre
+(al arrancar y cada `AUTO_REFRESH_MINUTES`, 6 h por defecto). También puedes pulsar
+**↻ Actualizar** en el dashboard para refrescar al instante. La cabecera muestra la hora de la
+última actualización.
 
 ## Actualizar datos (histórico + odds)
 

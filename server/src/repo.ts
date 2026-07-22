@@ -250,6 +250,28 @@ export function listUpcoming(filter: {
     .all(...params) as unknown as UpcomingRow[];
 }
 
+/** Distinct tournaments present in upcoming_matches (for dynamic/live events). */
+export function getUpcomingTournaments(
+  tour?: string,
+): { tournament_id: string; tournament_name: string; surface: string; tour: string; count: number }[] {
+  const where = tour ? 'WHERE tour = ?' : '';
+  const params = tour ? [tour] : [];
+  return getDb()
+    .prepare(
+      `SELECT tournament_id, tournament_name, surface, tour, COUNT(*) AS count
+       FROM upcoming_matches ${where}
+       GROUP BY tournament_id, tour
+       ORDER BY MIN(commence_time) ASC`,
+    )
+    .all(...params) as unknown as {
+    tournament_id: string;
+    tournament_name: string;
+    surface: string;
+    tour: string;
+    count: number;
+  }[];
+}
+
 export function getUpcomingById(id: string): UpcomingRow | null {
   return (
     (getDb().prepare('SELECT * FROM upcoming_matches WHERE id = ?').get(id) as

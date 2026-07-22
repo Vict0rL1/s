@@ -2,18 +2,20 @@
 // and delegates to repo (DB reads) and model (predict).
 
 import type { FastifyInstance } from 'fastify';
-import { toursConfig, tournamentsConfig } from '../config.ts';
+import { env, toursConfig, tournamentsConfig } from '../config.ts';
 import { getMeta } from '../db.ts';
 import {
   countRows,
   getProfile,
   getH2HMeetings,
   getUpcomingById,
+  getUpcomingTournaments,
   listUpcoming,
   searchPlayers,
 } from '../repo.ts';
 import { computeH2H } from '../model/h2h.ts';
 import { buildPrediction, type Prediction } from '../model/predict.ts';
+import { refreshOdds } from '../ingest/odds.ts';
 import type { UpcomingRow } from '../types.ts';
 
 /** Attach a full prediction to an upcoming-match row (null if players unknown). */
@@ -41,6 +43,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     seededAt: getMeta('seeded_at'),
     updatedAt: getMeta('updated_at'),
     oddsSource: getMeta('odds_source'),
+    oddsRefreshedAt: getMeta('odds_refreshed_at'),
+    autoRefreshMinutes: env.autoRefreshMinutes,
+    hasOddsKey: !!env.oddsApiKey,
     counts: {
       players: countRows('players'),
       matches: countRows('matches'),
@@ -48,6 +53,17 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       upcoming: countRows('upcoming_matches'),
     },
   }));
+
+  // --- manual odds refresh (button in the UI / on demand) ---
+  app.post('/refresh', async (_req, reply) => {
+    if (countRows('players') === 0) {
+      return reply
+        .code(409)
+        .send({ error: 'No hay datos. Corre `npm run seed` o `npm run update-data` primero.' });
+    }
+    const result = await refreshOdds();
+    return { ok: true, ...result };
+  });
 
   // --- tours ---
   app.get('/tours', async () => {
@@ -81,17 +97,42 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return profile;
   });
 
-  // --- tournaments (config + which have upcoming matches; optionally per tour) ---
+  // --- tournaments (config + dynamically discovered live events) ---
   app.get<{ Querystring: { tour?: string } }>('/tournaments', async (req) => {
-    const upcoming = listUpcoming({ tour: req.query.tour });
-    const withData = new Set(upcoming.map((u) => u.tournament_id));
+    const tour = req.query.tour;
+    const discovered = getUpcomingTournaments(tour);
+    const byId = new Map(discovered.map((d) => [d.tournament_id, d]));
+
+    // Configured tournaments (Slams, Masters 1000, …) enriched with live counts.
+    const configured = tournamentsConfig.tournaments
+      .filter((t) => !tour || t.tours.includes(tour))
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        category: t.category,
+        surface: t.surface,
+        tours: t.tours,
+        hasUpcoming: byId.has(t.id),
+        upcomingCount: byId.get(t.id)?.count ?? 0,
+      }));
+
+    // Any live event NOT in the config (e.g. an ATP 500 currently in season).
+    const configuredIds = new Set(tournamentsConfig.tournaments.map((t) => t.id));
+    const dynamic = discovered
+      .filter((d) => !configuredIds.has(d.tournament_id))
+      .map((d) => ({
+        id: d.tournament_id,
+        name: d.tournament_name,
+        category: 'other',
+        surface: d.surface,
+        tours: [d.tour],
+        hasUpcoming: true,
+        upcomingCount: d.count,
+      }));
+
     return {
       categories: tournamentsConfig.categories,
-      tournaments: tournamentsConfig.tournaments.map((t) => ({
-        ...t,
-        hasUpcoming: withData.has(t.id),
-        upcomingCount: upcoming.filter((u) => u.tournament_id === t.id).length,
-      })),
+      tournaments: [...configured, ...dynamic],
     };
   });
 

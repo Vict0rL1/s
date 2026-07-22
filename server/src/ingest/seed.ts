@@ -314,6 +314,7 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
 
   const tconf = (id: string) => tournamentsConfig.tournaments.find((t) => t.id === id);
   let count = 0;
+  let slot = 0; // spreads demo fixtures across the next few days, starting today
   db.exec('BEGIN');
   plan.forEach((block) => {
     const conf = tconf(block.tournamentId);
@@ -333,7 +334,7 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
         block.tournamentId,
         conf?.name ?? block.tournamentId,
         block.surface,
-        nextSeasonDateISO(block.month, pi),
+        nearTermISO(slot++),
         a.name,
         b.name,
         a.id,
@@ -352,19 +353,13 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
 }
 
 /**
- * Next future date in the tournament's month (this year if it hasn't passed,
- * otherwise next year), so demo fixtures look calendar-coherent.
+ * Spread demo fixtures across the next few days starting a couple of hours from
+ * now, so there is always something "today/soon" to show (real upcoming matches
+ * come from The Odds API via `npm run update-data`).
  */
-function nextSeasonDateISO(month: number, dayOffset: number): string {
-  const now = new Date();
-  let year = now.getUTCFullYear();
-  const day = 8 + dayOffset * 2;
-  let d = new Date(Date.UTC(year, month - 1, day, 13, 0, 0));
-  if (d.getTime() < now.getTime()) {
-    year += 1;
-    d = new Date(Date.UTC(year, month - 1, day, 13, 0, 0));
-  }
-  return d.toISOString();
+function nearTermISO(slot: number): string {
+  const hoursFromNow = 3 + slot * 7; // first ~3h out, then ~every 7h → ~4 days
+  return new Date(Date.now() + hoursFromNow * 3600 * 1000).toISOString();
 }
 
 function round2(n: number): number {

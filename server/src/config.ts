@@ -30,8 +30,12 @@ export const tournamentsConfig = readJson<TournamentsConfig>(
 
 export const env = {
   oddsApiKey: process.env.ODDS_API_KEY?.trim() || '',
-  oddsRegions: (process.env.ODDS_REGIONS?.trim() || 'eu,uk'),
+  oddsRegions: process.env.ODDS_REGIONS?.trim() || 'eu,uk',
   port: Number(process.env.PORT) || 4000,
+  // Minutes between automatic odds refreshes (0 disables). Only runs when a key
+  // is set. The /sports listing used to discover events is free; only the odds
+  // fetches count against the 500/month free quota, so keep this modest.
+  autoRefreshMinutes: Number(process.env.AUTO_REFRESH_MINUTES) || 360,
 };
 
 export function tourById(id: string) {

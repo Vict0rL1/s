@@ -19,6 +19,27 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<{ tour: string; id: number } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    setError(null);
+    try {
+      await api.refresh();
+      const [m, tt, up] = await Promise.all([
+        api.meta(),
+        api.tournaments(tour),
+        api.upcoming(tour, tournamentId ?? undefined),
+      ]);
+      setMeta(m);
+      setTournaments(tt.tournaments);
+      setMatches(up);
+    } catch (e) {
+      setError(`No se pudo actualizar: ${e}`);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   // Initial load: meta + tours.
   useEffect(() => {
@@ -70,14 +91,25 @@ export default function App() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <header className="mb-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-slate-100">🎾 Tennis Predictor</h1>
-          {meta && <DataBadge meta={meta} />}
+          <div className="flex items-center gap-2">
+            {meta && <DataBadge meta={meta} />}
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              title="Vuelve a consultar las odds de los partidos próximos"
+              className="rounded-lg bg-slate-800 px-3 py-1 text-xs font-medium text-slate-200 ring-1 ring-slate-600 transition hover:bg-slate-700 disabled:opacity-50"
+            >
+              {refreshing ? 'Actualizando…' : '↻ Actualizar'}
+            </button>
+          </div>
         </div>
         <p className="mt-1 text-sm text-slate-400">
           Predicción de partidos con Elo por superficie, forma reciente, head-to-head y odds del
           mercado.
         </p>
+        {meta && <RefreshInfo meta={meta} />}
       </header>
 
       {error && (
@@ -157,6 +189,23 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+function RefreshInfo({ meta }: { meta: Meta }) {
+  const when = meta.oddsRefreshedAt ?? meta.updatedAt ?? meta.seededAt;
+  const whenTxt = when
+    ? new Date(when).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : '—';
+  return (
+    <p className="mt-1 text-xs text-slate-500">
+      Odds actualizadas: {whenTxt}
+      {meta.hasOddsKey
+        ? meta.autoRefreshMinutes > 0
+          ? ` · auto cada ${Math.round(meta.autoRefreshMinutes / 60)}h`
+          : ''
+        : ' · configura ODDS_API_KEY y corre npm run update-data para partidos reales'}
+    </p>
   );
 }
 
