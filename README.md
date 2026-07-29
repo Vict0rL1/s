@@ -22,6 +22,8 @@ posible *value* cuando el modelo discrepa de las cuotas.
 - **Elo general + por superficie** (dura / arcilla / hierba) con K-factor dinámico.
 - **Forma reciente**, **head-to-head** y **comparación contra el mercado** (probabilidad
   implícita sin vig + detección de value).
+- **Resumen "qué es lo más probable"** en cada partido: en lenguaje natural, con el favorito,
+  su probabilidad, el marcador probable y las razones (superficie, forma, H2H, saque, mercado).
 - **Desglose completo por partido**: explicación de *por qué* gana X (qué señal pesa más),
   ranking por Elo, últimos 5 resultados, récord en la superficie, comparativa de saque/quiebre
   (ace%, 1er saque, break points salvados) y marcador estimado.

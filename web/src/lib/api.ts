@@ -133,6 +133,11 @@ export interface ExpectedScore {
   note: string;
 }
 
+export interface MatchSummary {
+  headline: string;
+  bullets: string[];
+}
+
 export interface Prediction {
   tour: string;
   surface: string;
@@ -149,6 +154,7 @@ export interface Prediction {
   market: MarketComparison;
   reasoning: Reasoning;
   expectedScore: ExpectedScore;
+  summary: MatchSummary;
   verdict: {
     favoredSide: 1 | 2 | null;
     favoredName: string | null;

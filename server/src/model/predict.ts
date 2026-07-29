@@ -78,6 +78,12 @@ export interface ExpectedScore {
   note: string;
 }
 
+/** Plain-language "what is most likely to happen" for this match. */
+export interface MatchSummary {
+  headline: string;
+  bullets: string[];
+}
+
 export interface Prediction {
   tour: TourId;
   surface: string;
@@ -94,6 +100,7 @@ export interface Prediction {
   market: MarketComparison;
   reasoning: Reasoning;
   expectedScore: ExpectedScore;
+  summary: MatchSummary;
   verdict: {
     favoredSide: 1 | 2 | null;
     favoredName: string | null;
@@ -189,6 +196,158 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
+const SURFACE_ES: Record<string, string> = { hard: 'dura', clay: 'arcilla', grass: 'hierba' };
+
+/**
+ * Write the "what's most likely to happen" summary in plain Spanish. Everything
+ * here restates numbers already computed above — no new modelling — so the text
+ * can never disagree with the figures shown next to it. Uncertainty is stated
+ * explicitly (a coin-flip is described as such, not dressed up as a pick).
+ */
+function buildSummary(args: {
+  p1: string;
+  p2: string;
+  prob1: number;
+  confidence: ConfidenceTier;
+  expected: ExpectedScore;
+  surface: string;
+  eff1: EffectiveRating;
+  eff2: EffectiveRating;
+  form1: FormSignal;
+  form2: FormSignal;
+  h2h: H2HSignal;
+  serve1: ServeStats;
+  serve2: ServeStats;
+  rec1: SurfaceRecord;
+  rec2: SurfaceRecord;
+  market: MarketComparison;
+}): MatchSummary {
+  const { p1, p2, prob1, confidence, expected, h2h, market } = args;
+  const favIsP1 = prob1 >= 0.5;
+  const fav = favIsP1 ? p1 : p2;
+  const dog = favIsP1 ? p2 : p1;
+  const favProb = Math.round(Math.max(prob1, 1 - prob1) * 100);
+  const surfName = SURFACE_ES[args.surface.toLowerCase()] ?? args.surface.toLowerCase();
+
+  // --- Headline ---
+  const headline =
+    confidence === 'toss_up'
+      ? `Partido muy parejo: ligerísima ventaja para ${fav} (${favProb}%–${100 - favProb}%). ` +
+        `Cualquiera de los dos puede ganar.`
+      : `Lo más probable: gana ${fav} (${favProb}%), ` +
+        `${expected.likelySets} en sets. ${expected.note}`;
+
+  const bullets: string[] = [];
+
+  // --- Surface / rating ---
+  const favEff = favIsP1 ? args.eff1 : args.eff2;
+  const dogEff = favIsP1 ? args.eff2 : args.eff1;
+  if (favEff.surface != null && dogEff.surface != null) {
+    // Judge "who is better" on the very numbers shown, so the words can't
+    // contradict the figures (a 2-point gap is not an advantage).
+    const favS = Math.round(favEff.surface);
+    const dogS = Math.round(dogEff.surface);
+    const leader = favS >= dogS ? fav : dog;
+    bullets.push(
+      Math.abs(favS - dogS) >= 25
+        ? `En ${surfName}, ${leader} llega con mejor Elo (${Math.max(favS, dogS)} vs ${Math.min(favS, dogS)}).`
+        : `Nivel muy parejo en ${surfName} (${favS} vs ${dogS}); la ventaja viene de otras señales.`,
+    );
+  } else {
+    bullets.push(
+      `Superficie no identificada: la predicción usa el Elo general (${Math.round(favEff.overall)} vs ${Math.round(dogEff.overall)}).`,
+    );
+  }
+
+  // --- Surface record ---
+  const favRec = favIsP1 ? args.rec1 : args.rec2;
+  const dogRec = favIsP1 ? args.rec2 : args.rec1;
+  if (favRec.wins + favRec.losses >= 5 && dogRec.wins + dogRec.losses >= 5) {
+    bullets.push(
+      `Historial en ${surfName}: ${fav} ${favRec.wins}–${favRec.losses}, ${dog} ${dogRec.wins}–${dogRec.losses}.`,
+    );
+  }
+
+  // --- Form ---
+  const favForm = favIsP1 ? args.form1 : args.form2;
+  const dogForm = favIsP1 ? args.form2 : args.form1;
+  const streakTxt = (f: FormSignal, who: string) =>
+    f.streak >= 2
+      ? `${who} llega con ${f.streak} victorias seguidas`
+      : f.streak <= -2
+        ? `${who} llega con ${-f.streak} derrotas seguidas`
+        : null;
+  const favStreak = streakTxt(favForm, fav);
+  const dogStreak = streakTxt(dogForm, dog);
+  if (favStreak || dogStreak) {
+    bullets.push(`Forma: ${[favStreak, dogStreak].filter(Boolean).join('; ')}.`);
+  } else {
+    bullets.push(
+      `Forma reciente parecida (${Math.round(favForm.winRate * 100)}% vs ${Math.round(dogForm.winRate * 100)}% de victorias).`,
+    );
+  }
+
+  // --- Head-to-head ---
+  if (h2h.total === 0) {
+    bullets.push('Nunca se han enfrentado, así que no hay historial directo que pese.');
+  } else {
+    const favWins = favIsP1 ? h2h.p1Wins : h2h.p2Wins;
+    const dogWins = favIsP1 ? h2h.p2Wins : h2h.p1Wins;
+    const leader = favWins > dogWins ? fav : dog;
+    const hi = Math.max(favWins, dogWins);
+    const lo = Math.min(favWins, dogWins);
+    if (favWins === dogWins) {
+      bullets.push(`El head-to-head está igualado ${hi}–${lo} en ${h2h.total} enfrentamientos.`);
+    } else if (h2h.total <= 2) {
+      // One or two meetings is anecdote, not dominance — say it plainly.
+      bullets.push(
+        `Solo se han enfrentado ${h2h.total} ${h2h.total === 1 ? 'vez' : 'veces'} ` +
+          `(ganó ${leader}): poco peso en la predicción.`,
+      );
+    } else {
+      bullets.push(
+        hi - lo >= 2
+          ? `${leader} domina el head-to-head ${hi}–${lo}.`
+          : `El head-to-head está muy ajustado (${hi}–${lo} para ${leader}).`,
+      );
+    }
+  }
+
+  // --- Serve edge ---
+  const favServe = favIsP1 ? args.serve1 : args.serve2;
+  const dogServe = favIsP1 ? args.serve2 : args.serve1;
+  if (favServe.acePct != null && dogServe.acePct != null) {
+    const diff = favServe.acePct - dogServe.acePct;
+    if (Math.abs(diff) >= 3) {
+      const better = diff > 0 ? fav : dog;
+      bullets.push(
+        `${better} tiene el saque más fuerte (${Math.max(favServe.acePct, dogServe.acePct)}% de aces vs ${Math.min(favServe.acePct, dogServe.acePct)}%).`,
+      );
+    }
+  }
+
+  // --- Market agreement ---
+  if (market.market) {
+    const marketFavProb = Math.round((favIsP1 ? market.market.implied1 : market.market.implied2) * 100);
+    const gap = favProb - marketFavProb;
+    if (Math.abs(gap) < 5) {
+      bullets.push(`Las casas de apuestas coinciden (${marketFavProb}% para ${fav}).`);
+    } else if (gap > 0) {
+      bullets.push(
+        `El modelo es más optimista con ${fav} (${favProb}%) que el mercado (${marketFavProb}%): posible value en ${fav}.`,
+      );
+    } else {
+      bullets.push(
+        `El mercado ve a ${fav} más favorito (${marketFavProb}%) que el modelo (${favProb}%): el valor estaría en ${dog}.`,
+      );
+    }
+  } else {
+    bullets.push('Sin cuotas disponibles para comparar con el mercado.');
+  }
+
+  return { headline, bullets };
+}
+
 /**
  * Build a full, explainable prediction between two players on a given surface.
  * `market` is optional decimal odds {odds1, odds2} for the same p1/p2 order.
@@ -242,6 +401,31 @@ export function buildPrediction(
     2 * h2h.delta,
   );
 
+  const confidence = confidenceTier(prob1);
+  const expected = estimateScoreline(prob1, bestOf);
+  const serve1 = getServeStats(tour, p1Id);
+  const serve2 = getServeStats(tour, p2Id);
+  const rec1 = getSurfaceRecord(tour, p1Id, surface);
+  const rec2 = getSurfaceRecord(tour, p2Id, surface);
+  const summary = buildSummary({
+    p1: p1Name,
+    p2: p2Name,
+    prob1,
+    confidence,
+    expected,
+    surface,
+    eff1,
+    eff2,
+    form1,
+    form2,
+    h2h,
+    serve1,
+    serve2,
+    rec1,
+    rec2,
+    market: marketComparison,
+  });
+
   return {
     tour,
     surface,
@@ -256,21 +440,19 @@ export function buildPrediction(
       p1: form1Results.slice(0, 5).map((r) => r.won),
       p2: form2Results.slice(0, 5).map((r) => r.won),
     },
-    surfaceRecord: {
-      p1: getSurfaceRecord(tour, p1Id, surface),
-      p2: getSurfaceRecord(tour, p2Id, surface),
-    },
-    serve: { p1: getServeStats(tour, p1Id), p2: getServeStats(tour, p2Id) },
+    surfaceRecord: { p1: rec1, p2: rec2 },
+    serve: { p1: serve1, p2: serve2 },
     h2h,
     adjustedRatings: { p1: Math.round(adj1 * 10) / 10, p2: Math.round(adj2 * 10) / 10 },
     model: { prob1: round3(prob1), prob2: round3(prob2) },
     market: marketComparison,
     reasoning,
-    expectedScore: estimateScoreline(prob1, bestOf),
+    expectedScore: expected,
+    summary,
     verdict: {
       favoredSide,
       favoredName,
-      confidence: confidenceTier(prob1),
+      confidence,
       marginPct: Math.round(Math.abs(prob1 - 0.5) * 1000) / 10,
     },
     disclaimer: DISCLAIMER,

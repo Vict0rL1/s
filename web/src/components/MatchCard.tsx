@@ -80,6 +80,22 @@ export default function MatchCard({
             )}
           </div>
 
+          {/* What the model expects to happen, in plain language */}
+          <div className="mt-3 rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-700/50">
+            <div className="mb-1.5 text-xs uppercase tracking-wide text-slate-500">
+              Qué es lo más probable
+            </div>
+            <p className="text-sm font-medium text-slate-100">{prediction.summary.headline}</p>
+            <ul className="mt-2 space-y-1">
+              {prediction.summary.bullets.map((b, i) => (
+                <li key={i} className="flex gap-2 text-xs text-slate-300">
+                  <span className="text-slate-600">•</span>
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
           <button
             onClick={() => setOpen((o) => !o)}
             className="mt-3 text-xs text-sky-400 hover:text-sky-300"
