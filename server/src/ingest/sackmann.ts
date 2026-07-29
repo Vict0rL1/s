@@ -5,12 +5,17 @@
 // Docs: https://github.com/JeffSackmann/tennis_atp
 //       https://github.com/JeffSackmann/tennis_wta
 //
-// NOTE: this reaches out to raw.githubusercontent.com, so it needs internet
-// access. In restricted/offline environments use `npm run seed` instead, which
-// loads the bundled sample dataset.
+// Two ways to get the files:
+//   1. Fast path — HTTP GET from raw.githubusercontent.com (cached in data/raw).
+//   2. Fallback  — `git clone` from github.com. Some networks (universities,
+//      some ISPs) block/filter raw.githubusercontent.com and return 404 even
+//      though github.com works; when the always-present players file 404s or a
+//      request errors, we clone the repo instead and read the CSVs from disk.
+// Offline/restricted → use `npm run seed`.
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { parse } from 'csv-parse/sync';
 import { getDb } from '../db.ts';
 import { RAW_DIR, toursConfig } from '../config.ts';
@@ -20,38 +25,82 @@ function rawUrl(repo: string, file: string): string {
   return toursConfig.history.rawBaseUrl.replace('{repo}', repo).replace('{file}', file);
 }
 
-/** Fetch a CSV, caching it under data/raw so re-runs don't re-download. */
-async function fetchCsvCached(repo: string, file: string): Promise<string | null> {
-  const cachePath = path.join(RAW_DIR, file);
-  if (fs.existsSync(cachePath)) {
-    return fs.readFileSync(cachePath, 'utf8');
-  }
-  const url = rawUrl(repo, file);
-  let res: Response;
+// Repos we've switched to the git-clone source (because HTTP was unreachable).
+const gitRepoDir = new Map<string, string>();
+
+/** Shallow-clone (or update) a data repo and return its local directory. */
+function cloneRepo(repo: string): string {
+  const name = repo.split('/')[1] ?? repo.replace('/', '_');
+  const dir = path.join(RAW_DIR, 'repos', name);
+  const url = `https://github.com/${repo}.git`;
   try {
-    res = await fetch(url, { signal: AbortSignal.timeout(45_000) });
+    if (fs.existsSync(path.join(dir, '.git'))) {
+      execFileSync('git', ['-C', dir, 'pull', '--ff-only'], { stdio: 'pipe' });
+    } else {
+      fs.mkdirSync(path.dirname(dir), { recursive: true });
+      process.stdout.write(`  (raw.githubusercontent no disponible; clonando ${repo} vía git…)\n`);
+      execFileSync('git', ['clone', '--depth', '1', url, dir], { stdio: 'inherit' });
+    }
   } catch (e) {
     throw new Error(
-      `No se pudo conectar con GitHub para descargar ${file} (${(e as Error).message}). ` +
-        `Revisa tu conexión a internet.`,
+      `No se pudo obtener ${repo}: falló tanto la descarga HTTP como git clone ` +
+        `(${(e as Error).message}). Revisa tu conexión / que 'git' esté instalado.`,
     );
   }
-  if (res.status === 404) return null; // season file may not exist yet
-  if (!res.ok) throw new Error(`Fallo al descargar ${url}: HTTP ${res.status}`);
-  const text = await res.text();
-  fs.mkdirSync(RAW_DIR, { recursive: true });
-  fs.writeFileSync(cachePath, text);
-  return text;
+  return dir;
+}
+
+/**
+ * Read a repo file as text (null if it legitimately doesn't exist). Tries HTTP
+ * first (cached in data/raw); on failure/filtered-404 switches to a git clone.
+ */
+async function readRepoFile(repo: string, file: string): Promise<string | null> {
+  // Already switched this repo to git → read from the clone.
+  const switched = gitRepoDir.get(repo);
+  if (switched) {
+    const p = path.join(switched, file);
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
+  }
+
+  const cachePath = path.join(RAW_DIR, file);
+  if (fs.existsSync(cachePath)) return fs.readFileSync(cachePath, 'utf8');
+
+  const useGitFor = (): string | null => {
+    const dir = cloneRepo(repo);
+    gitRepoDir.set(repo, dir);
+    const p = path.join(dir, file);
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
+  };
+
+  let res: Response;
+  try {
+    res = await fetch(rawUrl(repo, file), { signal: AbortSignal.timeout(45_000) });
+  } catch {
+    return useGitFor(); // network error → git
+  }
+  if (res.ok) {
+    const text = await res.text();
+    fs.mkdirSync(RAW_DIR, { recursive: true });
+    fs.writeFileSync(cachePath, text);
+    return text;
+  }
+  if (res.status === 404) {
+    // The players file always exists; a 404 for it means raw.githubusercontent
+    // is filtered on this network → switch to git. A missing season file is real.
+    if (file.endsWith('_players.csv')) return useGitFor();
+    return null;
+  }
+  return useGitFor(); // any other HTTP error → git
 }
 
 /**
  * Check we can actually reach the data source before wiping anything. Returns
  * the number of players found in the first tour's players file (throws a
- * friendly error if unreachable).
+ * friendly error if unreachable via both HTTP and git).
  */
 export async function preflight(tour: TourConfig): Promise<number> {
-  const csv = await fetchCsvCached(tour.sackmann.repo, tour.sackmann.playersFile);
-  if (!csv) throw new Error(`El archivo de jugadores de ${tour.id} no está disponible (404).`);
+  const csv = await readRepoFile(tour.sackmann.repo, tour.sackmann.playersFile);
+  if (!csv) throw new Error(`El archivo de jugadores de ${tour.id} no está disponible.`);
   const rows = parse(csv, { columns: true, skip_empty_lines: true, relax_column_count: true });
   return (rows as any[]).length;
 }
@@ -75,7 +124,7 @@ export async function ingestTour(tour: TourConfig, opts: IngestOptions): Promise
   const db = getDb();
 
   // --- Players (biographical info) ---
-  const playersCsv = await fetchCsvCached(tour.sackmann.repo, tour.sackmann.playersFile);
+  const playersCsv = await readRepoFile(tour.sackmann.repo, tour.sackmann.playersFile);
   const playerUpsert = db.prepare(
     `INSERT INTO players (id, tour, name, hand, country, birthdate)
      VALUES (?, ?, ?, ?, ?, ?)
@@ -115,7 +164,7 @@ export async function ingestTour(tour: TourConfig, opts: IngestOptions): Promise
   let matchCount = 0;
   for (let year = opts.fromYear; year <= opts.toYear; year++) {
     const file = tour.sackmann.matchesFile.replace('{year}', String(year));
-    const csv = await fetchCsvCached(tour.sackmann.repo, file);
+    const csv = await readRepoFile(tour.sackmann.repo, file);
     if (!csv) continue;
     const rows = parse(csv, { columns: true, skip_empty_lines: true, relax_column_count: true }) as any[];
     db.exec('BEGIN');
