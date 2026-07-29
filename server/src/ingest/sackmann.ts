@@ -28,26 +28,68 @@ function rawUrl(repo: string, file: string): string {
 // Repos we've switched to the git-clone source (because HTTP was unreachable).
 const gitRepoDir = new Map<string, string>();
 
-/** Shallow-clone (or update) a data repo and return its local directory. */
+/**
+ * Shallow-clone (or update) a data repo and return its local directory. Tries
+ * the configured mirrors in order. GIT_TERMINAL_PROMPT=0 is essential: when a
+ * repo is unreachable GitHub answers 404 and git would otherwise hang forever
+ * asking for a username/password.
+ */
 function cloneRepo(repo: string): string {
   const name = repo.split('/')[1] ?? repo.replace('/', '_');
   const dir = path.join(RAW_DIR, 'repos', name);
-  const url = `https://github.com/${repo}.git`;
-  try {
-    if (fs.existsSync(path.join(dir, '.git'))) {
-      execFileSync('git', ['-C', dir, 'pull', '--ff-only'], { stdio: 'pipe' });
-    } else {
-      fs.mkdirSync(path.dirname(dir), { recursive: true });
-      process.stdout.write(`  (raw.githubusercontent no disponible; clonando ${repo} vía git…)\n`);
-      execFileSync('git', ['clone', '--depth', '1', url, dir], { stdio: 'inherit' });
+  const noPrompt = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_ASKPASS: 'echo',
+    GCM_INTERACTIVE: 'never',
+  };
+
+  // A manually placed copy (e.g. an unzipped download) — use it as-is.
+  if (fs.existsSync(dir) && !fs.existsSync(path.join(dir, '.git'))) {
+    if (fs.readdirSync(dir).some((f) => f.endsWith('.csv'))) {
+      process.stdout.write(`  usando la copia local en data/raw/repos/${name}\n`);
+      return dir;
     }
-  } catch (e) {
-    throw new Error(
-      `No se pudo obtener ${repo}: falló tanto la descarga HTTP como git clone ` +
-        `(${(e as Error).message}). Revisa tu conexión / que 'git' esté instalado.`,
-    );
+    fs.rmSync(dir, { recursive: true, force: true }); // empty/partial → re-clone
   }
-  return dir;
+
+  // Already cloned → just try to update (a failed pull is fine, we have data).
+  if (fs.existsSync(path.join(dir, '.git'))) {
+    try {
+      execFileSync('git', ['-C', dir, 'pull', '--ff-only'], { stdio: 'pipe', env: noPrompt });
+    } catch {
+      process.stdout.write(`  (no se pudo actualizar ${name}; usando la copia local)\n`);
+    }
+    return dir;
+  }
+
+  const candidates = [repo, ...(toursConfig.history.mirrors?.[repo] ?? [])];
+  const errors: string[] = [];
+  for (const candidate of candidates) {
+    try {
+      fs.mkdirSync(path.dirname(dir), { recursive: true });
+      process.stdout.write(`  clonando ${candidate} vía git…\n`);
+      execFileSync(
+        'git',
+        ['clone', '--depth', '1', `https://github.com/${candidate}.git`, dir],
+        { stdio: 'inherit', env: noPrompt },
+      );
+      return dir;
+    } catch (e) {
+      errors.push(`${candidate}: ${(e as Error).message.split('\n')[0]}`);
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  throw new Error(
+    `No se pudo obtener ${repo} ni por HTTP ni por git clone.\n` +
+      `   Intentos: ${errors.join(' | ')}\n` +
+      `   Tu red parece bloquear GitHub para este repositorio. Opciones:\n` +
+      `     • Prueba con otra red (p. ej. datos del móvil) y vuelve a ejecutar.\n` +
+      `     • O descarga el ZIP manualmente desde github.com/${repo} y descomprímelo en\n` +
+      `       data/raw/repos/${name} (debe contener los .csv directamente).\n` +
+      `     • Mientras tanto, \`npm run seed\` deja la app funcionando con datos de ejemplo.`,
+  );
 }
 
 /**
@@ -101,8 +143,7 @@ async function readRepoFile(repo: string, file: string): Promise<string | null> 
 export async function preflight(tour: TourConfig): Promise<number> {
   const csv = await readRepoFile(tour.sackmann.repo, tour.sackmann.playersFile);
   if (!csv) throw new Error(`El archivo de jugadores de ${tour.id} no está disponible.`);
-  const rows = parse(csv, { columns: true, skip_empty_lines: true, relax_column_count: true });
-  return (rows as any[]).length;
+  return parsePlayers(csv).length;
 }
 
 function num(v: unknown): number | null {
@@ -114,6 +155,20 @@ function num(v: unknown): number | null {
 interface IngestOptions {
   fromYear: number;
   toYear: number;
+}
+
+// Column order of the players file in older snapshots, which ship WITHOUT a
+// header row. Newer Sackmann files include one, so we detect and adapt.
+const PLAYERS_COLUMNS = ['player_id', 'name_first', 'name_last', 'hand', 'dob', 'ioc', 'height', 'wikidata_id'];
+
+/** Parse a players CSV whether or not it has a header row. */
+function parsePlayers(csv: string): any[] {
+  const hasHeader = /^\s*player_id\b/i.test(csv);
+  return parse(csv, {
+    columns: hasHeader ? true : PLAYERS_COLUMNS,
+    skip_empty_lines: true,
+    relax_column_count: true,
+  }) as any[];
 }
 
 /** Download + parse + store one tour's players and matches for a year range. */
@@ -133,7 +188,7 @@ export async function ingestTour(tour: TourConfig, opts: IngestOptions): Promise
   );
   let playerCount = 0;
   if (playersCsv) {
-    const rows = parse(playersCsv, { columns: true, skip_empty_lines: true, relax_column_count: true }) as any[];
+    const rows = parsePlayers(playersCsv);
     db.exec('BEGIN');
     for (const r of rows) {
       const id = num(r.player_id);

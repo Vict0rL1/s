@@ -46,6 +46,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     oddsRefreshedAt: getMeta('odds_refreshed_at'),
     autoRefreshMinutes: env.autoRefreshMinutes,
     hasOddsKey: !!env.oddsApiKey,
+    // Newest match in the history (YYYYMMDD). If this is old, Elo is stale and
+    // predictions are unreliable — the UI surfaces this.
+    historyThrough: getMeta('history_through'),
     counts: {
       players: countRows('players'),
       matches: countRows('matches'),

@@ -203,6 +203,7 @@ export interface Meta {
   oddsRefreshedAt: string | null;
   autoRefreshMinutes: number;
   hasOddsKey: boolean;
+  historyThrough: string | null;
   counts: { players: number; matches: number; ratings: number; upcoming: number };
 }
 

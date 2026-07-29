@@ -385,6 +385,7 @@ export function seedDatabase(): {
 
   setMeta('data_source', 'seed');
   setMeta('seeded_at', new Date().toISOString());
+  setMeta('history_through', `${END_YEAR}1231`);
 
   return {
     players: ATP.length + WTA.length,

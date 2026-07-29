@@ -53,19 +53,55 @@ async function main() {
   // Full rebuild keeps ratings correct and avoids duplicate matches.
   resetData();
 
+  // One unreachable tour shouldn't lose the other: ingest what we can and warn.
   let totalMatches = 0;
+  const failed: string[] = [];
   for (const tour of tours) {
     console.log(`\n▸ ${tour.label}`);
-    const res = await ingestTour(tour, { fromYear, toYear });
-    console.log(`  players: ${res.players}, matches: ${res.matches}`);
-    totalMatches += res.matches;
+    try {
+      const res = await ingestTour(tour, { fromYear, toYear });
+      console.log(`  players: ${res.players}, matches: ${res.matches}`);
+      totalMatches += res.matches;
+    } catch (e) {
+      failed.push(tour.id);
+      console.warn(`  ⚠️  No se pudo descargar ${tour.id}: ${(e as Error).message}`);
+    }
   }
 
   if (totalMatches === 0) {
     throw new Error(
-      'No se descargó ningún partido. Puede ser un problema de red temporal con GitHub — ' +
-        'vuelve a ejecutar `npm run update-data`. Mientras tanto puedes usar `npm run seed`.',
+      'No se descargó ningún partido. Puede ser un bloqueo de red a GitHub — ' +
+        'prueba con otra red y vuelve a ejecutar `npm run update-data`. ' +
+        'Mientras tanto, `npm run seed` deja la app funcionando con datos de ejemplo.',
     );
+  }
+  if (failed.length) {
+    console.warn(
+      `\n⚠️  Circuitos no descargados: ${failed.join(', ')}. ` +
+        `El resto de la app funciona; reintenta más tarde para completarlos.`,
+    );
+  }
+
+  // Warn loudly if the newest match is old: stale history means stale Elo (a
+// mirror can be years behind, so today's top players would be missing).
+  const latest = getDb()
+    .prepare('SELECT MAX(tourney_date) AS d FROM matches')
+    .get() as unknown as { d: string | null };
+  if (latest.d) {
+    setMeta('history_through', latest.d);
+    const year = Number(latest.d.slice(0, 4));
+    const month = Number(latest.d.slice(4, 6));
+    const monthsOld =
+      (new Date().getUTCFullYear() - year) * 12 + (new Date().getUTCMonth() + 1 - month);
+    console.log(`\n  Último partido en los datos: ${latest.d}`);
+    if (monthsOld > 6) {
+      console.warn(
+        `  ⚠️  ATENCIÓN: el historial termina hace ~${Math.round(monthsOld / 12 * 10) / 10} años.\n` +
+          `      Los Elo NO reflejan a los jugadores actuales y las predicciones serán poco fiables.\n` +
+          `      Suele pasar al caer en un repositorio espejo desactualizado. Intenta de nuevo\n` +
+          `      desde una red que no bloquee github.com/JeffSackmann para obtener datos al día.`,
+      );
+    }
   }
 
   console.log('\n▸ Computing Elo ratings…');

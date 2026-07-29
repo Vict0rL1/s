@@ -103,7 +103,12 @@ export interface TourConfig {
 }
 
 export interface ToursConfig {
-  history: { startYear: number; rawBaseUrl: string };
+  history: {
+    startYear: number;
+    rawBaseUrl: string;
+    /** primary repo → alternative repos to git-clone if it's unreachable */
+    mirrors?: Record<string, string[]>;
+  };
   tours: TourConfig[];
 }
 

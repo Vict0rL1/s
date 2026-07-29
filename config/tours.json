@@ -1,9 +1,13 @@
 {
   "$comment": "Circuits (tours) covered by the app. Add a tour by appending an entry — nothing in the model/API logic hardcodes these ids.",
   "history": {
-    "$comment": "How much history to ingest by default and where the raw CSVs live. `startYear` is the earliest season pulled by `npm run update-data` (override with --from). Serve/break stats exist in Sackmann data from ~1991 onward.",
+    "$comment": "How much history to ingest by default and where the raw CSVs live. `startYear` is the earliest season pulled by `npm run update-data` (override with --from). Serve/break stats exist in Sackmann data from ~1991 onward. `mirrors` lists alternative GitHub repos to git-clone if the primary one is unreachable from your network.",
     "startYear": 2015,
-    "rawBaseUrl": "https://raw.githubusercontent.com/{repo}/master/{file}"
+    "rawBaseUrl": "https://raw.githubusercontent.com/{repo}/master/{file}",
+    "mirrors": {
+      "JeffSackmann/tennis_atp": ["stakah/tennis_atp"],
+      "JeffSackmann/tennis_wta": []
+    }
   },
   "tours": [
     {
