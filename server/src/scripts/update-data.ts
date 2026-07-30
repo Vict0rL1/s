@@ -9,6 +9,7 @@
 // Needs internet access. In offline/restricted environments use `npm run seed`.
 
 import fs from 'node:fs';
+import path from 'node:path';
 import { getDb, resetData, setMeta } from '../db.ts';
 import { RAW_DIR, toursConfig } from '../config.ts';
 import { ingestRankings, ingestTour, preflight, tourConfigs } from '../ingest/sackmann.ts';
@@ -44,9 +45,36 @@ async function main() {
   // from scratch. Needed to escape a stale mirror: cached CSVs and an existing
   // clone are reused by design, so a plain re-run would keep the old data.
   if (args.fresh) {
-    fs.rmSync(RAW_DIR, { recursive: true, force: true });
+    // Clear cached CSVs and clones, but KEEP anything the user placed manually
+    // (ZIPs / unzipped folders) — that copy is the whole point of the manual route.
+    let kept = 0;
+    if (fs.existsSync(RAW_DIR)) {
+      for (const entry of fs.readdirSync(RAW_DIR)) {
+        if (entry === '.gitkeep') continue;
+        if (entry.toLowerCase().endsWith('.zip')) {
+          kept++;
+          continue;
+        }
+        if (entry === 'repos') {
+          for (const repoDir of fs.readdirSync(path.join(RAW_DIR, 'repos'))) {
+            const full = path.join(RAW_DIR, 'repos', repoDir);
+            // A manual copy has no .git; keep it, drop clones and stale unzips.
+            if (!fs.existsSync(path.join(full, '.git')) && !repoDir.endsWith('-unzipped')) {
+              kept++;
+              continue;
+            }
+            fs.rmSync(full, { recursive: true, force: true });
+          }
+          continue;
+        }
+        fs.rmSync(path.join(RAW_DIR, entry), { recursive: true, force: true });
+      }
+    }
     fs.mkdirSync(RAW_DIR, { recursive: true });
-    console.log('\n🧹 Caché de descargas borrada (data/raw): se volverá a descargar todo.');
+    console.log(
+      `\n🧹 Caché de descargas borrada (data/raw)` +
+        (kept ? `; se conservan ${kept} copia(s) manual(es).` : ': se volverá a descargar todo.'),
+    );
   }
 
   getDb();

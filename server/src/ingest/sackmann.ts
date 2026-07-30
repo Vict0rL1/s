@@ -43,6 +43,65 @@ let workingBaseIndex: number | null = null;
 // Repos we've switched to the git-clone source (because HTTP was unreachable).
 const gitRepoDir = new Map<string, string>();
 
+/** True if a directory directly contains the repo's CSV files. */
+function hasCsvs(dir: string): boolean {
+  try {
+    return fs.readdirSync(dir).some((f) => f.endsWith('.csv'));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Find a manually provided copy of a data repo, so downloading the ZIP from
+ * GitHub by hand fully replaces git. Accepts, under data/raw (or data/raw/repos):
+ *   • a folder with the CSVs (any of `tennis_atp`, `tennis_atp-master`, …)
+ *   • the unmodified `tennis_atp-master.zip` — it is extracted automatically
+ * Returns the directory holding the CSVs, or null.
+ */
+function findLocalCopy(name: string): string | null {
+  const roots = [path.join(RAW_DIR, 'repos'), RAW_DIR];
+  const folderNames = [name, `${name}-master`, `${name}-main`];
+
+  for (const root of roots) {
+    for (const folder of folderNames) {
+      const candidate = path.join(root, folder);
+      if (hasCsvs(candidate)) return candidate;
+      // GitHub ZIPs nest the CSVs one level down (repo-master/…).
+      if (fs.existsSync(candidate)) {
+        for (const sub of fs.readdirSync(candidate)) {
+          const nested = path.join(candidate, sub);
+          if (fs.statSync(nested).isDirectory() && hasCsvs(nested)) return nested;
+        }
+      }
+    }
+  }
+
+  // A ZIP the user dropped in place: extract it once, then use it.
+  for (const root of roots) {
+    if (!fs.existsSync(root)) continue;
+    const zip = fs
+      .readdirSync(root)
+      .find((f) => f.toLowerCase().endsWith('.zip') && f.toLowerCase().startsWith(name.toLowerCase()));
+    if (!zip) continue;
+    const dest = path.join(RAW_DIR, 'repos', `${name}-unzipped`);
+    try {
+      process.stdout.write(`  descomprimiendo ${zip}…\n`);
+      fs.mkdirSync(dest, { recursive: true });
+      execFileSync('unzip', ['-o', '-q', path.join(root, zip), '-d', dest], { stdio: 'pipe' });
+      if (hasCsvs(dest)) return dest;
+      for (const sub of fs.readdirSync(dest)) {
+        const nested = path.join(dest, sub);
+        if (fs.statSync(nested).isDirectory() && hasCsvs(nested)) return nested;
+      }
+    } catch (e) {
+      process.stderr.write(`  no se pudo descomprimir ${zip}: ${(e as Error).message}\n`);
+    }
+  }
+
+  return null;
+}
+
 /**
  * Shallow-clone (or update) a data repo and return its local directory. Tries
  * the configured mirrors in order. GIT_TERMINAL_PROMPT=0 is essential: when a
@@ -65,13 +124,12 @@ function cloneRepo(repo: string): string {
   // reason that has nothing to do with the repo or the network.
   const anonymous = ['-c', 'credential.helper=', '-c', 'core.askPass=echo'];
 
-  // A manually placed copy (e.g. an unzipped download) — use it as-is.
-  if (fs.existsSync(dir) && !fs.existsSync(path.join(dir, '.git'))) {
-    if (fs.readdirSync(dir).some((f) => f.endsWith('.csv'))) {
-      process.stdout.write(`  usando la copia local en data/raw/repos/${name}\n`);
-      return dir;
-    }
-    fs.rmSync(dir, { recursive: true, force: true }); // empty/partial → re-clone
+  // Manual route: use whatever the user dropped in data/raw, so downloading the
+  // ZIP from GitHub by hand is a complete alternative to git.
+  const local = findLocalCopy(name);
+  if (local) {
+    process.stdout.write(`  usando la copia local: ${path.relative(RAW_DIR, local) || '.'}\n`);
+    return local;
   }
 
   // Already cloned → just try to update (a failed pull is fine, we have data).
@@ -116,15 +174,19 @@ function cloneRepo(repo: string): string {
       `     • git config --global --unset credential.helper\n` +
       `     • o borra la entrada de github.com en Acceso a Llaveros (macOS) / tu gestor de\n` +
       `       credenciales, y vuelve a ejecutar \`npm run update-data -- --fresh\`.`
-    : `   Tu red parece bloquear GitHub para este repositorio. Opciones:\n` +
-      `     • Prueba con otra red (p. ej. datos del móvil) y vuelve a ejecutar.\n` +
-      `     • O descarga el ZIP manualmente desde github.com/${repo} y descomprímelo en\n` +
-      `       data/raw/repos/${name} (debe contener los .csv directamente).`;
+    : `   No se pudo alcanzar GitHub para este repositorio. Opciones:\n` +
+      `     • Prueba con otra red (p. ej. datos del móvil) y vuelve a ejecutar.`;
 
   throw new Error(
     `No se pudo obtener ${repo} ni por HTTP ni por git clone.\n` +
       `   Intentos: ${errors.join(' | ')}\n` +
       advice +
+      `\n\n   MÉTODO MANUAL (siempre funciona, no usa git):\n` +
+      `     1. Abre https://github.com/${repo} en el navegador.\n` +
+      `     2. Botón verde "Code" → "Download ZIP".\n` +
+      `     3. Mueve el archivo ${name}-master.zip (sin renombrar ni descomprimir) a:\n` +
+      `        data/raw/\n` +
+      `     4. Vuelve a ejecutar \`npm run update-data\` — se descomprime solo.\n` +
       `\n     • Mientras tanto, \`npm run seed\` deja la app funcionando con datos de ejemplo.`,
   );
 }

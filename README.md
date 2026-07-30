@@ -127,6 +127,19 @@ Esto:
 > `update-data` necesita acceso a internet (GitHub + The Odds API). En entornos sin red usa
 > `npm run seed`.
 
+### Método manual (si la descarga automática falla)
+
+Funciona siempre, sin git y sin credenciales. Útil si tu red filtra GitHub o si `git` tiene
+credenciales guardadas que GitHub rechaza:
+
+1. Abre https://github.com/JeffSackmann/tennis_atp → botón verde **Code** → **Download ZIP**.
+2. Repite con https://github.com/JeffSackmann/tennis_wta.
+3. Mueve los dos ZIP **sin renombrar ni descomprimir** a la carpeta `data/raw/` del proyecto.
+4. Ejecuta `npm run update-data`. La app detecta los ZIP, los descomprime sola y los usa.
+
+`npm run update-data -- --fresh` limpia la caché de descargas pero **conserva** los ZIP que hayas
+puesto a mano, así que puedes reintentar sin volver a descargarlos.
+
 ---
 
 ## Scripts
