@@ -48,8 +48,9 @@ posible *value* cuando el modelo discrepa de las cuotas.
 
 | Tipo | Fuente | Por qué |
 |------|--------|---------|
-| Histórico | [Jeff Sackmann `tennis_atp` / `tennis_wta`](https://github.com/JeffSackmann/tennis_atp) | Gratis, sin API key, partido a partido desde décadas atrás, con superficie, ronda, sets y estadísticas de saque/quiebre. Estándar de facto para Elo de tenis. |
-| Datos de jugador | Archivos de **rankings oficiales** y biografías del mismo repo de Sackmann | Ranking ATP/WTA + puntos, país, mano y fecha de nacimiento. Misma fuente ya en uso (el ATP Tour no ofrece API pública, y hacer scraping de su web sería frágil y de legalidad dudosa). |
+| Histórico ATP | [Tennismylife `TML-Database`](https://github.com/Tennismylife/TML-Database) | Gratis, sin API key, partido a partido desde 1968 hasta la temporada actual, con superficie, ronda, sets, estadísticas de saque/quiebre **y el ranking oficial de cada jugador en cada partido**. Mismo formato de columnas que el dataset clásico de Jeff Sackmann. |
+| Histórico WTA | *(pendiente)* | Los repos `JeffSackmann/tennis_atp` y `tennis_wta` dejaron de estar accesibles públicamente (404). TML cubre ATP; para WTA no hay todavía un equivalente abierto y accesible, así que la app avisa y sigue funcionando con ATP. |
+| Datos de jugador | Incluidos en el histórico | Ranking oficial + puntos, país y mano. (El ATP Tour no ofrece API pública, y hacer scraping de su web sería frágil y de legalidad dudosa.) |
 | Odds | [The Odds API](https://the-odds-api.com) | Cuotas head-to-head de partidos próximos ATP/WTA. Plan gratuito (500 req/mes). Requiere API key. |
 
 ---
@@ -120,7 +121,7 @@ npm run update-data -- --skip-odds              # solo histórico
 ```
 
 Esto:
-1. Descarga los CSV de Sackmann para el rango de años (cacheados en `data/raw/`).
+1. Descarga los CSV del histórico para el rango de años (cacheados en `data/raw/`).
 2. Recalcula todos los ratings Elo.
 3. Descarga odds en vivo de The Odds API (o genera fixtures si no hay key / fuera de temporada).
 
@@ -132,10 +133,9 @@ Esto:
 Funciona siempre, sin git y sin credenciales. Útil si tu red filtra GitHub o si `git` tiene
 credenciales guardadas que GitHub rechaza:
 
-1. Abre https://github.com/JeffSackmann/tennis_atp → botón verde **Code** → **Download ZIP**.
-2. Repite con https://github.com/JeffSackmann/tennis_wta.
-3. Mueve los dos ZIP **sin renombrar ni descomprimir** a la carpeta `data/raw/` del proyecto.
-4. Ejecuta `npm run update-data`. La app detecta los ZIP, los descomprime sola y los usa.
+1. Abre https://github.com/Tennismylife/TML-Database → botón verde **Code** → **Download ZIP**.
+2. Mueve el ZIP **sin renombrar ni descomprimir** a la carpeta `data/raw/` del proyecto.
+3. Ejecuta `npm run update-data`. La app detecta el ZIP, lo descomprime sola y lo usa.
 
 `npm run update-data -- --fresh` limpia la caché de descargas pero **conserva** los ZIP que hayas
 puesto a mano, así que puedes reintentar sin volver a descargarlos.

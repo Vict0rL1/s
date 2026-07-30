@@ -20,10 +20,12 @@
       "name": "ATP",
       "label": "ATP · Men's singles",
       "sackmann": {
-        "repo": "JeffSackmann/tennis_atp",
-        "matchesFile": "atp_matches_{year}.csv",
-        "playersFile": "atp_players.csv",
-        "rankingsFiles": ["atp_rankings_current.csv", "atp_rankings_20s.csv"]
+        "$comment": "JeffSackmann/tennis_atp stopped being publicly reachable (404), so ATP history now comes from Tennismylife/TML-Database: same column layout, one CSV per season, updated through the current year, and it carries each player's official rank/points on every match row.",
+        "format": "tml",
+        "repo": "Tennismylife/TML-Database",
+        "matchesFile": "{year}.csv",
+        "playersFile": "",
+        "rankingsFiles": []
       }
     },
     {

@@ -261,6 +261,23 @@ async function readRepoFile(repo: string, file: string): Promise<string | null> 
  * friendly error if unreachable via both HTTP and git).
  */
 export async function preflight(tour: TourConfig): Promise<number> {
+  if (tour.sackmann.format === 'tml') {
+    // No players file in this layout — probe the current season instead, which
+    // also confirms the source is up to date.
+    const year = new Date().getUTCFullYear();
+    for (const y of [year, year - 1]) {
+      const csv = await readRepoFile(
+        tour.sackmann.repo,
+        tour.sackmann.matchesFile.replace('{year}', String(y)),
+      );
+      if (csv) {
+        const rows = parse(csv, { columns: true, skip_empty_lines: true, relax_column_count: true });
+        return (rows as any[]).length;
+      }
+    }
+    throw new Error(`No se pudo leer ninguna temporada reciente de ${tour.id}.`);
+  }
+
   const csv = await readRepoFile(tour.sackmann.repo, tour.sackmann.playersFile);
   if (!csv) throw new Error(`El archivo de jugadores de ${tour.id} no está disponible.`);
   return parsePlayers(csv).length;
@@ -275,6 +292,110 @@ function num(v: unknown): number | null {
 interface IngestOptions {
   fromYear: number;
   toYear: number;
+}
+
+/**
+ * TML player ids are alphanumeric ("B0BI"), but the schema (and Elo) key on
+ * integers. Map them with FNV-1a — deterministic, so the same player keeps the
+ * same id across runs, which is what makes incremental updates coherent.
+ */
+function stableId(external: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < external.length; i++) {
+    h ^= external.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0) % 2_000_000_000;
+}
+
+/**
+ * Ingest the TML layout: one {year}.csv per season, with a header, where each
+ * row also carries both players' bio and official ranking. Players and rankings
+ * are therefore derived from the match rows (there are no separate files).
+ */
+async function ingestTml(tour: TourConfig, opts: IngestOptions) {
+  const db = getDb();
+
+  const playerUpsert = db.prepare(
+    `INSERT INTO players (id, tour, name, hand, country, birthdate)
+     VALUES (?, ?, ?, ?, ?, NULL)
+     ON CONFLICT(tour, id) DO UPDATE SET name=excluded.name,
+       hand=COALESCE(excluded.hand, players.hand),
+       country=COALESCE(excluded.country, players.country)`,
+  );
+  const rankUpsert = db.prepare(
+    `INSERT INTO player_rankings (player_id, tour, rank, points, ranking_date)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(tour, player_id) DO UPDATE SET
+       rank=excluded.rank, points=excluded.points, ranking_date=excluded.ranking_date
+     WHERE excluded.ranking_date > player_rankings.ranking_date`,
+  );
+  const matchInsert = db.prepare(
+    `INSERT INTO matches (
+       tour, tourney_id, tourney_name, tourney_date, surface, level, round, best_of,
+       winner_id, loser_id, score,
+       w_ace, w_df, w_svpt, w_1stIn, w_1stWon, w_2ndWon, w_bpSaved, w_bpFaced,
+       l_ace, l_df, l_svpt, l_1stIn, l_1stWon, l_2ndWon, l_bpSaved, l_bpFaced
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?)`,
+  );
+
+  const seenPlayers = new Set<number>();
+  let matchCount = 0;
+
+  for (let year = opts.fromYear; year <= opts.toYear; year++) {
+    const file = tour.sackmann.matchesFile.replace('{year}', String(year));
+    const csv = await readRepoFile(tour.sackmann.repo, file);
+    if (!csv) continue;
+    const rows = parse(csv, {
+      columns: true,
+      skip_empty_lines: true,
+      relax_column_count: true,
+    }) as any[];
+
+    db.exec('BEGIN');
+    for (const r of rows) {
+      const wExt = String(r.winner_id ?? '').trim();
+      const lExt = String(r.loser_id ?? '').trim();
+      if (!wExt || !lExt) continue;
+      const wId = stableId(wExt);
+      const lId = stableId(lExt);
+      const date = String(r.tourney_date || `${year}0101`);
+
+      playerUpsert.run(wId, tour.id, r.winner_name || wExt, r.winner_hand || null, r.winner_ioc || null);
+      playerUpsert.run(lId, tour.id, r.loser_name || lExt, r.loser_hand || null, r.loser_ioc || null);
+      seenPlayers.add(wId).add(lId);
+
+      // Ranking as of this match — the newest one per player wins (see the
+      // conditional UPDATE above), giving each player their latest known rank.
+      const wRank = num(r.winner_rank);
+      if (wRank !== null) rankUpsert.run(wId, tour.id, wRank, num(r.winner_rank_points), date);
+      const lRank = num(r.loser_rank);
+      if (lRank !== null) rankUpsert.run(lId, tour.id, lRank, num(r.loser_rank_points), date);
+
+      matchInsert.run(
+        tour.id,
+        r.tourney_id || null,
+        r.tourney_name || null,
+        date,
+        r.surface || null,
+        r.tourney_level || null,
+        r.round || null,
+        num(r.best_of),
+        wId,
+        lId,
+        r.score || null,
+        num(r.w_ace), num(r.w_df), num(r.w_svpt), num(r.w_1stIn),
+        num(r.w_1stWon), num(r.w_2ndWon), num(r.w_bpSaved), num(r.w_bpFaced),
+        num(r.l_ace), num(r.l_df), num(r.l_svpt), num(r.l_1stIn),
+        num(r.l_1stWon), num(r.l_2ndWon), num(r.l_bpSaved), num(r.l_bpFaced),
+      );
+      matchCount++;
+    }
+    db.exec('COMMIT');
+    process.stdout.write(`  ${tour.id} ${year}: ${rows.length} matches\n`);
+  }
+
+  return { players: seenPlayers.size, matches: matchCount };
 }
 
 // Column order of the players file in older snapshots, which ship WITHOUT a
@@ -343,6 +464,8 @@ export async function ingestTour(tour: TourConfig, opts: IngestOptions): Promise
   players: number;
   matches: number;
 }> {
+  if (tour.sackmann.format === 'tml') return ingestTml(tour, opts);
+
   const db = getDb();
 
   // --- Players (biographical info) ---

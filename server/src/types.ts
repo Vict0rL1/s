@@ -118,6 +118,13 @@ export interface TourConfig {
   name: string;
   label: string;
   sackmann: {
+    /**
+     * Layout of the CSVs:
+     *  • "sackmann" — separate players/rankings files, no header row in those.
+     *  • "tml"      — one {year}.csv per season with a header; players and their
+     *                 official rank/points are embedded in the match rows.
+     */
+    format?: 'sackmann' | 'tml';
     repo: string;
     matchesFile: string;
     playersFile: string;
