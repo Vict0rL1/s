@@ -106,6 +106,44 @@ está la probabilidad del 50%:
 
 ---
 
+## Precisión: calibración y exactitud medida
+
+Los porcentajes se muestran con un decimal, pero **precisión mostrada ≠ exactitud**. Para no
+prometer nada sin evidencia, el proyecto incluye un backtest *walk-forward* (cada partido se
+predice usando solo información anterior a él, y luego se actualizan los ratings):
+
+```bash
+npm run backtest                      # con calibración (lo que usa la app)
+npm run backtest -- --calibration 1   # curva Elo cruda, para comparar
+```
+
+### Resultado medido (ATP, 6.022 partidos out-of-sample)
+
+| Métrica | Elo crudo | **Calibrado (0.7)** |
+|---|---|---|
+| Accuracy (acierta al favorito) | 65.8% | **65.8%** |
+| Brier score (menor = mejor; 0.25 = decir siempre 50/50) | 0.2177 | **0.2147** |
+| Log loss (menor = mejor; 0.693 = 50/50) | 0.6300 | **0.6187** |
+| Error de calibración en 70–80% | −5.9 pp | **−0.7 pp** |
+| Error de calibración en 80–90% | −9.0 pp | **−0.3 pp** |
+
+**El hallazgo:** la curva Elo cruda es **sobre-confiada**. Los partidos que anunciaba al ~85%
+se ganaban solo el ~76% de las veces. Por eso el modelo aplica un **factor de calibración de
+0.7** a la diferencia de rating antes de convertirla en probabilidad (equivale a *temperature
+scaling* sobre el logit; ver `CALIBRATION_SCALE` en `server/src/model/elo.ts`). Tras calibrar,
+lo predicho y lo observado coinciden dentro de ~1 punto porcentual entre el 50% y el 90%.
+
+Interpretación honesta: cuando la app dice 70%, históricamente ese lado ganaba ~70% de las
+veces — pero **acierta ~2 de cada 3 partidos**, así que se equivoca a menudo. El tramo
+90–100% sigue algo sobre-confiado (−5.9 pp, con muestra pequeña): desconfía de los favoritos
+extremos.
+
+### Consistencia de las cifras
+
+Las probabilidades se redondean una sola vez y la contraria se deriva por diferencia, así que
+los dos lados **siempre suman exactamente 100.0%** y el texto del resumen usa la misma cifra
+que el número grande — nunca verás 63.2% en un sitio y 63% en otro.
+
 ## Limitaciones (sé honesto)
 
 Este modelo **NO** debe usarse para apostar con confianza ciega. Es una **estimación

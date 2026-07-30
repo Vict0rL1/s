@@ -188,7 +188,9 @@ export default function MatchDetail({ prediction }: { prediction: Prediction }) 
           {market.market && (
             <>
               <span>Cuotas: {market.market.odds1} / {market.market.odds2}</span>
-              <span>Prob. implícita: {pct(market.market.implied1)} / {pct(market.market.implied2)}</span>
+              <span>
+                Prob. implícita: {pct(market.market.implied1, 1)} / {pct(market.market.implied2, 1)}
+              </span>
               <span>Overround: {pct(market.market.overround - 1, 1)}</span>
               {market.edge1 != null && (
                 <span>

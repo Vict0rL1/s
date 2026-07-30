@@ -33,21 +33,23 @@ export default function MatchCard({
         </span>
       </div>
 
-      {/* Players */}
-      <div className="mb-3 flex items-center justify-between">
+      {/* Players + headline win probabilities */}
+      <div className="mb-4 flex items-start justify-between">
         <PlayerName
           name={match.p1_name}
           country={prediction?.players.p1.country ?? null}
           color={P1_COLOR}
           odds={match.p1_odds}
+          prob={prediction?.model.prob1 ?? null}
           onClick={match.p1_id ? () => onOpenPlayer(match.tour, match.p1_id!) : undefined}
         />
-        <span className="px-3 text-xs text-slate-500">vs</span>
+        <span className="px-3 pt-6 text-xs text-slate-500">vs</span>
         <PlayerName
           name={match.p2_name}
           country={prediction?.players.p2.country ?? null}
           color={P2_COLOR}
           odds={match.p2_odds}
+          prob={prediction?.model.prob2 ?? null}
           alignRight
           onClick={match.p2_id ? () => onOpenPlayer(match.tour, match.p2_id!) : undefined}
         />
@@ -118,6 +120,7 @@ function PlayerName({
   country,
   color,
   odds,
+  prob,
   alignRight = false,
   onClick,
 }: {
@@ -125,6 +128,7 @@ function PlayerName({
   country: string | null;
   color: string;
   odds: number | null;
+  prob: number | null;
   alignRight?: boolean;
   onClick?: () => void;
 }) {
@@ -138,6 +142,17 @@ function PlayerName({
       >
         {flag(country)} {name}
       </button>
+      {/* Headline win probability — one decimal, matching the API value exactly */}
+      {prob != null && (
+        <div
+          className="text-4xl font-bold leading-tight tabular-nums sm:text-5xl"
+          style={{ color }}
+          title="Probabilidad de victoria según el modelo"
+        >
+          {(prob * 100).toFixed(1)}
+          <span className="text-2xl">%</span>
+        </div>
+      )}
       <div className="text-xs text-slate-500">{odds != null ? `cuota ${odds}` : 'sin cuota'}</div>
     </div>
   );

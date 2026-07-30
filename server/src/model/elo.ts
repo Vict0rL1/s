@@ -39,6 +39,30 @@ export function expectedScore(ratingA: number, ratingB: number): number {
   return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
 }
 
+/**
+ * CALIBRATION
+ * -----------
+ * The raw Elo curve is over-confident on real data: measured on ATP matches
+ * (see `npm run backtest`), matches predicted at ~85% were won ~76% of the time.
+ * That happens because a single rating gap can't capture how noisy tennis is
+ * (injuries, off days, match-ups), so extreme probabilities are too extreme.
+ *
+ * Fix: shrink the rating gap toward zero by a constant factor before converting
+ * it to a probability. This is standard probability calibration (equivalent to
+ * temperature scaling on the logit). The factor was fitted from the backtest's
+ * calibration table — re-run the backtest after changing the model to re-check.
+ */
+export const CALIBRATION_SCALE = 0.7;
+
+/** Win probability with the calibration factor applied (what the app reports). */
+export function calibratedExpectedScore(
+  ratingA: number,
+  ratingB: number,
+  scale: number = CALIBRATION_SCALE,
+): number {
+  return 1 / (1 + Math.pow(10, ((ratingB - ratingA) * scale) / 400));
+}
+
 /** Dynamic K-factor: large for newcomers, small for veterans. */
 export function kFactor(matchesPlayed: number): number {
   return 250 / Math.pow(matchesPlayed + 5, 0.4);

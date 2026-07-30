@@ -63,14 +63,14 @@ export default function ProbabilityBars({ prediction }: { prediction: Prediction
       <SplitBar
         title="Modelo"
         leftFrac={modelLeft}
-        leftLabel={pct(prediction.model.prob1)}
-        rightLabel={pct(prediction.model.prob2)}
+        leftLabel={pct(prediction.model.prob1, 1)}
+        rightLabel={pct(prediction.model.prob2, 1)}
       />
       <SplitBar
         title="Mercado (odds sin vig)"
         leftFrac={marketLeft}
-        leftLabel={market ? pct(market.implied1) : 'sin odds'}
-        rightLabel={market ? pct(market.implied2) : ''}
+        leftLabel={market ? pct(market.implied1, 1) : 'sin odds'}
+        rightLabel={market ? pct(market.implied2, 1) : ''}
       />
     </div>
   );

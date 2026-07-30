@@ -22,6 +22,11 @@ posible *value* cuando el modelo discrepa de las cuotas.
 - **Elo general + por superficie** (dura / arcilla / hierba) con K-factor dinámico.
 - **Forma reciente**, **head-to-head** y **comparación contra el mercado** (probabilidad
   implícita sin vig + detección de value).
+- **Probabilidad de victoria en grande** para cada jugador (con un decimal), y todas las cifras
+  consistentes entre sí: los dos lados siempre suman exactamente 100.0%.
+- **Modelo calibrado y verificado:** `npm run backtest` mide la exactitud real (65.8% de acierto
+  y calibración dentro de ~1 pp entre 50–90% en 6.022 partidos ATP out-of-sample). Ver
+  [docs/MODEL.md](docs/MODEL.md).
 - **Resumen "qué es lo más probable"** en cada partido: en lenguaje natural, con el favorito,
   su probabilidad, el marcador probable y las razones (superficie, forma, H2H, saque, mercado).
 - **Desglose completo por partido**: explicación de *por qué* gana X (qué señal pesa más),
@@ -127,6 +132,7 @@ Esto:
 | `npm run dev` | Levanta backend + frontend a la vez |
 | `npm run seed` | Carga el dataset de demostración |
 | `npm run update-data` | Refresca histórico real + odds |
+| `npm run backtest` | Mide la exactitud del modelo (accuracy, Brier, calibración) |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 

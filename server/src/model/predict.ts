@@ -17,12 +17,13 @@
 // confidence tier derived purely from how far the probability sits from 50%.
 // ===========================================================================
 
-import { expectedScore, surfaceKey } from './elo.ts';
+import { calibratedExpectedScore, surfaceKey } from './elo.ts';
 import { computeForm, type FormSignal } from './form.ts';
 import { computeH2H, type H2HSignal } from './h2h.ts';
 import {
   compareToMarket,
   impliedProbabilities,
+  VALUE_THRESHOLD,
   type MarketComparison,
   type MarketProbabilities,
 } from './market.ts';
@@ -198,6 +199,11 @@ function round1(n: number): number {
 
 const SURFACE_ES: Record<string, string> = { hard: 'dura', clay: 'arcilla', grass: 'hierba' };
 
+/** Format a 0..1 probability as a percentage string with one decimal. */
+function pct1(p: number): string {
+  return (p * 100).toFixed(1);
+}
+
 /**
  * Write the "what's most likely to happen" summary in plain Spanish. Everything
  * here restates numbers already computed above — no new modelling — so the text
@@ -226,13 +232,16 @@ function buildSummary(args: {
   const favIsP1 = prob1 >= 0.5;
   const fav = favIsP1 ? p1 : p2;
   const dog = favIsP1 ? p2 : p1;
-  const favProb = Math.round(Math.max(prob1, 1 - prob1) * 100);
+  // One decimal everywhere, matching what the UI displays, so the prose and the
+  // big numbers never show different figures for the same quantity.
+  const favProb = pct1(Math.max(prob1, 1 - prob1));
+  const dogProb = pct1(Math.min(prob1, 1 - prob1));
   const surfName = SURFACE_ES[args.surface.toLowerCase()] ?? args.surface.toLowerCase();
 
   // --- Headline ---
   const headline =
     confidence === 'toss_up'
-      ? `Partido muy parejo: ligerísima ventaja para ${fav} (${favProb}%–${100 - favProb}%). ` +
+      ? `Partido muy parejo: ligerísima ventaja para ${fav} (${favProb}%–${dogProb}%). ` +
         `Cualquiera de los dos puede ganar.`
       : `Lo más probable: gana ${fav} (${favProb}%), ` +
         `${expected.likelySets} en sets. ${expected.note}`;
@@ -328,11 +337,13 @@ function buildSummary(args: {
 
   // --- Market agreement ---
   if (market.market) {
-    const marketFavProb = Math.round((favIsP1 ? market.market.implied1 : market.market.implied2) * 100);
-    const gap = favProb - marketFavProb;
-    if (Math.abs(gap) < 5) {
+    const marketFav = favIsP1 ? market.market.implied1 : market.market.implied2;
+    const modelFav = Math.max(prob1, 1 - prob1);
+    const gapPp = (modelFav - marketFav) * 100; // percentage points
+    const marketFavProb = pct1(marketFav);
+    if (Math.abs(gapPp) < VALUE_THRESHOLD * 100) {
       bullets.push(`Las casas de apuestas coinciden (${marketFavProb}% para ${fav}).`);
-    } else if (gap > 0) {
+    } else if (gapPp > 0) {
       bullets.push(
         `El modelo es más optimista con ${fav} (${favProb}%) que el mercado (${marketFavProb}%): posible value en ${fav}.`,
       );
@@ -379,8 +390,11 @@ export function buildPrediction(
   const adj1 = eff1.effective + form1.delta + h2h.delta;
   const adj2 = eff2.effective + form2.delta - h2h.delta;
 
-  const prob1 = expectedScore(adj1, adj2);
-  const prob2 = 1 - prob1;
+  // Calibrated (see elo.ts): the raw curve is over-confident on real matches.
+  // Round once, then derive the complement, so the two probabilities always sum
+  // to exactly 1 at the precision we expose (no 63.2% / 36.9% mismatches).
+  const prob1 = round5(calibratedExpectedScore(adj1, adj2));
+  const prob2 = round5(1 - prob1);
 
   let marketProbs: MarketProbabilities | null = null;
   if (market && market.odds1 && market.odds2) {
@@ -444,7 +458,7 @@ export function buildPrediction(
     serve: { p1: serve1, p2: serve2 },
     h2h,
     adjustedRatings: { p1: Math.round(adj1 * 10) / 10, p2: Math.round(adj2 * 10) / 10 },
-    model: { prob1: round3(prob1), prob2: round3(prob2) },
+    model: { prob1, prob2 },
     market: marketComparison,
     reasoning,
     expectedScore: expected,
@@ -459,6 +473,6 @@ export function buildPrediction(
   };
 }
 
-function round3(n: number): number {
-  return Math.round(n * 1000) / 1000;
+function round5(n: number): number {
+  return Math.round(n * 100000) / 100000;
 }

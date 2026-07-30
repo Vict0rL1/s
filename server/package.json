@@ -9,6 +9,7 @@
     "start": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/index.ts",
     "seed": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/seed.ts",
     "update-data": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/update-data.ts",
+    "backtest": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/backtest.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

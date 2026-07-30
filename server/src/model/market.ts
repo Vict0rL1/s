@@ -31,13 +31,21 @@ export function impliedProbabilities(odds1: number, odds2: number): MarketProbab
   const raw1 = 1 / odds1;
   const raw2 = 1 / odds2;
   const overround = raw1 + raw2;
+  // Round one side and derive the other so the pair always sums to exactly 1 —
+  // rounding both independently can yield 50.0%/50.1% and undermine the figures
+  // shown side by side. 5 decimals keeps far more resolution than we display.
+  const implied1 = round5(raw1 / overround);
   return {
     odds1,
     odds2,
-    implied1: raw1 / overround,
-    implied2: raw2 / overround,
-    overround: Math.round(overround * 1000) / 1000,
+    implied1,
+    implied2: round5(1 - implied1),
+    overround: Math.round(overround * 100000) / 100000,
   };
+}
+
+function round5(n: number): number {
+  return Math.round(n * 100000) / 100000;
 }
 
 export type ValueVerdict = 'value_p1' | 'value_p2' | 'agree' | 'no_market';
@@ -58,5 +66,5 @@ export function compareToMarket(
   let verdict: ValueVerdict = 'agree';
   if (edge1 >= VALUE_THRESHOLD) verdict = 'value_p1';
   else if (edge1 <= -VALUE_THRESHOLD) verdict = 'value_p2';
-  return { market, edge1: Math.round(edge1 * 1000) / 1000, verdict };
+  return { market, edge1: round5(edge1), verdict };
 }
