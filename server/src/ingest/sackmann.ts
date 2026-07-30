@@ -58,6 +58,12 @@ function cloneRepo(repo: string): string {
     GIT_ASKPASS: 'echo',
     GCM_INTERACTIVE: 'never',
   };
+  // These repos are public, so clone ANONYMOUSLY. Without this, git hands over
+  // whatever credentials a helper has stored (macOS Keychain, GCM…); if those are
+  // stale GitHub rejects the request outright ("Invalid username or token.
+  // Password authentication is not supported") and a public clone fails for a
+  // reason that has nothing to do with the repo or the network.
+  const anonymous = ['-c', 'credential.helper=', '-c', 'core.askPass=echo'];
 
   // A manually placed copy (e.g. an unzipped download) — use it as-is.
   if (fs.existsSync(dir) && !fs.existsSync(path.join(dir, '.git'))) {
@@ -71,7 +77,10 @@ function cloneRepo(repo: string): string {
   // Already cloned → just try to update (a failed pull is fine, we have data).
   if (fs.existsSync(path.join(dir, '.git'))) {
     try {
-      execFileSync('git', ['-C', dir, 'pull', '--ff-only'], { stdio: 'pipe', env: noPrompt });
+      execFileSync('git', [...anonymous, '-C', dir, 'pull', '--ff-only'], {
+        stdio: 'pipe',
+        env: noPrompt,
+      });
     } catch {
       process.stdout.write(`  (no se pudo actualizar ${name}; usando la copia local)\n`);
     }
@@ -86,7 +95,7 @@ function cloneRepo(repo: string): string {
       process.stdout.write(`  clonando ${candidate} vía git…\n`);
       execFileSync(
         'git',
-        ['clone', '--depth', '1', `https://github.com/${candidate}.git`, dir],
+        [...anonymous, 'clone', '--depth', '1', `https://github.com/${candidate}.git`, dir],
         { stdio: 'inherit', env: noPrompt },
       );
       return dir;
@@ -96,14 +105,27 @@ function cloneRepo(repo: string): string {
     }
   }
 
+  // Credential failures and network blocks need completely different advice, so
+  // don't blame the network for what is a local git-credentials problem.
+  const looksLikeAuth = errors.some((e) =>
+    /authentication failed|invalid username or token|could not read/i.test(e),
+  );
+  const advice = looksLikeAuth
+    ? `   Git está enviando credenciales guardadas que GitHub rechaza (estos repos son\n` +
+      `   públicos y no necesitan ninguna). Prueba:\n` +
+      `     • git config --global --unset credential.helper\n` +
+      `     • o borra la entrada de github.com en Acceso a Llaveros (macOS) / tu gestor de\n` +
+      `       credenciales, y vuelve a ejecutar \`npm run update-data -- --fresh\`.`
+    : `   Tu red parece bloquear GitHub para este repositorio. Opciones:\n` +
+      `     • Prueba con otra red (p. ej. datos del móvil) y vuelve a ejecutar.\n` +
+      `     • O descarga el ZIP manualmente desde github.com/${repo} y descomprímelo en\n` +
+      `       data/raw/repos/${name} (debe contener los .csv directamente).`;
+
   throw new Error(
     `No se pudo obtener ${repo} ni por HTTP ni por git clone.\n` +
       `   Intentos: ${errors.join(' | ')}\n` +
-      `   Tu red parece bloquear GitHub para este repositorio. Opciones:\n` +
-      `     • Prueba con otra red (p. ej. datos del móvil) y vuelve a ejecutar.\n` +
-      `     • O descarga el ZIP manualmente desde github.com/${repo} y descomprímelo en\n` +
-      `       data/raw/repos/${name} (debe contener los .csv directamente).\n` +
-      `     • Mientras tanto, \`npm run seed\` deja la app funcionando con datos de ejemplo.`,
+      advice +
+      `\n     • Mientras tanto, \`npm run seed\` deja la app funcionando con datos de ejemplo.`,
   );
 }
 
