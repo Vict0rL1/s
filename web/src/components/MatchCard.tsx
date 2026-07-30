@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { UpcomingWithPrediction } from '../lib/api';
+import type { UpcomingMatch, UpcomingWithPrediction } from '../lib/api';
 import { confidenceLabelEs, flag, formatDateTime, surfaceLabelEs } from '../lib/format';
 import ProbabilityBars, { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import MatchDetail from './MatchDetail';
@@ -107,10 +107,32 @@ export default function MatchCard({
           {open && <MatchDetail prediction={prediction} />}
         </>
       ) : (
-        <div className="text-sm text-slate-500">
-          No hay datos históricos suficientes para predecir este partido (jugador no reconocido).
-        </div>
+        <MissingPlayers match={match} />
       )}
+    </div>
+  );
+}
+
+/**
+ * A prediction needs history for BOTH players. Name whoever is missing — that
+ * points straight at the cause (usually an out-of-date match history that
+ * predates the player's career) instead of a vague "not recognised".
+ */
+function MissingPlayers({ match }: { match: UpcomingMatch }) {
+  const missing = [
+    match.p1_id == null ? match.p1_name : null,
+    match.p2_id == null ? match.p2_name : null,
+  ].filter(Boolean) as string[];
+
+  return (
+    <div className="rounded-lg bg-slate-900/60 p-3 text-sm text-slate-400 ring-1 ring-slate-700/50">
+      Sin predicción: no hay historial de{' '}
+      <strong className="text-slate-200">{missing.join(' ni de ')}</strong> en la base de datos.
+      <div className="mt-1 text-xs text-slate-500">
+        Suele pasar si el historial descargado es antiguo y no cubre la carrera de este jugador.
+        Ejecuta <code className="rounded bg-slate-800 px-1">npm run update-data -- --fresh</code>{' '}
+        para volver a descargarlo.
+      </div>
     </div>
   );
 }

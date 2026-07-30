@@ -21,9 +21,24 @@ import { getDb } from '../db.ts';
 import { RAW_DIR, toursConfig } from '../config.ts';
 import type { TourConfig, TourId } from '../types.ts';
 
-function rawUrl(repo: string, file: string): string {
-  return toursConfig.history.rawBaseUrl.replace('{repo}', repo).replace('{file}', file);
+function rawUrls(repo: string, file: string): string[] {
+  return toursConfig.history.rawBaseUrls.map((tpl) =>
+    tpl.replace('{repo}', repo).replace('{file}', file),
+  );
 }
+
+/** Host label for logging, e.g. "cdn.jsdelivr.net". */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+// Remembers which HTTP source worked, so we don't re-probe blocked hosts for
+// every one of the ~12 season files.
+let workingBaseIndex: number | null = null;
 
 // Repos we've switched to the git-clone source (because HTTP was unreachable).
 const gitRepoDir = new Map<string, string>();
@@ -114,25 +129,46 @@ async function readRepoFile(repo: string, file: string): Promise<string | null> 
     return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
   };
 
-  let res: Response;
-  try {
-    res = await fetch(rawUrl(repo, file), { signal: AbortSignal.timeout(45_000) });
-  } catch {
-    return useGitFor(); // network error → git
-  }
-  if (res.ok) {
-    const text = await res.text();
+  const save = (text: string): string => {
     fs.mkdirSync(RAW_DIR, { recursive: true });
     fs.writeFileSync(cachePath, text);
     return text;
+  };
+
+  const urls = rawUrls(repo, file);
+  // Once a source works, stick to it for the remaining files.
+  const order =
+    workingBaseIndex !== null
+      ? [workingBaseIndex, ...urls.map((_, i) => i).filter((i) => i !== workingBaseIndex)]
+      : urls.map((_, i) => i);
+
+  let sawRealNotFound = false;
+  for (const i of order) {
+    let res: Response;
+    try {
+      res = await fetch(urls[i], { signal: AbortSignal.timeout(45_000) });
+    } catch {
+      continue; // this host is unreachable → try the next one
+    }
+    if (res.ok) {
+      if (workingBaseIndex !== i) {
+        workingBaseIndex = i;
+        process.stdout.write(`  (descargando vía ${hostOf(urls[i])})\n`);
+      }
+      return save(await res.text());
+    }
+    // A 404 for the always-present players file means this host is filtering
+    // (some networks answer 404 instead of blocking); try the next source.
+    // For season files a 404 can be genuine — but only trust it if the host
+    // has already proven it works.
+    if (res.status === 404 && !file.endsWith('_players.csv') && workingBaseIndex === i) {
+      sawRealNotFound = true;
+      break;
+    }
   }
-  if (res.status === 404) {
-    // The players file always exists; a 404 for it means raw.githubusercontent
-    // is filtered on this network → switch to git. A missing season file is real.
-    if (file.endsWith('_players.csv')) return useGitFor();
-    return null;
-  }
-  return useGitFor(); // any other HTTP error → git
+
+  if (sawRealNotFound) return null; // season genuinely not published yet
+  return useGitFor(); // every HTTP source failed → git clone
 }
 
 /**

@@ -8,8 +8,9 @@
 //
 // Needs internet access. In offline/restricted environments use `npm run seed`.
 
+import fs from 'node:fs';
 import { getDb, resetData, setMeta } from '../db.ts';
-import { toursConfig } from '../config.ts';
+import { RAW_DIR, toursConfig } from '../config.ts';
 import { ingestTour, preflight, tourConfigs } from '../ingest/sackmann.ts';
 import { recomputeRatings } from '../ingest/ratings.ts';
 import { refreshOdds } from '../ingest/odds.ts';
@@ -38,6 +39,15 @@ async function main() {
   const toYear = Number(args.to) || new Date().getFullYear();
   const onlyTour = typeof args.tour === 'string' ? args.tour : null;
   const skipOdds = !!args['skip-odds'];
+
+  // `--fresh` deletes the download cache (data/raw) so the next run re-fetches
+  // from scratch. Needed to escape a stale mirror: cached CSVs and an existing
+  // clone are reused by design, so a plain re-run would keep the old data.
+  if (args.fresh) {
+    fs.rmSync(RAW_DIR, { recursive: true, force: true });
+    fs.mkdirSync(RAW_DIR, { recursive: true });
+    console.log('\n🧹 Caché de descargas borrada (data/raw): se volverá a descargar todo.');
+  }
 
   getDb();
   console.log(`\n⟳ Updating data ${fromYear}–${toYear}${onlyTour ? ` (${onlyTour})` : ''}…`);
