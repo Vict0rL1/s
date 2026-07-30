@@ -184,6 +184,8 @@ export interface UpcomingMatch {
 export interface UpcomingWithPrediction {
   match: UpcomingMatch;
   prediction: Prediction | null;
+  /** Market-implied probabilities, present only when the model can't predict. */
+  marketOnly?: MarketProbabilities | null;
 }
 
 export interface TournamentInfo {

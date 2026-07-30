@@ -14,6 +14,7 @@ import {
   searchPlayers,
 } from '../repo.ts';
 import { computeH2H } from '../model/h2h.ts';
+import { impliedProbabilities, type MarketProbabilities } from '../model/market.ts';
 import { buildPrediction, type Prediction } from '../model/predict.ts';
 import { refreshOdds } from '../ingest/odds.ts';
 import type { UpcomingRow } from '../types.ts';
@@ -32,6 +33,27 @@ function predictRow(row: UpcomingRow): Prediction | null {
     { odds1: row.p1_odds, odds2: row.p2_odds },
     bestOf,
   );
+}
+
+/**
+ * The market's own probabilities, for matches the model can't predict (a player
+ * missing from the history). The odds are real data we already hold, so showing
+ * them beats showing nothing — clearly labelled as the market, not the model.
+ */
+function marketOnly(row: UpcomingRow): MarketProbabilities | null {
+  if (row.p1_odds == null || row.p2_odds == null) return null;
+  return impliedProbabilities(row.p1_odds, row.p2_odds);
+}
+
+/** Shape returned for every upcoming match. */
+function describeRow(row: UpcomingRow, withPrediction = true) {
+  const prediction = withPrediction ? predictRow(row) : null;
+  return {
+    match: row,
+    prediction,
+    // Only when the model has nothing to say, so clients never have two sources.
+    marketOnly: prediction ? null : marketOnly(row),
+  };
 }
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -145,10 +167,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     async (req) => {
       const rows = listUpcoming({ tour: req.query.tour, tournament: req.query.tournament });
       const withPred = req.query.predictions !== 'false';
-      return rows.map((row) => ({
-        match: row,
-        prediction: withPred ? predictRow(row) : undefined,
-      }));
+      return rows.map((row) => describeRow(row, withPred));
     },
   );
 
@@ -172,7 +191,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // --- predictions for all upcoming matches of a tournament (or tour) ---
   app.get<{ Querystring: { tour?: string; tournament?: string } }>('/predictions', async (req) => {
     const rows = listUpcoming({ tour: req.query.tour, tournament: req.query.tournament });
-    return rows.map((row) => ({ match: row, prediction: predictRow(row) }));
+    return rows.map((row) => describeRow(row));
   });
 
   // --- ad-hoc prediction between any two players ---

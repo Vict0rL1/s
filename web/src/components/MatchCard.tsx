@@ -12,7 +12,7 @@ export default function MatchCard({
   onOpenPlayer: (tour: string, id: number) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const { match, prediction } = item;
+  const { match, prediction, marketOnly } = item;
 
   const verdict = prediction?.verdict;
   const value = prediction?.market.verdict;
@@ -40,7 +40,8 @@ export default function MatchCard({
           country={prediction?.players.p1.country ?? null}
           color={P1_COLOR}
           odds={match.p1_odds}
-          prob={prediction?.model.prob1 ?? null}
+          prob={prediction?.model.prob1 ?? marketOnly?.implied1 ?? null}
+          probSource={prediction ? 'model' : 'market'}
           onClick={match.p1_id ? () => onOpenPlayer(match.tour, match.p1_id!) : undefined}
         />
         <span className="px-3 pt-6 text-xs text-slate-500">vs</span>
@@ -49,7 +50,8 @@ export default function MatchCard({
           country={prediction?.players.p2.country ?? null}
           color={P2_COLOR}
           odds={match.p2_odds}
-          prob={prediction?.model.prob2 ?? null}
+          prob={prediction?.model.prob2 ?? marketOnly?.implied2 ?? null}
+          probSource={prediction ? 'model' : 'market'}
           alignRight
           onClick={match.p2_id ? () => onOpenPlayer(match.tour, match.p2_id!) : undefined}
         />
@@ -143,6 +145,7 @@ function PlayerName({
   color,
   odds,
   prob,
+  probSource = 'model',
   alignRight = false,
   onClick,
 }: {
@@ -151,6 +154,7 @@ function PlayerName({
   color: string;
   odds: number | null;
   prob: number | null;
+  probSource?: 'model' | 'market';
   alignRight?: boolean;
   onClick?: () => void;
 }) {
@@ -164,15 +168,25 @@ function PlayerName({
       >
         {flag(country)} {name}
       </button>
-      {/* Headline win probability — one decimal, matching the API value exactly */}
+      {/* Headline win probability — one decimal, matching the API value exactly.
+          Dimmed when it comes from the market because the model couldn't predict. */}
       {prob != null && (
         <div
-          className="text-4xl font-bold leading-tight tabular-nums sm:text-5xl"
+          className={`text-4xl font-bold leading-tight tabular-nums sm:text-5xl ${
+            probSource === 'market' ? 'opacity-60' : ''
+          }`}
           style={{ color }}
-          title="Probabilidad de victoria según el modelo"
+          title={
+            probSource === 'model'
+              ? 'Probabilidad de victoria según el modelo'
+              : 'Probabilidad implícita en las cuotas del mercado (el modelo no puede predecir este partido)'
+          }
         >
           {(prob * 100).toFixed(1)}
           <span className="text-2xl">%</span>
+          {probSource === 'market' && (
+            <span className="ml-1 align-middle text-xs font-normal text-slate-400">mercado</span>
+          )}
         </div>
       )}
       <div className="text-xs text-slate-500">{odds != null ? `cuota ${odds}` : 'sin cuota'}</div>
