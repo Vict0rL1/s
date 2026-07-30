@@ -49,10 +49,15 @@ export function expectedScore(ratingA: number, ratingB: number): number {
  *
  * Fix: shrink the rating gap toward zero by a constant factor before converting
  * it to a probability. This is standard probability calibration (equivalent to
- * temperature scaling on the logit). The factor was fitted from the backtest's
- * calibration table — re-run the backtest after changing the model to re-check.
+ * temperature scaling on the logit). The factor is fitted from the backtest's
+ * calibration table — re-run `npm run backtest` after changing the model, and
+ * compare candidates with `--calibration <n>`.
+ *
+ * Fitted on 22,062 out-of-sample ATP matches (2015–2026): 0.75 matched or beat
+ * every alternative on Brier/log loss and kept predicted-vs-observed within
+ * ~1 pp up to the 90% band (uncalibrated was off by 6–8 pp there).
  */
-export const CALIBRATION_SCALE = 0.7;
+export const CALIBRATION_SCALE = 0.75;
 
 /** Win probability with the calibration factor applied (what the app reports). */
 export function calibratedExpectedScore(

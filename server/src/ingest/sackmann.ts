@@ -333,10 +333,10 @@ async function ingestTml(tour: TourConfig, opts: IngestOptions) {
   const matchInsert = db.prepare(
     `INSERT INTO matches (
        tour, tourney_id, tourney_name, tourney_date, surface, level, round, best_of,
-       winner_id, loser_id, score,
+       winner_id, loser_id, score, winner_rank, loser_rank,
        w_ace, w_df, w_svpt, w_1stIn, w_1stWon, w_2ndWon, w_bpSaved, w_bpFaced,
        l_ace, l_df, l_svpt, l_1stIn, l_1stWon, l_2ndWon, l_bpSaved, l_bpFaced
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?)`,
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?)`,
   );
 
   const seenPlayers = new Set<number>();
@@ -384,6 +384,8 @@ async function ingestTml(tour: TourConfig, opts: IngestOptions) {
         wId,
         lId,
         r.score || null,
+        wRank,
+        lRank,
         num(r.w_ace), num(r.w_df), num(r.w_svpt), num(r.w_1stIn),
         num(r.w_1stWon), num(r.w_2ndWon), num(r.w_bpSaved), num(r.w_bpFaced),
         num(r.l_ace), num(r.l_df), num(r.l_svpt), num(r.l_1stIn),

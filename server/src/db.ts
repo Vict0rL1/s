@@ -49,6 +49,10 @@ function createSchema(d: DatabaseSync): void {
       winner_id    INTEGER NOT NULL,
       loser_id     INTEGER NOT NULL,
       score        TEXT,
+      -- Official ranking of each player AT THE TIME of the match. Kept so the
+      -- backtest can score a "higher-ranked player wins" baseline honestly.
+      winner_rank  INTEGER,
+      loser_rank   INTEGER,
       w_ace INTEGER, w_df INTEGER, w_svpt INTEGER, w_1stIn INTEGER,
       w_1stWon INTEGER, w_2ndWon INTEGER, w_bpSaved INTEGER, w_bpFaced INTEGER,
       l_ace INTEGER, l_df INTEGER, l_svpt INTEGER, l_1stIn INTEGER,

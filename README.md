@@ -27,9 +27,10 @@ posible *value* cuando el modelo discrepa de las cuotas.
 - **Datos de cada jugador en el partido**: ranking oficial ATP/WTA + puntos, país, edad y mano.
   Se muestran aunque el modelo no pueda predecir (jugador sin partidos en el historial), y en ese
   caso también se muestra la probabilidad implícita del mercado.
-- **Modelo calibrado y verificado:** `npm run backtest` mide la exactitud real (65.8% de acierto
-  y calibración dentro de ~1 pp entre 50–90% en 6.022 partidos ATP out-of-sample). Ver
-  [docs/MODEL.md](docs/MODEL.md).
+- **Modelo calibrado y verificado:** `npm run backtest` mide la exactitud real — **64.8% de
+  acierto** y probabilidades calibradas dentro de ~1–2 pp, sobre **22.062 partidos ATP
+  out-of-sample** (2015–2026). Incluye baseline de ranking y análisis de las discrepancias con el
+  mercado. Ver [docs/MODEL.md](docs/MODEL.md).
 - **Resumen "qué es lo más probable"** en cada partido: en lenguaje natural, con el favorito,
   su probabilidad, el marcador probable y las razones (superficie, forma, H2H, saque, mercado).
 - **Desglose completo por partido**: explicación de *por qué* gana X (qué señal pesa más),

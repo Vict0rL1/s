@@ -34,6 +34,8 @@ interface Row {
   surface: string | null;
   winner_id: number;
   loser_id: number;
+  winner_rank: number | null;
+  loser_rank: number | null;
 }
 
 interface State {
@@ -97,7 +99,7 @@ function main() {
   for (const tour of tours) {
     const rows = db
       .prepare(
-        `SELECT id, tourney_date, surface, winner_id, loser_id
+        `SELECT id, tourney_date, surface, winner_id, loser_id, winner_rank, loser_rank
          FROM matches WHERE tour = ? AND tourney_date >= ?
          ORDER BY tourney_date ASC, id ASC`,
       )
@@ -124,6 +126,15 @@ function main() {
     let correct = 0;
     let brier = 0;
     let logloss = 0;
+    // Baseline: "the higher-ranked player wins". The betting market is usually a
+    // bit sharper than the ranking, so this is a floor to compare against — not a
+    // stand-in for the market itself (we have no historical odds).
+    let rankScored = 0;
+    let rankCorrect = 0;
+    // How often the model and the ranking pick different winners, and who is
+    // right when they do — the quantitative version of "it disagrees with odds".
+    let disagreements = 0;
+    let modelRightOnDisagreement = 0;
     // Calibration buckets by predicted probability of the *predicted winner*.
     const buckets = new Map<string, { n: number; pred: number; won: number }>();
 
@@ -175,6 +186,18 @@ function main() {
         b.pred += pFav;
         b.won += favWon;
         buckets.set(bk, b);
+
+        // Ranking baseline + head-to-head against the model on the same matches.
+        if (m.winner_rank != null && m.loser_rank != null && m.winner_rank !== m.loser_rank) {
+          rankScored++;
+          const rankPicksWinner = m.winner_rank < m.loser_rank; // lower rank = better
+          if (rankPicksWinner) rankCorrect++;
+          const modelPicksWinner = pWinnerWins > 0.5;
+          if (modelPicksWinner !== rankPicksWinner) {
+            disagreements++;
+            if (modelPicksWinner) modelRightOnDisagreement++;
+          }
+        }
       }
 
       // ---- UPDATE (after predicting) ----
@@ -222,6 +245,20 @@ function main() {
     }
     const acc = correct / scored;
     console.log(`\nAccuracy (acierta al favorito): ${(acc * 100).toFixed(1)}%`);
+    if (rankScored > 0) {
+      console.log(
+        `Baseline "gana el mejor rankeado": ${((rankCorrect / rankScored) * 100).toFixed(1)}%` +
+          ` (sobre ${rankScored} partidos con ranking)`,
+      );
+    }
+    if (disagreements > 0) {
+      const pct = (modelRightOnDisagreement / disagreements) * 100;
+      console.log(
+        `\nCuando el modelo NO coincide con el ranking (${disagreements} partidos, ` +
+          `${((disagreements / rankScored) * 100).toFixed(1)}% del total):`,
+      );
+      console.log(`  el modelo acierta ${pct.toFixed(1)}% y el ranking ${(100 - pct).toFixed(1)}%`);
+    }
     console.log(`Brier score: ${(brier / scored).toFixed(4)}   (0 = perfecto, 0.25 = 50/50 siempre)`);
     console.log(`Log loss:    ${(logloss / scored).toFixed(4)}   (0.693 = 50/50 siempre)`);
     console.log('\nCalibración (predicho vs real, del favorito):');

@@ -108,41 +108,63 @@ está la probabilidad del 50%:
 
 ## Precisión: calibración y exactitud medida
 
-Los porcentajes se muestran con un decimal, pero **precisión mostrada ≠ exactitud**. Para no
-prometer nada sin evidencia, el proyecto incluye un backtest *walk-forward* (cada partido se
-predice usando solo información anterior a él, y luego se actualizan los ratings):
+Los porcentajes se muestran con un decimal, pero **precisión mostrada ≠ exactitud**. El proyecto
+incluye un backtest *walk-forward* (cada partido se predice usando solo información anterior a
+él, y luego se actualizan los ratings, así que no hay fuga de información del futuro):
 
 ```bash
 npm run backtest                      # con calibración (lo que usa la app)
 npm run backtest -- --calibration 1   # curva Elo cruda, para comparar
 ```
 
-### Resultado medido (ATP, 6.022 partidos out-of-sample)
+### Resultado medido (ATP, 22.062 partidos out-of-sample, 2015–2026)
 
-| Métrica | Elo crudo | **Calibrado (0.7)** |
+| Métrica | Valor | Referencia |
 |---|---|---|
-| Accuracy (acierta al favorito) | 65.8% | **65.8%** |
-| Brier score (menor = mejor; 0.25 = decir siempre 50/50) | 0.2177 | **0.2147** |
-| Log loss (menor = mejor; 0.693 = 50/50) | 0.6300 | **0.6187** |
-| Error de calibración en 70–80% | −5.9 pp | **−0.7 pp** |
-| Error de calibración en 80–90% | −9.0 pp | **−0.3 pp** |
+| **Accuracy** (acierta al favorito) | **64.8%** | Decir siempre "gana el mejor rankeado": 63.6% |
+| **Brier score** | **0.2164** | 0 = perfecto · 0.25 = decir siempre 50/50 |
+| **Log loss** | **0.6208** | 0.693 = decir siempre 50/50 |
 
-**El hallazgo:** la curva Elo cruda es **sobre-confiada**. Los partidos que anunciaba al ~85%
-se ganaban solo el ~76% de las veces. Por eso el modelo aplica un **factor de calibración de
-0.7** a la diferencia de rating antes de convertirla en probabilidad (equivale a *temperature
-scaling* sobre el logit; ver `CALIBRATION_SCALE` en `server/src/model/elo.ts`). Tras calibrar,
-lo predicho y lo observado coinciden dentro de ~1 punto porcentual entre el 50% y el 90%.
+### Calibración (lo más importante)
 
-Interpretación honesta: cuando la app dice 70%, históricamente ese lado ganaba ~70% de las
-veces — pero **acierta ~2 de cada 3 partidos**, así que se equivoca a menudo. El tramo
-90–100% sigue algo sobre-confiado (−5.9 pp, con muestra pequeña): desconfía de los favoritos
-extremos.
+| Cuando el modelo dice… | …gana realmente | Error |
+|---|---|---|
+| 55.0% | 54.4% | −0.5 pp |
+| 64.8% | 63.4% | −1.4 pp |
+| 74.5% | 73.8% | −0.7 pp |
+| 84.2% | 84.5% | +0.3 pp |
+| 92.7% | 94.6% | +1.9 pp |
 
-### Consistencia de las cifras
+Es decir: **cuando dice 70%, ese lado gana ~70% de las veces**. Las probabilidades son
+interpretables literalmente, dentro de ~1–2 puntos porcentuales.
 
-Las probabilidades se redondean una sola vez y la contraria se deriva por diferencia, así que
-los dos lados **siempre suman exactamente 100.0%** y el texto del resumen usa la misma cifra
-que el número grande — nunca verás 63.2% en un sitio y 63% en otro.
+### El factor de calibración
+
+La curva Elo cruda es **sobre-confiada**: sin calibrar, los partidos anunciados al ~85% se ganaban
+solo el ~77% (error de −7,6 pp). Por eso se aplica un factor de **0.75** a la diferencia de rating
+antes de convertirla en probabilidad (*temperature scaling*; ver `CALIBRATION_SCALE` en
+`server/src/model/elo.ts`). Comparación sobre los mismos 22.062 partidos:
+
+| Factor | Brier | Log loss | Error en 80–90% |
+|---|---|---|---|
+| 1.00 (crudo) | 0.2189 | 0.6282 | −7.6 pp |
+| **0.75 (elegido)** | **0.2164** | **0.6208** | **+0.3 pp** |
+| 0.85 | 0.2170 | 0.6223 | −2.7 pp |
+
+### Cuando el modelo discrepa del mercado
+
+El modelo elige un ganador distinto al del ranking oficial en el **21,7%** de los partidos. En
+esos casos el modelo acierta **52,7%** y el ranking **47,3%**: una ventaja real pero **muy
+pequeña**, casi una moneda al aire.
+
+Y una advertencia importante: **las casas de apuestas son más afiladas que el ranking**. Sus
+cuotas incorporan información que este modelo no ve (lesiones, estado del día, noticias de
+última hora, dinero de apostadores informados). No dispongo de odds históricas para medirlo, así
+que **no puedo afirmar que el modelo supere al mercado — y lo más probable es que no lo haga**.
+
+Interpreta las discrepancias como *"aquí hay algo que el modelo ve distinto"*, no como *"el
+mercado se equivoca"*. Si la diferencia es grande, la explicación más habitual es que el mercado
+sabe algo que los datos históricos no contienen.
 
 ## Limitaciones (sé honesto)
 
@@ -162,7 +184,7 @@ joven) porque promedia el historial. Úsalo como una señal más, no como la ún
 `npm run seed` genera datos **sintéticos**: los nombres son reales, pero los partidos están
 **simulados** a partir de una habilidad latente por superficie usando la misma fórmula Elo del
 modelo. Sirven para probar la app end-to-end sin conexión; **no** son historial real. Usa
-`npm run update-data` para cargar datos reales de Jeff Sackmann.
+`npm run update-data` para cargar el historial real (TML-Database).
 
 Detalles a tener en cuenta con el demo:
 
