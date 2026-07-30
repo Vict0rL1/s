@@ -59,6 +59,8 @@ export interface SurfaceRecord {
 export interface Profile extends Player {
   rating: Rating;
   eloRank: number;
+  ranking: OfficialRanking | null;
+  age: number | null;
   serve: ServeStats;
   recent: RecentMatch[];
 }
@@ -181,11 +183,30 @@ export interface UpcomingMatch {
   source: 'live' | 'fixture';
 }
 
+export interface OfficialRanking {
+  rank: number;
+  points: number | null;
+  date: string;
+}
+
+/** Player facts that don't depend on a complete match history. */
+export interface PlayerInfo {
+  id: number;
+  name: string;
+  country: string | null;
+  hand: string | null;
+  age: number | null;
+  ranking: OfficialRanking | null;
+  matchesInDb: number;
+}
+
 export interface UpcomingWithPrediction {
   match: UpcomingMatch;
   prediction: Prediction | null;
   /** Market-implied probabilities, present only when the model can't predict. */
   marketOnly?: MarketProbabilities | null;
+  /** Ranking/country/age per player; either side may be null if unknown. */
+  players?: { p1: PlayerInfo | null; p2: PlayerInfo | null };
 }
 
 export interface TournamentInfo {

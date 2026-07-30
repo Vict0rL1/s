@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { UpcomingMatch, UpcomingWithPrediction } from '../lib/api';
+import type { PlayerInfo, UpcomingMatch, UpcomingWithPrediction } from '../lib/api';
 import { confidenceLabelEs, flag, formatDateTime, surfaceLabelEs } from '../lib/format';
 import ProbabilityBars, { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import MatchDetail from './MatchDetail';
@@ -12,7 +12,7 @@ export default function MatchCard({
   onOpenPlayer: (tour: string, id: number) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const { match, prediction, marketOnly } = item;
+  const { match, prediction, marketOnly, players } = item;
 
   const verdict = prediction?.verdict;
   const value = prediction?.market.verdict;
@@ -37,21 +37,25 @@ export default function MatchCard({
       <div className="mb-4 flex items-start justify-between">
         <PlayerName
           name={match.p1_name}
-          country={prediction?.players.p1.country ?? null}
+          country={prediction?.players.p1.country ?? players?.p1?.country ?? null}
           color={P1_COLOR}
           odds={match.p1_odds}
           prob={prediction?.model.prob1 ?? marketOnly?.implied1 ?? null}
           probSource={prediction ? 'model' : 'market'}
+          info={players?.p1 ?? null}
+          tourLabel={match.tour.toUpperCase()}
           onClick={match.p1_id ? () => onOpenPlayer(match.tour, match.p1_id!) : undefined}
         />
         <span className="px-3 pt-6 text-xs text-slate-500">vs</span>
         <PlayerName
           name={match.p2_name}
-          country={prediction?.players.p2.country ?? null}
+          country={prediction?.players.p2.country ?? players?.p2?.country ?? null}
           color={P2_COLOR}
           odds={match.p2_odds}
           prob={prediction?.model.prob2 ?? marketOnly?.implied2 ?? null}
           probSource={prediction ? 'model' : 'market'}
+          info={players?.p2 ?? null}
+          tourLabel={match.tour.toUpperCase()}
           alignRight
           onClick={match.p2_id ? () => onOpenPlayer(match.tour, match.p2_id!) : undefined}
         />
@@ -109,7 +113,7 @@ export default function MatchCard({
           {open && <MatchDetail prediction={prediction} />}
         </>
       ) : (
-        <MissingPlayers match={match} />
+        <MissingPlayers match={match} players={players} />
       )}
     </div>
   );
@@ -120,21 +124,52 @@ export default function MatchCard({
  * points straight at the cause (usually an out-of-date match history that
  * predates the player's career) instead of a vague "not recognised".
  */
-function MissingPlayers({ match }: { match: UpcomingMatch }) {
-  const missing = [
-    match.p1_id == null ? match.p1_name : null,
-    match.p2_id == null ? match.p2_name : null,
-  ].filter(Boolean) as string[];
+function MissingPlayers({
+  match,
+  players,
+}: {
+  match: UpcomingMatch;
+  players?: { p1: PlayerInfo | null; p2: PlayerInfo | null };
+}) {
+  // Distinguish "we know nothing about this player" from "we know who they are
+  // (rank, country…) but have too few of their matches to rate them" — the fix
+  // differs, and the second case is not a data-loading failure.
+  const sides = [
+    { name: match.p1_name, id: match.p1_id, info: players?.p1 ?? null },
+    { name: match.p2_name, id: match.p2_id, info: players?.p2 ?? null },
+  ];
+  const unknown = sides.filter((s) => !s.info).map((s) => s.name);
+  const knownButUnrated = sides
+    .filter((s) => s.info && s.info.matchesInDb === 0)
+    .map((s) => `${s.name}${s.info!.ranking ? ` (#${s.info!.ranking.rank})` : ''}`);
 
   return (
     <div className="rounded-lg bg-slate-900/60 p-3 text-sm text-slate-400 ring-1 ring-slate-700/50">
-      Sin predicción: no hay historial de{' '}
-      <strong className="text-slate-200">{missing.join(' ni de ')}</strong> en la base de datos.
-      <div className="mt-1 text-xs text-slate-500">
-        Suele pasar si el historial descargado es antiguo y no cubre la carrera de este jugador.
-        Ejecuta <code className="rounded bg-slate-800 px-1">npm run update-data -- --fresh</code>{' '}
-        para volver a descargarlo.
-      </div>
+      {unknown.length > 0 && (
+        <>
+          Sin predicción del modelo: no hay datos de{' '}
+          <strong className="text-slate-200">{unknown.join(' ni de ')}</strong>.
+          <div className="mt-1 text-xs text-slate-500">
+            Suele pasar si el historial descargado es antiguo y no cubre la carrera de este jugador.
+            Ejecuta{' '}
+            <code className="rounded bg-slate-800 px-1">npm run update-data -- --fresh</code> para
+            volver a descargarlo.
+          </div>
+        </>
+      )}
+      {unknown.length === 0 && knownButUnrated.length > 0 && (
+        <>
+          Sin predicción del modelo: aún no hay partidos de{' '}
+          <strong className="text-slate-200">{knownButUnrated.join(' ni de ')}</strong> en el
+          historial, así que no se puede calcular su Elo.
+          <div className="mt-1 text-xs text-slate-500">
+            Arriba tienes su ranking oficial y la probabilidad del mercado.
+          </div>
+        </>
+      )}
+      {unknown.length === 0 && knownButUnrated.length === 0 && (
+        <>Sin predicción del modelo para este partido.</>
+      )}
     </div>
   );
 }
@@ -146,6 +181,8 @@ function PlayerName({
   odds,
   prob,
   probSource = 'model',
+  info,
+  tourLabel,
   alignRight = false,
   onClick,
 }: {
@@ -155,9 +192,19 @@ function PlayerName({
   odds: number | null;
   prob: number | null;
   probSource?: 'model' | 'market';
+  info?: PlayerInfo | null;
+  tourLabel: string;
   alignRight?: boolean;
   onClick?: () => void;
 }) {
+  // Official ranking / age / hand — real facts about the player, independent of
+  // whether the match history is complete enough to rate them.
+  const facts = [
+    info?.ranking ? `#${info.ranking.rank} ${tourLabel}` : null,
+    info?.ranking?.points != null ? `${info.ranking.points.toLocaleString('es')} pts` : null,
+    info?.age != null ? `${info.age} años` : null,
+    info?.hand === 'L' ? 'zurdo/a' : info?.hand === 'R' ? 'diestro/a' : null,
+  ].filter(Boolean) as string[];
   return (
     <div className={`flex-1 ${alignRight ? 'text-right' : 'text-left'}`}>
       <button
@@ -189,6 +236,7 @@ function PlayerName({
           )}
         </div>
       )}
+      {facts.length > 0 && <div className="text-xs text-slate-400">{facts.join(' · ')}</div>}
       <div className="text-xs text-slate-500">{odds != null ? `cuota ${odds}` : 'sin cuota'}</div>
     </div>
   );

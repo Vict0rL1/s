@@ -37,7 +37,15 @@ export default function PlayerProfile({
             </h2>
             {profile && (
               <div className="text-xs text-slate-400">
+                {profile.ranking && (
+                  <>
+                    <span className="text-slate-200">#{profile.ranking.rank} oficial</span>
+                    {profile.ranking.points != null && ` (${profile.ranking.points.toLocaleString('es')} pts)`}
+                    {' · '}
+                  </>
+                )}
                 #{profile.eloRank} por Elo · {profile.rating.matches_played} partidos
+                {profile.age != null && ` · ${profile.age} años`}
               </div>
             )}
           </div>

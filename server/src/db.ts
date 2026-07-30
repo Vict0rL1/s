@@ -70,6 +70,18 @@ function createSchema(d: DatabaseSync): void {
       PRIMARY KEY (tour, player_id)
     );
 
+    -- Official ATP/WTA ranking snapshots (source: Sackmann rankings files).
+    -- Only the most recent snapshot per player is kept.
+    CREATE TABLE IF NOT EXISTS player_rankings (
+      player_id     INTEGER NOT NULL,
+      tour          TEXT NOT NULL,
+      rank          INTEGER NOT NULL,
+      points        INTEGER,
+      ranking_date  TEXT NOT NULL,
+      PRIMARY KEY (tour, player_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rankings_rank ON player_rankings (tour, rank);
+
     CREATE TABLE IF NOT EXISTS upcoming_matches (
       id              TEXT PRIMARY KEY,
       tour            TEXT NOT NULL,
@@ -111,7 +123,14 @@ export function getMeta(key: string): string | null {
 /** Wipe all ingested data (used before a fresh seed or full re-ingest). */
 export function resetData(): void {
   const d = getDb();
-  for (const t of ['upcoming_matches', 'player_ratings', 'matches', 'players', 'meta']) {
+  for (const t of [
+    'upcoming_matches',
+    'player_ratings',
+    'player_rankings',
+    'matches',
+    'players',
+    'meta',
+  ]) {
     d.exec(`DELETE FROM ${t};`);
   }
 }

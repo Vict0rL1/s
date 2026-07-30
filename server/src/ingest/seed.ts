@@ -35,38 +35,39 @@ interface SeedPlayer {
   name: string;
   ioc: string;
   hand: 'R' | 'L';
+  born: number; // real birth year — keeps displayed ages sensible in the demo
   base: number;
   d: { Hard: number; Clay: number; Grass: number }; // per-surface skill offset
 }
 
 const ATP: SeedPlayer[] = [
-  { id: 1001, name: 'Novak Djokovic', ioc: 'SRB', hand: 'R', base: 2150, d: { Hard: 30, Clay: 0, Grass: 20 } },
-  { id: 1002, name: 'Carlos Alcaraz', ioc: 'ESP', hand: 'R', base: 2120, d: { Hard: 10, Clay: 40, Grass: 30 } },
-  { id: 1003, name: 'Jannik Sinner', ioc: 'ITA', hand: 'R', base: 2110, d: { Hard: 40, Clay: 0, Grass: 10 } },
-  { id: 1004, name: 'Rafael Nadal', ioc: 'ESP', hand: 'L', base: 2080, d: { Hard: 0, Clay: 120, Grass: -10 } },
-  { id: 1005, name: 'Daniil Medvedev', ioc: 'RUS', hand: 'R', base: 2060, d: { Hard: 50, Clay: -60, Grass: 0 } },
-  { id: 1006, name: 'Alexander Zverev', ioc: 'GER', hand: 'R', base: 2030, d: { Hard: 20, Clay: 20, Grass: -10 } },
-  { id: 1007, name: 'Stefanos Tsitsipas', ioc: 'GRE', hand: 'R', base: 2010, d: { Hard: 0, Clay: 40, Grass: -20 } },
-  { id: 1008, name: 'Andrey Rublev', ioc: 'RUS', hand: 'R', base: 1990, d: { Hard: 20, Clay: 10, Grass: -10 } },
-  { id: 1009, name: 'Casper Ruud', ioc: 'NOR', hand: 'R', base: 1970, d: { Hard: -10, Clay: 50, Grass: -30 } },
-  { id: 1010, name: 'Taylor Fritz', ioc: 'USA', hand: 'R', base: 1960, d: { Hard: 30, Clay: -20, Grass: 20 } },
-  { id: 1011, name: 'Grigor Dimitrov', ioc: 'BUL', hand: 'R', base: 1940, d: { Hard: 10, Clay: -10, Grass: 20 } },
-  { id: 1012, name: 'Hubert Hurkacz', ioc: 'POL', hand: 'R', base: 1930, d: { Hard: 20, Clay: -30, Grass: 30 } },
+  { id: 1001, name: 'Novak Djokovic', ioc: 'SRB', hand: 'R', born: 1987, base: 2150, d: { Hard: 30, Clay: 0, Grass: 20 } },
+  { id: 1002, name: 'Carlos Alcaraz', ioc: 'ESP', hand: 'R', born: 2003, base: 2120, d: { Hard: 10, Clay: 40, Grass: 30 } },
+  { id: 1003, name: 'Jannik Sinner', ioc: 'ITA', hand: 'R', born: 2001, base: 2110, d: { Hard: 40, Clay: 0, Grass: 10 } },
+  { id: 1004, name: 'Rafael Nadal', ioc: 'ESP', hand: 'L', born: 1986, base: 2080, d: { Hard: 0, Clay: 120, Grass: -10 } },
+  { id: 1005, name: 'Daniil Medvedev', ioc: 'RUS', hand: 'R', born: 1996, base: 2060, d: { Hard: 50, Clay: -60, Grass: 0 } },
+  { id: 1006, name: 'Alexander Zverev', ioc: 'GER', hand: 'R', born: 1997, base: 2030, d: { Hard: 20, Clay: 20, Grass: -10 } },
+  { id: 1007, name: 'Stefanos Tsitsipas', ioc: 'GRE', hand: 'R', born: 1998, base: 2010, d: { Hard: 0, Clay: 40, Grass: -20 } },
+  { id: 1008, name: 'Andrey Rublev', ioc: 'RUS', hand: 'R', born: 1997, base: 1990, d: { Hard: 20, Clay: 10, Grass: -10 } },
+  { id: 1009, name: 'Casper Ruud', ioc: 'NOR', hand: 'R', born: 1998, base: 1970, d: { Hard: -10, Clay: 50, Grass: -30 } },
+  { id: 1010, name: 'Taylor Fritz', ioc: 'USA', hand: 'R', born: 1997, base: 1960, d: { Hard: 30, Clay: -20, Grass: 20 } },
+  { id: 1011, name: 'Grigor Dimitrov', ioc: 'BUL', hand: 'R', born: 1991, base: 1940, d: { Hard: 10, Clay: -10, Grass: 20 } },
+  { id: 1012, name: 'Hubert Hurkacz', ioc: 'POL', hand: 'R', born: 1997, base: 1930, d: { Hard: 20, Clay: -30, Grass: 30 } },
 ];
 
 const WTA: SeedPlayer[] = [
-  { id: 2001, name: 'Iga Swiatek', ioc: 'POL', hand: 'R', base: 2130, d: { Hard: 10, Clay: 80, Grass: -20 } },
-  { id: 2002, name: 'Aryna Sabalenka', ioc: 'BLR', hand: 'R', base: 2100, d: { Hard: 40, Clay: 0, Grass: 10 } },
-  { id: 2003, name: 'Elena Rybakina', ioc: 'KAZ', hand: 'R', base: 2060, d: { Hard: 30, Clay: -10, Grass: 40 } },
-  { id: 2004, name: 'Coco Gauff', ioc: 'USA', hand: 'R', base: 2050, d: { Hard: 30, Clay: 10, Grass: 0 } },
-  { id: 2005, name: 'Jessica Pegula', ioc: 'USA', hand: 'R', base: 2000, d: { Hard: 20, Clay: -10, Grass: 0 } },
-  { id: 2006, name: 'Ons Jabeur', ioc: 'TUN', hand: 'R', base: 1990, d: { Hard: -10, Clay: 10, Grass: 40 } },
-  { id: 2007, name: 'Marketa Vondrousova', ioc: 'CZE', hand: 'L', base: 1970, d: { Hard: 0, Clay: 10, Grass: 30 } },
-  { id: 2008, name: 'Maria Sakkari', ioc: 'GRE', hand: 'R', base: 1960, d: { Hard: 20, Clay: 10, Grass: -20 } },
-  { id: 2009, name: 'Barbora Krejcikova', ioc: 'CZE', hand: 'R', base: 1955, d: { Hard: 0, Clay: 30, Grass: 20 } },
-  { id: 2010, name: 'Qinwen Zheng', ioc: 'CHN', hand: 'R', base: 1945, d: { Hard: 30, Clay: 0, Grass: -10 } },
-  { id: 2011, name: 'Petra Kvitova', ioc: 'CZE', hand: 'L', base: 1950, d: { Hard: 10, Clay: -20, Grass: 40 } },
-  { id: 2012, name: 'Jelena Ostapenko', ioc: 'LAT', hand: 'R', base: 1940, d: { Hard: 10, Clay: 20, Grass: 10 } },
+  { id: 2001, name: 'Iga Swiatek', ioc: 'POL', hand: 'R', born: 2001, base: 2130, d: { Hard: 10, Clay: 80, Grass: -20 } },
+  { id: 2002, name: 'Aryna Sabalenka', ioc: 'BLR', hand: 'R', born: 1998, base: 2100, d: { Hard: 40, Clay: 0, Grass: 10 } },
+  { id: 2003, name: 'Elena Rybakina', ioc: 'KAZ', hand: 'R', born: 1999, base: 2060, d: { Hard: 30, Clay: -10, Grass: 40 } },
+  { id: 2004, name: 'Coco Gauff', ioc: 'USA', hand: 'R', born: 2004, base: 2050, d: { Hard: 30, Clay: 10, Grass: 0 } },
+  { id: 2005, name: 'Jessica Pegula', ioc: 'USA', hand: 'R', born: 1994, base: 2000, d: { Hard: 20, Clay: -10, Grass: 0 } },
+  { id: 2006, name: 'Ons Jabeur', ioc: 'TUN', hand: 'R', born: 1994, base: 1990, d: { Hard: -10, Clay: 10, Grass: 40 } },
+  { id: 2007, name: 'Marketa Vondrousova', ioc: 'CZE', hand: 'L', born: 1999, base: 1970, d: { Hard: 0, Clay: 10, Grass: 30 } },
+  { id: 2008, name: 'Maria Sakkari', ioc: 'GRE', hand: 'R', born: 1995, base: 1960, d: { Hard: 20, Clay: 10, Grass: -20 } },
+  { id: 2009, name: 'Barbora Krejcikova', ioc: 'CZE', hand: 'R', born: 1995, base: 1955, d: { Hard: 0, Clay: 30, Grass: 20 } },
+  { id: 2010, name: 'Qinwen Zheng', ioc: 'CHN', hand: 'R', born: 2002, base: 1945, d: { Hard: 30, Clay: 0, Grass: -10 } },
+  { id: 2011, name: 'Petra Kvitova', ioc: 'CZE', hand: 'L', born: 1990, base: 1950, d: { Hard: 10, Clay: -20, Grass: 40 } },
+  { id: 2012, name: 'Jelena Ostapenko', ioc: 'LAT', hand: 'R', born: 1997, base: 1940, d: { Hard: 10, Clay: 20, Grass: 10 } },
 ];
 
 // Events simulated each season (name, surface, month). Names align with the
@@ -147,10 +148,22 @@ function simulateTour(tour: TourId, players: SeedPlayer[], rng: () => number): n
   const playerInsert = db.prepare(
     'INSERT INTO players (id, tour, name, hand, country, birthdate) VALUES (?, ?, ?, ?, ?, ?)',
   );
+  // Plausible birth dates and official rankings so the demo exercises the same
+  // player-info UI as real data (rank/points ordered by latent skill).
+  const rankInsert = db.prepare(
+    'INSERT INTO player_rankings (player_id, tour, rank, points, ranking_date) VALUES (?, ?, ?, ?, ?)',
+  );
+  const today = new Date();
+  const rankingDate = `${today.getUTCFullYear()}${String(today.getUTCMonth() + 1).padStart(2, '0')}01`;
+  const bySkill = [...players].sort((a, b) => b.base - a.base);
+
   db.exec('BEGIN');
   for (const p of players) {
-    playerInsert.run(p.id, tour, p.name, p.hand, p.ioc, null);
+    playerInsert.run(p.id, tour, p.name, p.hand, p.ioc, `${p.born}0615`);
   }
+  bySkill.forEach((p, i) => {
+    rankInsert.run(p.id, tour, i + 1, Math.round(11000 - i * 850 + (rng() - 0.5) * 300), rankingDate);
+  });
   db.exec('COMMIT');
 
   const matchInsert = db.prepare(

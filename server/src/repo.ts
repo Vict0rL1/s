@@ -6,6 +6,8 @@ import { INITIAL_ELO } from './model/elo.ts';
 import type { FormResult } from './model/form.ts';
 import type { H2HMeeting } from './model/h2h.ts';
 import type {
+  OfficialRanking,
+  PlayerInfo,
   PlayerRow,
   RatingRow,
   ServeStats,
@@ -17,6 +19,8 @@ import type {
 export interface PlayerProfile extends PlayerRow {
   rating: RatingRow;
   eloRank: number;
+  ranking: OfficialRanking | null;
+  age: number | null;
   serve: ServeStats;
   recent: RecentMatch[];
 }
@@ -218,6 +222,66 @@ export function getEloRank(tour: TourId, id: number): number {
   return row.rank;
 }
 
+/** Latest official ATP/WTA ranking for a player (null if not ranked/unknown). */
+export function getOfficialRanking(tour: TourId, id: number): OfficialRanking | null {
+  const row = getDb()
+    .prepare(
+      'SELECT rank, points, ranking_date FROM player_rankings WHERE tour = ? AND player_id = ?',
+    )
+    .get(tour, id) as unknown as
+    | { rank: number; points: number | null; ranking_date: string }
+    | undefined;
+  return row ? { rank: row.rank, points: row.points, date: row.ranking_date } : null;
+}
+
+function ageFromDob(dob: string | null): number | null {
+  if (!dob || dob.length < 8) return null;
+  const y = Number(dob.slice(0, 4));
+  const m = Number(dob.slice(4, 6));
+  const d = Number(dob.slice(6, 8));
+  if (!y || !m || !d) return null;
+  const now = new Date();
+  let age = now.getUTCFullYear() - y;
+  const beforeBirthday =
+    now.getUTCMonth() + 1 < m || (now.getUTCMonth() + 1 === m && now.getUTCDate() < d);
+  if (beforeBirthday) age--;
+  return age > 0 && age < 100 ? age : null;
+}
+
+/**
+ * Player facts that don't depend on the match history being complete: name,
+ * country, hand, age and official ranking. Resolves by id when known, otherwise
+ * by name — so a player the model can't rate can still be described.
+ */
+export function getPlayerInfo(
+  tour: TourId,
+  idOrName: number | string,
+): PlayerInfo | null {
+  const player =
+    typeof idOrName === 'number'
+      ? getPlayer(tour, idOrName)
+      : ((getDb()
+          .prepare('SELECT id, tour, name, hand, country, birthdate FROM players WHERE tour = ? AND lower(name) = ?')
+          .get(tour, idOrName.toLowerCase()) as unknown as PlayerRow | undefined) ?? null);
+  if (!player) return null;
+
+  const played = getDb()
+    .prepare(
+      'SELECT COUNT(*) AS c FROM matches WHERE tour = ? AND (winner_id = ? OR loser_id = ?)',
+    )
+    .get(tour, player.id, player.id) as unknown as { c: number };
+
+  return {
+    id: player.id,
+    name: player.name,
+    country: player.country,
+    hand: player.hand,
+    age: ageFromDob(player.birthdate),
+    ranking: getOfficialRanking(tour, player.id),
+    matchesInDb: played.c,
+  };
+}
+
 export function getProfile(tour: TourId, id: number): PlayerProfile | null {
   const player = getPlayer(tour, id);
   if (!player) return null;
@@ -225,6 +289,8 @@ export function getProfile(tour: TourId, id: number): PlayerProfile | null {
     ...player,
     rating: getRating(tour, id),
     eloRank: getEloRank(tour, id),
+    ranking: getOfficialRanking(tour, id),
+    age: ageFromDob(player.birthdate),
     serve: getServeStats(tour, id),
     recent: getRecentMatches(tour, id, 10),
   };

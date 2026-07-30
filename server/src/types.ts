@@ -77,6 +77,24 @@ export interface SurfaceRecord {
   losses: number;
 }
 
+/** Official ATP/WTA ranking snapshot for a player. */
+export interface OfficialRanking {
+  rank: number;
+  points: number | null;
+  date: string; // YYYYMMDD
+}
+
+/** Everything we can say about a player independent of a specific match. */
+export interface PlayerInfo {
+  id: number;
+  name: string;
+  country: string | null;
+  hand: string | null;
+  age: number | null;
+  ranking: OfficialRanking | null;
+  matchesInDb: number;
+}
+
 export interface UpcomingRow {
   id: string;
   tour: TourId;
@@ -99,7 +117,13 @@ export interface TourConfig {
   id: TourId;
   name: string;
   label: string;
-  sackmann: { repo: string; matchesFile: string; playersFile: string };
+  sackmann: {
+    repo: string;
+    matchesFile: string;
+    playersFile: string;
+    /** Official ranking snapshots (rank + points), newest file first. */
+    rankingsFiles?: string[];
+  };
 }
 
 export interface ToursConfig {

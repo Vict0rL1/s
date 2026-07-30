@@ -8,6 +8,7 @@ import {
   countRows,
   getProfile,
   getH2HMeetings,
+  getPlayerInfo,
   getUpcomingById,
   getUpcomingTournaments,
   listUpcoming,
@@ -53,6 +54,12 @@ function describeRow(row: UpcomingRow, withPrediction = true) {
     prediction,
     // Only when the model has nothing to say, so clients never have two sources.
     marketOnly: prediction ? null : marketOnly(row),
+    // Player facts (official ranking, country, age…) that don't need a complete
+    // match history — so unrated players are still described rather than blank.
+    players: {
+      p1: getPlayerInfo(row.tour, row.p1_id ?? row.p1_name),
+      p2: getPlayerInfo(row.tour, row.p2_id ?? row.p2_name),
+    },
   };
 }
 
@@ -183,9 +190,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>('/predictions/:id', async (req, reply) => {
     const row = getUpcomingById(req.params.id);
     if (!row) return reply.code(404).send({ error: 'match not found' });
-    const prediction = predictRow(row);
-    if (!prediction) return reply.code(422).send({ error: 'players could not be resolved for this match' });
-    return { match: row, prediction };
+    // Same shape as the list endpoints: when the model can't predict, the caller
+    // still gets market probabilities and player info instead of a bare error.
+    return describeRow(row);
   });
 
   // --- predictions for all upcoming matches of a tournament (or tour) ---

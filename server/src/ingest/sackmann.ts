@@ -197,6 +197,53 @@ interface IngestOptions {
 // header row. Newer Sackmann files include one, so we detect and adapt.
 const PLAYERS_COLUMNS = ['player_id', 'name_first', 'name_last', 'hand', 'dob', 'ioc', 'height', 'wikidata_id'];
 
+// Rankings files ship without a header: ranking_date, rank, player_id, points.
+const RANKINGS_COLUMNS = ['ranking_date', 'rank', 'player_id', 'points'];
+
+/**
+ * Ingest official ATP/WTA rankings (rank + points). Keeps only the most recent
+ * snapshot per player, so the app can show a player's real ranking even when the
+ * match history doesn't cover their career yet.
+ */
+export async function ingestRankings(tour: TourConfig): Promise<number> {
+  const files = tour.sackmann.rankingsFiles ?? [];
+  if (files.length === 0) return 0;
+  const db = getDb();
+
+  const upsert = db.prepare(
+    `INSERT INTO player_rankings (player_id, tour, rank, points, ranking_date)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(tour, player_id) DO UPDATE SET
+       rank=excluded.rank, points=excluded.points, ranking_date=excluded.ranking_date
+     WHERE excluded.ranking_date > player_rankings.ranking_date`,
+  );
+
+  let count = 0;
+  for (const file of files) {
+    const csv = await readRepoFile(tour.sackmann.repo, file);
+    if (!csv) continue;
+    const hasHeader = /^\s*ranking_date/i.test(csv);
+    const rows = parse(csv, {
+      columns: hasHeader ? true : RANKINGS_COLUMNS,
+      skip_empty_lines: true,
+      relax_column_count: true,
+    }) as any[];
+
+    db.exec('BEGIN');
+    for (const r of rows) {
+      const id = num(r.player_id);
+      const rank = num(r.rank);
+      const date = String(r.ranking_date ?? '');
+      if (id === null || rank === null || !date) continue;
+      upsert.run(id, tour.id, rank, num(r.points), date);
+      count++;
+    }
+    db.exec('COMMIT');
+    process.stdout.write(`  ${file}: ${rows.length} filas de ranking\n`);
+  }
+  return count;
+}
+
 /** Parse a players CSV whether or not it has a header row. */
 function parsePlayers(csv: string): any[] {
   const hasHeader = /^\s*player_id\b/i.test(csv);

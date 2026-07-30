@@ -22,7 +22,8 @@
       "sackmann": {
         "repo": "JeffSackmann/tennis_atp",
         "matchesFile": "atp_matches_{year}.csv",
-        "playersFile": "atp_players.csv"
+        "playersFile": "atp_players.csv",
+        "rankingsFiles": ["atp_rankings_current.csv", "atp_rankings_20s.csv"]
       }
     },
     {
@@ -32,7 +33,8 @@
       "sackmann": {
         "repo": "JeffSackmann/tennis_wta",
         "matchesFile": "wta_matches_{year}.csv",
-        "playersFile": "wta_players.csv"
+        "playersFile": "wta_players.csv",
+        "rankingsFiles": ["wta_rankings_current.csv", "wta_rankings_20s.csv"]
       }
     }
   ]

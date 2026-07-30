@@ -24,6 +24,9 @@ posible *value* cuando el modelo discrepa de las cuotas.
   implícita sin vig + detección de value).
 - **Probabilidad de victoria en grande** para cada jugador (con un decimal), y todas las cifras
   consistentes entre sí: los dos lados siempre suman exactamente 100.0%.
+- **Datos de cada jugador en el partido**: ranking oficial ATP/WTA + puntos, país, edad y mano.
+  Se muestran aunque el modelo no pueda predecir (jugador sin partidos en el historial), y en ese
+  caso también se muestra la probabilidad implícita del mercado.
 - **Modelo calibrado y verificado:** `npm run backtest` mide la exactitud real (65.8% de acierto
   y calibración dentro de ~1 pp entre 50–90% en 6.022 partidos ATP out-of-sample). Ver
   [docs/MODEL.md](docs/MODEL.md).
@@ -46,6 +49,7 @@ posible *value* cuando el modelo discrepa de las cuotas.
 | Tipo | Fuente | Por qué |
 |------|--------|---------|
 | Histórico | [Jeff Sackmann `tennis_atp` / `tennis_wta`](https://github.com/JeffSackmann/tennis_atp) | Gratis, sin API key, partido a partido desde décadas atrás, con superficie, ronda, sets y estadísticas de saque/quiebre. Estándar de facto para Elo de tenis. |
+| Datos de jugador | Archivos de **rankings oficiales** y biografías del mismo repo de Sackmann | Ranking ATP/WTA + puntos, país, mano y fecha de nacimiento. Misma fuente ya en uso (el ATP Tour no ofrece API pública, y hacer scraping de su web sería frágil y de legalidad dudosa). |
 | Odds | [The Odds API](https://the-odds-api.com) | Cuotas head-to-head de partidos próximos ATP/WTA. Plan gratuito (500 req/mes). Requiere API key. |
 
 ---

@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import { getDb, resetData, setMeta } from '../db.ts';
 import { RAW_DIR, toursConfig } from '../config.ts';
-import { ingestTour, preflight, tourConfigs } from '../ingest/sackmann.ts';
+import { ingestRankings, ingestTour, preflight, tourConfigs } from '../ingest/sackmann.ts';
 import { recomputeRatings } from '../ingest/ratings.ts';
 import { refreshOdds } from '../ingest/odds.ts';
 
@@ -72,6 +72,10 @@ async function main() {
       const res = await ingestTour(tour, { fromYear, toYear });
       console.log(`  players: ${res.players}, matches: ${res.matches}`);
       totalMatches += res.matches;
+      // Official rankings: lets the app show a player's real rank/points even if
+      // the match history doesn't cover their career.
+      const ranked = await ingestRankings(tour);
+      if (ranked) console.log(`  rankings oficiales: ${ranked} filas procesadas`);
     } catch (e) {
       failed.push(tour.id);
       console.warn(`  ⚠️  No se pudo descargar ${tour.id}: ${(e as Error).message}`);
