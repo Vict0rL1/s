@@ -7,6 +7,7 @@ import { getDb } from './db.ts';
 import { countRows } from './repo.ts';
 import { refreshOdds } from './ingest/odds.ts';
 import { registerRoutes } from './routes/api.ts';
+import { resolvePredictions } from './trackRecord.ts';
 
 /**
  * Keep odds current on their own: refresh once at startup and then on an
@@ -38,6 +39,14 @@ function startAutoRefresh(log: (msg: string) => void): void {
 
 async function main() {
   getDb(); // open + create schema up front
+
+  // Catch up on any prediction whose result arrived while the server was down
+  // (history is normally ingested by a separate `update-data` process).
+  try {
+    resolvePredictions();
+  } catch {
+    // Never block startup over the track record.
+  }
 
   const app = Fastify({ logger: { level: 'info', transport: undefined } });
   await app.register(cors, { origin: true });

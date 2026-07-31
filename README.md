@@ -31,6 +31,14 @@ posible *value* cuando el modelo discrepa de las cuotas.
   acierto** y probabilidades calibradas dentro de ~1–2 pp, sobre **22.062 partidos ATP
   out-of-sample** (2015–2026). Incluye baseline de ranking y análisis de las discrepancias con el
   mercado. Ver [docs/MODEL.md](docs/MODEL.md).
+- **Track record propio:** la app **anota cada predicción antes** de que se juegue el partido y la
+  puntúa cuando llega el resultado real, así que el dashboard muestra su acierto **en los partidos
+  que tú viste** — no solo en el backtest histórico. Incluye comparación contra el mercado en esos
+  mismos partidos. Ver [«Aciertos reales»](#aciertos-reales-de-la-app).
+- **Fiabilidad por predicción:** cada probabilidad viene con un semáforo (alta / media / baja) y un
+  **rango** (p. ej. *62% ± 3 pp*), calculado con cuántos partidos respaldan cada Elo, cuántos en esa
+  superficie y si los datos del jugador están viejos. Un 62% con 800 partidos detrás y un 62% con 8
+  ya no se ven iguales.
 - **Resumen "qué es lo más probable"** en cada partido: en lenguaje natural, con el favorito,
   su probabilidad, el marcador probable y las razones (superficie, forma, H2H, saque, mercado).
 - **Probabilidad de cada marcador** (2-0, 3-1, …) derivada matemáticamente de la probabilidad del
@@ -148,6 +156,31 @@ puesto a mano, así que puedes reintentar sin volver a descargarlos.
 
 ---
 
+## Aciertos reales de la app
+
+El `npm run backtest` mide el modelo sobre 20 años de historial. Útil para ajustarlo, pero no
+responde la pregunta que de verdad importa: **¿ha acertado los partidos que yo miré?**
+
+Para eso la app lleva su propio registro:
+
+1. Cada vez que muestra una predicción de un partido **real** próximo, la **guarda** (probabilidad,
+   favorito, cuotas del momento, fiabilidad declarada).
+2. Ese registro **no se reescribe nunca**: la primera cifra servida es la que se puntúa, así que no
+   puede «mejorar» sola cuando se mueven las cuotas.
+3. Cuando el resultado real entra al historial (al correr `npm run update-data`), la predicción se
+   empareja con él y se puntúa.
+
+El dashboard lo muestra arriba, plegable: acierto, Brier, log loss, calibración (dicho vs ocurrido),
+**el mismo cálculo para el mercado en esos mismos partidos**, y el desglose por fiabilidad
+declarada. Con menos de 30 partidos resueltos avisa de que la muestra es pequeña.
+
+> El registro **sobrevive** a `npm run update-data`: reingerir el historial no borra tu track record.
+> Los partidos de demostración (`odds demo`) **no** se registran: nunca se juegan, así que puntuar
+> contra ellos no significaría nada.
+
+Sirve además como detector de averías: si los datos se rompen o quedan viejos, el acierto cae y lo
+ves, en vez de fallar en silencio.
+
 ## Scripts
 
 | Comando | Qué hace |
@@ -164,6 +197,7 @@ puesto a mano, así que puedes reintentar sin volver a descargarlos.
 | Endpoint | Descripción |
 |----------|-------------|
 | `GET /api/meta` | Fuente de datos y conteos |
+| `GET /api/track-record?tour=` | Acierto medido de la app en partidos ya jugados (+ mercado) |
 | `GET /api/tours` | Circuitos ATP/WTA con conteos |
 | `GET /api/tours/:tour/players?q=` | Jugadores (búsqueda) |
 | `GET /api/players/:tour/:id` | Perfil: Elo general + por superficie + últimos resultados |

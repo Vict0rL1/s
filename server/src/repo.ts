@@ -83,17 +83,29 @@ export function getRating(tour: TourId, id: number): RatingRow {
   };
 }
 
-/** Recent win/loss outcomes for one player (most recent first). */
+/**
+ * Recent win/loss outcomes for one player (most recent first).
+ *
+ * The two roles are fetched as separate indexed lookups and merged, instead of
+ * `(winner_id = ? OR loser_id = ?)`. With the OR, SQLite walks the tour in date
+ * order until it happens to find `limit` matches for this player — cheap for an
+ * active player, very slow for anyone who stopped playing years ago. Two point
+ * lookups plus a sort of a few hundred rows is fast for everyone.
+ */
 export function getRecentForm(tour: TourId, id: number, limit = 10): FormResult[] {
   return getDb()
     .prepare(
-      `SELECT tourney_date AS date, (winner_id = ?) AS won
-       FROM matches
-       WHERE tour = ? AND (winner_id = ? OR loser_id = ?)
-       ORDER BY tourney_date DESC, id DESC
+      `SELECT date, won FROM (
+         SELECT tourney_date AS date, id AS mid, 1 AS won
+           FROM matches WHERE tour = ? AND winner_id = ?
+         UNION ALL
+         SELECT tourney_date AS date, id AS mid, 0 AS won
+           FROM matches WHERE tour = ? AND loser_id = ?
+       )
+       ORDER BY date DESC, mid DESC
        LIMIT ?`,
     )
-    .all(id, tour, id, id, limit)
+    .all(tour, id, tour, id, limit)
     .map((r: any) => ({ date: String(r.date), won: !!r.won }));
 }
 
@@ -101,15 +113,20 @@ export function getRecentForm(tour: TourId, id: number, limit = 10): FormResult[
 export function getRecentMatches(tour: TourId, id: number, limit = 10): RecentMatch[] {
   const rows = getDb()
     .prepare(
-      `SELECT m.tourney_date AS date, m.tourney_name, m.surface, m.round, m.score,
-              (m.winner_id = ?) AS won,
-              CASE WHEN m.winner_id = ? THEN m.loser_id ELSE m.winner_id END AS opponent_id
-       FROM matches m
-       WHERE m.tour = ? AND (m.winner_id = ? OR m.loser_id = ?)
-       ORDER BY m.tourney_date DESC, m.id DESC
+      // One indexed lookup per role, merged (see getRecentForm for why).
+      `SELECT date, tourney_name, surface, round, score, won, opponent_id FROM (
+         SELECT tourney_date AS date, id AS mid, tourney_name, surface, round, score,
+                1 AS won, loser_id AS opponent_id
+           FROM matches WHERE tour = ? AND winner_id = ?
+         UNION ALL
+         SELECT tourney_date AS date, id AS mid, tourney_name, surface, round, score,
+                0 AS won, winner_id AS opponent_id
+           FROM matches WHERE tour = ? AND loser_id = ?
+       )
+       ORDER BY date DESC, mid DESC
        LIMIT ?`,
     )
-    .all(id, id, tour, id, id, limit) as any[];
+    .all(tour, id, tour, id, limit) as any[];
 
   const nameStmt = getDb().prepare('SELECT name FROM players WHERE tour = ? AND id = ?');
   return rows.map((r) => {
@@ -129,15 +146,24 @@ export function getRecentMatches(tour: TourId, id: number, limit = 10): RecentMa
 
 /** Every meeting between two players. */
 export function getH2HMeetings(tour: TourId, p1: number, p2: number): H2HMeeting[] {
-  return getDb()
+  // One indexed lookup per direction (see getRecentForm for why not one OR).
+  //
+  // Sorted in JS on purpose: with `ORDER BY tourney_date DESC` in the SQL,
+  // SQLite prefers the date index — which sorts for free but scans every match
+  // of the tour (41 ms) — over the far more selective player index (0.1 ms). Two
+  // players meet a few dozen times at most, so sorting here costs nothing.
+  const rows = getDb()
     .prepare(
-      `SELECT tourney_date AS date, winner_id AS winnerId, tourney_name, surface, round, score
-       FROM matches
-       WHERE tour = ?
-         AND ((winner_id = ? AND loser_id = ?) OR (winner_id = ? AND loser_id = ?))
-       ORDER BY tourney_date DESC`,
+      `SELECT date, winnerId, tourney_name, surface, round, score FROM (
+         SELECT tourney_date AS date, winner_id AS winnerId, tourney_name, surface, round, score
+           FROM matches WHERE tour = ? AND winner_id = ? AND loser_id = ?
+         UNION ALL
+         SELECT tourney_date AS date, winner_id AS winnerId, tourney_name, surface, round, score
+           FROM matches WHERE tour = ? AND winner_id = ? AND loser_id = ?
+       )`,
     )
-    .all(tour, p1, p2, p2, p1) as unknown as H2HMeeting[];
+    .all(tour, p1, p2, tour, p2, p1) as unknown as H2HMeeting[];
+  return rows.sort((a, b) => String(b.date).localeCompare(String(a.date)));
 }
 
 /** Aggregated serve/return stats across all matches with recorded stats. */
@@ -193,17 +219,25 @@ export function getServeStats(tour: TourId, id: number): ServeStats {
   };
 }
 
-/** Win/loss record on a specific surface. */
+/**
+ * Win/loss record on a specific surface.
+ *
+ * Written as two separate counts rather than `(winner_id = ? OR loser_id = ?)`:
+ * an OR over two different columns leaves SQLite free to choose between a
+ * multi-index union and a full scan of the tour, and it picks the scan often
+ * enough to matter (measured: 96 ms vs 0.1 ms on 62k matches, and a prediction
+ * issues six queries of this shape). Two point lookups can only be index reads.
+ */
 export function getSurfaceRecord(tour: TourId, id: number, surface: string): SurfaceRecord {
   const row = getDb()
     .prepare(
       `SELECT
-         SUM(CASE WHEN winner_id = ? THEN 1 ELSE 0 END) AS wins,
-         SUM(CASE WHEN loser_id  = ? THEN 1 ELSE 0 END) AS losses
-       FROM matches
-       WHERE tour = ? AND surface = ? AND (winner_id = ? OR loser_id = ?)`,
+         (SELECT COUNT(*) FROM matches
+           WHERE tour = ? AND winner_id = ? AND surface = ?) AS wins,
+         (SELECT COUNT(*) FROM matches
+           WHERE tour = ? AND loser_id  = ? AND surface = ?) AS losses`,
     )
-    .get(id, id, tour, surface, id, id) as unknown as {
+    .get(tour, id, surface, tour, id, surface) as unknown as {
     wins: number | null;
     losses: number | null;
   };
@@ -246,13 +280,22 @@ function daysBetweenYmd(fromYmd: string, toYmd: string): number | null {
 export function getFitnessSignals(tour: TourId, id: number): FitnessSignals {
   const recent = getDb()
     .prepare(
-      `SELECT tourney_date AS date, score, (loser_id = ?) AS lost
-       FROM matches
-       WHERE tour = ? AND (winner_id = ? OR loser_id = ?)
-       ORDER BY tourney_date DESC, id DESC
+      // One indexed lookup per role, merged (see getRecentForm for why).
+      `SELECT date, score, lost FROM (
+         SELECT tourney_date AS date, id AS mid, score, 0 AS lost
+           FROM matches WHERE tour = ? AND winner_id = ?
+         UNION ALL
+         SELECT tourney_date AS date, id AS mid, score, 1 AS lost
+           FROM matches WHERE tour = ? AND loser_id = ?
+       )
+       ORDER BY date DESC, mid DESC
        LIMIT 20`,
     )
-    .all(id, tour, id, id) as unknown as { date: string; score: string | null; lost: number }[];
+    .all(tour, id, tour, id) as unknown as {
+    date: string;
+    score: string | null;
+    lost: number;
+  }[];
 
   let retirements = 0;
   let walkovers = 0;
@@ -278,15 +321,25 @@ export function getFitnessSignals(tour: TourId, id: number): FitnessSignals {
       unknown as { d: string | null }
   ).d;
   const load = lastDate
-    ? (
-        getDb()
+    ? (() => {
+        // Two indexed counts rather than an OR (see getSurfaceRecord).
+        const from = shiftYmd(lastDate, -30);
+        const r = getDb()
           .prepare(
-            `SELECT COUNT(*) AS c FROM matches
-             WHERE tour = ? AND (winner_id = ? OR loser_id = ?)
-               AND tourney_date < ? AND tourney_date >= ?`,
+            `SELECT
+               (SELECT COUNT(*) FROM matches
+                 WHERE tour = ? AND winner_id = ?
+                   AND tourney_date < ? AND tourney_date >= ?) AS w,
+               (SELECT COUNT(*) FROM matches
+                 WHERE tour = ? AND loser_id = ?
+                   AND tourney_date < ? AND tourney_date >= ?) AS l`,
           )
-          .get(tour, id, id, lastDate, shiftYmd(lastDate, -30)) as unknown as { c: number }
-      ).c
+          .get(tour, id, lastDate, from, tour, id, lastDate, from) as unknown as {
+          w: number;
+          l: number;
+        };
+        return r.w + r.l;
+      })()
     : 0;
 
   return {
@@ -317,43 +370,45 @@ export function getTournamentHistory(
 ): TournamentHistory {
   if (!tourneyName) return { played: 0, wins: 0, losses: 0, titles: 0, finals: 0, bestRound: null };
   const like = `%${tourneyName.toLowerCase()}%`;
-  const row = getDb()
+  // `LIKE '%name%'` can never use an index, so the player filter has to be the
+  // one that narrows the search — as two indexed lookups, not an OR (which let
+  // SQLite scan every match of the tour: measured 180 ms vs 0.1 ms). The name
+  // filter then applies to that player's few hundred matches. Aggregating in JS
+  // keeps it to a single query instead of two scans.
+  const rows = getDb()
     .prepare(
-      `SELECT
-         COUNT(*) AS played,
-         SUM(CASE WHEN winner_id = ? THEN 1 ELSE 0 END) AS wins,
-         SUM(CASE WHEN loser_id  = ? THEN 1 ELSE 0 END) AS losses,
-         SUM(CASE WHEN winner_id = ? AND upper(round) = 'F' THEN 1 ELSE 0 END) AS titles,
-         SUM(CASE WHEN upper(round) = 'F' THEN 1 ELSE 0 END) AS finals
-       FROM matches
-       WHERE tour = ? AND lower(tourney_name) LIKE ? AND (winner_id = ? OR loser_id = ?)`,
+      `SELECT won, round FROM (
+         SELECT 1 AS won, round, tourney_name
+           FROM matches WHERE tour = ? AND winner_id = ?
+         UNION ALL
+         SELECT 0 AS won, round, tourney_name
+           FROM matches WHERE tour = ? AND loser_id = ?
+       )
+       WHERE lower(tourney_name) LIKE ?`,
     )
-    .get(id, id, id, tour, like, id, id) as unknown as {
-    played: number | null;
-    wins: number | null;
-    losses: number | null;
-    titles: number | null;
-    finals: number | null;
-  };
+    .all(tour, id, tour, id, like) as unknown as { won: number; round: string | null }[];
+
+  let wins = 0;
+  let losses = 0;
+  let titles = 0;
+  let finals = 0;
+  const seenRounds = new Set<string>();
+  for (const r of rows) {
+    if (r.won) wins++;
+    else losses++;
+    const round = (r.round ?? '').toUpperCase();
+    if (round) seenRounds.add(round);
+    if (round === 'F') {
+      finals++;
+      if (r.won) titles++;
+    }
+  }
 
   // Deepest round reached, ordered by how far it is in a draw.
   const ORDER = ['F', 'SF', 'QF', 'R16', 'R32', 'R64', 'R128', 'RR'];
-  const rounds = getDb()
-    .prepare(
-      `SELECT DISTINCT upper(round) AS r FROM matches
-       WHERE tour = ? AND lower(tourney_name) LIKE ? AND (winner_id = ? OR loser_id = ?)`,
-    )
-    .all(tour, like, id, id) as unknown as { r: string | null }[];
-  const best = ORDER.find((r) => rounds.some((x) => x.r === r)) ?? null;
+  const best = ORDER.find((r) => seenRounds.has(r)) ?? null;
 
-  return {
-    played: row.played ?? 0,
-    wins: row.wins ?? 0,
-    losses: row.losses ?? 0,
-    titles: row.titles ?? 0,
-    finals: row.finals ?? 0,
-    bestRound: best,
-  };
+  return { played: rows.length, wins, losses, titles, finals, bestRound: best };
 }
 
 /** Latest official ATP/WTA ranking for a player (null if not ranked/unknown). */

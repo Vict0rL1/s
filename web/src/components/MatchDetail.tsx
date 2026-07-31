@@ -75,6 +75,9 @@ export default function MatchDetail({ prediction }: { prediction: Prediction }) 
 
   return (
     <div className="mt-4 space-y-5 border-t border-slate-700/60 pt-4 text-sm">
+      {/* HOW SOLID — qualifies every number below it, so it goes first */}
+      <ReliabilityBlock prediction={prediction} />
+
       {/* WHY — reasoning */}
       <div className="rounded-lg bg-slate-800/50 p-3">
         <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">Por qué</div>
@@ -301,6 +304,77 @@ export default function MatchDetail({ prediction }: { prediction: Prediction }) 
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * How much evidence sits behind the probability, as a range plus the reasons it
+ * isn't tighter. Placed at the top of the breakdown because it qualifies every
+ * figure below: the same 62% means different things with 800 matches of history
+ * than with 8.
+ */
+function ReliabilityBlock({ prediction }: { prediction: Prediction }) {
+  const rel = prediction.reliability;
+  const { p1, p2 } = prediction.players;
+  // Express the range from the favourite's side — that's the number the user
+  // reads off the card, so the band has to qualify the same quantity.
+  const favIsP1 = prediction.model.prob1 >= 0.5;
+  const favProb = favIsP1 ? prediction.model.prob1 : prediction.model.prob2;
+  const favName = favIsP1 ? p1.name : p2.name;
+  const lo = Math.max(0, favProb - rel.marginPp / 100);
+  const hi = Math.min(1, favProb + rel.marginPp / 100);
+
+  const tone =
+    rel.level === 'high'
+      ? 'border-emerald-700/50 bg-emerald-950/30'
+      : rel.level === 'medium'
+        ? 'border-amber-700/50 bg-amber-950/30'
+        : 'border-rose-700/50 bg-rose-950/30';
+
+  return (
+    <div className={`rounded-lg border p-3 ${tone}`}>
+      <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+        Cuánta confianza merece este número
+      </div>
+      <p className="text-slate-200">
+        <strong className="capitalize">{rel.label}</strong> — {favName} entre{' '}
+        <strong className="tabular-nums">{pct(lo, 1)}</strong> y{' '}
+        <strong className="tabular-nums">{pct(hi, 1)}</strong>{' '}
+        <span className="text-slate-400">(±{rel.marginPp} pp)</span>
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded bg-slate-900/50 p-2">
+          <div className="truncate text-slate-400" title={p1.name}>
+            {p1.name}
+          </div>
+          <div className="tabular-nums text-slate-200">
+            {rel.effectiveMatches.p1} partidos efectivos
+          </div>
+        </div>
+        <div className="rounded bg-slate-900/50 p-2">
+          <div className="truncate text-slate-400" title={p2.name}>
+            {p2.name}
+          </div>
+          <div className="tabular-nums text-slate-200">
+            {rel.effectiveMatches.p2} partidos efectivos
+          </div>
+        </div>
+      </div>
+      {rel.reasons.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {rel.reasons.map((r, i) => (
+            <li key={i} className="flex gap-2 text-xs text-slate-300">
+              <span className="text-slate-600">•</span>
+              <span>{r}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs text-slate-500">
+        «Partidos efectivos» pondera el historial igual que el Elo del partido: 70% los partidos en
+        esta superficie, 30% el total. Menos partidos (o datos antiguos) ⇒ banda más ancha.
+      </p>
     </div>
   );
 }

@@ -148,6 +148,42 @@ lugar se muestran las huellas que las lesiones dejan en los resultados:
 Es **evidencia, no un diagnóstico**: la app no sabe si alguien está lesionado hoy, y estas señales
 **no** entran en el cálculo de la probabilidad — se muestran para que tú las interpretes.
 
+### Fiabilidad de la predicción (`model/reliability.ts`)
+
+Una probabilidad sola esconde **cuánta evidencia** tiene detrás. «62.4%» entre dos jugadores con 800
+partidos cada uno y «62.4%» entre dos qualifiers con 8 partidos se leen idénticos, y no lo son. Es
+probablemente la cosa más engañosa que puede hacer un predictor, así que cada probabilidad va
+acompañada de su solidez.
+
+Se calcula por propagación de error de primer orden:
+
+```
+σ_rating ≈ C / √(n + 1)              ruido del Elo, decrece con partidos jugados  (C = 250)
+σ_stale   = min(años · 40, 120)      ruido extra si el jugador lleva tiempo sin jugar
+σ_jugador = √(σ_rating² + σ_stale²)
+σ_brecha  = √(σ_J1² + σ_J2²)
+dP/dbrecha = 0.75 · ln10/400 · p(1−p)    pendiente de la curva Elo calibrada en p
+margen     = σ_brecha · dP/dbrecha
+```
+
+`n` no es el total de partidos, sino el **efectivo**, ponderado igual que el rating del partido:
+`0.7 · partidos_en_la_superficie + 0.3 · partidos_totales`. Un especialista en arcilla con 400
+partidos en tierra está bien descrito en tierra y mal descrito en hierba, y esto lo refleja.
+
+El nivel resulta de tres cortes: **baja** si algún jugador tiene <10 partidos efectivos, el margen
+llega a ±8 pp o alguien lleva ≥1 año sin competir; **alta** si ambos superan 60 partidos efectivos,
+el margen es ≤±3.5 pp y nadie lleva más de 6 meses parado; **media** en el resto.
+
+**Qué es y qué no es:** es propagación de error con una escala de ruido puesta a mano (`C`), **no** un
+posterior bayesiano — los Elo no se siguen con varianza, así que no hay una σ exacta que leer. Lo que
+sí está **medido** es el *orden* de las bandas: `npm run backtest` agrupa los partidos por nivel de
+fiabilidad e imprime el Brier de cada uno, así que la afirmación «fiabilidad baja acierta menos» se
+comprueba en vez de suponerse.
+
+Ejemplo real (datos ATP hasta 2026): Sinner–Alcaraz sale **alta, ±3.4 pp**; un partido que incluya a
+Federer sale **baja** con el aviso de que lleva ~5 años sin jugar. Sin esto, la app daría un 60.6%
+sobre un jugador retirado con la misma seguridad que sobre el número 1 actual.
+
 ### Historial en el torneo (`repo.ts → getTournamentHistory`)
 
 Récord, títulos, finales y mejor ronda de cada jugador en ese evento concreto. Es contexto
@@ -214,6 +250,30 @@ que **no puedo afirmar que el modelo supere al mercado — y lo más probable es
 Interpreta las discrepancias como *"aquí hay algo que el modelo ve distinto"*, no como *"el
 mercado se equivoca"*. Si la diferencia es grande, la explicación más habitual es que el mercado
 sabe algo que los datos históricos no contienen.
+
+## Track record en vivo: la app se mide a sí misma (`trackRecord.ts`)
+
+El backtest de arriba mide el modelo sobre el historial. Es la forma correcta de ajustarlo, pero
+responde a una pregunta distinta de la del usuario: *¿ha acertado los partidos que yo vi?*
+
+Por eso cada predicción de un partido próximo **real** se escribe en `prediction_log` en el momento
+de mostrarse, y se puntúa cuando el resultado llega al historial. Tres propiedades la hacen honesta:
+
+- **Se escribe antes** del partido: no hay retrospectiva posible.
+- **Gana el primer valor** (`ON CONFLICT DO NOTHING`): la predicción no puede «mejorarse» a posteriori
+  a medida que se mueven las cuotas.
+- **Sobrevive a la reingesta** (`resetData()` no la toca), así que el registro se acumula.
+
+Los partidos de demostración se excluyen a propósito: son fixtures sintéticos que nunca se jugarán, y
+puntuar contra resultados inventados haría el número inútil.
+
+Emparejar predicción y resultado no es un `JOIN` por fecha exacta: `commence_time` es el inicio del
+**partido** y `matches.tourney_date` el del **torneo**, que en un Grand Slam se separan hasta dos
+semanas. Se busca en una ventana asimétrica (−10 / +30 días) y gana la fecha más cercana.
+
+Lo valioso es que da la comparación que el backtest **no puede** hacer: modelo contra **mercado** en
+partidos idénticos, con las cuotas guardadas en el instante de predecir. Restringido a los partidos
+que tenían cuotas, así que ningún lado juega con un conjunto más fácil.
 
 ## Limitaciones (sé honesto)
 

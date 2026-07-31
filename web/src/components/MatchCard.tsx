@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { PlayerInfo, UpcomingMatch, UpcomingWithPrediction } from '../lib/api';
+import type { PlayerInfo, Reliability, UpcomingMatch, UpcomingWithPrediction } from '../lib/api';
 import { confidenceLabelEs, flag, formatDateTime, surfaceLabelEs } from '../lib/format';
 import ProbabilityBars, { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import MatchDetail from './MatchDetail';
@@ -81,11 +81,14 @@ export default function MatchCard({
                 <span className="text-slate-400">Partido muy parejo</span>
               )}
             </div>
-            {valuePlayer && (
-              <span className="rounded-full bg-emerald-900/50 px-3 py-1 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/40">
-                Posible value: {valuePlayer}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              <ReliabilityBadge reliability={prediction.reliability} />
+              {valuePlayer && (
+                <span className="rounded-full bg-emerald-900/50 px-3 py-1 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/40">
+                  Posible value: {valuePlayer}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* What the model expects to happen, in plain language */}
@@ -116,6 +119,33 @@ export default function MatchCard({
         <MissingPlayers match={match} players={players} />
       )}
     </div>
+  );
+}
+
+/**
+ * How much data is behind this probability. Shown next to the verdict because
+ * that is where it changes the reading: "62% (fiabilidad baja, ±9 pp)" is a very
+ * different statement from "62% (fiabilidad alta, ±2 pp)", and without it both
+ * look like the same confident call.
+ */
+function ReliabilityBadge({ reliability }: { reliability: Reliability }) {
+  const styles: Record<Reliability['level'], string> = {
+    high: 'bg-emerald-900/40 text-emerald-300 ring-emerald-500/40',
+    medium: 'bg-amber-900/40 text-amber-300 ring-amber-500/40',
+    low: 'bg-rose-900/40 text-rose-300 ring-rose-500/40',
+  };
+  const title = [
+    `Margen de incertidumbre: ±${reliability.marginPp} puntos porcentuales.`,
+    `Partidos efectivos tras cada Elo: ${reliability.effectiveMatches.p1} y ${reliability.effectiveMatches.p2}.`,
+    ...reliability.reasons,
+  ].join('\n');
+  return (
+    <span
+      title={title}
+      className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ${styles[reliability.level]}`}
+    >
+      {reliability.label} · ±{reliability.marginPp} pp
+    </span>
   );
 }
 

@@ -39,6 +39,7 @@ import {
   getTournamentHistory,
 } from '../repo.ts';
 import { scorelineDistribution, type ScorelineDistribution } from './scoreline.ts';
+import { computeReliability, type Reliability } from './reliability.ts';
 import type {
   FitnessSignals,
   ServeStats,
@@ -116,6 +117,12 @@ export interface Prediction {
   fitness: { p1: FitnessSignals; p2: FitnessSignals };
   /** Each player's record at this tournament (empty when the event is unknown). */
   tournamentHistory: { p1: TournamentHistory; p2: TournamentHistory } | null;
+  /**
+   * How much evidence backs THIS probability (see reliability.ts). Two matches
+   * can show the same percentage while resting on wildly different amounts of
+   * data; this is what tells them apart.
+   */
+  reliability: Reliability;
   summary: MatchSummary;
   verdict: {
     favoredSide: 1 | 2 | null;
@@ -244,6 +251,7 @@ function buildSummary(args: {
   scorelines: ScorelineDistribution;
   fitness: { p1: FitnessSignals; p2: FitnessSignals };
   tournamentHistory: { p1: TournamentHistory; p2: TournamentHistory } | null;
+  reliability: Reliability;
 }): MatchSummary {
   const { p1, p2, prob1, confidence, h2h, market } = args;
   const favIsP1 = prob1 >= 0.5;
@@ -418,7 +426,24 @@ function buildSummary(args: {
     bullets.push('Sin cuotas disponibles para comparar con el mercado.');
   }
 
+  // --- How solid is this prediction? (closing caveat, last on purpose) ---
+  // Stated as a range rather than a single number when the evidence is thin, so
+  // the confidence of the wording matches the confidence of the data.
+  const rel = args.reliability;
+  if (rel.level !== 'high') {
+    const band = `${pct1(Math.max(prob1, 1 - prob1))}% ± ${rel.marginPp} pp`;
+    bullets.push(
+      `⚠️ ${cap(rel.label)}: tómalo como un rango (${band}) más que como una cifra exacta.` +
+        (rel.reasons.length ? ` ${rel.reasons[0]}` : ''),
+    );
+  }
+
   return { headline, bullets };
+}
+
+/** Capitalise the first letter (labels are stored lowercase for inline use). */
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /**
@@ -492,6 +517,25 @@ export function buildPrediction(
   const serve2 = getServeStats(tour, p2Id);
   const rec1 = getSurfaceRecord(tour, p1Id, surface);
   const rec2 = getSurfaceRecord(tour, p2Id, surface);
+
+  // How trustworthy is the number above? Built from evidence we already have:
+  // matches behind each rating, matches on THIS surface, and how stale the
+  // player's data is (measured against the dataset, not today).
+  const reliability = computeReliability(
+    prob1,
+    {
+      matches: r1.matches_played,
+      surfaceMatches: rec1.wins + rec1.losses,
+      daysStale: fitness.p1.daysSinceLastMatch,
+    },
+    {
+      matches: r2.matches_played,
+      surfaceMatches: rec2.wins + rec2.losses,
+      daysStale: fitness.p2.daysSinceLastMatch,
+    },
+    { p1: p1Name, p2: p2Name },
+  );
+
   const summary = buildSummary({
     p1: p1Name,
     p2: p2Name,
@@ -511,6 +555,7 @@ export function buildPrediction(
     scorelines,
     fitness,
     tournamentHistory,
+    reliability,
   });
 
   return {
@@ -538,6 +583,7 @@ export function buildPrediction(
     scorelines,
     fitness,
     tournamentHistory,
+    reliability,
     summary,
     verdict: {
       favoredSide,

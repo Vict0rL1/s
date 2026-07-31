@@ -27,6 +27,7 @@ import {
   INITIAL_ELO,
 } from '../model/elo.ts';
 import { computeForm, type FormResult } from '../model/form.ts';
+import { computeReliability } from '../model/reliability.ts';
 
 interface Row {
   id: number;
@@ -48,6 +49,7 @@ interface State {
   nClay: number;
   nGrass: number;
   recent: FormResult[]; // most recent first
+  lastDate: string | null; // date of their previous match, for staleness
 }
 
 const SURFACE_WEIGHT = 0.7; // must match model/predict.ts
@@ -66,7 +68,17 @@ function fresh(): State {
     nClay: 0,
     nGrass: 0,
     recent: [],
+    lastDate: null,
   };
+}
+
+/** Whole days between two YYYYMMDD strings (0 if either is unusable). */
+function daysBetween(fromYmd: string | null, toYmd: string): number {
+  if (!fromYmd || fromYmd.length < 8 || toYmd.length < 8) return 0;
+  const a = Date.UTC(+fromYmd.slice(0, 4), +fromYmd.slice(4, 6) - 1, +fromYmd.slice(6, 8));
+  const b = Date.UTC(+toYmd.slice(0, 4), +toYmd.slice(4, 6) - 1, +toYmd.slice(6, 8));
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  return Math.max(0, Math.round((b - a) / 86_400_000));
 }
 
 function parseArgs(argv: string[]) {
@@ -137,6 +149,9 @@ function main() {
     let modelRightOnDisagreement = 0;
     // Calibration buckets by predicted probability of the *predicted winner*.
     const buckets = new Map<string, { n: number; pred: number; won: number }>();
+    // Does the reliability tier shown in the UI mean anything? Score each tier
+    // separately: if the label is informative, "low" must be measurably worse.
+    const tiers = new Map<string, { n: number; correct: number; brier: number; margin: number }>();
 
     for (const m of rows) {
       const w = get(m.winner_id);
@@ -187,6 +202,22 @@ function main() {
         b.won += favWon;
         buckets.set(bk, b);
 
+        // Reliability tier, computed from exactly what the app would know at
+        // this point in time (matches so far, matches on this surface, days
+        // since each player's previous match).
+        const depthOf = (s: State) => ({
+          matches: s.nOverall,
+          surfaceMatches: sk ? (sk === 'hard' ? s.nHard : sk === 'clay' ? s.nClay : s.nGrass) : 0,
+          daysStale: daysBetween(s.lastDate, m.tourney_date),
+        });
+        const rel = computeReliability(pWinnerWins, depthOf(w), depthOf(l), { p1: 'w', p2: 'l' });
+        const t = tiers.get(rel.level) ?? { n: 0, correct: 0, brier: 0, margin: 0 };
+        t.n++;
+        t.correct += pWinnerWins > 0.5 ? 1 : pWinnerWins === 0.5 ? 0.5 : 0;
+        t.brier += (1 - pWinnerWins) ** 2;
+        t.margin += rel.marginPp;
+        tiers.set(rel.level, t);
+
         // Ranking baseline + head-to-head against the model on the same matches.
         if (m.winner_rank != null && m.loser_rank != null && m.winner_rank !== m.loser_rank) {
           rankScored++;
@@ -223,6 +254,8 @@ function main() {
           l.nGrass++;
         }
       }
+      w.lastDate = m.tourney_date;
+      l.lastDate = m.tourney_date;
       w.recent.unshift({ won: true, date: m.tourney_date });
       l.recent.unshift({ won: false, date: m.tourney_date });
       if (w.recent.length > 10) w.recent.pop();
@@ -274,6 +307,24 @@ function main() {
             `(${diff >= 0 ? '+' : ''}${diff.toFixed(1)} pp)`,
         );
       });
+
+    // Validates the reliability badge the UI shows on every match. The point is
+    // the ORDER: "alta" must beat "baja" on Brier, otherwise the label is noise
+    // and shouldn't be displayed as if it meant something.
+    if (tiers.size > 0) {
+      console.log('\nFiabilidad declarada (valida el semáforo que muestra la app):');
+      for (const level of ['high', 'medium', 'low']) {
+        const t = tiers.get(level);
+        if (!t) continue;
+        const es = level === 'high' ? 'alta' : level === 'medium' ? 'media' : 'baja';
+        console.log(
+          `  ${es.padEnd(6)} n=${String(t.n).padStart(6)}  ` +
+            `accuracy ${((t.correct / t.n) * 100).toFixed(1)}%  ` +
+            `Brier ${(t.brier / t.n).toFixed(4)}  ` +
+            `banda media ±${(t.margin / t.n).toFixed(1)} pp`,
+        );
+      }
+    }
   }
 
   console.log(

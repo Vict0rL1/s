@@ -62,6 +62,14 @@ function createSchema(d: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_matches_tour_date ON matches (tour, tourney_date);
     CREATE INDEX IF NOT EXISTS idx_matches_winner ON matches (tour, winner_id);
     CREATE INDEX IF NOT EXISTS idx_matches_loser  ON matches (tour, loser_id);
+    -- Surface appended so the per-player+surface lookups (surface record,
+    -- tournament history, head-to-head) can be served by a MULTI-INDEX OR
+    -- instead of scanning every match of that tour. Measured on 62k ATP
+    -- matches: getSurfaceRecord 96 ms → 0.1 ms, getTournamentHistory 180 ms →
+    -- 0.1 ms, a full prediction 612 ms → ~5 ms. Without these, a tournament page
+    -- with 30 matches spends ~18 s building predictions.
+    CREATE INDEX IF NOT EXISTS idx_matches_w_surface ON matches (tour, winner_id, surface);
+    CREATE INDEX IF NOT EXISTS idx_matches_l_surface ON matches (tour, loser_id, surface);
 
     CREATE TABLE IF NOT EXISTS player_ratings (
       player_id      INTEGER NOT NULL,
@@ -104,6 +112,45 @@ function createSchema(d: DatabaseSync): void {
       source          TEXT,
       updated_at      TEXT
     );
+
+    -- ------------------------------------------------------------------
+    -- The app's own track record.
+    --
+    -- Every prediction shown for an upcoming match is stored here the FIRST
+    -- time it is served, and never rewritten afterwards: that is the number
+    -- the user actually saw before the match was played, so it can be scored
+    -- honestly later. Once the real result lands in the matches table (on the
+    -- next update-data run), the row is resolved with the actual winner.
+    --
+    -- This is deliberately NOT cleared by resetData(): re-ingesting the
+    -- history must not erase the record of how the model has been doing.
+    -- ------------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS prediction_log (
+      -- Stable identity of the fixture, independent of the odds-feed event id
+      -- (which changes between providers/refreshes): tour|loId|hiId|YYYYMMDD.
+      match_key       TEXT PRIMARY KEY,
+      tour            TEXT NOT NULL,
+      upcoming_id     TEXT,
+      tournament_name TEXT,
+      surface         TEXT,
+      commence_time   TEXT,
+      p1_id           INTEGER NOT NULL,
+      p2_id           INTEGER NOT NULL,
+      p1_name         TEXT,
+      p2_name         TEXT,
+      -- Model probability that p1 wins, exactly as displayed.
+      prob1           REAL NOT NULL,
+      -- Vig-free market probability for p1 at that moment (null without odds),
+      -- so the model can be scored against the market on the same matches.
+      market_prob1    REAL,
+      reliability     TEXT,
+      predicted_at    TEXT NOT NULL,
+      -- Filled in when the real result arrives:
+      winner_id       INTEGER,
+      match_id        INTEGER,
+      resolved_at     TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_predlog_tour ON prediction_log (tour, resolved_at);
 
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
@@ -163,7 +210,14 @@ export function getMeta(key: string): string | null {
   return row?.value ?? null;
 }
 
-/** Wipe all ingested data (used before a fresh seed or full re-ingest). */
+/**
+ * Wipe all ingested data (used before a fresh seed or full re-ingest).
+ *
+ * `prediction_log` is intentionally absent from this list: it holds the app's
+ * own track record (what it predicted, before the match), which is earned over
+ * time and must survive a history re-ingest. Everything else is re-derivable
+ * from the sources.
+ */
 export function resetData(): void {
   const d = getDb();
   for (const t of [

@@ -18,6 +18,7 @@ import { computeH2H } from '../model/h2h.ts';
 import { impliedProbabilities, type MarketProbabilities } from '../model/market.ts';
 import { buildPrediction, type Prediction } from '../model/predict.ts';
 import { refreshOdds } from '../ingest/odds.ts';
+import { getTrackRecord, logPrediction } from '../trackRecord.ts';
 import type { UpcomingRow } from '../types.ts';
 
 /** Attach a full prediction to an upcoming-match row (null if players unknown). */
@@ -50,6 +51,11 @@ function marketOnly(row: UpcomingRow): MarketProbabilities | null {
 /** Shape returned for every upcoming match. */
 function describeRow(row: UpcomingRow, withPrediction = true) {
   const prediction = withPrediction ? predictRow(row) : null;
+  // Record what we're about to show, so it can be scored once the real result
+  // lands (see trackRecord.ts). Only for LIVE fixtures: demo fixtures are
+  // synthetic matches that will never be played, and scoring the app against
+  // invented results would make the track record meaningless.
+  if (prediction && row.source === 'live') logPrediction(row, prediction);
   return {
     match: row,
     prediction,
@@ -86,6 +92,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       upcoming: countRows('upcoming_matches'),
     },
   }));
+
+  // --- the app's own measured accuracy on real, already-played matches ---
+  app.get<{ Querystring: { tour?: string } }>('/track-record', async (req) => {
+    return getTrackRecord(req.query.tour);
+  });
 
   // --- manual odds refresh (button in the UI / on demand) ---
   app.post('/refresh', async (_req, reply) => {

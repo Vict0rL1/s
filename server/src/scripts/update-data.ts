@@ -15,6 +15,7 @@ import { RAW_DIR, toursConfig } from '../config.ts';
 import { ingestRankings, ingestTour, preflight, tourConfigs } from '../ingest/sackmann.ts';
 import { recomputeRatings } from '../ingest/ratings.ts';
 import { refreshOdds } from '../ingest/odds.ts';
+import { getTrackRecord, resolvePredictions } from '../trackRecord.ts';
 
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
@@ -149,6 +150,20 @@ async function main() {
   console.log('\n▸ Computing Elo ratings…');
   const ratings = recomputeRatings();
   console.log(`  rated players: ${JSON.stringify(ratings)}`);
+
+  // Score the app's own past predictions against the results just ingested.
+  // This is what turns the prediction log into a real, measured track record.
+  const scored = resolvePredictions();
+  if (scored.resolved > 0) {
+    const rec = getTrackRecord();
+    console.log(
+      `\n▸ Predicciones resueltas con los nuevos resultados: ${scored.resolved}` +
+        (rec.accuracy != null
+          ? `\n  Track record acumulado: ${(rec.accuracy * 100).toFixed(1)}% de acierto ` +
+            `en ${rec.resolved} predicciones (Brier ${rec.brier}).`
+          : ''),
+    );
+  }
 
   if (!skipOdds) {
     console.log('\n▸ Fetching odds…');

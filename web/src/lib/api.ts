@@ -172,6 +172,21 @@ export interface TournamentHistory {
   bestRound: string | null;
 }
 
+/**
+ * How much evidence backs one prediction. Two matches can show the same
+ * percentage while resting on wildly different amounts of data — this is what
+ * distinguishes them.
+ */
+export interface Reliability {
+  level: 'high' | 'medium' | 'low';
+  label: string;
+  /** ± band on the probability, in percentage points. */
+  marginPp: number;
+  range: { low: number; high: number };
+  reasons: string[];
+  effectiveMatches: { p1: number; p2: number };
+}
+
 export interface Prediction {
   tour: string;
   surface: string;
@@ -191,6 +206,7 @@ export interface Prediction {
   scorelines: ScorelineDistribution;
   fitness: { p1: FitnessSignals; p2: FitnessSignals };
   tournamentHistory: { p1: TournamentHistory; p2: TournamentHistory } | null;
+  reliability: Reliability;
   summary: MatchSummary;
   verdict: {
     favoredSide: 1 | 2 | null;
@@ -277,6 +293,40 @@ export interface RefreshResult {
   count: number;
 }
 
+/**
+ * The app's measured performance on real matches it predicted BEFORE they were
+ * played — as opposed to the backtest, which measures it on history.
+ */
+export interface TrackRecord {
+  resolved: number;
+  pending: number;
+  accuracy: number | null;
+  brier: number | null;
+  logLoss: number | null;
+  calibration: { label: string; n: number; predicted: number; observed: number }[];
+  byReliability: { level: string; n: number; accuracy: number | null; brier: number | null }[];
+  vsMarket: {
+    n: number;
+    modelAccuracy: number | null;
+    marketAccuracy: number | null;
+    modelBrier: number | null;
+    marketBrier: number | null;
+    disagreements: number;
+    modelRightOnDisagreement: number | null;
+  } | null;
+  recent: {
+    tournament: string | null;
+    surface: string | null;
+    date: string | null;
+    p1: string | null;
+    p2: string | null;
+    prob1: number;
+    winnerIsP1: boolean;
+    hit: boolean;
+    reliability: string | null;
+  }[];
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`/api${path}`);
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
@@ -302,5 +352,7 @@ export const api = {
   },
   prediction: (id: string) => get<UpcomingWithPrediction>(`/predictions/${encodeURIComponent(id)}`),
   profile: (tour: string, id: number) => get<Profile>(`/players/${tour}/${id}`),
+  trackRecord: (tour?: string) =>
+    get<TrackRecord>(`/track-record${tour ? `?tour=${encodeURIComponent(tour)}` : ''}`),
   refresh: () => post<RefreshResult>('/refresh'),
 };

@@ -8,6 +8,7 @@ import {
 } from './lib/api';
 import MatchCard from './components/MatchCard';
 import PlayerProfile from './components/PlayerProfile';
+import TrackRecordPanel from './components/TrackRecordPanel';
 
 export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -111,6 +112,7 @@ export default function App() {
         </p>
         {meta && <RefreshInfo meta={meta} />}
         {meta && <StaleHistoryWarning meta={meta} />}
+        <TrackRecordPanel tour={tour} />
       </header>
 
       {error && (
