@@ -1,8 +1,14 @@
-# 🎾 Tennis Predictor
+# 🎾🏀 Sports Predictor
 
-Aplicación web + API REST para **predecir resultados de partidos de tenis** (ATP y WTA,
-singles) combinando historial partido a partido, **ratings Elo por superficie**, forma
-reciente, head-to-head y **odds de casas de apuestas**.
+Aplicación web + API REST para **predecir resultados deportivos** combinando historial
+partido a partido, **ratings Elo**, forma reciente y **odds de casas de apuestas**.
+
+Dos deportes, en **pestañas separadas** (nunca mezclados):
+
+- **🎾 Tenis** — ATP y WTA singles: Elo por superficie, forma, head-to-head, marcador por sets.
+- **🏀 Baloncesto** — NBA, WNBA, NCAA (M y F), EuroLeague y NBL: Elo por equipo con ventaja de
+  campo, margen de puntos y descanso, más **diferencia esperada (spread)** y **total de puntos**.
+  Ver [docs/BASKETBALL.md](docs/BASKETBALL.md).
 
 El modelo es **explicable, no una caja negra**: cada señal se expresa en puntos Elo y se
 muestra lado a lado con la probabilidad implícita del mercado, incluyendo la detección de
@@ -15,7 +21,29 @@ posible *value* cuando el modelo discrepa de las cuotas.
 
 ---
 
-## Qué incluye
+## Qué incluye — 🏀 Baloncesto
+
+- **Ligas apostables**, configurables en `config/basketball.json`: NBA, WNBA, NCAA masculino y
+  femenino, EuroLeague y NBL. Qué ligas aparecen lo decide The Odds API según lo que esté activo
+  ahora, no un calendario fijo.
+- **Información de todos los equipos**: tabla ordenada por Elo con puntos anotados, recibidos y
+  diferencial, y ficha por equipo (balance global / en casa / fuera, últimos partidos, Elo y su
+  puesto en la liga).
+- **Partidos próximos con cuotas** y, para cada uno, **tres cifras**: probabilidad de ganar,
+  **diferencia esperada** (comparable al spread de la casa) y **total de puntos**.
+- **Desglose completo**: por qué gana X en puntos de Elo (nivel, ventaja de campo, descanso), tabla
+  que **suma exactamente** el rating usado, marcador estimado, medias de anotación, forma, balance
+  por cancha, historial directo (con ventana reciente aparte) y comparación con el mercado.
+- **Modelo verificado sobre 36.965 partidos NBA reales**: **68.4% de acierto** (baseline «gana el
+  local»: 61.6%), Brier 0.2012 y error de margen de 9.2 puntos con sesgo cero. Y comparado contra
+  **la predicción que publicó FiveThirtyEight** en esos mismos partidos: empate técnico
+  (0.2012 vs 0.2014 de Brier).
+- **Fiabilidad y track record propios**, igual que en tenis — incluida la precisión del margen, que
+  es lo que importa si miras el handicap.
+- **Ligas sin fuente de resultados** (EuroLeague, NBL) muestran partidos y probabilidades del
+  mercado, diciendo claramente que no hay modelo Elo, en vez de inventar una predicción.
+
+## Qué incluye — 🎾 Tenis
 
 - **ATP y WTA**, singles. Torneos configurables (4 Grand Slams + Masters 1000 / WTA 1000 de
   fábrica) en `config/tournaments.json` — se amplía agregando entradas, sin tocar la lógica.
@@ -71,7 +99,9 @@ posible *value* cuando el modelo discrepa de las cuotas.
 | Histórico WTA | [tennis-data.co.uk](http://www.tennis-data.co.uk/alldata.php) | Los repos `JeffSackmann/tennis_atp` y `tennis_wta` dejaron de estar accesibles (404) y TML solo cubre ATP, así que la WTA viene de aquí: un `.xlsx` por temporada, gratis y sin API key, con superficie, ronda, marcador set a set, ranking y puntos. **Además trae las cuotas de cierre de cada partido.** No tiene estadísticas de saque. |
 | Cuotas históricas | [tennis-data.co.uk](http://www.tennis-data.co.uk/alldata.php) | Cuotas de cierre partido a partido (promedio entre casas). Es lo que permite medir de verdad si el modelo le gana al mercado — ver `npm run backtest -- --market`. |
 | Datos de jugador | Incluidos en el histórico | Ranking oficial + puntos, país y mano. (El ATP Tour no ofrece API pública, y hacer scraping de su web sería frágil y de legalidad dudosa.) |
-| Odds | [The Odds API](https://the-odds-api.com) | Cuotas head-to-head de partidos próximos ATP/WTA. Plan gratuito (500 req/mes). Requiere API key. |
+| Odds | [The Odds API](https://the-odds-api.com) | Cuotas head-to-head de partidos próximos, **de tenis y de baloncesto**, con la misma key. Plan gratuito (500 req/mes). |
+| Resultados de baloncesto | [ESPN API pública](https://site.api.espn.com) | Gratis y sin key. Cubre NBA, WNBA y NCAA (M y F). |
+| Histórico NBA profundo | [FiveThirtyEight `nba-elo`](https://github.com/fivethirtyeight/data/tree/master/nba-elo) | 59.008 partidos reales 1946–2015. Con esto se **ajusta y valida** el modelo de baloncesto; termina en 2015, así que nunca es la fuente de los ratings de hoy. Detalles en [docs/BASKETBALL.md](docs/BASKETBALL.md). |
 
 ---
 
@@ -216,10 +246,12 @@ ves, en vez de fallar en silencio.
 
 | Comando | Qué hace |
 |---------|----------|
-| `npm run dev` | Levanta backend + frontend a la vez |
-| `npm run seed` | Carga el dataset de demostración |
-| `npm run update-data` | Refresca histórico real + odds |
-| `npm run backtest` | Mide la exactitud del modelo (accuracy, Brier, calibración, fiabilidad) |
+| `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
+| `npm run seed` | Tenis: carga el dataset de demostración |
+| `npm run update-data` | Tenis: refresca histórico real + odds |
+| `npm run backtest` | Tenis: mide la exactitud del modelo |
+| `npm run update-data:bb` | **Baloncesto**: equipos, resultados, partidos próximos y cuotas |
+| `npm run backtest:bb` | **Baloncesto**: mide el modelo (incluye comparación con FiveThirtyEight) |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 
@@ -244,7 +276,33 @@ Con datos que traen cuotas (tennis-data.co.uk), el backtest imprime además la c
 **modelo vs mercado real** sobre los mismos partidos, incluyendo si las señales de *«posible value»*
 ganaron más de lo que el mercado les daba. Es la prueba honesta de si esas señales valen algo.
 
+## Puesta en marcha del baloncesto
+
+```bash
+npm run update-data:bb     # equipos + resultados + partidos próximos y cuotas
+npm run dev                # → abre la pestaña 🏀 Baloncesto
+```
+
+Opciones:
+
+```bash
+npm run update-data:bb -- --league nba        # solo una liga
+npm run update-data:bb -- --seasons 12        # más temporadas de histórico
+npm run update-data:bb -- --source 538        # histórico NBA real desde GitHub (llega a 2015)
+npm run update-data:bb -- --skip-odds         # solo resultados
+```
+
+`--source` decide de dónde salen los resultados: `auto` (por defecto) usa ESPN y, si no lo alcanza,
+cae al histórico NBA de FiveThirtyEight alojado en GitHub. Ese fichero es **real** pero termina en
+2015, así que la app avisa en pantalla de que los Elo no describen a las plantillas actuales — nunca
+lo presenta como datos al día.
+
+Las cuotas usan **la misma `ODDS_API_KEY`** que el tenis. Sin key, la pestaña funciona igualmente
+con una jornada de demostración etiquetada como tal.
+
 ## API REST (puerto 4000)
+
+Tenis y baloncesto viven en espacios de nombres distintos: ningún endpoint puede devolver los dos.
 
 | Endpoint | Descripción |
 |----------|-------------|
@@ -259,19 +317,35 @@ ganaron más de lo que el mercado les daba. Es la prueba honesta de si esas señ
 | `GET /api/predictions/:id` | Predicción completa de un partido próximo |
 | `GET /api/predictions?tournament=` | Predicciones de todos los próximos de un torneo |
 | `POST /api/predict` | Predicción ad-hoc `{tour, p1, p2, surface, odds1?, odds2?}` |
+| `GET /api/basketball/leagues` | Ligas con conteos y si tienen modelo Elo |
+| `GET /api/basketball/games/upcoming?league=` | Partidos próximos con cuotas y predicción |
+| `GET /api/basketball/games/:id` | Un partido con su predicción completa |
+| `GET /api/basketball/teams/:league` | Todos los equipos de la liga |
+| `GET /api/basketball/teams/:league/:id` | Ficha del equipo (balance, forma, anotación) |
+| `GET /api/basketball/power?league=` | Ranking por Elo de todos los equipos |
+| `GET /api/basketball/track-record?league=` | Acierto medido, incluido el error de margen |
+| `POST /api/basketball/predict` | Predicción ad-hoc `{league, home, away, homeOdds?, awayOdds?}` |
 
 ## Estructura del proyecto
 
 ```
-config/        tours.json + tournaments.json  (ampliar aquí, no en el código)
-data/          SQLite + CSV crudos + dataset seed
-docs/          MODEL.md — cómo funciona el modelo
-server/        API REST (Fastify) + ingesta + modelo Elo   (TypeScript)
-web/           Dashboard (React + Vite + Tailwind)          (TypeScript)
+config/        tours.json + tournaments.json + basketball.json  (ampliar aquí, no en el código)
+data/          SQLite + datos crudos + dataset seed
+docs/          MODEL.md (tenis) · BASKETBALL.md (baloncesto)
+server/
+  src/            tenis: ingesta, modelo Elo, API
+  src/basketball/ baloncesto: ingesta, modelo, backtest, track record propios
+web/
+  src/components/            tenis
+  src/components/basketball/ baloncesto
 ```
+
+Los dos deportes están separados a propósito en todas las capas —tablas, modelo, endpoints y
+pestaña— porque discrepan justo en los campos que un modelo necesita. El razonamiento completo está
+en [docs/BASKETBALL.md](docs/BASKETBALL.md).
 
 ## Cómo funciona el modelo
 
-Ver **[docs/MODEL.md](docs/MODEL.md)** para la explicación completa del cálculo del Elo, cómo
+Baloncesto: **[docs/BASKETBALL.md](docs/BASKETBALL.md)**. Tenis: ver **[docs/MODEL.md](docs/MODEL.md)** para la explicación completa del cálculo del Elo, cómo
 se combinan las señales y las limitaciones. La lógica también está comentada en el código
 (`server/src/model/`).

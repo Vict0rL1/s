@@ -157,6 +157,105 @@ function createSchema(d: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_predlog_tour ON prediction_log (tour, resolved_at);
 
+    -- ==================================================================
+    -- BASKETBALL
+    --
+    -- Separate tables rather than a shared "sport" abstraction over the
+    -- tennis ones. The two sports disagree on exactly the fields a model
+    -- cares about: basketball has a home court and a score margin worth
+    -- modelling and no surface; tennis is the reverse. One schema over both
+    -- would make every column nullable and every query conditional. The
+    -- pieces that genuinely generalise (market maths, reliability, the
+    -- prediction log) are reused as-is.
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS bb_teams (
+      id           TEXT NOT NULL,   -- slug, unique within the league
+      league       TEXT NOT NULL,
+      name         TEXT NOT NULL,
+      abbreviation TEXT,
+      location     TEXT,
+      conference   TEXT,
+      division     TEXT,
+      logo         TEXT,
+      PRIMARY KEY (league, id)
+    );
+
+    CREATE TABLE IF NOT EXISTS bb_games (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      league     TEXT NOT NULL,
+      season     INTEGER NOT NULL,
+      game_date  TEXT NOT NULL,     -- YYYYMMDD
+      home_id    TEXT NOT NULL,
+      away_id    TEXT NOT NULL,
+      home_pts   INTEGER NOT NULL,
+      away_pts   INTEGER NOT NULL,
+      -- Neutral venue (finals, cup ties, the 2020 bubble): the home-court
+      -- bonus must NOT be applied to these, and ~5% of games are like this.
+      neutral    INTEGER DEFAULT 0,
+      is_playoff INTEGER DEFAULT 0,
+      overtimes  INTEGER,
+      UNIQUE (league, game_date, home_id, away_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_bb_games_date ON bb_games (league, game_date);
+    -- Per-team lookups, as two indexed halves (same reason as the tennis
+    -- indexes: an OR over two columns lets SQLite pick a full scan).
+    CREATE INDEX IF NOT EXISTS idx_bb_games_home ON bb_games (league, home_id, game_date);
+    CREATE INDEX IF NOT EXISTS idx_bb_games_away ON bb_games (league, away_id, game_date);
+
+    CREATE TABLE IF NOT EXISTS bb_team_ratings (
+      team_id       TEXT NOT NULL,
+      league        TEXT NOT NULL,
+      elo           REAL NOT NULL,
+      games_played  INTEGER NOT NULL,
+      last_date     TEXT,
+      ppg           REAL,
+      papg          REAL,
+      PRIMARY KEY (league, team_id)
+    );
+
+    -- The basketball track record. Same contract as prediction_log (written
+    -- before the game, never rewritten, survives re-ingestion) but with TEXT team
+    -- ids, which is why it is a separate table rather than a nullable column
+    -- bolted onto the tennis one.
+    CREATE TABLE IF NOT EXISTS bb_prediction_log (
+      game_key      TEXT PRIMARY KEY,   -- league|home|away|YYYYMMDD
+      league        TEXT NOT NULL,
+      upcoming_id   TEXT,
+      commence_time TEXT,
+      home_id       TEXT NOT NULL,
+      away_id       TEXT NOT NULL,
+      home_name     TEXT,
+      away_name     TEXT,
+      prob_home     REAL NOT NULL,
+      market_prob_home REAL,
+      -- What the model expected the margin to be, so spread accuracy is
+      -- measurable after the fact and not just the moneyline.
+      predicted_margin REAL,
+      reliability   TEXT,
+      predicted_at  TEXT NOT NULL,
+      -- Filled in once the real result arrives:
+      home_pts      INTEGER,
+      away_pts      INTEGER,
+      game_id       INTEGER,
+      resolved_at   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_bb_predlog ON bb_prediction_log (league, resolved_at);
+
+    CREATE TABLE IF NOT EXISTS bb_upcoming (
+      id            TEXT PRIMARY KEY,
+      league        TEXT NOT NULL,
+      commence_time TEXT,
+      home_name     TEXT NOT NULL,
+      away_name     TEXT NOT NULL,
+      home_id       TEXT,
+      away_id       TEXT,
+      home_odds     REAL,
+      away_odds     REAL,
+      books         INTEGER DEFAULT 0,
+      source        TEXT,
+      updated_at    TEXT
+    );
+
     -- ------------------------------------------------------------------
     -- Stable numeric ids for sources that don't provide any.
     --

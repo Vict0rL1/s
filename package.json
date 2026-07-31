@@ -20,7 +20,10 @@
     "backtest": "npm run backtest --workspace server --",
     "build": "npm run build --workspace web && npm run typecheck --workspace server",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "update-data:bb": "npm run update-data:bb --workspace server --",
+    "backtest:bb": "npm run backtest:bb --workspace server --",
+    "seed:bb": "npm run seed:bb --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
