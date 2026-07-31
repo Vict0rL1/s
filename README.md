@@ -68,7 +68,8 @@ posible *value* cuando el modelo discrepa de las cuotas.
 | Tipo | Fuente | Por qué |
 |------|--------|---------|
 | Histórico ATP | [Tennismylife `TML-Database`](https://github.com/Tennismylife/TML-Database) | Gratis, sin API key, partido a partido desde 1968 hasta la temporada actual, con superficie, ronda, sets, estadísticas de saque/quiebre **y el ranking oficial de cada jugador en cada partido**. Mismo formato de columnas que el dataset clásico de Jeff Sackmann. |
-| Histórico WTA | *(pendiente)* | Los repos `JeffSackmann/tennis_atp` y `tennis_wta` dejaron de estar accesibles públicamente (404). TML cubre ATP; para WTA no hay todavía un equivalente abierto y accesible, así que la app avisa y sigue funcionando con ATP. |
+| Histórico WTA | [tennis-data.co.uk](http://www.tennis-data.co.uk/alldata.php) | Los repos `JeffSackmann/tennis_atp` y `tennis_wta` dejaron de estar accesibles (404) y TML solo cubre ATP, así que la WTA viene de aquí: un `.xlsx` por temporada, gratis y sin API key, con superficie, ronda, marcador set a set, ranking y puntos. **Además trae las cuotas de cierre de cada partido.** No tiene estadísticas de saque. |
+| Cuotas históricas | [tennis-data.co.uk](http://www.tennis-data.co.uk/alldata.php) | Cuotas de cierre partido a partido (promedio entre casas). Es lo que permite medir de verdad si el modelo le gana al mercado — ver `npm run backtest -- --market`. |
 | Datos de jugador | Incluidos en el histórico | Ranking oficial + puntos, país y mano. (El ATP Tour no ofrece API pública, y hacer scraping de su web sería frágil y de legalidad dudosa.) |
 | Odds | [The Odds API](https://the-odds-api.com) | Cuotas head-to-head de partidos próximos ATP/WTA. Plan gratuito (500 req/mes). Requiere API key. |
 
@@ -137,7 +138,20 @@ npm run update-data
 npm run update-data -- --from 2015 --to 2025    # rango de temporadas
 npm run update-data -- --tour atp               # solo un circuito
 npm run update-data -- --skip-odds              # solo histórico
+npm run update-data -- --source tennis-data     # forzar tennis-data.co.uk (trae cuotas)
+npm run update-data -- --source tml             # forzar solo GitHub (comportamiento anterior)
 ```
+
+**De dónde saca el histórico (`--source`)**
+
+| Valor | Qué hace |
+|---|---|
+| `auto` *(por defecto)* | Intenta GitHub (TML) para cada circuito y, si no puede servirlo, cae a tennis-data.co.uk. Es así como la **WTA obtiene datos**: TML es solo ATP. |
+| `tml` | Solo GitHub. Más estadísticas por partido (saque, break points), sin cuotas. |
+| `tennis-data` | Solo tennis-data.co.uk. **Con cuotas históricas** en todos los partidos, sin estadísticas de saque. |
+
+No es una fuente mejor que la otra: TML da más detalle por partido, tennis-data da cuotas. Con
+`auto` obtienes ATP detallado y WTA funcionando.
 
 Esto:
 1. Descarga los CSV del histórico para el rango de años (cacheados en `data/raw/`).
@@ -147,7 +161,19 @@ Esto:
 > `update-data` necesita acceso a internet (GitHub + The Odds API). En entornos sin red usa
 > `npm run seed`.
 
-### Método manual (si la descarga automática falla)
+### Descarga manual de tennis-data.co.uk
+
+Si tu red bloquea ese dominio (el mensaje de error lo dirá):
+
+1. Abre **http://www.tennis-data.co.uk/alldata.php**.
+2. Baja el `.xlsx` de cada temporada que quieras (columna ATP o WTA).
+3. Guárdalos en `data/raw/tennis-data/` con el circuito y el año en el nombre:
+   `wta-2024.xlsx`, `atp-2024.xlsx`, …
+4. Vuelve a ejecutar `npm run update-data`. Los detecta y los usa sin red.
+
+También acepta `.csv`: si prefieres, abre el `.xlsx` y guárdalo como CSV.
+
+### Método manual del histórico ATP (si la descarga automática falla)
 
 Funciona siempre, sin git y sin credenciales. Útil si tu red filtra GitHub o si `git` tiene
 credenciales guardadas que GitHub rechaza:
@@ -208,9 +234,15 @@ npm run backtest -- --mov 0                  # sin margen de victoria
 npm run backtest -- --rest 0                 # sin penalización por inactividad
 npm run backtest -- --bo3 0.7 --bo5 0.9      # otra calibración por formato
 npm run backtest -- --calibration 1          # curva Elo cruda, un solo factor
+npm run backtest -- --load 20                 # experimento: bonus por carga reciente
+npm run backtest -- --tour wta --market       # modelo contra las cuotas históricas
 ```
 
 Así ninguna decisión del modelo depende de una intuición: se compara y se queda la que mide mejor.
+
+Con datos que traen cuotas (tennis-data.co.uk), el backtest imprime además la comparación
+**modelo vs mercado real** sobre los mismos partidos, incluyendo si las señales de *«posible value»*
+ganaron más de lo que el mercado les daba. Es la prueba honesta de si esas señales valen algo.
 
 ## API REST (puerto 4000)
 

@@ -32,6 +32,7 @@ import {
 } from '../model/elo.ts';
 import { computeForm, type FormResult } from '../model/form.ts';
 import { computeReliability } from '../model/reliability.ts';
+import { VALUE_THRESHOLD } from '../model/market.ts';
 
 interface Row {
   id: number;
@@ -43,6 +44,8 @@ interface Row {
   loser_rank: number | null;
   score: string | null;
   best_of: number | null;
+  w_odds: number | null;
+  l_odds: number | null;
 }
 
 interface State {
@@ -144,7 +147,7 @@ function main() {
   for (const tour of tours) {
     const rows = db
       .prepare(
-        `SELECT id, tourney_date, surface, winner_id, loser_id, winner_rank, loser_rank, score, best_of
+        `SELECT id, tourney_date, surface, winner_id, loser_id, winner_rank, loser_rank, score, best_of, w_odds, l_odds
          FROM matches WHERE tour = ? AND tourney_date >= ?
          ORDER BY tourney_date ASC, id ASC`,
       )
@@ -185,6 +188,24 @@ function main() {
     // Does the reliability tier shown in the UI mean anything? Score each tier
     // separately: if the label is informative, "low" must be measurably worse.
     const tiers = new Map<string, { n: number; correct: number; brier: number; margin: number }>();
+    // ---- Model vs the actual betting market ----------------------------------
+    // Only possible where the source carries historical odds (tennis-data.co.uk
+    // does). This is the comparison that decides whether the model is worth
+    // anything beyond the price you can already read off a bookmaker.
+    let mkN = 0;
+    let mkModelCorrect = 0;
+    let mkMarketCorrect = 0;
+    let mkModelBrier = 0;
+    let mkMarketBrier = 0;
+    let mkModelLog = 0;
+    let mkMarketLog = 0;
+    let mkDisagree = 0;
+    let mkModelRight = 0;
+    // Value flags: when the model claims a side is underpriced by >5 pp, did that
+    // side actually win more often than the market's price implied?
+    let valN = 0;
+    let valImplied = 0;
+    let valWon = 0;
 
     for (const m of rows) {
       const w = get(m.winner_id);
@@ -260,6 +281,39 @@ function main() {
         t.brier += (1 - pWinnerWins) ** 2;
         t.margin += rel.marginPp;
         tiers.set(rel.level, t);
+
+        // ---- Against the real market, where odds exist ----
+        if (m.w_odds != null && m.l_odds != null && m.w_odds > 1 && m.l_odds > 1) {
+          // Strip the bookmaker's margin the same way the app does at runtime.
+          const rawW = 1 / m.w_odds;
+          const rawL = 1 / m.l_odds;
+          const impliedWinner = rawW / (rawW + rawL);
+          mkN++;
+          mkModelCorrect += pWinnerWins > 0.5 ? 1 : pWinnerWins === 0.5 ? 0.5 : 0;
+          mkMarketCorrect += impliedWinner > 0.5 ? 1 : impliedWinner === 0.5 ? 0.5 : 0;
+          mkModelBrier += (1 - pWinnerWins) ** 2;
+          mkMarketBrier += (1 - impliedWinner) ** 2;
+          mkModelLog += -Math.log(Math.max(pWinnerWins, 1e-15));
+          mkMarketLog += -Math.log(Math.max(impliedWinner, 1e-15));
+          if (pWinnerWins > 0.5 !== impliedWinner > 0.5) {
+            mkDisagree++;
+            if (pWinnerWins > 0.5) mkModelRight++;
+          }
+          // The "posible value" badge, scored. The flagged side is whichever the
+          // model rates more highly than the market by more than the threshold.
+          const edgeWinner = pWinnerWins - impliedWinner;
+          if (Math.abs(edgeWinner) > VALUE_THRESHOLD) {
+            valN++;
+            // Track the flagged side: its market price, and whether it won.
+            if (edgeWinner > 0) {
+              valImplied += impliedWinner;
+              valWon += 1; // the flagged side is the winner of this match
+            } else {
+              valImplied += 1 - impliedWinner;
+              valWon += 0; // flagged side was the loser
+            }
+          }
+        }
 
         // Ranking baseline + head-to-head against the model on the same matches.
         if (m.winner_rank != null && m.loser_rank != null && m.winner_rank !== m.loser_rank) {
@@ -352,6 +406,43 @@ function main() {
             `(${diff >= 0 ? '+' : ''}${diff.toFixed(1)} pp)`,
         );
       });
+
+    if (mkN > 0) {
+      console.log(`\nContra el MERCADO REAL (${mkN} partidos con cuotas históricas):`);
+      console.log(
+        `  ${'modelo'.padEnd(8)} accuracy ${((mkModelCorrect / mkN) * 100).toFixed(1)}%  ` +
+          `Brier ${(mkModelBrier / mkN).toFixed(4)}  log loss ${(mkModelLog / mkN).toFixed(4)}`,
+      );
+      console.log(
+        `  ${'mercado'.padEnd(8)} accuracy ${((mkMarketCorrect / mkN) * 100).toFixed(1)}%  ` +
+          `Brier ${(mkMarketBrier / mkN).toFixed(4)}  log loss ${(mkMarketLog / mkN).toFixed(4)}`,
+      );
+      if (mkDisagree > 0) {
+        console.log(
+          `  discrepan en ${mkDisagree} (${((mkDisagree / mkN) * 100).toFixed(1)}%); ` +
+            `el modelo acierta ${((mkModelRight / mkDisagree) * 100).toFixed(1)}% de esos`,
+        );
+      }
+      if (valN > 0) {
+        const implied = (valImplied / valN) * 100;
+        const won = (valWon / valN) * 100;
+        console.log(
+          `\n  Señales de "posible value" (${valN} partidos, umbral ` +
+            `${(VALUE_THRESHOLD * 100).toFixed(0)} pp):\n` +
+            `    el mercado daba ${implied.toFixed(1)}% al lado señalado y ganó ${won.toFixed(1)}%` +
+            ` → ${won > implied ? 'ventaja de' : 'DESVENTAJA de'} ${Math.abs(won - implied).toFixed(1)} pp`,
+        );
+        console.log(
+          won > implied
+            ? '    (positivo, pero comprueba el tamaño de muestra antes de creerlo)'
+            : '    (el modelo NO gana dinero en estas señales: el mercado tenía razón)',
+        );
+      }
+      console.log(
+        `\n  Nota: las casas incorporan información que el modelo no ve (lesiones,\n` +
+          `  noticias, dinero informado). Superarlas es la vara alta, no el ranking.`,
+      );
+    }
 
     // Validates the reliability badge the UI shows on every match. The point is
     // the ORDER: "alta" must beat "baja" on Brier, otherwise the label is noise

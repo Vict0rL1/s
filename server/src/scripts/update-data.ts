@@ -15,6 +15,7 @@ import { RAW_DIR, toursConfig } from '../config.ts';
 import { ingestRankings, ingestTour, preflight, tourConfigs } from '../ingest/sackmann.ts';
 import { recomputeRatings } from '../ingest/ratings.ts';
 import { refreshOdds } from '../ingest/odds.ts';
+import { ingestTennisData } from '../ingest/tennisData.ts';
 import { getTrackRecord, resolvePredictions } from '../trackRecord.ts';
 
 function parseArgs(argv: string[]) {
@@ -41,6 +42,17 @@ async function main() {
   const toYear = Number(args.to) || new Date().getFullYear();
   const onlyTour = typeof args.tour === 'string' ? args.tour : null;
   const skipOdds = !!args['skip-odds'];
+  // Where the history comes from:
+  //   auto (default) — the configured GitHub source per tour, falling back to
+  //                    tennis-data.co.uk for any tour that source can't serve
+  //                    (which is how the WTA gets data at all).
+  //   tml            — GitHub only, the previous behaviour.
+  //   tennis-data    — tennis-data.co.uk only: fewer per-match stats, but it
+  //                    carries historical odds for every match.
+  const source = typeof args.source === 'string' ? args.source : 'auto';
+  if (!['auto', 'tml', 'tennis-data'].includes(source)) {
+    throw new Error(`--source desconocido: ${source} (usa auto, tml o tennis-data)`);
+  }
 
   // `--fresh` deletes the download cache (data/raw) so the next run re-fetches
   // from scratch. Needed to escape a stale mirror: cached CSVs and an existing
@@ -85,9 +97,13 @@ async function main() {
   if (tours.length === 0) throw new Error(`Tour desconocido: ${onlyTour}`);
 
   // Preflight: confirm we can reach the data source BEFORE wiping existing data.
-  console.log('\n▸ Comprobando conexión con la fuente de datos (GitHub)…');
-  const found = await preflight(tours[0]);
-  console.log(`  OK — ${found} jugadores disponibles.`);
+  // Skipped when GitHub isn't being used, so a network that blocks it doesn't
+  // stop an ingest that never needed it.
+  if (source !== 'tennis-data') {
+    console.log('\n▸ Comprobando conexión con la fuente de datos (GitHub)…');
+    const found = await preflight(tours[0]);
+    console.log(`  OK — ${found} jugadores disponibles.`);
+  }
 
   // Full rebuild keeps ratings correct and avoids duplicate matches.
   resetData();
@@ -97,18 +113,46 @@ async function main() {
   const failed: string[] = [];
   for (const tour of tours) {
     console.log(`\n▸ ${tour.label}`);
-    try {
-      const res = await ingestTour(tour, { fromYear, toYear });
-      console.log(`  players: ${res.players}, matches: ${res.matches}`);
-      totalMatches += res.matches;
-      // Official rankings: lets the app show a player's real rank/points even if
-      // the match history doesn't cover their career.
-      const ranked = await ingestRankings(tour);
-      if (ranked) console.log(`  rankings oficiales: ${ranked} filas procesadas`);
-    } catch (e) {
-      failed.push(tour.id);
-      console.warn(`  ⚠️  No se pudo descargar ${tour.id}: ${(e as Error).message}`);
+    let got = 0;
+    let gitHubError: string | null = null;
+
+    if (source !== 'tennis-data') {
+      try {
+        const res = await ingestTour(tour, { fromYear, toYear });
+        console.log(`  players: ${res.players}, matches: ${res.matches}`);
+        got = res.matches;
+        // Official rankings: lets the app show a player's real rank/points even
+        // if the match history doesn't cover their career.
+        const ranked = await ingestRankings(tour);
+        if (ranked) console.log(`  rankings oficiales: ${ranked} filas procesadas`);
+      } catch (e) {
+        gitHubError = (e as Error).message;
+        if (source === 'tml') console.warn(`  ⚠️  No se pudo descargar ${tour.id}: ${gitHubError}`);
+      }
     }
+
+    // tennis-data.co.uk: either asked for explicitly, or as the fallback for a
+    // tour GitHub couldn't serve. This is what gives the WTA any data at all.
+    if (source === 'tennis-data' || (source === 'auto' && got === 0)) {
+      if (gitHubError) {
+        console.warn(`  ⚠️  GitHub no sirvió ${tour.id} (${gitHubError}).`);
+        console.log(`  ↳ Probando tennis-data.co.uk (incluye cuotas históricas)…`);
+      }
+      try {
+        const seasons = await ingestTennisData(tour.id, { fromYear, toYear });
+        const n = seasons.reduce((a, s2) => a + s2.matches, 0);
+        const withOdds = seasons.reduce((a, s2) => a + s2.withOdds, 0);
+        if (n > 0) {
+          console.log(`  tennis-data.co.uk: ${n} partidos, ${withOdds} con cuotas históricas`);
+          got += n;
+        }
+      } catch (e) {
+        console.warn(`  ⚠️  tennis-data.co.uk falló para ${tour.id}: ${(e as Error).message}`);
+      }
+    }
+
+    if (got === 0) failed.push(tour.id);
+    totalMatches += got;
   }
 
   if (totalMatches === 0) {
@@ -171,7 +215,7 @@ async function main() {
     console.log(`  ${odds.source} odds for ${odds.count} upcoming matches`);
   }
 
-  setMeta('data_source', 'sackmann');
+  setMeta('data_source', source === 'tennis-data' ? 'tennis-data' : 'sackmann');
   setMeta('updated_at', new Date().toISOString());
 
   console.log('\n✅ Done. Start the app with:  npm run dev\n');

@@ -370,10 +370,39 @@ El modelo elige un ganador distinto al del ranking oficial en el **20,9%** de lo
 esos casos el modelo acierta **53,6%** y el ranking **46,4%**: una ventaja real pero **pequeña**,
 lejos de una certeza.
 
-Y una advertencia importante: **las casas de apuestas son más afiladas que el ranking**. Sus
+### Contra el mercado real: ahora sí se puede medir
+
+Antes esto era la limitación más honesta del proyecto: *«no dispongo de odds históricas, así que no
+puedo afirmar que el modelo supere al mercado»*. Con datos de tennis-data.co.uk (que trae las cuotas
+de cierre de cada partido) ya es medible:
+
+```bash
+npm run backtest -- --tour wta --market
+```
+
+El backtest imprime, sobre los mismos partidos, accuracy / Brier / log loss del **modelo** y del
+**mercado**, cuántas veces discrepan y quién acierta en esos casos. Y lo más útil para quien mira las
+señales de *«posible value»*: si el lado señalado ganó **más** de lo que el mercado le daba.
+
+Interpretación de lo que salga:
+
+- Si el mercado tiene mejor Brier, el modelo **no** aporta precio: úsalo para entender el partido, no
+  para buscarle la vuelta a la casa.
+- Si en los partidos donde discrepan el modelo acierta **menos del 50%**, las discrepancias son ruido,
+  no señal.
+- Si el lado señalado como *value* gana aproximadamente lo que el mercado le daba, esas señales no
+  tienen ventaja — es el resultado que hay que esperar por defecto.
+
+**Aviso de verificación:** la ingesta de esa fuente está probada contra ficheros de prueba escritos en
+su formato real (columnas, fechas como número de serie de Excel, marcador set a set, cuotas), pero el
+entorno donde se desarrolló **no tiene acceso al dominio**, así que no se ha ejecutado contra los
+ficheros oficiales. El mapeo de columnas es **por nombre de cabecera**: si algo no cuadra, falla con un
+error que lista las cabeceras que encontró, en vez de ingerir datos incorrectos en silencio.
+
+Y la advertencia de siempre: **las casas de apuestas son más afiladas que el ranking**. Sus
 cuotas incorporan información que este modelo no ve (lesiones, estado del día, noticias de
-última hora, dinero de apostadores informados). No dispongo de odds históricas para medirlo, así
-que **no puedo afirmar que el modelo supere al mercado — y lo más probable es que no lo haga**.
+última hora, dinero de apostadores informados). Lo más probable sigue siendo que el modelo **no**
+supere al mercado; ahora al menos puedes comprobarlo en vez de suponerlo.
 
 Interpreta las discrepancias como *"aquí hay algo que el modelo ve distinto"*, no como *"el
 mercado se equivoca"*. Si la diferencia es grande, la explicación más habitual es que el mercado

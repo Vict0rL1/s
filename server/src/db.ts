@@ -57,7 +57,12 @@ function createSchema(d: DatabaseSync): void {
       w_ace INTEGER, w_df INTEGER, w_svpt INTEGER, w_1stIn INTEGER,
       w_1stWon INTEGER, w_2ndWon INTEGER, w_bpSaved INTEGER, w_bpFaced INTEGER,
       l_ace INTEGER, l_df INTEGER, l_svpt INTEGER, l_1stIn INTEGER,
-      l_1stWon INTEGER, l_2ndWon INTEGER, l_bpSaved INTEGER, l_bpFaced INTEGER
+      l_1stWon INTEGER, l_2ndWon INTEGER, l_bpSaved INTEGER, l_bpFaced INTEGER,
+      -- Closing decimal odds for the winner / loser, when the source carries
+      -- them (tennis-data.co.uk does; TML does not). Historical odds are what
+      -- make it possible to ask whether the model beats the market at all --
+      -- see the --market flag of the backtest script.
+      w_odds REAL, l_odds REAL
     );
     CREATE INDEX IF NOT EXISTS idx_matches_tour_date ON matches (tour, tourney_date);
     CREATE INDEX IF NOT EXISTS idx_matches_winner ON matches (tour, winner_id);
@@ -152,6 +157,23 @@ function createSchema(d: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_predlog_tour ON prediction_log (tour, resolved_at);
 
+    -- ------------------------------------------------------------------
+    -- Stable numeric ids for sources that don't provide any.
+    --
+    -- TML/Sackmann rows carry a player id, so ids survive a re-ingest for free.
+    -- tennis-data.co.uk identifies players only by name ("Alcaraz C."), and
+    -- handing out sequential ids per run would renumber everyone as soon as one
+    -- new name appears -- silently invalidating prediction_log, which stores
+    -- player ids and is meant to outlive re-ingestion. So a name keeps its id
+    -- forever, recorded here and never reset.
+    -- ------------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS player_ids (
+      tour TEXT NOT NULL,
+      name TEXT NOT NULL,
+      id   INTEGER NOT NULL,
+      PRIMARY KEY (tour, name)
+    );
+
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
       value TEXT
@@ -183,6 +205,8 @@ function migrateSchema(d: DatabaseSync): void {
     matches: {
       winner_rank: 'INTEGER',
       loser_rank: 'INTEGER',
+      w_odds: 'REAL',
+      l_odds: 'REAL',
     },
   };
 
@@ -213,10 +237,12 @@ export function getMeta(key: string): string | null {
 /**
  * Wipe all ingested data (used before a fresh seed or full re-ingest).
  *
- * `prediction_log` is intentionally absent from this list: it holds the app's
- * own track record (what it predicted, before the match), which is earned over
- * time and must survive a history re-ingest. Everything else is re-derivable
- * from the sources.
+ * `prediction_log` and `player_ids` are intentionally absent from this list.
+ * The first holds the app's own track record (what it predicted, before the
+ * match), which is earned over time and must survive a history re-ingest. The
+ * second keeps a name's numeric id stable across runs, which is what makes those
+ * logged predictions still refer to the same players afterwards. Everything else
+ * is re-derivable from the sources.
  */
 export function resetData(): void {
   const d = getDb();
