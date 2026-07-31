@@ -69,6 +69,16 @@ export default function MatchDetail({ prediction }: { prediction: Prediction }) 
     { label: 'Efectivo (0.7·sup + 0.3·gen)', p1: ratings.p1.effective, p2: ratings.p2.effective },
     { label: 'Ajuste forma', p1: <Num value={form.p1.delta} plus />, p2: <Num value={form.p2.delta} plus /> },
     { label: 'Ajuste head-to-head', p1: <Num value={h2h.delta} plus />, p2: <Num value={-h2h.delta} plus /> },
+    // Only shown when it bites: a zero row for every in-season match would be noise.
+    ...(prediction.layoff.p1 !== 0 || prediction.layoff.p2 !== 0
+      ? [
+          {
+            label: 'Ajuste inactividad',
+            p1: <Num value={prediction.layoff.p1} plus />,
+            p2: <Num value={prediction.layoff.p2} plus />,
+          },
+        ]
+      : []),
     { label: 'Rating ajustado', p1: <strong>{adjustedRatings.p1}</strong>, p2: <strong>{adjustedRatings.p2}</strong> },
     { label: 'Prob. del modelo', p1: <strong>{pct(prediction.model.prob1, 1)}</strong>, p2: <strong>{pct(prediction.model.prob2, 1)}</strong> },
   ];

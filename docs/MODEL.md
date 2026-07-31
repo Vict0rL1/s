@@ -37,6 +37,34 @@ K(n) = 250 / (n + 5)^0.4        (n = partidos jugados)
 Novatos (n pequeño) se mueven rápido para encontrar su nivel; veteranos (n grande) son
 estables. Es el enfoque popularizado por FiveThirtyEight / Tennis Abstract para tenis.
 
+**c-bis) Margen de victoria** (`elo.ts → movMultiplier`)
+
+Un 6-0 6-0 y un 7-6 6-7 7-6 dicen cosas muy distintas sobre la diferencia entre dos jugadores, y
+el Elo clásico los trata igual. Así que la K se escala por lo dominante que fue la victoria,
+medida como la **cuota de games** que ganó el vencedor:
+
+```
+mult = 1 + 4 · (games_ganador / games_totales − 0.615)      acotado a [0.6, 1.5]
+```
+
+0.615 es la cuota media medida sobre 44.054 partidos ATP: centrar ahí (y no en 0.5) es lo que
+mantiene los ratings en la misma escala en vez de inflar todas las K. Una victoria de margen
+normal mueve el rating igual que antes; una paliza mueve más y un partido apretado menos.
+
+Los **retiros y walkovers no cuentan**: el marcador refleja una lesión, no dominancia, así que
+se usa `mult = 1` y el partido se trata como Elo normal.
+
+| Peso | Accuracy | Brier | Log loss |
+|---|---|---|---|
+| 0 (desactivado) | 66.1% | 0.2110 | 0.6081 |
+| 1 | 66.3% | 0.2104 | 0.6070 |
+| **4 (elegido)** | **66.3%** | **0.2097** | **0.6054** |
+| 6 | 66.4% | 0.2097 | 0.6055 |
+| 8 | 66.5% | 0.2098 | 0.6056 |
+
+(33.967 partidos ATP out-of-sample, 2010–2026. Mide cualquier peso con
+`npm run backtest -- --mov <w>`.)
+
 **d) Elo por superficie**
 
 Arcilla, hierba y pista dura premian habilidades distintas. Además del Elo **general**,
@@ -69,12 +97,69 @@ Para cada jugador se construye un **rating efectivo** para *ese* partido:
 1. Mezcla por superficie:  R_eff = 0.7 · Elo_superficie + 0.3 · Elo_general
 2. + ajuste de forma        (acotado)
 3. + ajuste head-to-head    (acotado + encogido; desde la perspectiva del jugador 1)
+4. + penalización por inactividad  (≤ 0; ver abajo)
 
 Prob(gana J1) = expectedScore(R_eff_J1_ajustado, R_eff_J2_ajustado)
 ```
 
+### Inactividad (`elo.ts → layoffAdjustment`)
+
+El Elo no tiene noción del tiempo: un rating logrado antes de seis meses de lesión se aplica como
+si el jugador no hubiera parado nunca. Agrupando el residuo del modelo (real − predicho) según
+cuánto descanso tuvo cada jugador **respecto a su rival**, sobre 33.967 partidos:
+
+| Descanso vs rival | real − predicho |
+|---|---|
+| ≥ 60 días **más** | −4.3 pp |
+| 14–60 días más | −3.5 pp |
+| ±4 días (normal) | 0.0 pp |
+| 14–60 días menos | +3.5 pp |
+| ≥ 60 días **menos** | +4.2 pp |
+
+Es decir, al contrario de lo que suele suponerse: **llegar más descansado que el rival hace rendir
+peor**. La falta de ritmo de competición y la lesión (no observada) que normalmente causó el parón
+apuntan en la misma dirección. Se modela como una penalización que satura:
+
+```
+penalización = −60 · min(1, (días_sin_jugar − 7) / 83)     0 si ≤ 7 días
+```
+
+Una semana entre torneos es lo normal y no penaliza; a partir de 90 días el castigo es máximo.
+El efecto en agregado es pequeño (Brier 0.2097 → 0.2094) porque solo ~9% de los partidos tienen
+diferencias grandes de descanso — pero son justo los partidos en los que el modelo se equivocaba
+más, como un jugador que vuelve de lesión.
+
+**Resolución de las fechas:** el histórico guarda la fecha de inicio del **torneo**, no del partido,
+así que esto mide «tiempo desde el último evento». Por eso la ventana libre empieza en una semana y
+no en un día.
+
+### Carga de partidos: medida y descartada
+
+La otra cara del descanso es la **carga**: partidos jugados en los últimos 14 días. En los residuos
+también aparece señal (hasta ±2.5 pp), y en la **misma dirección** que el descanso — jugar más
+recientemente hace rendir mejor. Eso ya es sospechoso: ambas cosas miden lo mismo (ritmo de
+competición) desde lados opuestos.
+
+Se probó como término aparte, encima de la penalización por inactividad:
+
+| Bonus por carga | Accuracy | Brier | Log loss |
+|---|---|---|---|
+| **0 (desactivado)** | 66.3% | **0.2089** | **0.6031** |
+| 10 pts | 66.4% | 0.2088 | 0.6030 |
+| 20 pts | 66.4% | 0.2088 | 0.6029 |
+| 40 pts | 66.5% | 0.2088 | 0.6029 |
+
+La ganancia (0.0001 de Brier) está dentro del ruido: la inactividad ya captura la señal, y añadir la
+carga sería contarla dos veces. **Así que no está activada.** La bandera
+`npm run backtest -- --load <elo>` se mantiene para que la medición que justificó descartarla sea
+reproducible.
+
+Se muestra igualmente en el desglose («carga alta: N partidos en 30 días») como contexto para que lo
+interpretes tú — pero no entra en la probabilidad.
+
 Al ser todo en puntos Elo, el desglose que muestra el dashboard (Elo general, Elo superficie,
-efectivo, ajuste forma, ajuste H2H, rating ajustado, probabilidad) es completamente auditable.
+efectivo, ajuste forma, ajuste H2H, ajuste inactividad, rating ajustado, probabilidad) es
+completamente auditable: las filas **suman exactamente** el rating ajustado.
 
 ## 5. Comparación con el mercado (`market.ts`)
 
@@ -206,41 +291,84 @@ npm run backtest -- --calibration 1   # curva Elo cruda, para comparar
 
 | Métrica | Valor | Referencia |
 |---|---|---|
-| **Accuracy** (acierta al favorito) | **64.8%** | Decir siempre "gana el mejor rankeado": 63.6% |
-| **Brier score** | **0.2164** | 0 = perfecto · 0.25 = decir siempre 50/50 |
-| **Log loss** | **0.6208** | 0.693 = decir siempre 50/50 |
+| **Accuracy** (acierta al favorito) | **65.2%** | Decir siempre "gana el mejor rankeado": 63.6% |
+| **Brier score** | **0.2140** | 0 = perfecto · 0.25 = decir siempre 50/50 |
+| **Log loss** | **0.6151** | 0.693 = decir siempre 50/50 |
+
+Qué aportaron el margen de victoria, la inactividad y la calibración por formato, sobre esos
+mismos 22.062 partidos:
+
+| Modelo | Accuracy | Brier | Log loss | Peor sesgo |
+|---|---|---|---|---|
+| Solo Elo + forma + H2H, calibración única | 64.8% | 0.2164 | 0.6208 | +1.9 pp |
+| **+ margen, inactividad y calibración por formato** | **65.2%** | **0.2140** | **0.6151** | **+1.3 pp** |
+
+Ganancia modesta y honesta: **+0.4 pp de accuracy**. Lo que más mejora no es acertar más, sino que
+las probabilidades sean más creíbles (Brier y log loss bajan, y el sesgo de calibración se estrecha).
+
+Verificado además en una ventana distinta de la usada para elegir los parámetros (2020–2026,
+10.728 partidos): accuracy 64.1% → 64.6%, Brier 0.2188 → 0.2166. La mejora no es un artefacto de
+haber ajustado y medido en los mismos datos.
 
 ### Calibración (lo más importante)
 
 | Cuando el modelo dice… | …gana realmente | Error |
 |---|---|---|
-| 55.0% | 54.4% | −0.5 pp |
-| 64.8% | 63.4% | −1.4 pp |
-| 74.5% | 73.8% | −0.7 pp |
-| 84.2% | 84.5% | +0.3 pp |
-| 92.7% | 94.6% | +1.9 pp |
+| 54.9% | 54.1% | −0.9 pp |
+| 64.8% | 63.7% | −1.1 pp |
+| 74.5% | 73.9% | −0.6 pp |
+| 84.3% | 83.8% | −0.5 pp |
+| 93.2% | 94.5% | +1.3 pp |
 
 Es decir: **cuando dice 70%, ese lado gana ~70% de las veces**. Las probabilidades son
 interpretables literalmente, dentro de ~1–2 puntos porcentuales.
 
-### El factor de calibración
+### El factor de calibración (uno por formato)
 
 La curva Elo cruda es **sobre-confiada**: sin calibrar, los partidos anunciados al ~85% se ganaban
-solo el ~77% (error de −7,6 pp). Por eso se aplica un factor de **0.75** a la diferencia de rating
-antes de convertirla en probabilidad (*temperature scaling*; ver `CALIBRATION_SCALE` en
-`server/src/model/elo.ts`). Comparación sobre los mismos 22.062 partidos:
+solo el ~77% (error de −7,6 pp). Por eso se aplica un factor a la diferencia de rating antes de
+convertirla en probabilidad (*temperature scaling*; ver `elo.ts`).
 
-| Factor | Brier | Log loss | Error en 80–90% |
+Pero el factor **no puede ser el mismo para los dos formatos**. Al mejor de 5 hay menos varianza, así
+que el mejor jugador convierte su ventaja más a menudo. Medido sobre los mismos partidos con un solo
+factor de 0.75, el favorito ganaba **2.1 pp menos** de lo anunciado al mejor de 3 y **3.1 pp más** al
+mejor de 5: un único número tenía que estar mal en ambos casos. De ahí dos factores:
+
+```
+al mejor de 3 → 0.68        al mejor de 5 → 0.86        formato desconocido → 0.75
+```
+
+| Configuración | Brier | Log loss | Peor sesgo de calibración |
 |---|---|---|---|
 | 1.00 (crudo) | 0.2189 | 0.6282 | −7.6 pp |
-| **0.75 (elegido)** | **0.2164** | **0.6208** | **+0.3 pp** |
-| 0.85 | 0.2170 | 0.6223 | −2.7 pp |
+| 0.75 único | 0.2095 | 0.6048 | −1.3 pp |
+| 0.70 / 0.90 | 0.2090 | 0.6032 | −1.3 pp |
+| **0.68 / 0.86 (elegido)** | **0.2089** | **0.6031** | **−1.0 pp** |
+| 0.63 / 0.80 | 0.2090 | 0.6034 | +2.2 pp |
+
+(33.967 partidos, 2010–2026, con margen de victoria e inactividad activos. Mídelo con
+`npm run backtest -- --bo3 <s> --bo5 <s>`.) Se descartó 0.68/1.00 —marginalmente mejor en Brier—
+porque 1.00 significa no calibrar nada, ajustado sobre solo 6.853 partidos al mejor de 5.
+
+### ¿Sirve el semáforo de fiabilidad?
+
+Sí, y está medido out-of-sample sobre los mismos 22.062 partidos. Las bandas salen en el orden
+correcto, que es exactamente lo que la etiqueta promete:
+
+| Fiabilidad declarada | n | Accuracy | Brier | Banda media |
+|---|---|---|---|---|
+| alta | 7.444 | 68.7% | 0.2012 | ±2.6 pp |
+| media | 13.551 | 63.6% | 0.2199 | ±4.7 pp |
+| baja | 1.067 | 59.5% | 0.2293 | ±8.7 pp |
+
+Un partido etiquetado «baja» acierta ~9 puntos menos que uno «alta». La etiqueta no es decorativa:
+es información sobre cuánto fiarte de la cifra que tiene al lado.
 
 ### Cuando el modelo discrepa del mercado
 
-El modelo elige un ganador distinto al del ranking oficial en el **21,7%** de los partidos. En
-esos casos el modelo acierta **52,7%** y el ranking **47,3%**: una ventaja real pero **muy
-pequeña**, casi una moneda al aire.
+El modelo elige un ganador distinto al del ranking oficial en el **20,9%** de los partidos. En
+esos casos el modelo acierta **53,6%** y el ranking **46,4%**: una ventaja real pero **pequeña**,
+lejos de una certeza.
 
 Y una advertencia importante: **las casas de apuestas son más afiladas que el ranking**. Sus
 cuotas incorporan información que este modelo no ve (lesiones, estado del día, noticias de

@@ -118,7 +118,7 @@ export interface PlayerLite {
 }
 
 export interface ReasoningFactor {
-  key: 'rating' | 'form' | 'h2h';
+  key: 'rating' | 'form' | 'h2h' | 'layoff';
   label: string;
   pointsForP1: number;
 }
@@ -198,6 +198,8 @@ export interface Prediction {
   surfaceRecord: { p1: SurfaceRecord; p2: SurfaceRecord };
   serve: { p1: ServeStats; p2: ServeStats };
   h2h: H2HSignal;
+  /** Layoff penalty in Elo points per player (<= 0). */
+  layoff: { p1: number; p2: number };
   adjustedRatings: { p1: number; p2: number };
   model: { prob1: number; prob2: number };
   market: MarketComparison;

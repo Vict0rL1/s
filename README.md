@@ -19,7 +19,8 @@ posible *value* cuando el modelo discrepa de las cuotas.
 
 - **ATP y WTA**, singles. Torneos configurables (4 Grand Slams + Masters 1000 / WTA 1000 de
   fábrica) en `config/tournaments.json` — se amplía agregando entradas, sin tocar la lógica.
-- **Elo general + por superficie** (dura / arcilla / hierba) con K-factor dinámico.
+- **Elo general + por superficie** (dura / arcilla / hierba) con K-factor dinámico y ponderado por
+  el margen de victoria.
 - **Forma reciente**, **head-to-head** y **comparación contra el mercado** (probabilidad
   implícita sin vig + detección de value).
 - **Probabilidad de victoria en grande** para cada jugador (con un decimal), y todas las cifras
@@ -27,10 +28,14 @@ posible *value* cuando el modelo discrepa de las cuotas.
 - **Datos de cada jugador en el partido**: ranking oficial ATP/WTA + puntos, país, edad y mano.
   Se muestran aunque el modelo no pueda predecir (jugador sin partidos en el historial), y en ese
   caso también se muestra la probabilidad implícita del mercado.
-- **Modelo calibrado y verificado:** `npm run backtest` mide la exactitud real — **64.8% de
-  acierto** y probabilidades calibradas dentro de ~1–2 pp, sobre **22.062 partidos ATP
+- **Modelo calibrado y verificado:** `npm run backtest` mide la exactitud real — **65.2% de
+  acierto** y probabilidades calibradas dentro de ~1 pp, sobre **22.062 partidos ATP
   out-of-sample** (2015–2026). Incluye baseline de ranking y análisis de las discrepancias con el
   mercado. Ver [docs/MODEL.md](docs/MODEL.md).
+- **Elo que aprovecha el marcador:** la K se escala con el **margen de games** (un 6-0 6-0 no
+  informa lo mismo que un 7-6 6-7 7-6), penaliza la **inactividad** (volver de un parón largo hace
+  rendir peor de lo que dice el Elo — medido, no supuesto) y **calibra distinto al mejor de 3 que al
+  mejor de 5**. Cada cambio se aceptó solo tras verificar con el backtest que baja el Brier.
 - **Track record propio:** la app **anota cada predicción antes** de que se juegue el partido y la
   puntúa cuando llega el resultado real, así que el dashboard muestra su acierto **en los partidos
   que tú viste** — no solo en el backtest histórico. Incluye comparación contra el mercado en esos
@@ -188,9 +193,24 @@ ves, en vez de fallar en silencio.
 | `npm run dev` | Levanta backend + frontend a la vez |
 | `npm run seed` | Carga el dataset de demostración |
 | `npm run update-data` | Refresca histórico real + odds |
-| `npm run backtest` | Mide la exactitud del modelo (accuracy, Brier, calibración) |
+| `npm run backtest` | Mide la exactitud del modelo (accuracy, Brier, calibración, fiabilidad) |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
+
+### Medir cambios del modelo
+
+El backtest acepta banderas para **desactivar o reajustar** cada pieza y ver qué aporta, sobre los
+mismos partidos:
+
+```bash
+npm run backtest -- --tour atp --from 2015   # ventana de evaluación
+npm run backtest -- --mov 0                  # sin margen de victoria
+npm run backtest -- --rest 0                 # sin penalización por inactividad
+npm run backtest -- --bo3 0.7 --bo5 0.9      # otra calibración por formato
+npm run backtest -- --calibration 1          # curva Elo cruda, un solo factor
+```
+
+Así ninguna decisión del modelo depende de una intuición: se compara y se queda la que mide mejor.
 
 ## API REST (puerto 4000)
 

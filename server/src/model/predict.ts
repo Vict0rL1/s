@@ -9,15 +9,25 @@
 //      (If the surface is unknown we fall back to overall only.)
 //   2. + recent-form delta        (bounded, see form.ts)
 //   3. + head-to-head delta       (bounded + shrunk, see h2h.ts; from p1's view)
+//   4. + layoff penalty           (≤ 0, see elo.ts; a long absence costs points)
 //
 //   model P(p1 wins) = expectedScore(R_eff_p1_adjusted, R_eff_p2_adjusted)
+//
+// The probability is then calibrated with a factor that depends on the FORMAT:
+// best-of-5 is less noisy than best-of-3, so the same rating gap deserves more
+// confidence there (see calibrationScaleFor in elo.ts).
 //
 // Then we compare that against the vig-free market probability (market.ts) to
 // flag agreement / possible value. The verdict names the favoured player and a
 // confidence tier derived purely from how far the probability sits from 50%.
 // ===========================================================================
 
-import { calibratedExpectedScore, surfaceKey } from './elo.ts';
+import {
+  calibratedExpectedScore,
+  calibrationScaleFor,
+  layoffAdjustment,
+  surfaceKey,
+} from './elo.ts';
 import { computeForm, type FormSignal } from './form.ts';
 import { computeH2H, type H2HSignal } from './h2h.ts';
 import {
@@ -72,7 +82,7 @@ export interface PlayerLite {
 
 /** One driver of the verdict, expressed as Elo points in favour of p1 (signed). */
 export interface ReasoningFactor {
-  key: 'rating' | 'form' | 'h2h';
+  key: 'rating' | 'form' | 'h2h' | 'layoff';
   label: string;
   pointsForP1: number;
 }
@@ -106,6 +116,8 @@ export interface Prediction {
   surfaceRecord: { p1: SurfaceRecord; p2: SurfaceRecord };
   serve: { p1: ServeStats; p2: ServeStats };
   h2h: H2HSignal; // deltas expressed from p1's perspective
+  /** Layoff penalty in Elo points per player (≤ 0), so the breakdown adds up. */
+  layoff: { p1: number; p2: number };
   adjustedRatings: { p1: number; p2: number };
   model: { prob1: number; prob2: number };
   market: MarketComparison;
@@ -162,7 +174,7 @@ function confidenceTier(prob1: number): ConfidenceTier {
 /**
  * Break the adjusted-rating gap into its drivers so we can explain WHY the model
  * favours someone. Each factor is the points it contributes to the gap in p1's
- * favour: gap = (rating) + (form) + (h2h).
+ * favour: gap = (rating) + (form) + (h2h) + (layoff).
  */
 function buildReasoning(
   p1Name: string,
@@ -170,15 +182,17 @@ function buildReasoning(
   ratingGap: number, // eff1 - eff2
   formGap: number, // form1.delta - form2.delta
   h2hGap: number, // 2 * h2h.delta
+  layoffGap: number, // layoff1 - layoff2 (both ≤ 0)
 ): Reasoning {
   const factors: ReasoningFactor[] = [
     { key: 'rating', label: 'Elo (nivel + superficie)', pointsForP1: round1(ratingGap) },
     { key: 'form', label: 'Forma reciente', pointsForP1: round1(formGap) },
     { key: 'h2h', label: 'Head-to-head', pointsForP1: round1(h2hGap) },
+    { key: 'layoff', label: 'Inactividad', pointsForP1: round1(layoffGap) },
   ];
   const ranked = [...factors].sort((a, b) => Math.abs(b.pointsForP1) - Math.abs(a.pointsForP1));
   const top = ranked[0];
-  const totalGap = ratingGap + formGap + h2hGap;
+  const totalGap = ratingGap + formGap + h2hGap + layoffGap;
   const favored = totalGap >= 0 ? p1Name : p2Name;
 
   let text: string;
@@ -474,14 +488,24 @@ export function buildPrediction(
 
   const h2h = computeH2H(getH2HMeetings(tour, p1Id, p2Id), p1Id, p2Id);
 
-  // Combine: effective rating + form + head-to-head (h2h.delta favours p1).
-  const adj1 = eff1.effective + form1.delta + h2h.delta;
-  const adj2 = eff2.effective + form2.delta - h2h.delta;
+  // Layoff: a rating earned before a long absence overstates the player today.
+  // The gap is measured against the newest match in the dataset rather than
+  // today's date (same choice as getFitnessSignals) so that a stale download is
+  // never mistaken for a player who stopped competing — erring toward NOT
+  // penalising someone for data we simply don't have yet.
+  const fitness = { p1: getFitnessSignals(tour, p1Id), p2: getFitnessSignals(tour, p2Id) };
+  const layoff1 = layoffAdjustment(fitness.p1.daysSinceLastMatch);
+  const layoff2 = layoffAdjustment(fitness.p2.daysSinceLastMatch);
 
-  // Calibrated (see elo.ts): the raw curve is over-confident on real matches.
+  // Combine: effective rating + form + head-to-head (h2h.delta favours p1) + layoff.
+  const adj1 = eff1.effective + form1.delta + h2h.delta + layoff1;
+  const adj2 = eff2.effective + form2.delta - h2h.delta + layoff2;
+
+  // Calibrated (see elo.ts): the raw curve is over-confident on real matches,
+  // and by different amounts at best-of-3 vs best-of-5.
   // Round once, then derive the complement, so the two probabilities always sum
   // to exactly 1 at the precision we expose (no 63.2% / 36.9% mismatches).
-  const prob1 = round5(calibratedExpectedScore(adj1, adj2));
+  const prob1 = round5(calibratedExpectedScore(adj1, adj2, calibrationScaleFor(bestOf)));
   const prob2 = round5(1 - prob1);
 
   let marketProbs: MarketProbabilities | null = null;
@@ -501,12 +525,12 @@ export function buildPrediction(
     eff1.effective - eff2.effective,
     form1.delta - form2.delta,
     2 * h2h.delta,
+    layoff1 - layoff2,
   );
 
   const confidence = confidenceTier(prob1);
   const expected = estimateScoreline(prob1, bestOf);
   const scorelines = scorelineDistribution(prob1, bestOf);
-  const fitness = { p1: getFitnessSignals(tour, p1Id), p2: getFitnessSignals(tour, p2Id) };
   const tournamentHistory = tourneyName
     ? {
         p1: getTournamentHistory(tour, p1Id, tourneyName),
@@ -575,6 +599,7 @@ export function buildPrediction(
     surfaceRecord: { p1: rec1, p2: rec2 },
     serve: { p1: serve1, p2: serve2 },
     h2h,
+    layoff: { p1: round1(layoff1), p2: round1(layoff2) },
     adjustedRatings: { p1: Math.round(adj1 * 10) / 10, p2: Math.round(adj2 * 10) / 10 },
     model: { prob1, prob2 },
     market: marketComparison,

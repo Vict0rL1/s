@@ -23,7 +23,8 @@ export function recomputeRatings(): Record<string, number> {
   for (const tour of toursConfig.tours) {
     const matches = db
       .prepare(
-        `SELECT id, tourney_date, surface, winner_id, loser_id
+        // `score` is needed for the margin-of-victory K-factor (see elo.ts).
+        `SELECT id, tourney_date, surface, winner_id, loser_id, score
          FROM matches WHERE tour = ? ORDER BY tourney_date ASC, id ASC`,
       )
       .all(tour.id) as unknown as MatchRow[];

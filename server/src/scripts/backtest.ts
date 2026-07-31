@@ -23,8 +23,12 @@ import {
   expectedScore,
   kFactor,
   surfaceKey,
-  CALIBRATION_SCALE,
   INITIAL_ELO,
+  MOV_WEIGHT,
+  movMultiplier,
+  layoffAdjustment,
+  calibrationScaleFor,
+  REST_MAX_PENALTY,
 } from '../model/elo.ts';
 import { computeForm, type FormResult } from '../model/form.ts';
 import { computeReliability } from '../model/reliability.ts';
@@ -37,6 +41,8 @@ interface Row {
   loser_id: number;
   winner_rank: number | null;
   loser_rank: number | null;
+  score: string | null;
+  best_of: number | null;
 }
 
 interface State {
@@ -102,8 +108,35 @@ function main() {
   const fromYear = Number(args.from) || 0;
   const warmup = Number(args.warmup) || 20; // matches per player before scoring
   // `--calibration 1` measures the raw (uncalibrated) curve, for comparison.
-  const scale = args.calibration !== undefined ? Number(args.calibration) : CALIBRATION_SCALE;
-  console.log(`Factor de calibración: ${scale}${scale === 1 ? ' (curva Elo cruda)' : ''}`);
+  // `--mov <w>` overrides the margin-of-victory weight (0 = plain Elo), so any
+  // candidate can be scored against the current default on the same matches.
+  const movWeight = args.mov !== undefined ? Number(args.mov) : MOV_WEIGHT;
+  // `--rest <elo>` overrides the layoff penalty (0 = off). `--bo3/--bo5 <s>`
+  // override the per-format calibration factors; unset uses the fitted defaults.
+  const restPenalty = args.rest !== undefined ? Number(args.rest) : REST_MAX_PENALTY;
+  // `--load <elo>` is an EXPERIMENT: bonus Elo for having played recently, on
+  // top of the layoff penalty. Kept as a flag (default 0) so the measurement
+  // that justified leaving it out stays reproducible.
+  const loadWeight = args.load !== undefined ? Number(args.load) : 0;
+  const bo3Scale = args.bo3 !== undefined ? Number(args.bo3) : null;
+  const bo5Scale = args.bo5 !== undefined ? Number(args.bo5) : null;
+  // `--calibration <n>` forces ONE factor for both formats (used to measure the
+  // raw curve, and to compare against the split).
+  const forcedScale = args.calibration !== undefined ? Number(args.calibration) : null;
+  const scaleFor = (bestOf: number | null): number => {
+    if (forcedScale !== null) return forcedScale;
+    if (bestOf === 5 && bo5Scale !== null) return bo5Scale;
+    if (bestOf === 3 && bo3Scale !== null) return bo3Scale;
+    return calibrationScaleFor(bestOf);
+  };
+  console.log(`Peso del margen de victoria: ${movWeight}${movWeight === 0 ? ' (desactivado)' : ''}`);
+  console.log(`Penalización por inactividad: ${restPenalty} pts Elo${restPenalty === 0 ? ' (desactivada)' : ''}`);
+  if (loadWeight !== 0) console.log(`Bonus por carga reciente: ${loadWeight} pts Elo (experimental)`);
+  console.log(
+    forcedScale !== null
+      ? `Calibración forzada (un solo factor): ${forcedScale}`
+      : `Calibración por formato: bo3=${scaleFor(3)} · bo5=${scaleFor(5)}`,
+  );
 
   const db = getDb();
   const tours = toursConfig.tours.filter((t) => !onlyTour || t.id === onlyTour);
@@ -111,7 +144,7 @@ function main() {
   for (const tour of tours) {
     const rows = db
       .prepare(
-        `SELECT id, tourney_date, surface, winner_id, loser_id, winner_rank, loser_rank
+        `SELECT id, tourney_date, surface, winner_id, loser_id, winner_rank, loser_rank, score, best_of
          FROM matches WHERE tour = ? AND tourney_date >= ?
          ORDER BY tourney_date ASC, id ASC`,
       )
@@ -179,11 +212,21 @@ function main() {
             (rate - 0.5) * (H2H_MAX * 2) * (total / (total + H2H_SHRINK));
         }
 
-        const adjW = effOf(w) + formDelta(w) + h2hDeltaForWinner;
-        const adjL = effOf(l) + formDelta(l) - h2hDeltaForWinner;
+        // Layoff penalty, from each player's own previous match date.
+        const layoffOf = (st: State) =>
+          layoffAdjustment(daysBetween(st.lastDate, m.tourney_date), restPenalty);
+        // Match load: matches in the 14 days before this one, capped at 4.
+        const loadOf = (st: State) => {
+          if (loadWeight === 0) return 0;
+          const n = st.recent.filter((r) => daysBetween(r.date, m.tourney_date) <= 14).length;
+          return (loadWeight * Math.min(n, 4)) / 4;
+        };
+
+        const adjW = effOf(w) + formDelta(w) + h2hDeltaForWinner + layoffOf(w) + loadOf(w);
+        const adjL = effOf(l) + formDelta(l) - h2hDeltaForWinner + layoffOf(l) + loadOf(l);
         // Calibrated probability — the same one the app reports. Note the rating
         // UPDATES below deliberately use the raw curve (that's the Elo system).
-        const pWinnerWins = calibratedExpectedScore(adjW, adjL, scale);
+        const pWinnerWins = calibratedExpectedScore(adjW, adjL, scaleFor(m.best_of));
 
         scored++;
         if (pWinnerWins > 0.5) correct++;
@@ -232,17 +275,19 @@ function main() {
       }
 
       // ---- UPDATE (after predicting) ----
+      // Scale the step by how dominant the win was (1 when unknown).
+      const mov = movMultiplier(m.score, movWeight);
       const eW = expectedScore(w.overall, l.overall);
-      w.overall += kFactor(w.nOverall) * (1 - eW);
-      l.overall += kFactor(l.nOverall) * (0 - (1 - eW));
+      w.overall += kFactor(w.nOverall) * mov * (1 - eW);
+      l.overall += kFactor(l.nOverall) * mov * (0 - (1 - eW));
       w.nOverall++;
       l.nOverall++;
       if (sk) {
         const eWs = expectedScore(w[sk], l[sk]);
         const nW = sk === 'hard' ? w.nHard : sk === 'clay' ? w.nClay : w.nGrass;
         const nL = sk === 'hard' ? l.nHard : sk === 'clay' ? l.nClay : l.nGrass;
-        w[sk] += kFactor(nW) * (1 - eWs);
-        l[sk] += kFactor(nL) * (0 - (1 - eWs));
+        w[sk] += kFactor(nW) * mov * (1 - eWs);
+        l[sk] += kFactor(nL) * mov * (0 - (1 - eWs));
         if (sk === 'hard') {
           w.nHard++;
           l.nHard++;
