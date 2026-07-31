@@ -6,9 +6,11 @@ import { INITIAL_ELO } from './model/elo.ts';
 import type { FormResult } from './model/form.ts';
 import type { H2HMeeting } from './model/h2h.ts';
 import type {
+  FitnessSignals,
   OfficialRanking,
   PlayerInfo,
   PlayerRow,
+  TournamentHistory,
   RatingRow,
   ServeStats,
   SurfaceRecord,
@@ -220,6 +222,138 @@ export function getEloRank(tour: TourId, id: number): number {
     )
     .get(tour, tour, id) as unknown as { rank: number };
   return row.rank;
+}
+
+function ymdToUtc(ymd: string): number | null {
+  if (!ymd || ymd.length < 8) return null;
+  const t = Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8)));
+  return Number.isNaN(t) ? null : t;
+}
+
+/** Whole days between two YYYYMMDD dates (null if either is unparseable). */
+function daysBetweenYmd(fromYmd: string, toYmd: string): number | null {
+  const a = ymdToUtc(fromYmd);
+  const b = ymdToUtc(toYmd);
+  if (a === null || b === null) return null;
+  return Math.max(0, Math.round((b - a) / 86_400_000));
+}
+
+/**
+ * Physical-availability signals from results: retirements and walkovers (which
+ * appear in the score text, e.g. "6-4 2-1 RET"), time since the last match, and
+ * recent workload. Evidence of fitness problems, not a medical claim.
+ */
+export function getFitnessSignals(tour: TourId, id: number): FitnessSignals {
+  const recent = getDb()
+    .prepare(
+      `SELECT tourney_date AS date, score, (loser_id = ?) AS lost
+       FROM matches
+       WHERE tour = ? AND (winner_id = ? OR loser_id = ?)
+       ORDER BY tourney_date DESC, id DESC
+       LIMIT 20`,
+    )
+    .all(id, tour, id, id) as unknown as { date: string; score: string | null; lost: number }[];
+
+  let retirements = 0;
+  let walkovers = 0;
+  let lastIncidentDate: string | null = null;
+  for (const m of recent) {
+    const score = (m.score || '').toUpperCase();
+    // Only counts against the player who could not continue (the loser).
+    const isRet = /\bRET\b/.test(score);
+    const isWo = /\bW\/?O\b|WALKOVER|DEF/.test(score);
+    if (m.lost && (isRet || isWo)) {
+      if (isRet) retirements++;
+      else walkovers++;
+      if (!lastIncidentDate) lastIncidentDate = String(m.date);
+    }
+  }
+
+  const lastDate = recent[0]?.date ? String(recent[0].date) : null;
+  // Measure the gap against the newest match in the DATASET, not today: if the
+  // history lags behind (a source updated weekly/monthly), "days since last
+  // match" would otherwise report the dataset's staleness as a player absence.
+  const datasetLatest = (
+    getDb().prepare('SELECT MAX(tourney_date) AS d FROM matches WHERE tour = ?').get(tour) as
+      unknown as { d: string | null }
+  ).d;
+  const load = lastDate
+    ? (
+        getDb()
+          .prepare(
+            `SELECT COUNT(*) AS c FROM matches
+             WHERE tour = ? AND (winner_id = ? OR loser_id = ?)
+               AND tourney_date < ? AND tourney_date >= ?`,
+          )
+          .get(tour, id, id, lastDate, shiftYmd(lastDate, -30)) as unknown as { c: number }
+      ).c
+    : 0;
+
+  return {
+    retirements,
+    walkovers,
+    lastIncidentDate,
+    daysSinceLastMatch: lastDate && datasetLatest ? daysBetweenYmd(lastDate, datasetLatest) : null,
+    matchesLast30Days: load,
+  };
+}
+
+/** Shift a YYYYMMDD date by N days, returning YYYYMMDD. */
+function shiftYmd(ymd: string, days: number): string {
+  const d = new Date(
+    Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8))),
+  );
+  d.setUTCDate(d.getUTCDate() + days);
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(
+    d.getUTCDate(),
+  ).padStart(2, '0')}`;
+}
+
+/** A player's record at a specific tournament (matched by name). */
+export function getTournamentHistory(
+  tour: TourId,
+  id: number,
+  tourneyName: string,
+): TournamentHistory {
+  if (!tourneyName) return { played: 0, wins: 0, losses: 0, titles: 0, finals: 0, bestRound: null };
+  const like = `%${tourneyName.toLowerCase()}%`;
+  const row = getDb()
+    .prepare(
+      `SELECT
+         COUNT(*) AS played,
+         SUM(CASE WHEN winner_id = ? THEN 1 ELSE 0 END) AS wins,
+         SUM(CASE WHEN loser_id  = ? THEN 1 ELSE 0 END) AS losses,
+         SUM(CASE WHEN winner_id = ? AND upper(round) = 'F' THEN 1 ELSE 0 END) AS titles,
+         SUM(CASE WHEN upper(round) = 'F' THEN 1 ELSE 0 END) AS finals
+       FROM matches
+       WHERE tour = ? AND lower(tourney_name) LIKE ? AND (winner_id = ? OR loser_id = ?)`,
+    )
+    .get(id, id, id, tour, like, id, id) as unknown as {
+    played: number | null;
+    wins: number | null;
+    losses: number | null;
+    titles: number | null;
+    finals: number | null;
+  };
+
+  // Deepest round reached, ordered by how far it is in a draw.
+  const ORDER = ['F', 'SF', 'QF', 'R16', 'R32', 'R64', 'R128', 'RR'];
+  const rounds = getDb()
+    .prepare(
+      `SELECT DISTINCT upper(round) AS r FROM matches
+       WHERE tour = ? AND lower(tourney_name) LIKE ? AND (winner_id = ? OR loser_id = ?)`,
+    )
+    .all(tour, like, id, id) as unknown as { r: string | null }[];
+  const best = ORDER.find((r) => rounds.some((x) => x.r === r)) ?? null;
+
+  return {
+    played: row.played ?? 0,
+    wins: row.wins ?? 0,
+    losses: row.losses ?? 0,
+    titles: row.titles ?? 0,
+    finals: row.finals ?? 0,
+    bestRound: best,
+  };
 }
 
 /** Latest official ATP/WTA ranking for a player (null if not ranked/unknown). */

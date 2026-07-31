@@ -106,6 +106,55 @@ está la probabilidad del 50%:
 
 ---
 
+## 7. Información adicional por partido
+
+Además de la probabilidad, cada predicción incluye datos derivados del historial:
+
+### Probabilidad de cada marcador (`model/scoreline.ts`)
+
+En vez de adivinar un marcador, se **deriva la distribución completa** desde la probabilidad del
+partido. Se recupera la probabilidad de ganar *un set* (`p`) invirtiendo por bisección:
+
+```
+al mejor de 3:  P(partido) = p²(3 − 2p)
+al mejor de 5:  P(partido) = p³(1 + 3(1−p) + 6(1−p)²)
+```
+
+y con esa `p` se expanden los marcadores:
+
+```
+mejor de 3:  2-0 = p²      2-1 = 2p²(1−p)
+mejor de 5:  3-0 = p³      3-1 = 3p³(1−p)      3-2 = 6p³(1−p)²
+```
+
+De ahí salen también la probabilidad de **set decisivo** y de ganar **sin ceder sets**. Las
+probabilidades suman exactamente la del partido, así que nunca contradicen el número principal.
+
+**Supuesto declarado:** los sets se tratan como independientes y de igual probabilidad. El tenis
+real tiene inercia y el orden de saque importa, así que son estimaciones bien fundadas, no
+verdades exactas.
+
+### Señales físicas (`repo.ts → getFitnessSignals`)
+
+**No existe una fuente abierta y fiable de lesiones actuales**, así que no se inventa una. En su
+lugar se muestran las huellas que las lesiones dejan en los resultados:
+
+- **Retiros (RET)** y **walkovers (W/O)** en los últimos 20 partidos (solo cuentan contra quien no
+  pudo continuar).
+- **Días sin competir** — medidos contra el partido más reciente **del dataset**, no contra hoy,
+  para no confundir la inactividad del jugador con el desfase de los datos.
+- **Carga**: partidos en los 30 días previos a su último partido.
+
+Es **evidencia, no un diagnóstico**: la app no sabe si alguien está lesionado hoy, y estas señales
+**no** entran en el cálculo de la probabilidad — se muestran para que tú las interpretes.
+
+### Historial en el torneo (`repo.ts → getTournamentHistory`)
+
+Récord, títulos, finales y mejor ronda de cada jugador en ese evento concreto. Es contexto
+informativo; tampoco alimenta la probabilidad.
+
+---
+
 ## Precisión: calibración y exactitud medida
 
 Los porcentajes se muestran con un decimal, pero **precisión mostrada ≠ exactitud**. El proyecto

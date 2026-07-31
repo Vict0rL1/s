@@ -33,6 +33,7 @@ function predictRow(row: UpcomingRow): Prediction | null {
     row.surface,
     { odds1: row.p1_odds, odds2: row.p2_odds },
     bestOf,
+    row.tournament_name || undefined,
   );
 }
 

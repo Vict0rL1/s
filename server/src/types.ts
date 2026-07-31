@@ -77,6 +77,35 @@ export interface SurfaceRecord {
   losses: number;
 }
 
+/**
+ * Physical-availability signals derived from the match history. There is no open,
+ * reliable feed of current injuries, so instead of inventing one we surface the
+ * traces injuries actually leave in results: retirements mid-match, walkovers,
+ * long absences and heavy recent workload. These are evidence, not a diagnosis.
+ */
+export interface FitnessSignals {
+  /** Retirements (RET) in the player's last 20 matches. */
+  retirements: number;
+  /** Walkovers (W/O) in the player's last 20 matches. */
+  walkovers: number;
+  /** Date of the most recent retirement/walkover, if any (YYYYMMDD). */
+  lastIncidentDate: string | null;
+  /** Days since their last match (null if unknown). Long gaps suggest absence. */
+  daysSinceLastMatch: number | null;
+  /** Matches played in the 30 days before their last match (workload). */
+  matchesLast30Days: number;
+}
+
+/** A player's record at one specific tournament. */
+export interface TournamentHistory {
+  played: number;
+  wins: number;
+  losses: number;
+  titles: number; // finals won at this event
+  finals: number;
+  bestRound: string | null;
+}
+
 /** Official ATP/WTA ranking snapshot for a player. */
 export interface OfficialRanking {
   rank: number;

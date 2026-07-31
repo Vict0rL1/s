@@ -29,14 +29,23 @@ import {
 } from './market.ts';
 import {
   getEloRank,
+  getFitnessSignals,
   getH2HMeetings,
   getPlayer,
   getRating,
   getRecentForm,
   getServeStats,
   getSurfaceRecord,
+  getTournamentHistory,
 } from '../repo.ts';
-import type { ServeStats, SurfaceRecord, TourId } from '../types.ts';
+import { scorelineDistribution, type ScorelineDistribution } from './scoreline.ts';
+import type {
+  FitnessSignals,
+  ServeStats,
+  SurfaceRecord,
+  TournamentHistory,
+  TourId,
+} from '../types.ts';
 
 const SURFACE_WEIGHT = 0.7; // weight on surface Elo vs overall Elo
 
@@ -101,6 +110,12 @@ export interface Prediction {
   market: MarketComparison;
   reasoning: Reasoning;
   expectedScore: ExpectedScore;
+  /** Probability of every possible scoreline, derived from the match probability. */
+  scorelines: ScorelineDistribution;
+  /** Retirements / absences / workload per player, from results (not a diagnosis). */
+  fitness: { p1: FitnessSignals; p2: FitnessSignals };
+  /** Each player's record at this tournament (empty when the event is unknown). */
+  tournamentHistory: { p1: TournamentHistory; p2: TournamentHistory } | null;
   summary: MatchSummary;
   verdict: {
     favoredSide: 1 | 2 | null;
@@ -215,7 +230,6 @@ function buildSummary(args: {
   p2: string;
   prob1: number;
   confidence: ConfidenceTier;
-  expected: ExpectedScore;
   surface: string;
   eff1: EffectiveRating;
   eff2: EffectiveRating;
@@ -227,8 +241,11 @@ function buildSummary(args: {
   rec1: SurfaceRecord;
   rec2: SurfaceRecord;
   market: MarketComparison;
+  scorelines: ScorelineDistribution;
+  fitness: { p1: FitnessSignals; p2: FitnessSignals };
+  tournamentHistory: { p1: TournamentHistory; p2: TournamentHistory } | null;
 }): MatchSummary {
-  const { p1, p2, prob1, confidence, expected, h2h, market } = args;
+  const { p1, p2, prob1, confidence, h2h, market } = args;
   const favIsP1 = prob1 >= 0.5;
   const fav = favIsP1 ? p1 : p2;
   const dog = favIsP1 ? p2 : p1;
@@ -239,12 +256,16 @@ function buildSummary(args: {
   const surfName = SURFACE_ES[args.surface.toLowerCase()] ?? args.surface.toLowerCase();
 
   // --- Headline ---
+  // Most likely single outcome, with its own probability — derived, not guessed.
+  const top = args.scorelines.outcomes[0];
+  const topPct = pct1(top.probability);
   const headline =
     confidence === 'toss_up'
       ? `Partido muy parejo: ligerísima ventaja para ${fav} (${favProb}%–${dogProb}%). ` +
         `Cualquiera de los dos puede ganar.`
-      : `Lo más probable: gana ${fav} (${favProb}%), ` +
-        `${expected.likelySets} en sets. ${expected.note}`;
+      : `Lo más probable: gana ${fav} (${favProb}%). ` +
+        `El marcador más probable es ${top.label} para ` +
+        `${top.side === 1 ? p1 : p2} (${topPct}%).`;
 
   const bullets: string[] = [];
 
@@ -335,6 +356,47 @@ function buildSummary(args: {
     }
   }
 
+  // --- Scoreline shape: how the match is likely to unfold ---
+  bullets.push(
+    `Probabilidad de que se vaya al set decisivo: ` +
+      `${pct1(args.scorelines.decidingSetProbability)}%; ` +
+      `de que el favorito gane sin ceder sets: ${pct1(args.scorelines.straightSetsProbability)}%.`,
+  );
+
+  // --- Tournament history ---
+  if (args.tournamentHistory) {
+    const th = favIsP1 ? args.tournamentHistory.p1 : args.tournamentHistory.p2;
+    const to = favIsP1 ? args.tournamentHistory.p2 : args.tournamentHistory.p1;
+    if (th.played > 0 || to.played > 0) {
+      const describe = (who: string, h: TournamentHistory) =>
+        h.played === 0
+          ? `${who} nunca ha jugado aquí`
+          : `${who} ${h.wins}–${h.losses}` +
+            (h.titles > 0 ? `, ${h.titles} ${h.titles === 1 ? 'título' : 'títulos'}` : '') +
+            (h.titles === 0 && h.bestRound ? `, mejor ronda ${h.bestRound}` : '');
+      bullets.push(`En este torneo: ${describe(fav, th)}; ${describe(dog, to)}.`);
+    }
+  }
+
+  // --- Physical availability (evidence from results, not a medical claim) ---
+  const fitnessNotes: string[] = [];
+  for (const [who, f] of [
+    [fav, favIsP1 ? args.fitness.p1 : args.fitness.p2],
+    [dog, favIsP1 ? args.fitness.p2 : args.fitness.p1],
+  ] as [string, FitnessSignals][]) {
+    const flags: string[] = [];
+    if (f.retirements > 0)
+      flags.push(`${f.retirements} retiro${f.retirements > 1 ? 's' : ''} en sus últimos 20 partidos`);
+    if (f.walkovers > 0) flags.push(`${f.walkovers} W/O`);
+    if (f.daysSinceLastMatch != null && f.daysSinceLastMatch > 45)
+      flags.push(`${f.daysSinceLastMatch} días sin competir`);
+    if (f.matchesLast30Days >= 12) flags.push(`carga alta (${f.matchesLast30Days} partidos en 30 días)`);
+    if (flags.length) fitnessNotes.push(`${who}: ${flags.join(', ')}`);
+  }
+  if (fitnessNotes.length) {
+    bullets.push(`Señales físicas — ${fitnessNotes.join('; ')}.`);
+  }
+
   // --- Market agreement ---
   if (market.market) {
     const marketFav = favIsP1 ? market.market.implied1 : market.market.implied2;
@@ -370,6 +432,7 @@ export function buildPrediction(
   surface: string,
   market?: { odds1: number | null; odds2: number | null } | null,
   bestOf = 3,
+  tourneyName?: string,
 ): Prediction {
   const p1 = getPlayer(tour, p1Id);
   const p2 = getPlayer(tour, p2Id);
@@ -417,6 +480,14 @@ export function buildPrediction(
 
   const confidence = confidenceTier(prob1);
   const expected = estimateScoreline(prob1, bestOf);
+  const scorelines = scorelineDistribution(prob1, bestOf);
+  const fitness = { p1: getFitnessSignals(tour, p1Id), p2: getFitnessSignals(tour, p2Id) };
+  const tournamentHistory = tourneyName
+    ? {
+        p1: getTournamentHistory(tour, p1Id, tourneyName),
+        p2: getTournamentHistory(tour, p2Id, tourneyName),
+      }
+    : null;
   const serve1 = getServeStats(tour, p1Id);
   const serve2 = getServeStats(tour, p2Id);
   const rec1 = getSurfaceRecord(tour, p1Id, surface);
@@ -426,7 +497,6 @@ export function buildPrediction(
     p2: p2Name,
     prob1,
     confidence,
-    expected,
     surface,
     eff1,
     eff2,
@@ -438,6 +508,9 @@ export function buildPrediction(
     rec1,
     rec2,
     market: marketComparison,
+    scorelines,
+    fitness,
+    tournamentHistory,
   });
 
   return {
@@ -462,6 +535,9 @@ export function buildPrediction(
     market: marketComparison,
     reasoning,
     expectedScore: expected,
+    scorelines,
+    fitness,
+    tournamentHistory,
     summary,
     verdict: {
       favoredSide,

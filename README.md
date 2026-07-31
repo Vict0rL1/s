@@ -33,6 +33,11 @@ posible *value* cuando el modelo discrepa de las cuotas.
   mercado. Ver [docs/MODEL.md](docs/MODEL.md).
 - **Resumen "qué es lo más probable"** en cada partido: en lenguaje natural, con el favorito,
   su probabilidad, el marcador probable y las razones (superficie, forma, H2H, saque, mercado).
+- **Probabilidad de cada marcador** (2-0, 3-1, …) derivada matemáticamente de la probabilidad del
+  partido, más probabilidad de set decisivo y de ganar sin ceder sets.
+- **Señales físicas** por jugador: retiros, walkovers, días sin competir y carga de partidos
+  (evidencia extraída de los resultados — no un diagnóstico médico ni una fuente de lesiones).
+- **Historial en el torneo**: récord, títulos y mejor ronda de cada jugador en ese evento.
 - **Desglose completo por partido**: explicación de *por qué* gana X (qué señal pesa más),
   ranking por Elo, últimos 5 resultados, récord en la superficie, comparativa de saque/quiebre
   (ace%, 1er saque, break points salvados) y marcador estimado.

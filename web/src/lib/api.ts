@@ -140,6 +140,38 @@ export interface MatchSummary {
   bullets: string[];
 }
 
+export interface ScorelineOutcome {
+  side: 1 | 2;
+  label: string;
+  probability: number;
+}
+
+export interface ScorelineDistribution {
+  bestOf: number;
+  setProb1: number;
+  outcomes: ScorelineOutcome[];
+  decidingSetProbability: number;
+  straightSetsProbability: number;
+}
+
+/** Physical-availability evidence from results (not a medical claim). */
+export interface FitnessSignals {
+  retirements: number;
+  walkovers: number;
+  lastIncidentDate: string | null;
+  daysSinceLastMatch: number | null;
+  matchesLast30Days: number;
+}
+
+export interface TournamentHistory {
+  played: number;
+  wins: number;
+  losses: number;
+  titles: number;
+  finals: number;
+  bestRound: string | null;
+}
+
 export interface Prediction {
   tour: string;
   surface: string;
@@ -156,6 +188,9 @@ export interface Prediction {
   market: MarketComparison;
   reasoning: Reasoning;
   expectedScore: ExpectedScore;
+  scorelines: ScorelineDistribution;
+  fitness: { p1: FitnessSignals; p2: FitnessSignals };
+  tournamentHistory: { p1: TournamentHistory; p2: TournamentHistory } | null;
   summary: MatchSummary;
   verdict: {
     favoredSide: 1 | 2 | null;

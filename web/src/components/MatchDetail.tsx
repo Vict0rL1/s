@@ -1,4 +1,4 @@
-import type { Prediction, ServeStats } from '../lib/api';
+import type { FitnessSignals, Prediction, ServeStats } from '../lib/api';
 import { pct, surfaceLabelEs, formatDate } from '../lib/format';
 import { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 
@@ -59,6 +59,9 @@ export default function MatchDetail({ prediction }: { prediction: Prediction }) 
   const { ratings, form, h2h, adjustedRatings, players, surface, market, reasoning } = prediction;
   const surfLabel = surfaceLabelEs(surface);
   const maxFactor = Math.max(50, ...reasoning.factors.map((f) => Math.abs(f.pointsForP1)));
+  // Most likely scoreline comes from the derived distribution — never a separate
+  // heuristic, which could contradict the table right above it.
+  const topOutcome = prediction.scorelines.outcomes[0];
 
   const rows: { label: string; p1: React.ReactNode; p2: React.ReactNode }[] = [
     { label: 'Elo general', p1: ratings.p1.overall, p2: ratings.p2.overall },
@@ -181,6 +184,88 @@ export default function MatchDetail({ prediction }: { prediction: Prediction }) 
         )}
       </div>
 
+      {/* Scoreline distribution — real probabilities, not a single guess */}
+      <div className="rounded-lg bg-slate-800/50 p-3">
+        <div className="mb-2 flex items-baseline justify-between">
+          <span className="text-xs uppercase tracking-wide text-slate-500">
+            Probabilidad de cada marcador
+          </span>
+          <span className="text-[10px] text-slate-500">
+            al mejor de {prediction.scorelines.bestOf}
+          </span>
+        </div>
+        <div className="space-y-1.5">
+          {prediction.scorelines.outcomes.map((o) => (
+            <div key={o.label} className="grid grid-cols-[7rem_1fr_3.5rem] items-center gap-2">
+              <span className="truncate text-xs font-medium text-slate-300" title={o.label}>
+                {(o.side === 1 ? players.p1.name : players.p2.name).split(' ').slice(-1)[0]}{' '}
+                {o.side === 1 ? o.label : o.label.split('-').reverse().join('-')}
+              </span>
+              <div className="h-3 overflow-hidden rounded bg-slate-700/50">
+                <div
+                  className="h-full rounded"
+                  style={{
+                    width: `${Math.max(1, o.probability * 100 * 2.4)}%`,
+                    backgroundColor: o.side === 1 ? P1_COLOR : P2_COLOR,
+                  }}
+                />
+              </div>
+              <span className="text-right text-xs tabular-nums text-slate-400">
+                {pct(o.probability, 1)}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 text-xs text-slate-400">
+          <span>Set decisivo: {pct(prediction.scorelines.decidingSetProbability, 1)}</span>
+          <span>Sets corridos: {pct(prediction.scorelines.straightSetsProbability, 1)}</span>
+        </div>
+      </div>
+
+      {/* Tournament history */}
+      {prediction.tournamentHistory &&
+        (prediction.tournamentHistory.p1.played > 0 ||
+          prediction.tournamentHistory.p2.played > 0) && (
+          <div className="rounded-lg bg-slate-800/50 p-3">
+            <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+              Historial en este torneo
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              {(['p1', 'p2'] as const).map((k) => {
+                const h = prediction.tournamentHistory![k];
+                const name = players[k].name;
+                return (
+                  <div key={k}>
+                    <div
+                      className="mb-0.5 font-medium"
+                      style={{ color: k === 'p1' ? P1_COLOR : P2_COLOR }}
+                    >
+                      {name}
+                    </div>
+                    {h.played === 0 ? (
+                      <div className="text-slate-500">Nunca ha jugado aquí</div>
+                    ) : (
+                      <div className="text-slate-400">
+                        {h.wins}V–{h.losses}D
+                        {h.titles > 0 && ` · ${h.titles} título${h.titles > 1 ? 's' : ''}`}
+                        {h.titles === 0 && h.bestRound && ` · mejor ronda ${h.bestRound}`}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+      {/* Physical availability signals */}
+      <FitnessBlock
+        p1Name={players.p1.name}
+        p2Name={players.p2.name}
+        f1={prediction.fitness.p1}
+        f2={prediction.fitness.p2}
+      />
+
       {/* Market + expected score */}
       <div className="rounded-lg bg-slate-800/50 p-3 text-xs">
         <div className="mb-2 uppercase tracking-wide text-slate-500">Mercado y marcador estimado</div>
@@ -201,8 +286,18 @@ export default function MatchDetail({ prediction }: { prediction: Prediction }) 
             </>
           )}
           <span className="w-full text-slate-400">
-            Marcador probable: <strong className="text-slate-200">{prediction.expectedScore.likelySets} sets</strong>{' '}
-            para {prediction.verdict.favoredName ?? '—'} — {prediction.expectedScore.note}
+            Marcador más probable:{' '}
+            <strong className="text-slate-200">
+              {topOutcome
+                ? `${topOutcome.side === 1 ? players.p1.name : players.p2.name} ${
+                    topOutcome.side === 1
+                      ? topOutcome.label
+                      : topOutcome.label.split('-').reverse().join('-')
+                  }`
+                : '—'}
+            </strong>{' '}
+            ({topOutcome ? pct(topOutcome.probability, 1) : '—'}) · set decisivo{' '}
+            {pct(prediction.scorelines.decidingSetProbability, 1)}
           </span>
         </div>
       </div>
@@ -236,6 +331,63 @@ function FormBox({
       <div className="text-xs text-slate-400">Racha: {streakTxt}</div>
       <div className="text-xs text-slate-400">
         En superficie: {rec.wins}V–{rec.losses}D
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Physical availability. These are traces injuries leave in results (retirements,
+ * walkovers, absences, workload) — evidence, not a medical report. Labelled that
+ * way so nobody reads it as "player X is injured".
+ */
+function FitnessBlock({
+  p1Name,
+  p2Name,
+  f1,
+  f2,
+}: {
+  p1Name: string;
+  p2Name: string;
+  f1: FitnessSignals;
+  f2: FitnessSignals;
+}) {
+  const describe = (f: FitnessSignals) => {
+    const items: string[] = [];
+    if (f.retirements > 0) items.push(`${f.retirements} retiro${f.retirements > 1 ? 's' : ''}`);
+    if (f.walkovers > 0) items.push(`${f.walkovers} W/O`);
+    if (f.daysSinceLastMatch != null) items.push(`${f.daysSinceLastMatch} días sin jugar`);
+    items.push(`${f.matchesLast30Days} partidos en 30 días`);
+    return items;
+  };
+
+  return (
+    <div className="rounded-lg bg-slate-800/50 p-3">
+      <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">
+        Señales físicas (de resultados, no diagnóstico)
+      </div>
+      <p className="mb-2 text-[10px] leading-snug text-slate-500">
+        Retiros, ausencias y carga de partidos. No existe una fuente abierta de lesiones actuales;
+        esto son las huellas que dejan en los resultados.
+      </p>
+      <div className="grid grid-cols-2 gap-4 text-xs">
+        {(
+          [
+            [p1Name, f1, P1_COLOR],
+            [p2Name, f2, P2_COLOR],
+          ] as [string, FitnessSignals, string][]
+        ).map(([name, f, color]) => (
+          <div key={name}>
+            <div className="mb-0.5 font-medium" style={{ color }}>
+              {name}
+            </div>
+            <ul className="text-slate-400">
+              {describe(f).map((t, i) => (
+                <li key={i}>{t}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
     </div>
   );
