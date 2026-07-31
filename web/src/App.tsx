@@ -154,6 +154,16 @@ export default function App() {
             </button>
           ))}
         </div>
+      ) : meta && meta.counts.matches === 0 ? (
+        <div className="mb-6 rounded-lg border border-rose-800/60 bg-rose-950/40 p-4 text-sm text-rose-200">
+          <p className="font-medium">La base de datos está vacía.</p>
+          <p className="mt-1 text-rose-300/90">
+            Ejecuta <code className="rounded bg-rose-900/40 px-1">npm run update-data</code> para
+            descargar el historial real, o{' '}
+            <code className="rounded bg-rose-900/40 px-1">npm run seed</code> para ver la app con
+            datos de ejemplo.
+          </p>
+        </div>
       ) : (
         <p className="mb-6 text-sm text-slate-500">
           No hay próximos partidos para {tour.toUpperCase()}.
@@ -234,6 +244,18 @@ function RefreshInfo({ meta }: { meta: Meta }) {
 }
 
 function DataBadge({ meta }: { meta: Meta }) {
+  // An empty database must never read as "datos reales" — that's how a failed
+  // ingest ends up looking like a working install with nothing in it.
+  if (meta.counts.matches === 0) {
+    return (
+      <span
+        className="rounded-full bg-rose-900/40 px-3 py-1 text-xs font-medium text-rose-300 ring-1 ring-rose-500/40"
+        title="La base de datos está vacía. Ejecuta npm run update-data (o npm run seed)."
+      >
+        sin datos
+      </span>
+    );
+  }
   const isSeed = meta.dataSource === 'seed';
   return (
     <span

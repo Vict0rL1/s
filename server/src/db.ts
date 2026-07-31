@@ -21,6 +21,7 @@ export function getDb(): DatabaseSync {
   db.exec('PRAGMA busy_timeout = 5000;');
   db.exec('PRAGMA foreign_keys = ON;');
   createSchema(db);
+  migrateSchema(db);
   return db;
 }
 
@@ -109,6 +110,44 @@ function createSchema(d: DatabaseSync): void {
       value TEXT
     );
   `);
+}
+
+/**
+ * Bring an existing database up to the current schema.
+ *
+ * `CREATE TABLE IF NOT EXISTS` does nothing to a table that already exists, so a
+ * database created by an earlier version keeps its old columns. Ingestion then
+ * wipes the rows and fails on the first INSERT ("table matches has no column
+ * named …"), leaving an empty database. Adding the missing columns here means an
+ * upgrade never needs the user to delete their data by hand.
+ */
+function migrateSchema(d: DatabaseSync): void {
+  const columnsOf = (table: string): Set<string> => {
+    try {
+      const rows = d.prepare(`PRAGMA table_info(${table})`).all() as unknown as { name: string }[];
+      return new Set(rows.map((r) => r.name));
+    } catch {
+      return new Set();
+    }
+  };
+
+  // table -> column -> definition
+  const wanted: Record<string, Record<string, string>> = {
+    matches: {
+      winner_rank: 'INTEGER',
+      loser_rank: 'INTEGER',
+    },
+  };
+
+  for (const [table, cols] of Object.entries(wanted)) {
+    const existing = columnsOf(table);
+    if (existing.size === 0) continue; // table not created yet — schema handles it
+    for (const [col, def] of Object.entries(cols)) {
+      if (!existing.has(col)) {
+        d.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def};`);
+      }
+    }
+  }
 }
 
 export function setMeta(key: string, value: string): void {
