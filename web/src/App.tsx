@@ -59,7 +59,7 @@ export default function App() {
         sport's identity colour appears — data marks use the shared, validated
         palette, so a blue bar means "home" on every tab.
       */}
-      <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#0a0f1e]/85 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#0b0d11]/85 backdrop-blur-xl">
         <div className="mx-auto max-w-3xl px-4">
           <div className="flex items-center gap-3 pb-1 pt-4">
             <span
@@ -70,10 +70,10 @@ export default function App() {
               {theme.emoji}
             </span>
             <div className="min-w-0">
-              <h1 className="truncate text-[15px] font-semibold leading-tight text-slate-100">
+              <h1 className="truncate text-[15px] font-semibold leading-tight text-[#e8eaed]">
                 Sports Predictor
               </h1>
-              <p className="truncate text-[11px] leading-tight text-slate-500">
+              <p className="truncate text-[11px] leading-tight text-[#7b828d]">
                 Modelos explicables, medidos contra resultados reales
               </p>
             </div>
@@ -90,7 +90,7 @@ export default function App() {
                   aria-selected={active}
                   onClick={() => setSport(id)}
                   className={`relative shrink-0 rounded-t-lg px-3 py-2.5 text-[13px] font-medium transition ${
-                    active ? 'text-slate-100' : 'text-slate-500 hover:text-slate-300'
+                    active ? 'text-[#e8eaed]' : 'text-[#7b828d] hover:text-[#c3c9d1]'
                   }`}
                 >
                   <span className="mr-1.5" aria-hidden>
@@ -118,7 +118,7 @@ export default function App() {
       </main>
 
       <footer className="mx-auto max-w-3xl px-4 pb-10">
-        <p className="border-t border-white/[0.07] pt-4 text-[11px] leading-relaxed text-slate-500">
+        <p className="border-t border-white/[0.07] pt-4 text-[11px] leading-relaxed text-[#7b828d]">
           Estimación estadística. Cada modelo se mide contra resultados reales y la app registra sus
           propios aciertos, pero ninguno conoce las lesiones de última hora, el clima ni la
           motivación. No es una recomendación para apostar.

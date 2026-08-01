@@ -76,22 +76,22 @@ export default function RunMatrix({ prediction }: { prediction: BsbPrediction })
       </div>
 
       <div className="mt-2 grid grid-cols-2 gap-2 text-center text-[11px]">
-        <div className="rounded bg-slate-900/50 px-1 py-1.5">
+        <div className="rounded bg-white/[0.03] px-1 py-1.5">
           <div className="mx-auto mb-1 h-1 w-8 rounded" style={{ backgroundColor: HOME_COLOR }} />
-          <div className="truncate text-slate-400" title={home.name}>Gana {home.name}</div>
-          <div className="font-semibold tabular-nums text-slate-100">
+          <div className="truncate text-[#9aa1ac]" title={home.name}>Gana {home.name}</div>
+          <div className="font-semibold tabular-nums text-[#e8eaed]">
             {(prediction.model.home * 100).toFixed(1)}%
           </div>
         </div>
-        <div className="rounded bg-slate-900/50 px-1 py-1.5">
+        <div className="rounded bg-white/[0.03] px-1 py-1.5">
           <div className="mx-auto mb-1 h-1 w-8 rounded" style={{ backgroundColor: AWAY_COLOR }} />
-          <div className="truncate text-slate-400" title={away.name}>Gana {away.name}</div>
-          <div className="font-semibold tabular-nums text-slate-100">
+          <div className="truncate text-[#9aa1ac]" title={away.name}>Gana {away.name}</div>
+          <div className="font-semibold tabular-nums text-[#e8eaed]">
             {(prediction.model.away * 100).toFixed(1)}%
           </div>
         </div>
       </div>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+      <p className="mt-1.5 text-[11px] leading-relaxed text-[#7b828d]">
         La diagonal está vacía porque un marcador final nunca queda empatado: esa probabilidad
         ({(extraInnings * 100).toFixed(1)}%, las entradas extra) ya está repartida en las casillas de
         una carrera de diferencia.
@@ -114,7 +114,7 @@ function Cell({
     return (
       <td
         title={title}
-        className="rounded bg-slate-900/60 px-0.5 py-1 text-slate-700"
+        className="rounded bg-white/[0.03] px-0.5 py-1 text-[#5c636c]"
         aria-label="imposible: empate"
       >
         ×
@@ -126,7 +126,7 @@ function Cell({
   return (
     <td
       title={title}
-      className={`rounded px-0.5 py-1 ${top ? 'ring-1 ring-slate-200/70' : ''}`}
+      className={`rounded px-0.5 py-1 ${top ? 'ring-1 ring-white/40' : ''}`}
       style={{
         backgroundColor: withAlpha(color, strength * 0.85),
         color: inkOn(strength),
@@ -154,8 +154,8 @@ function Margins({
   const peak = Math.max(...shown.map((m) => m.probability));
   const edge = Math.max(...shown.map((m) => Math.abs(m.margin)));
   return (
-    <div className="mt-3 border-t border-slate-700/50 pt-2">
-      <div className="mb-1.5 text-xs uppercase tracking-wide text-slate-500">
+    <div className="mt-3 border-t border-white/[0.07] pt-2">
+      <div className="mb-1.5 text-xs uppercase tracking-wide text-[#7b828d]">
         Diferencia de carreras
       </div>
       <div className="space-y-0.5">
@@ -164,10 +164,10 @@ function Margins({
           const label = `${m.margin > 0 ? homeName : awayName} por ${Math.abs(m.margin)}${atEdge ? ' o más' : ''}`;
           return (
             <div key={m.margin} className="flex items-center gap-2 text-[11px]">
-              <span className="w-9 text-right tabular-nums text-slate-300">
+              <span className="w-9 text-right tabular-nums text-[#c3c9d1]">
                 {atEdge ? `${m.margin > 0 ? '≥+' : '≤−'}${edge}` : m.margin > 0 ? `+${m.margin}` : m.margin}
               </span>
-              <div className="h-2 flex-1 overflow-hidden rounded bg-slate-700/40">
+              <div className="h-2 flex-1 overflow-hidden rounded bg-white/[0.06]">
                 <div
                   className="h-full rounded"
                   style={{
@@ -177,14 +177,14 @@ function Margins({
                   title={`${label}: ${(m.probability * 100).toFixed(1)}%`}
                 />
               </div>
-              <span className="w-11 text-right tabular-nums text-slate-400">
+              <span className="w-11 text-right tabular-nums text-[#9aa1ac]">
                 {(m.probability * 100).toFixed(1)}%
               </span>
             </div>
           );
         })}
       </div>
-      <p className="mt-1.5 text-[11px] text-slate-500">
+      <p className="mt-1.5 text-[11px] text-[#7b828d]">
         La línea de carreras se juega a ±1.5, así que todo lo que sea ganar por una carrera —el
         margen más frecuente del béisbol— no cubre.
       </p>

@@ -11,6 +11,8 @@ import {
   ProbabilityBar,
   ReliabilityChip,
   SectionTitle,
+  SeriesDot,
+  StatRow,
   StatTile,
 } from '../ui';
 import GameDetail from './GameDetail';
@@ -49,7 +51,7 @@ export default function GameCard({
 
   return (
     <Card as="article" className="p-4">
-      <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+      <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-[#7b828d]">
         <time>{formatDateTime(game.commence_time)}</time>
         <div className="flex items-center gap-1.5">
           {prediction?.neutral && <Badge>cancha neutral</Badge>}
@@ -67,7 +69,7 @@ export default function GameCard({
           record={prediction?.teams.away.record ?? teams.away?.record ?? null}
           onClick={game.away_id ? () => onOpenTeam(game.league, game.away_id!) : undefined}
         />
-        <span className="shrink-0 pt-1 text-[11px] font-medium text-slate-600">@</span>
+        <span className="shrink-0 pt-1 text-[11px] font-medium text-[#5c636c]">@</span>
         <TeamName
           name={prediction?.teams.home.name ?? game.home_name}
           color={HOME_COLOR}
@@ -107,7 +109,7 @@ export default function GameCard({
           </div>
           {prediction.market.market && (
             <div className="mt-1.5">
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.06em] text-slate-500">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
                 Mercado, sin vig
               </div>
               <ProbabilityBar
@@ -123,7 +125,7 @@ export default function GameCard({
           {/* The numbers a basketball bettor looks at — as probabilities now, not
               just point estimates. A spread with no likelihood attached invites
               the reader to treat it as a certainty. */}
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatRow className="mt-3">
             <StatTile
               label="Diferencia"
               value={prediction.projection.spreadLabel}
@@ -157,7 +159,7 @@ export default function GameCard({
                   : undefined
               }
             />
-          </div>
+          </StatRow>
 
           <div className="mt-3">
             <SectionTitle right="σ 11.7 puntos, medida">Por cuánto gana</SectionTitle>
@@ -179,17 +181,17 @@ export default function GameCard({
                   />
                 ))}
             </div>
-            <p className="mt-1.5 text-[11px] text-slate-500">
+            <p className="mt-1.5 text-[11px] text-[#7b828d]">
               Positivo = gana el local. La barra más larga es el resultado más probable, no el único.
             </p>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-3">
-            <p className="min-w-0 text-[13px] leading-snug text-slate-300">
+            <p className="min-w-0 text-[13px] leading-snug text-[#c3c9d1]">
               {prediction.verdict.favored ? (
                 <>
                   El modelo favorece a{' '}
-                  <strong className="font-semibold text-slate-100">
+                  <strong className="font-semibold text-[#e8eaed]">
                     {prediction.verdict.favoredName}
                   </strong>
                 </>
@@ -224,8 +226,8 @@ export default function GameCard({
                   <SectionTitle>Lectura completa</SectionTitle>
                   <ul className="space-y-1.5">
                     {prediction.summary.bullets.map((b, i) => (
-                      <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-slate-400">
-                        <span aria-hidden className="text-slate-600">•</span>
+                      <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-[#9aa1ac]">
+                        <span aria-hidden className="text-[#5c636c]">•</span>
                         <span>{b}</span>
                       </li>
                     ))}
@@ -259,18 +261,21 @@ function TeamName({
 }) {
   return (
     <div className={`min-w-0 flex-1 ${alignRight ? 'text-right' : ''}`}>
-      <button
-        onClick={onClick}
-        disabled={!onClick}
-        className={`max-w-full truncate text-[15px] font-semibold leading-tight ${
-          onClick ? 'hover:underline' : 'cursor-default'
-        }`}
-        style={{ color }}
-        title={onClick ? 'Ver ficha del equipo' : name}
-      >
-        {name}
-      </button>
-      <div className="truncate text-[11px] text-slate-500">
+      <span className={`flex items-center gap-1.5 ${alignRight ? 'justify-end' : ''}`}>
+        {!alignRight && <SeriesDot color={color} />}
+        <button
+          onClick={onClick}
+          disabled={!onClick}
+          className={`max-w-full truncate text-[15px] font-semibold leading-tight text-[#e8eaed] ${
+            onClick ? 'hover:underline' : 'cursor-default'
+          }`}
+          title={onClick ? 'Ver ficha del equipo' : name}
+        >
+          {name}
+        </button>
+        {alignRight && <SeriesDot color={color} />}
+      </span>
+      <div className="truncate text-[11px] text-[#7b828d]">
         {homeBadge && 'local · '}
         {elo != null && (
           <>

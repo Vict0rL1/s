@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SkeletonList } from '../ui';
+import { pillClass, SkeletonList } from '../ui';
 import {
   bsbApi,
   type BsbGameWithPrediction,
@@ -93,7 +93,7 @@ export default function BaseballDashboard() {
     <div>
       <header className="mb-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-prose text-[13px] leading-relaxed text-slate-400">
+          <p className="max-w-prose text-[13px] leading-relaxed text-[#9aa1ac]">
             Predicción con Elo por equipo, ventaja de campo, el <strong>lanzador abridor</strong> y
             una distribución de carreras que produce ganador, total y línea de una sola vez.
           </p>
@@ -101,7 +101,7 @@ export default function BaseballDashboard() {
             onClick={handleRefresh}
             disabled={refreshing}
             title="Vuelve a consultar los partidos próximos, sus cuotas y los abridores anunciados"
-            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-slate-200 ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
           >
             {refreshing ? 'Actualizando…' : '↻ Actualizar'}
           </button>
@@ -124,11 +124,7 @@ export default function BaseballDashboard() {
               key={l.id}
               onClick={() => setLeague(l.id)}
               title={l.label}
-              className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
-                league === l.id
-                  ? 'bg-white/[0.14] text-slate-100 ring-1 ring-inset ring-white/20'
-                  : 'bg-white/[0.04] text-slate-400 ring-1 ring-inset ring-white/[0.06] hover:bg-white/[0.08] hover:text-slate-200'
-              }`}
+              className={pillClass(league === l.id)}
             >
               {l.name}
               {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
@@ -137,7 +133,7 @@ export default function BaseballDashboard() {
           ))}
         </div>
       ) : (
-        <div className="mb-6 rounded-2xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[13px] text-rose-200">
+        <div className="mb-6 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[13px] text-rose-200">
           <p className="font-medium">No hay datos de béisbol todavía.</p>
           <p className="mt-1 text-rose-300/90">
             Ejecuta <code className="rounded bg-rose-900/40 px-1">npm run update-data:bsb</code> para
@@ -158,7 +154,7 @@ export default function BaseballDashboard() {
       {loading ? (
         <SkeletonList />
       ) : games.length === 0 ? (
-        <p className="mb-6 text-sm text-slate-500">
+        <p className="mb-6 text-sm text-[#7b828d]">
           No hay partidos próximos para {activeLeague?.name ?? 'esta liga'}.
         </p>
       ) : (
@@ -170,24 +166,24 @@ export default function BaseballDashboard() {
       )}
 
       {power.length > 0 && (
-        <div className="mt-8 rounded-2xl border border-white/[0.07] bg-slate-900/70 p-4">
+        <div className="mt-8 rounded-xl border border-white/[0.07] bg-[#14161b] p-4">
           <button
             onClick={() => setShowTeams((s) => !s)}
             className="flex w-full items-center justify-between text-left"
           >
             <span>
-              <span className="text-xs uppercase tracking-wide text-slate-500">
+              <span className="text-xs uppercase tracking-wide text-[#7b828d]">
                 Todos los equipos · {activeLeague?.name}
               </span>
               <br />
-              <span className="text-sm text-slate-200">{power.length} equipos ordenados por Elo</span>
+              <span className="text-sm text-[#d5d9df]">{power.length} equipos ordenados por Elo</span>
             </span>
-            <span className="text-xs text-sky-400">{showTeams ? '▲' : '▼'}</span>
+            <span className="text-xs text-[#5c636c]">{showTeams ? '▲' : '▼'}</span>
           </button>
           {showTeams && (
-            <div className="mt-3 overflow-x-auto border-t border-slate-700/60 pt-3">
+            <div className="mt-3 overflow-x-auto border-t border-white/[0.07] pt-3">
               <table className="w-full text-left text-xs tabular-nums">
-                <thead className="text-slate-500">
+                <thead className="text-[#7b828d]">
                   <tr>
                     <th className="py-1 pr-2">#</th>
                     <th className="py-1 pr-2">Equipo</th>
@@ -199,20 +195,20 @@ export default function BaseballDashboard() {
                 </thead>
                 <tbody>
                   {power.map((t, i) => (
-                    <tr key={t.id} className="border-t border-slate-700/40">
-                      <td className="py-1 pr-2 text-slate-500">{i + 1}</td>
+                    <tr key={t.id} className="border-t border-white/[0.07]">
+                      <td className="py-1 pr-2 text-[#7b828d]">{i + 1}</td>
                       <td className="py-1 pr-2">
                         <button
-                          className="text-slate-200 hover:underline"
+                          className="text-[#d5d9df] hover:underline"
                           onClick={() => setTeam({ league: league!, id: t.id })}
                         >
                           {t.name ?? t.id}
                         </button>
                       </td>
-                      <td className="py-1 pr-2 text-right text-slate-200">{Math.round(t.elo)}</td>
-                      <td className="py-1 pr-2 text-right text-slate-400">{t.rs ?? '—'}</td>
-                      <td className="py-1 pr-2 text-right text-slate-400">{t.ra ?? '—'}</td>
-                      <td className="py-1 text-right text-slate-500">{t.games}</td>
+                      <td className="py-1 pr-2 text-right text-[#d5d9df]">{Math.round(t.elo)}</td>
+                      <td className="py-1 pr-2 text-right text-[#9aa1ac]">{t.rs ?? '—'}</td>
+                      <td className="py-1 pr-2 text-right text-[#9aa1ac]">{t.ra ?? '—'}</td>
+                      <td className="py-1 text-right text-[#7b828d]">{t.games}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -230,7 +226,7 @@ export default function BaseballDashboard() {
 function DataLine({ meta }: { meta: BsbMeta }) {
   const real = meta.dataSource === 'retrosheet';
   return (
-    <div className="mt-2 space-y-1 text-xs text-slate-500">
+    <div className="mt-2 space-y-1 text-xs text-[#7b828d]">
       <p>
         <span
           className={`rounded px-1.5 py-0.5 ${
@@ -285,8 +281,8 @@ function TrackRecordPanel({ league }: { league: string }) {
   return (
     <div className="mt-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 text-[12px]">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between">
-        <span className="text-slate-300">
-          <span className="uppercase tracking-wide text-slate-500">Cómo va acertando</span>{' '}
+        <span className="text-[#c3c9d1]">
+          <span className="uppercase tracking-wide text-[#7b828d]">Cómo va acertando</span>{' '}
           {rec.resolved > 0 ? (
             <>
               — {rec.resolved} predicciones resueltas
@@ -297,10 +293,10 @@ function TrackRecordPanel({ league }: { league: string }) {
             <>— {rec.pending} pendientes de jugarse</>
           )}
         </span>
-        <span className="text-sky-400">{open ? '▲' : '▼'}</span>
+        <span className="text-[#5c636c]">{open ? '▲' : '▼'}</span>
       </button>
       {open && rec.resolved > 0 && (
-        <div className="mt-2 space-y-2 border-t border-slate-700/60 pt-2 text-slate-300">
+        <div className="mt-2 space-y-2 border-t border-white/[0.07] pt-2 text-[#c3c9d1]">
           {rec.totalMae != null && (
             <p>
               Error del total de carreras: {rec.totalMae.toFixed(2)}
@@ -311,7 +307,7 @@ function TrackRecordPanel({ league }: { league: string }) {
           )}
           {rec.byStarterKnown.length > 0 && (
             <div>
-              <div className="text-slate-500">Según se supieran los abridores:</div>
+              <div className="text-[#7b828d]">Según se supieran los abridores:</div>
               {rec.byStarterKnown.map((b) => (
                 <div key={String(b.known)} className="flex justify-between">
                   <span>{b.known ? 'anunciados' : 'estimados'} ({b.n})</span>
@@ -330,7 +326,7 @@ function TrackRecordPanel({ league }: { league: string }) {
               {rec.vsMarket.marketBrier?.toFixed(4) ?? '—'}
             </p>
           )}
-          <p className="text-slate-500">
+          <p className="text-[#7b828d]">
             Solo cuenta lo que la app dijo ANTES de cada partido y nunca se reescribe.
           </p>
         </div>
@@ -347,22 +343,22 @@ function TeamProfile({ league, id, onClose }: { league: string; id: string; onCl
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4"
       onClick={onClose}
     >
       <div
-        className="mt-8 w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4"
+        className="mt-8 w-full max-w-lg rounded-xl border border-white/[0.07] bg-[#14161b] p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between">
-          <h3 className="text-lg font-semibold text-slate-100">{info?.name ?? 'Cargando…'}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200">✕</button>
+          <h3 className="text-lg font-semibold text-[#e8eaed]">{info?.name ?? 'Cargando…'}</h3>
+          <button onClick={onClose} className="text-[#9aa1ac] hover:text-[#d5d9df]">✕</button>
         </div>
         {!info ? (
-          <p className="text-sm text-slate-500">Cargando ficha…</p>
+          <p className="text-sm text-[#7b828d]">Cargando ficha…</p>
         ) : (
           <div className="space-y-4 text-sm">
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-white/[0.07] py-3 text-xs">
               <Stat label="Elo" value={`${Math.round(info.elo)} (#${info.eloRank})`} />
               <Stat label="Balance" value={`${info.record.wins}-${info.record.losses}`} />
               <Stat label="En casa" value={`${info.homeRecord.wins}-${info.homeRecord.losses}`} />
@@ -379,9 +375,9 @@ function TeamProfile({ league, id, onClose }: { league: string; id: string; onCl
 
             {info.rotation.length > 0 && (
               <div>
-                <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">Rotación</div>
+                <div className="mb-1 text-xs uppercase tracking-wide text-[#7b828d]">Rotación</div>
                 <table className="w-full text-left text-xs tabular-nums">
-                  <thead className="text-slate-500">
+                  <thead className="text-[#7b828d]">
                     <tr>
                       <th className="py-1 pr-2">Lanzador</th>
                       <th className="py-1 pr-2 text-right">Aperturas</th>
@@ -393,10 +389,10 @@ function TeamProfile({ league, id, onClose }: { league: string; id: string; onCl
                   </thead>
                   <tbody>
                     {info.rotation.map((p) => (
-                      <tr key={p.id} className="border-t border-slate-700/40">
-                        <td className="py-1 pr-2 text-slate-200">{p.name}</td>
-                        <td className="py-1 pr-2 text-right text-slate-400">{p.starts}</td>
-                        <td className="py-1 pr-2 text-right text-slate-400">{p.runsPer9 ?? '—'}</td>
+                      <tr key={p.id} className="border-t border-white/[0.07]">
+                        <td className="py-1 pr-2 text-[#d5d9df]">{p.name}</td>
+                        <td className="py-1 pr-2 text-right text-[#9aa1ac]">{p.starts}</td>
+                        <td className="py-1 pr-2 text-right text-[#9aa1ac]">{p.runsPer9 ?? '—'}</td>
                         <td
                           className="py-1 text-right"
                           style={{ color: (p.rating ?? 1) <= 1 ? '#34d399' : '#fb7185' }}
@@ -414,13 +410,13 @@ function TeamProfile({ league, id, onClose }: { league: string; id: string; onCl
 
             {info.form.length > 0 && (
               <div>
-                <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">
+                <div className="mb-1 text-xs uppercase tracking-wide text-[#7b828d]">
                   Últimos partidos
                 </div>
                 <ul className="space-y-1 text-xs">
                   {info.form.map((f, i) => (
-                    <li key={i} className="flex justify-between text-slate-300">
-                      <span className="text-slate-500">{formatDate(f.date)}</span>
+                    <li key={i} className="flex justify-between text-[#c3c9d1]">
+                      <span className="text-[#7b828d]">{formatDate(f.date)}</span>
                       <span>
                         {f.home ? 'vs' : '@'} {f.opponentName ?? f.opponentId}{' '}
                         <span className={f.result === 'W' ? 'text-emerald-400' : 'text-rose-400'}>
@@ -441,9 +437,9 @@ function TeamProfile({ league, id, onClose }: { league: string; id: string; onCl
 
 function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="rounded bg-slate-800/60 p-2" title={hint}>
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="font-semibold text-slate-100">{value}</div>
+    <div className="min-w-0" title={hint}>
+      <div className="text-[10px] uppercase tracking-wide text-[#7b828d]">{label}</div>
+      <div className="font-semibold text-[#e8eaed]">{value}</div>
     </div>
   );
 }

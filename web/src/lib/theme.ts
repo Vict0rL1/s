@@ -26,9 +26,61 @@
 //
 // Home is blue and away is orange in every sport now, which also means the colour
 // means the same thing when you switch tabs.
+//
+// A softer, more muted trio was tried and rejected: it passed too, but with less
+// room (CVD ΔE 8.2 against 9.4, normal vision 17.8 against 20.9). Trading safety
+// margin for a slightly calmer look is the wrong trade when the whole point of
+// the colour is telling two teams apart. What DOES make it calmer, without
+// costing anything, is using less of it — see the note on ink below.
 
-/** The chart surface these colours were validated against. */
-export const SURFACE = '#131a2a';
+/**
+ * THE RULE FOR TEXT: a number is never painted in a series colour.
+ *
+ * Values, labels and legends wear ink; a small coloured chip beside them carries
+ * the identity. The card used to render a 28px probability in full-saturation
+ * blue and another in full-saturation orange, which is a lot of shouting for two
+ * figures that are simply "the answer" — and it makes the number harder to read
+ * than plain white would. Colour marks WHO; ink states WHAT.
+ */
+export const INK = {
+  primary: '#e8eaed',
+  secondary: '#9aa1ac',
+  muted: '#7b828d',
+} as const;
+
+/**
+ * The neutral ramp, as Tailwind classes.
+ *
+ * Six steps, and every one of them is a true grey. The app used to write text in
+ * Tailwind's `slate`, which is a blue-tinted grey: on a blue-black page with a
+ * blue "home" series, that put a third, weaker blue on screen competing with the
+ * two that carry meaning. Neutral text lets the only hue in the interface be the
+ * data.
+ */
+export const TEXT = {
+  /** Headlines and the answer itself. */
+  strong: 'text-[#e8eaed]',
+  /** Body copy. */
+  body: 'text-[#c3c9d1]',
+  /** Secondary figures, hints under a value. */
+  soft: 'text-[#9aa1ac]',
+  /** Labels, captions, timestamps. */
+  muted: 'text-[#7b828d]',
+  /** Separators, "—" placeholders. Barely there on purpose. */
+  faint: 'text-[#5c636c]',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Surfaces
+// ---------------------------------------------------------------------------
+// Near-neutral, not navy. The page used to be #0a0f1e, a distinctly blue black,
+// which put a hue on every pixel and left the data colours competing with the
+// background instead of standing out of it. A near-neutral surface means the
+// only hue on screen belongs to the data.
+export const SURFACE_PAGE = '#0b0d11';
+export const SURFACE_CARD = '#14161b';
+/** The surface the categorical palette was validated against. */
+export const SURFACE = SURFACE_CARD;
 
 // ---------------------------------------------------------------------------
 // Data colours — categorical, shared by all four sports

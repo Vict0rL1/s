@@ -6,11 +6,23 @@
 // share; anything sport-specific composes them rather than restyling from scratch.
 
 import { useState, type ReactNode } from 'react';
-import { RELIABILITY_STYLE } from '../../lib/theme';
+import { INK, RELIABILITY_STYLE } from '../../lib/theme';
 
 // ---------------------------------------------------------------------------
 // Surfaces
 // ---------------------------------------------------------------------------
+// ONE surface level, ONE radius.
+//
+// The card used to be a box (rounded-2xl, border, inset highlight, drop shadow)
+// holding panels that were boxes (rounded-xl, fill, inset ring) holding stat tiles
+// that were boxes (rounded-xl, fill, inset ring). Three nested rectangles, each
+// with its own edge, around numbers that a rule and some space would have grouped
+// just as clearly. Every edge is ink the reader has to look past to reach the data.
+//
+// So: the card is the only filled box on the page. Inside it, sections are
+// separated by a hairline and whitespace — which is what a printed table does.
+
+/** The one box. Everything inside it is flat. */
 export function Card({
   children,
   className = '',
@@ -21,20 +33,21 @@ export function Card({
   as?: 'div' | 'article' | 'section';
 }) {
   return (
-    <As
-      className={`rounded-2xl border border-white/[0.07] bg-slate-900/70 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_8px_24px_-12px_rgba(0,0,0,0.6)] ${className}`}
-    >
+    <As className={`rounded-xl border border-white/[0.07] bg-[#14161b] ${className}`}>
       {children}
     </As>
   );
 }
 
-/** A recessive panel INSIDE a card, for a breakdown section. */
+/**
+ * A section INSIDE a card.
+ *
+ * A rule above and space below — no fill, no ring, no radius. Stacked sections
+ * read as one sheet divided into parts, instead of a pile of trays.
+ */
 export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-xl bg-white/[0.03] p-3 ring-1 ring-inset ring-white/[0.05] ${className}`}>
-      {children}
-    </section>
+    <section className={`border-t border-white/[0.07] pt-3 ${className}`}>{children}</section>
   );
 }
 
@@ -42,10 +55,10 @@ export function Panel({ children, className = '' }: { children: ReactNode; class
 export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
     <div className="mb-2 flex items-baseline justify-between gap-3">
-      <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+      <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
         {children}
       </h4>
-      {right && <span className="text-[11px] text-slate-500">{right}</span>}
+      {right && <span className="text-[11px] text-[#7b828d]">{right}</span>}
     </div>
   );
 }
@@ -56,8 +69,16 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
 /**
  * The headline number of a card.
  *
- * Deliberately not a chart: one probability with a label under it is a stat tile,
- * and turning it into a bar or a donut would add ink without adding information.
+ * The value is INK, never the series colour — a 28px probability in
+ * full-saturation blue next to another in full-saturation orange is a lot of
+ * shouting for two figures that are simply "the answer", and a saturated hue is
+ * harder to read at that weight than plain light grey. The colour still appears,
+ * as a 6px dot in front of the label: enough to say WHICH side this is, which is
+ * all the colour was ever needed for. The bar underneath carries the same two
+ * colours at the size where they actually do work.
+ *
+ * Deliberately not a chart: one probability with a label is a figure, and turning
+ * it into a donut would add ink without adding information.
  */
 export function HeroStat({
   value,
@@ -65,27 +86,58 @@ export function HeroStat({
   sub,
   color,
   align = 'left',
+  size = 'lg',
 }: {
   value: string;
   label: string;
   sub?: string;
   color: string;
-  align?: 'left' | 'right';
+  align?: 'left' | 'center' | 'right';
+  size?: 'lg' | 'sm';
 }) {
+  const box = align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : '';
+  const row =
+    align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start';
   return (
-    <div className={align === 'right' ? 'text-right' : ''}>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-        {label}
+    <div className={box}>
+      {/* The dot sits on the outside edge: leading on the left column, trailing on
+          the right one, so the two labels mirror instead of both pointing left. */}
+      <div className={`flex items-center gap-1.5 ${row}`}>
+        {align !== 'right' && <SeriesDot color={color} />}
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
+          {label}
+        </span>
+        {align === 'right' && <SeriesDot color={color} />}
       </div>
-      <div className="text-[28px] font-bold leading-none tabular-nums" style={{ color }}>
+      <div
+        className={`mt-1 font-bold leading-none tabular-nums ${size === 'lg' ? 'text-[28px]' : 'text-xl'}`}
+        style={{ color: INK.primary }}
+      >
         {value}
       </div>
-      {sub && <div className="mt-1 text-[11px] tabular-nums text-slate-400">{sub}</div>}
+      {sub && <div className="mt-1 text-[11px] tabular-nums text-[#9aa1ac]">{sub}</div>}
     </div>
   );
 }
 
-/** A small figure in a row of figures. Value in ink, never in a series colour. */
+/**
+ * The row that holds a card's secondary figures.
+ *
+ * One pair of hairlines around the whole group instead of a rounded box around
+ * each figure: four boxes said "four things", when what the reader needs is "one
+ * group of four".
+ */
+export function StatRow({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={`grid grid-cols-2 gap-x-4 gap-y-3 border-y border-white/[0.07] py-3 sm:grid-cols-4 ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A small figure inside a StatRow. Value in ink, never in a series colour. */
 export function StatTile({
   label,
   value,
@@ -98,13 +150,56 @@ export function StatTile({
   title?: string;
 }) {
   return (
-    <div className="rounded-xl bg-white/[0.03] px-2 py-2 text-center ring-1 ring-inset ring-white/[0.05]" title={title}>
-      <div className="truncate text-[10px] font-medium uppercase tracking-[0.06em] text-slate-500">
+    <div className="min-w-0" title={title}>
+      <div className="truncate text-[10px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
         {label}
       </div>
-      <div className="mt-0.5 truncate text-sm font-semibold tabular-nums text-slate-100">{value}</div>
-      {hint != null && <div className="truncate text-[10px] tabular-nums text-slate-500">{hint}</div>}
+      <div className="mt-0.5 truncate text-sm font-semibold tabular-nums text-[#e8eaed]">{value}</div>
+      {hint != null && <div className="truncate text-[10px] tabular-nums text-[#7b828d]">{hint}</div>}
     </div>
+  );
+}
+
+/**
+ * The 6px dot that says which side something belongs to.
+ *
+ * The same mark in front of a team's name, a hero figure's label and a factor's
+ * value, so "blue = this one" is learned once and holds everywhere. It replaced
+ * painting each of those in the series colour: a card carried a 15px bold blue
+ * name, a 28px blue percentage and a blue bar segment, all repeating the one fact
+ * that the bar already made obvious.
+ */
+export function SeriesDot({ color, className = '' }: { color: string; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${className}`}
+      style={{ backgroundColor: color }}
+    />
+  );
+}
+
+/**
+ * One factor's contribution in a "why" list.
+ *
+ * The figure is ink and the dot says which side it favours — the same split as
+ * HeroStat. The line already ends in the team's name, so painting the whole
+ * string blue or orange was colouring text that had already said who it meant.
+ */
+export function FactorValue({
+  color,
+  neutral = false,
+  children,
+}: {
+  color: string;
+  neutral?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 tabular-nums text-[#c3c9d1]">
+      {!neutral && <SeriesDot color={color} />}
+      {children}
+    </span>
   );
 }
 
@@ -122,11 +217,11 @@ export function CompareRow({
 }) {
   return (
     <>
-      <dt className="min-w-0 truncate py-1 text-slate-400" title={title}>
+      <dt className="min-w-0 truncate py-1 text-[#9aa1ac]" title={title}>
         {label}
       </dt>
-      <dd className="py-1 text-right tabular-nums text-slate-200">{left}</dd>
-      <dd className="py-1 text-right tabular-nums text-slate-200">{right}</dd>
+      <dd className="py-1 text-right tabular-nums text-[#d5d9df]">{left}</dd>
+      <dd className="py-1 text-right tabular-nums text-[#d5d9df]">{right}</dd>
     </>
   );
 }
@@ -185,14 +280,14 @@ export function BarRow({
 }) {
   return (
     <div className="flex items-center gap-2 text-[11px]" title={title}>
-      <span className="w-[3.75rem] shrink-0 text-right tabular-nums text-slate-300">{label}</span>
+      <span className="w-[3.75rem] shrink-0 text-right tabular-nums text-[#c3c9d1]">{label}</span>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
         <div
           className="h-full rounded-full"
           style={{ width: `${max > 0 ? (value / max) * 100 : 0}%`, backgroundColor: color }}
         />
       </div>
-      <span className="w-12 shrink-0 text-right tabular-nums text-slate-400">{valueLabel}</span>
+      <span className="w-12 shrink-0 text-right tabular-nums text-[#9aa1ac]">{valueLabel}</span>
     </div>
   );
 }
@@ -210,7 +305,7 @@ export function FormDots({
   results: ('W' | 'D' | 'L')[];
   colors: { W: string; D: string; L: string };
 }) {
-  if (results.length === 0) return <span className="text-slate-600">—</span>;
+  if (results.length === 0) return <span className="text-[#5c636c]">—</span>;
   return (
     <span className="inline-flex gap-[3px] align-middle">
       {results.map((r, i) => (
@@ -228,6 +323,14 @@ export function FormDots({
 // ---------------------------------------------------------------------------
 // Chrome
 // ---------------------------------------------------------------------------
+/**
+ * A small annotation on a card: "cancha neutral", "partido demo".
+ *
+ * The neutral tone has no fill at all — it is a word with a hairline round it.
+ * Most badges on a card are neutral, and a filled pill for every one of them put
+ * a row of grey lozenges above the teams competing with the teams. The coloured
+ * tones keep their tint, because those are the ones that need to be noticed.
+ */
 export function Badge({
   children,
   tone = 'neutral',
@@ -238,20 +341,41 @@ export function Badge({
   title?: string;
 }) {
   const tones: Record<string, string> = {
-    neutral: 'bg-white/[0.06] text-slate-300 ring-white/10',
+    neutral: 'text-[#9aa1ac] ring-white/[0.10]',
     good: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
     warning: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
     critical: 'bg-rose-500/10 text-rose-300 ring-rose-500/30',
-    accent: 'bg-sky-500/10 text-sky-300 ring-sky-500/30',
+    // "accent" marks a card the reader has changed (a lineup edit, a swapped
+    // starter). A strong neutral says "this one is not the default" without
+    // spending a fifth hue on it.
+    accent: 'bg-white/[0.12] text-[#e8eaed] ring-white/20',
   };
   return (
     <span
       title={title}
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset ${tones[tone]}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${tones[tone]}`}
     >
       {children}
     </span>
   );
+}
+
+/**
+ * Sub-navigation pill: a league, a tour, a tournament.
+ *
+ * The four sports had four different treatments for the same control — football
+ * an underline tab row (a second one, directly under the app's own underline tab
+ * row), tennis a solid lime button and a solid sky button, basketball and
+ * baseball a grey pill. One treatment now, and the unselected state has no fill
+ * at all, so a row of eight leagues is eight words rather than eight lozenges.
+ * Sport identity stays where it belongs: the accent under the main tab.
+ */
+export function pillClass(active: boolean): string {
+  return `shrink-0 rounded-full px-3 py-1.5 text-[12px] font-medium ring-1 ring-inset transition ${
+    active
+      ? 'bg-white/[0.12] text-[#e8eaed] ring-white/[0.18]'
+      : 'text-[#9aa1ac] ring-white/[0.08] hover:bg-white/[0.05] hover:text-[#e8eaed]'
+  }`;
 }
 
 /** Reliability chip. Always carries the word, never colour alone. */
@@ -269,7 +393,7 @@ export function ReliabilityChip({
   return (
     <span
       title={title}
-      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset ${RELIABILITY_STYLE[level]}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${RELIABILITY_STYLE[level]}`}
     >
       <span aria-hidden>{level === 'high' ? '●' : level === 'medium' ? '◐' : '○'}</span>
       {label} · ±{marginPp} pp
@@ -293,12 +417,12 @@ export function Disclosure({
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-left text-[12px] font-medium text-sky-300 transition hover:bg-white/[0.03] hover:text-sky-200"
+        className="flex w-full items-center justify-between gap-2 py-1.5 text-left text-[12px] font-medium text-[#9aa1ac] transition hover:text-[#e8eaed]"
       >
         <span>{summary}</span>
-        <span aria-hidden className="text-slate-500">{open ? '▲' : '▼'}</span>
+        <span aria-hidden className="text-[#5c636c]">{open ? '▲' : '▼'}</span>
       </button>
-      {open && <div className="mt-2">{children}</div>}
+      {open && <div className="mt-1">{children}</div>}
     </div>
   );
 }
@@ -323,10 +447,13 @@ export function CardSkeleton() {
         <div className="h-5 w-1/3 rounded bg-white/[0.08]" />
         <div className="h-5 w-1/3 rounded bg-white/[0.08]" />
       </div>
-      <div className="mb-3 h-2.5 w-full rounded-full bg-white/[0.06]" />
-      <div className="grid grid-cols-3 gap-2">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="h-12 rounded-xl bg-white/[0.04]" />
+      <div className="mb-4 h-2.5 w-full rounded-full bg-white/[0.06]" />
+      <div className="grid grid-cols-4 gap-4 border-y border-white/[0.07] py-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="space-y-1.5">
+            <div className="h-2 w-3/4 rounded bg-white/[0.05]" />
+            <div className="h-3 w-1/2 rounded bg-white/[0.07]" />
+          </div>
         ))}
       </div>
     </Card>
@@ -353,13 +480,13 @@ export function EmptyState({
   tone?: 'neutral' | 'warning' | 'critical';
 }) {
   const tones = {
-    neutral: 'border-white/[0.07] bg-white/[0.02] text-slate-400',
+    neutral: 'border-white/[0.07] bg-white/[0.02] text-[#9aa1ac]',
     warning: 'border-amber-500/25 bg-amber-500/[0.06] text-amber-200/90',
     critical: 'border-rose-500/25 bg-rose-500/[0.06] text-rose-200/90',
   };
   return (
-    <div className={`rounded-2xl border p-5 text-sm ${tones[tone]}`}>
-      <p className="font-medium text-slate-100">{title}</p>
+    <div className={`rounded-xl border p-5 text-sm ${tones[tone]}`}>
+      <p className="font-medium text-[#e8eaed]">{title}</p>
       {children && <div className="mt-1.5 leading-relaxed">{children}</div>}
     </div>
   );

@@ -22,10 +22,10 @@ function SplitBar({
   const left = hasData ? Math.round(leftFrac * 1000) / 10 : 50;
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
+      <div className="mb-1 flex items-center justify-between text-xs text-[#9aa1ac]">
         <span>{title}</span>
       </div>
-      <div className="flex h-6 w-full overflow-hidden rounded-md ring-1 ring-slate-700/60">
+      <div className="flex h-6 w-full overflow-hidden rounded-md ring-1 ring-white/[0.07]">
         <div
           className="flex items-center justify-start pl-2 text-xs font-semibold text-slate-900"
           style={{

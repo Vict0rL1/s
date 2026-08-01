@@ -27,7 +27,7 @@ export default function PlayerProfile({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
       <div
-        className="h-full w-full max-w-md overflow-y-auto border-l border-slate-700 bg-slate-900 p-6 shadow-xl"
+        className="h-full w-full max-w-md overflow-y-auto border-l border-white/[0.07] bg-[#14161b] p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between">
@@ -36,10 +36,10 @@ export default function PlayerProfile({
               {profile ? `${flag(profile.country)} ${profile.name}` : 'Cargando…'}
             </h2>
             {profile && (
-              <div className="text-xs text-slate-400">
+              <div className="text-xs text-[#9aa1ac]">
                 {profile.ranking && (
                   <>
-                    <span className="text-slate-200">#{profile.ranking.rank} oficial</span>
+                    <span className="text-[#d5d9df]">#{profile.ranking.rank} oficial</span>
                     {profile.ranking.points != null && ` (${profile.ranking.points.toLocaleString('es')} pts)`}
                     {' · '}
                   </>
@@ -49,7 +49,7 @@ export default function PlayerProfile({
               </div>
             )}
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
+          <button onClick={onClose} className="text-[#9aa1ac] hover:text-[#d5d9df]">
             ✕
           </button>
         </div>
@@ -58,7 +58,7 @@ export default function PlayerProfile({
 
         {profile && (
           <>
-            <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">Ratings Elo</div>
+            <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">Ratings Elo</div>
             <div className="mb-6 grid grid-cols-2 gap-3">
               <EloTile label="General" value={profile.rating.overall} color="#e2e8f0" big />
               <EloTile
@@ -75,7 +75,7 @@ export default function PlayerProfile({
 
             {profile.serve.matches > 0 && (
               <>
-                <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+                <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">
                   Saque y quiebre (promedio)
                 </div>
                 <div className="mb-6 grid grid-cols-2 gap-2 text-sm">
@@ -89,30 +89,30 @@ export default function PlayerProfile({
               </>
             )}
 
-            <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+            <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">
               Últimos resultados
             </div>
             <ul className="space-y-1">
               {profile.recent.map((m, i) => (
                 <li
                   key={i}
-                  className="flex items-center justify-between rounded bg-slate-800/50 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded bg-white/[0.04] px-3 py-2 text-sm"
                 >
                   <span
-                    className={`w-6 font-bold ${m.won ? 'text-lime-400' : 'text-rose-400'}`}
+                    className={`w-6 font-bold ${m.won ? 'text-emerald-400' : 'text-rose-400'}`}
                   >
                     {m.won ? 'V' : 'D'}
                   </span>
-                  <span className="flex-1 truncate px-2 text-slate-300">
+                  <span className="flex-1 truncate px-2 text-[#c3c9d1]">
                     vs {m.opponent_name ?? `#${m.opponent_id}`}
                   </span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-[#7b828d]">
                     {surfaceLabelEs(m.surface)} · {formatDate(m.date)}
                   </span>
                 </li>
               ))}
               {profile.recent.length === 0 && (
-                <li className="text-slate-500">Sin resultados registrados.</li>
+                <li className="text-[#7b828d]">Sin resultados registrados.</li>
               )}
             </ul>
           </>
@@ -132,9 +132,9 @@ function ServeStat({
   suffix?: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between rounded bg-slate-800/50 px-3 py-1.5">
-      <span className="text-xs text-slate-400">{label}</span>
-      <span className="font-semibold tabular-nums text-slate-200">
+    <div className="flex items-baseline justify-between rounded bg-white/[0.04] px-3 py-1.5">
+      <span className="text-xs text-[#9aa1ac]">{label}</span>
+      <span className="font-semibold tabular-nums text-[#d5d9df]">
         {value == null ? '—' : `${value}${suffix}`}
       </span>
     </div>
@@ -155,8 +155,8 @@ function EloTile({
   integer?: boolean;
 }) {
   return (
-    <div className={`rounded-lg bg-slate-800/60 p-3 ${big ? 'col-span-1' : ''}`}>
-      <div className="text-xs text-slate-400">{label}</div>
+    <div className={`rounded-lg bg-white/[0.04] p-3 ${big ? 'col-span-1' : ''}`}>
+      <div className="text-xs text-[#9aa1ac]">{label}</div>
       <div className="text-lg font-bold tabular-nums" style={{ color }}>
         {integer ? value : Math.round(value)}
       </div>

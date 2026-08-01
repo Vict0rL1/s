@@ -9,6 +9,7 @@ import {
 import MatchCard from './MatchCard';
 import PlayerProfile from './PlayerProfile';
 import TrackRecordPanel from './TrackRecordPanel';
+import { pillClass } from './ui';
 
 export default function TennisDashboard() {
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -93,7 +94,7 @@ export default function TennisDashboard() {
     <div>
       <header className="mb-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-prose text-[13px] leading-relaxed text-slate-400">
+          <p className="max-w-prose text-[13px] leading-relaxed text-[#9aa1ac]">
             Predicción de partidos con Elo por superficie, forma reciente, head-to-head y odds del
             mercado.
           </p>
@@ -103,7 +104,7 @@ export default function TennisDashboard() {
               onClick={handleRefresh}
               disabled={refreshing}
               title="Vuelve a consultar las odds de los partidos próximos"
-              className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-slate-200 ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
+              className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
             >
               {refreshing ? 'Actualizando…' : '↻ Actualizar'}
             </button>
@@ -126,11 +127,7 @@ export default function TennisDashboard() {
           <button
             key={t.id}
             onClick={() => setTour(t.id)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-              tour === t.id
-                ? 'bg-lime-500 text-slate-900'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-            }`}
+            className={pillClass(tour === t.id)}
           >
             {t.name}
           </button>
@@ -144,11 +141,7 @@ export default function TennisDashboard() {
             <button
               key={t.id}
               onClick={() => setTournamentId(t.id)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                tournamentId === t.id
-                  ? 'bg-sky-500 text-slate-900'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-              }`}
+              className={pillClass(tournamentId === t.id)}
             >
               {t.name}
               <span className="ml-1.5 opacity-60">{t.upcomingCount}</span>
@@ -166,14 +159,14 @@ export default function TennisDashboard() {
           </p>
         </div>
       ) : (
-        <p className="mb-6 text-sm text-slate-500">
+        <p className="mb-6 text-sm text-[#7b828d]">
           No hay próximos partidos para {tour.toUpperCase()}.
         </p>
       )}
 
       {/* Matches */}
       {loading ? (
-        <p className="text-slate-500">Cargando partidos…</p>
+        <p className="text-[#7b828d]">Cargando partidos…</p>
       ) : (
         <div className="space-y-4">
           {matches.map((m) => (
@@ -226,7 +219,7 @@ function RefreshInfo({ meta }: { meta: Meta }) {
     ? new Date(when).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
     : '—';
   return (
-    <p className="mt-1 text-xs text-slate-500">
+    <p className="mt-1 text-xs text-[#7b828d]">
       Odds actualizadas: {whenTxt}
       {meta.hasOddsKey
         ? meta.autoRefreshMinutes > 0

@@ -51,12 +51,12 @@ export default function SquadPanel({
 
   if (error) {
     return (
-      <p className="text-[11px] text-slate-500">
+      <p className="text-[11px] text-[#7b828d]">
         Sin datos de plantilla para {teamName}.
       </p>
     );
   }
-  if (!squad) return <p className="text-[11px] text-slate-500">Cargando plantilla…</p>;
+  if (!squad) return <p className="text-[11px] text-[#7b828d]">Cargando plantilla…</p>;
 
   const xi = squad.players.filter((p) => p.regular);
   const bench = squad.players.filter((p) => !p.regular && p.minutes > 0);
@@ -88,7 +88,7 @@ export default function SquadPanel({
 
       {rest.length > 0 && (
         <>
-          <div className="mt-1.5 text-[10px] uppercase tracking-wide text-slate-600">
+          <div className="mt-1.5 text-[10px] uppercase tracking-wide text-[#5c636c]">
             Resto de la plantilla
           </div>
           <ul className="space-y-0.5 opacity-70">
@@ -101,7 +101,7 @@ export default function SquadPanel({
               />
             ))}
           </ul>
-          <p className="mt-1 text-[10px] text-slate-600">
+          <p className="mt-1 text-[10px] text-[#5c636c]">
             Marcar a un suplente no cambia el pronóstico: el modelo solo cuenta las bajas del once
             habitual.
           </p>
@@ -111,7 +111,7 @@ export default function SquadPanel({
       {bench.length > 0 && (
         <button
           onClick={() => setShowAll((s) => !s)}
-          className="mt-1 text-[11px] text-sky-400 hover:text-sky-300"
+          className="mt-1 text-[11px] text-[#9aa1ac] hover:text-[#e8eaed]"
         >
           {showAll ? '▲ Solo el once' : `▼ Ver plantilla completa (${bench.length})`}
         </button>
@@ -132,8 +132,8 @@ function PlayerRow({
   return (
     <li>
       <label
-        className={`flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-[11px] transition hover:bg-slate-700/40 ${
-          isOut ? 'text-rose-300' : 'text-slate-300'
+        className={`flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-[11px] transition hover:bg-white/[0.06] ${
+          isOut ? 'text-rose-300' : 'text-[#c3c9d1]'
         }`}
         title={player.flagReason ?? undefined}
       >
@@ -144,14 +144,14 @@ function PlayerRow({
           className="h-3 w-3 shrink-0 accent-rose-500"
           aria-label={`${player.name} no juega`}
         />
-        <span className="w-7 shrink-0 text-[9px] uppercase text-slate-500">{player.position}</span>
+        <span className="w-7 shrink-0 text-[9px] uppercase text-[#7b828d]">{player.position}</span>
         <span className={`min-w-0 flex-1 truncate ${isOut ? 'line-through' : ''}`}>
           {player.name}
         </span>
         {player.flaggedOut && <span title={player.flagReason ?? 'baja'}>⛔</span>}
         {player.regular && player.attackShare > 0.005 && (
           <span
-            className="shrink-0 tabular-nums text-slate-500"
+            className="shrink-0 tabular-nums text-[#7b828d]"
             title="Parte del ataque del once que aporta este jugador"
           >
             {(player.attackShare * 100).toFixed(0)}%
@@ -164,7 +164,7 @@ function PlayerRow({
 
 function Effect({ availability }: { availability: FbAvailability }) {
   if (availability.out.length === 0) {
-    return <span className="shrink-0 text-[10px] text-slate-500">sin bajas</span>;
+    return <span className="shrink-0 text-[10px] text-[#7b828d]">sin bajas</span>;
   }
   const attack = Math.round((1 - availability.attack) * 100);
   const defence = Math.round((availability.defence - 1) * 100);

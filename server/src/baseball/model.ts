@@ -341,10 +341,14 @@ export function runDistribution(
     if (k + 1 <= maxRuns) {
       grid[k + 1][k] += tied * extraHome;
       grid[k][k + 1] += tied * (1 - extraHome);
-    } else {
-      // At the very top of the grid there is nowhere to push it; leaving it put
-      // would be worse than losing it, since it would read as a tied final score.
-      grid[k][k] = tied;
+    } else if (k > 0) {
+      // At the very top of the grid there is no k+1 to push into. Pushing DOWN
+      // instead keeps the invariant exact — "no cell on the diagonal" is a claim
+      // the card makes in words, so it has to be true for every cell, not for
+      // most of them. The mass involved is ~5e-6, but an invariant that holds
+      // almost always is not an invariant.
+      grid[k][k - 1] += tied * extraHome;
+      grid[k - 1][k] += tied * (1 - extraHome);
     }
   }
 

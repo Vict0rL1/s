@@ -3,6 +3,7 @@ import type { PlayerInfo, Reliability, UpcomingMatch, UpcomingWithPrediction } f
 import { confidenceLabelEs, flag, formatDateTime, surfaceLabelEs } from '../lib/format';
 import ProbabilityBars, { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import MatchDetail from './MatchDetail';
+import { Badge, SeriesDot } from './ui';
 
 export default function MatchCard({
   item,
@@ -20,11 +21,11 @@ export default function MatchCard({
     value === 'value_p1' ? match.p1_name : value === 'value_p2' ? match.p2_name : null;
 
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between text-xs text-slate-400">
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.04] p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between text-xs text-[#9aa1ac]">
         <span>{formatDateTime(match.commence_time)}</span>
         <span className="flex items-center gap-2">
-          <span className="rounded bg-slate-700/60 px-2 py-0.5">
+          <span className="rounded bg-white/[0.06] px-2 py-0.5">
             {surfaceLabelEs(match.surface)}
           </span>
           {match.source === 'fixture' && (
@@ -46,7 +47,7 @@ export default function MatchCard({
           tourLabel={match.tour.toUpperCase()}
           onClick={match.p1_id ? () => onOpenPlayer(match.tour, match.p1_id!) : undefined}
         />
-        <span className="px-3 pt-6 text-xs text-slate-500">vs</span>
+        <span className="px-3 pt-6 text-xs text-[#7b828d]">vs</span>
         <PlayerName
           name={match.p2_name}
           country={prediction?.players.p2.country ?? players?.p2?.country ?? null}
@@ -70,37 +71,34 @@ export default function MatchCard({
               {verdict && verdict.favoredSide ? (
                 <span>
                   El modelo favorece a{' '}
-                  <strong style={{ color: verdict.favoredSide === 1 ? P1_COLOR : P2_COLOR }}>
-                    {verdict.favoredName}
-                  </strong>{' '}
-                  <span className="text-slate-400">
+                  <SeriesDot color={verdict.favoredSide === 1 ? P1_COLOR : P2_COLOR} />{' '}
+                  <strong className="text-[#e8eaed]">{verdict.favoredName}</strong>{' '}
+                  <span className="text-[#9aa1ac]">
                     · {confidenceLabelEs(verdict.confidence)} ({verdict.marginPct} pp)
                   </span>
                 </span>
               ) : (
-                <span className="text-slate-400">Partido muy parejo</span>
+                <span className="text-[#9aa1ac]">Partido muy parejo</span>
               )}
             </div>
             <div className="flex items-center gap-2">
               <ReliabilityBadge reliability={prediction.reliability} />
               {valuePlayer && (
-                <span className="rounded-full bg-emerald-900/50 px-3 py-1 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/40">
-                  Posible value: {valuePlayer}
-                </span>
+                <Badge tone="good">Posible value: {valuePlayer}</Badge>
               )}
             </div>
           </div>
 
           {/* What the model expects to happen, in plain language */}
-          <div className="mt-3 rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-700/50">
-            <div className="mb-1.5 text-xs uppercase tracking-wide text-slate-500">
+          <div className="mt-3 border-t border-white/[0.07] pt-3">
+            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
               Qué es lo más probable
             </div>
-            <p className="text-sm font-medium text-slate-100">{prediction.summary.headline}</p>
+            <p className="text-sm font-medium text-[#e8eaed]">{prediction.summary.headline}</p>
             <ul className="mt-2 space-y-1">
               {prediction.summary.bullets.map((b, i) => (
-                <li key={i} className="flex gap-2 text-xs text-slate-300">
-                  <span className="text-slate-600">•</span>
+                <li key={i} className="flex gap-2 text-xs text-[#c3c9d1]">
+                  <span className="text-[#5c636c]">•</span>
                   <span>{b}</span>
                 </li>
               ))}
@@ -109,7 +107,7 @@ export default function MatchCard({
 
           <button
             onClick={() => setOpen((o) => !o)}
-            className="mt-3 text-xs text-sky-400 hover:text-sky-300"
+            className="mt-3 text-xs text-[#9aa1ac] hover:text-[#e8eaed]"
           >
             {open ? '▲ Ocultar desglose' : '▼ Ver desglose (Elo · forma · H2H · mercado)'}
           </button>
@@ -174,15 +172,15 @@ function MissingPlayers({
     .map((s) => `${s.name}${s.info!.ranking ? ` (#${s.info!.ranking.rank})` : ''}`);
 
   return (
-    <div className="rounded-lg bg-slate-900/60 p-3 text-sm text-slate-400 ring-1 ring-slate-700/50">
+    <div className="rounded-lg bg-white/[0.03] p-3 text-sm text-[#9aa1ac] ring-1 ring-white/[0.07]">
       {unknown.length > 0 && (
         <>
           Sin predicción del modelo: no hay datos de{' '}
-          <strong className="text-slate-200">{unknown.join(' ni de ')}</strong>.
-          <div className="mt-1 text-xs text-slate-500">
+          <strong className="text-[#d5d9df]">{unknown.join(' ni de ')}</strong>.
+          <div className="mt-1 text-xs text-[#7b828d]">
             Suele pasar si el historial descargado es antiguo y no cubre la carrera de este jugador.
             Ejecuta{' '}
-            <code className="rounded bg-slate-800 px-1">npm run update-data -- --fresh</code> para
+            <code className="rounded bg-white/[0.04] px-1">npm run update-data -- --fresh</code> para
             volver a descargarlo.
           </div>
         </>
@@ -190,9 +188,9 @@ function MissingPlayers({
       {unknown.length === 0 && knownButUnrated.length > 0 && (
         <>
           Sin predicción del modelo: aún no hay partidos de{' '}
-          <strong className="text-slate-200">{knownButUnrated.join(' ni de ')}</strong> en el
+          <strong className="text-[#d5d9df]">{knownButUnrated.join(' ni de ')}</strong> en el
           historial, así que no se puede calcular su Elo.
-          <div className="mt-1 text-xs text-slate-500">
+          <div className="mt-1 text-xs text-[#7b828d]">
             Arriba tienes su ranking oficial y la probabilidad del mercado.
           </div>
         </>
@@ -236,23 +234,25 @@ function PlayerName({
     info?.hand === 'L' ? 'zurdo/a' : info?.hand === 'R' ? 'diestro/a' : null,
   ].filter(Boolean) as string[];
   return (
-    <div className={`flex-1 ${alignRight ? 'text-right' : 'text-left'}`}>
-      <button
-        onClick={onClick}
-        disabled={!onClick}
-        className={`font-semibold ${onClick ? 'hover:underline' : 'cursor-default'}`}
-        style={{ color }}
-      >
-        {flag(country)} {name}
-      </button>
+    <div className={`min-w-0 flex-1 ${alignRight ? 'text-right' : 'text-left'}`}>
+      <span className={`flex min-w-0 items-center gap-1.5 ${alignRight ? 'justify-end' : ''}`}>
+        {!alignRight && <SeriesDot color={color} />}
+        <button
+          onClick={onClick}
+          disabled={!onClick}
+          className={`truncate font-semibold text-[#e8eaed] ${onClick ? 'hover:underline' : 'cursor-default'}`}
+        >
+          {flag(country)} {name}
+        </button>
+        {alignRight && <SeriesDot color={color} />}
+      </span>
       {/* Headline win probability — one decimal, matching the API value exactly.
           Dimmed when it comes from the market because the model couldn't predict. */}
       {prob != null && (
         <div
-          className={`text-4xl font-bold leading-tight tabular-nums sm:text-5xl ${
+          className={`text-4xl font-bold leading-tight tabular-nums text-[#e8eaed] sm:text-5xl ${
             probSource === 'market' ? 'opacity-60' : ''
           }`}
-          style={{ color }}
           title={
             probSource === 'model'
               ? 'Probabilidad de victoria según el modelo'
@@ -262,12 +262,12 @@ function PlayerName({
           {(prob * 100).toFixed(1)}
           <span className="text-2xl">%</span>
           {probSource === 'market' && (
-            <span className="ml-1 align-middle text-xs font-normal text-slate-400">mercado</span>
+            <span className="ml-1 align-middle text-xs font-normal text-[#9aa1ac]">mercado</span>
           )}
         </div>
       )}
-      {facts.length > 0 && <div className="text-xs text-slate-400">{facts.join(' · ')}</div>}
-      <div className="text-xs text-slate-500">{odds != null ? `cuota ${odds}` : 'sin cuota'}</div>
+      {facts.length > 0 && <div className="text-xs text-[#9aa1ac]">{facts.join(' · ')}</div>}
+      <div className="text-xs text-[#7b828d]">{odds != null ? `cuota ${odds}` : 'sin cuota'}</div>
     </div>
   );
 }

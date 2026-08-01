@@ -329,8 +329,39 @@ ves, en vez de fallar en silencio.
 | `npm run backtest:bsb` | **Béisbol**: mide el modelo con Brier, calibración y error del total |
 | `npm run verify:bsb` | **Béisbol**: recuenta una temporada y la compara con el registro oficial |
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
+| `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
+
+### Comprobar que la información es correcta
+
+`npm run audit` no mide el acierto del modelo (para eso están los backtests): comprueba
+**propiedades que se tienen que cumplir por construcción**, en los cuatro deportes a la vez. Un fallo
+ahí es un bug, nunca una cuestión de ajuste.
+
+Verifica, por deporte, que las probabilidades suman 1; que la rejilla de marcadores más su cola suma
+1; que los bloques de la rejilla coinciden **exactamente** con el 1X2 que muestra la cabecera de la
+tarjeta; que la distribución de márgenes suma 1 y que su casilla del 0 vale P(empate) en fútbol y
+cero en béisbol (un marcador final nunca queda empatado); que el marcador que anuncia la tarjeta es
+de verdad el máximo de la rejilla; que el balance mostrado coincide con lo que hay en la base de
+datos; que el pitagórico está bien calculado; que «cubrir el hándicap» nunca es más probable que
+ganar cuando el hándicap va en contra; que el veredicto es el resultado de mayor probabilidad; que
+el signo de la diferencia esperada concuerda con el favorito; y que no hay ids de partido repetidos
+ni fechas inválidas.
+
+```
+$ npm run audit
+▸ Fútbol      32 predicciones · 24 partidos próximos
+▸ Béisbol     12 predicciones · 8 partidos próximos
+▸ Baloncesto  12 predicciones · 8 partidos próximos
+▸ Tenis       30 predicciones
+✅ 789 comprobaciones, todas correctas.
+```
+
+La primera vez que se ejecutó encontró cuatro fallos reales: en béisbol, la diagonal de la rejilla
+de carreras dejaba 5·10⁻⁶ de probabilidad en marcadores empatados, justo en el borde superior del
+rango, contradiciendo lo que la propia tarjeta afirma con palabras. Se arregló el reparto de esa
+masa en `runDistribution` en vez de relajar la comprobación.
 
 ### Medir cambios del modelo
 
@@ -443,6 +474,30 @@ completa. La paleta actual (azul local · turquesa empate · naranja visitante) 
 pares en la superficie oscura de la app: separación CVD ΔE 9.4, visión normal 20.9, contraste ≥3:1.
 Local es azul y visitante naranja en los cuatro deportes, así que el color significa lo mismo al
 cambiar de pestaña.
+
+Sobre esa base hay otras tres reglas, todas dirigidas a que la app se lea como una herramienta y no
+como un tablero de colores:
+
+**Un número nunca se pinta con el color de una serie.** Las cifras van en tinta; un punto de 6 px
+delante de la etiqueta dice de quién son. La tarjeta llegaba a tener el nombre del equipo en azul
+saturado, el 47.7 % en azul saturado y el segmento de la barra en azul saturado: tres marcas
+repitiendo un dato que la barra ya deja obvio, y un porcentaje más difícil de leer que en blanco. El
+color marca **quién**; la tinta dice **qué**.
+
+**Una sola caja y un solo radio.** La tarjeta era una caja con borde, brillo interior y sombra, que
+contenía paneles que eran cajas, que contenían casillas que eran cajas — tres rectángulos anidados
+alrededor de unas cifras que una línea fina y algo de espacio agrupan igual de bien. Ahora la
+tarjeta es la única caja rellena: dentro, las secciones se separan con filetes y aire.
+
+**Gris de verdad, no gris azulado.** El texto usaba `slate` de Tailwind, que tiene tinte azul: sobre
+un fondo azul-negro y con una serie azul, eso metía un tercer azul débil compitiendo con los dos que
+sí significan algo. La rampa de texto es neutra y el paso de las etiquetas (`#7b828d`) está subido
+para llegar a 4.7:1 sobre la tarjeta, por encima del mínimo AA para texto pequeño; antes estaba en
+3.4:1 y no lo cumplía.
+
+Las cuatro pestañas comparten además un único tratamiento para las sub-pestañas (liga, circuito,
+torneo): había cuatro distintos, incluida una fila de subrayados justo debajo de la fila de
+subrayados de la app.
 
 ## Estructura del proyecto
 

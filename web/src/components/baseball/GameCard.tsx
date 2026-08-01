@@ -15,12 +15,15 @@ import {
   CompareRow,
   Disclosure,
   EmptyState,
+  FactorValue,
   FormDots,
   HeroStat,
   Panel,
   ProbabilityBar,
   ReliabilityChip,
   SectionTitle,
+  SeriesDot,
+  StatRow,
   StatTile,
 } from '../ui';
 import RunMatrix from './RunMatrix';
@@ -69,7 +72,7 @@ export default function GameCard({
 
   return (
     <Card as="article" className="p-4">
-      <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+      <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-[#7b828d]">
         <time>{formatDateTime(game.commence_time)}</time>
         <div className="flex items-center gap-1.5">
           {dirty && <Badge tone="accent">{adjusting ? 'recalculando…' : 'con tu abridor'}</Badge>}
@@ -92,7 +95,7 @@ export default function GameCard({
           odds={game.odds_away}
           onClick={game.away_id ? () => onOpenTeam(game.league, game.away_id!) : undefined}
         />
-        <span className="shrink-0 pt-1 text-[11px] font-medium text-slate-600">@</span>
+        <span className="shrink-0 pt-1 text-[11px] font-medium text-[#5c636c]">@</span>
         <TeamName
           name={prediction?.teams.home.name ?? game.home_name}
           color={HOME_COLOR}
@@ -146,12 +149,12 @@ export default function GameCard({
             <>
               {/* The starting pitchers get top billing: in baseball nothing else
                   a single player does moves the number this much. */}
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-x-4 border-t border-white/[0.07] pt-3">
                 <StarterChip side={prediction.teams.away} color={AWAY_COLOR} />
                 <StarterChip side={prediction.teams.home} color={HOME_COLOR} />
               </div>
 
-              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <StatRow className="mt-3">
                 <StatTile
                   label="Carreras esp."
                   value={`${prediction.runs.expectedAway} – ${prediction.runs.expectedHome}`}
@@ -172,14 +175,14 @@ export default function GameCard({
                   value={pct(prediction.runs.runLine.homeCovers)}
                   hint="local por 2+"
                 />
-              </div>
+              </StatRow>
 
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-3">
-                <p className="min-w-0 text-[13px] leading-snug text-slate-300">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="min-w-0 text-[13px] leading-snug text-[#c3c9d1]">
                   {prediction.verdict.close ? (
                     <>
                       Muy igualado —{' '}
-                      <strong className="font-semibold text-slate-100">
+                      <strong className="font-semibold text-[#e8eaed]">
                         {prediction.verdict.label}
                       </strong>{' '}
                       solo por poco
@@ -187,7 +190,7 @@ export default function GameCard({
                   ) : (
                     <>
                       Lo más probable:{' '}
-                      <strong className="font-semibold text-slate-100">
+                      <strong className="font-semibold text-[#e8eaed]">
                         {prediction.verdict.label}
                       </strong>
                     </>
@@ -253,12 +256,12 @@ function StarterChip({ side, color }: { side: BsbSide; color: string }) {
   const s = side.starter;
   const delta = s.rating != null ? Math.round((1 - s.rating) * 100) : null;
   return (
-    <div
-      className="min-w-0 rounded-xl bg-white/[0.03] px-2.5 py-2 ring-1 ring-inset ring-white/[0.05]"
-      title={s.label}
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-slate-500">
+    <div className="min-w-0" title={s.label}>
+      {/* The delta sits NEXT to the label, not pushed to the column's far edge:
+          spread across half a card it landed beside the OTHER starter's label and
+          read as belonging to them. */}
+      <div className="flex items-baseline gap-2">
+        <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
           Abridor
         </span>
         {delta != null && Math.abs(delta) >= 4 && (
@@ -272,10 +275,13 @@ function StarterChip({ side, color }: { side: BsbSide; color: string }) {
           </span>
         )}
       </div>
-      <div className="truncate text-[13px] font-semibold" style={{ color }}>
-        {s.name ?? 'sin anunciar'}
+      <div className="flex items-center gap-1.5">
+        <SeriesDot color={color} />
+        <span className="truncate text-[13px] font-semibold text-[#e8eaed]">
+          {s.name ?? 'sin anunciar'}
+        </span>
       </div>
-      <div className="truncate text-[10px] text-slate-500">
+      <div className="truncate text-[10px] text-[#7b828d]">
         {s.starts > 0 ? `${s.starts} aperturas` : 'sin datos'}
       </div>
     </div>
@@ -290,17 +296,20 @@ function TeamName({
 }) {
   return (
     <div className={`min-w-0 flex-1 ${alignRight ? 'text-right' : ''}`}>
-      <button
-        onClick={onClick}
-        disabled={!onClick}
-        className={`max-w-full truncate text-base font-semibold ${onClick ? 'hover:underline' : 'cursor-default'}`}
-        style={{ color }}
-        title={onClick ? 'Ver ficha del equipo' : undefined}
-      >
-        {name}
-        {homeBadge && <span className="ml-1.5 text-[10px] text-slate-500">(local)</span>}
-      </button>
-      <div className="text-[11px] text-slate-500">
+      <span className={`flex items-center gap-1.5 ${alignRight ? 'justify-end' : ''}`}>
+        {!alignRight && <SeriesDot color={color} />}
+        <button
+          onClick={onClick}
+          disabled={!onClick}
+          className={`max-w-full truncate text-base font-semibold text-[#e8eaed] ${onClick ? 'hover:underline' : 'cursor-default'}`}
+          title={onClick ? 'Ver ficha del equipo' : undefined}
+        >
+          {name}
+          {homeBadge && <span className="ml-1.5 text-[10px] text-[#7b828d]">(local)</span>}
+        </button>
+        {alignRight && <SeriesDot color={color} />}
+      </span>
+      <div className="text-[11px] text-[#7b828d]">
         {elo != null && <>Elo {Math.round(elo)}{eloRank != null && ` (#${eloRank})`}</>}
         {odds != null && <> · cuota {odds}</>}
       </div>
@@ -354,7 +363,7 @@ function StarterPicker({
     };
   }, [league, teamId]);
 
-  if (error) return <p className="text-[11px] text-slate-500">Sin datos de lanzadores.</p>;
+  if (error) return <p className="text-[11px] text-[#7b828d]">Sin datos de lanzadores.</p>;
   const current = value !== undefined ? value : announced;
 
   return (
@@ -365,7 +374,7 @@ function StarterPicker({
       <select
         value={current ?? ''}
         onChange={(e) => onChange(e.target.value || null)}
-        className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+        className="w-full rounded border border-white/[0.12] bg-[#14161b] px-2 py-1 text-xs text-[#d5d9df]"
         aria-label={`Abridor de ${teamName}`}
       >
         <option value="">— sin abridor conocido —</option>
@@ -401,7 +410,7 @@ function Detail({
         <SectionTitle right={adjusting ? 'recalculando…' : adjusted ? 'ajustado a tu elección' : undefined}>
           Quién abre
         </SectionTitle>
-        <p className="mb-2.5 text-[11px] leading-relaxed text-slate-400">
+        <p className="mb-2.5 text-[11px] leading-relaxed text-[#9aa1ac]">
           El abridor es lo que más mueve un partido de béisbol y se anuncia con un día de
           antelación. Si sabes quién lanza —o si lo han cambiado— elígelo aquí y se recalcula todo:
           el ganador, las carreras y la matriz de marcadores.
@@ -429,15 +438,15 @@ function Detail({
               : 'border-rose-500/25 bg-rose-500/[0.06]'
         }`}
       >
-        <p className="text-slate-200">
+        <p className="text-[#d5d9df]">
           <strong className="capitalize">{reliability.label}</strong> — margen ±{reliability.marginPp} pp.
           Partidos tras cada Elo: {reliability.gamesBehind.away} y {reliability.gamesBehind.home}.
         </p>
         {reliability.reasons.length > 0 && (
           <ul className="mt-1.5 space-y-1">
             {reliability.reasons.map((r, i) => (
-              <li key={i} className="flex gap-2 text-[11px] text-slate-400">
-                <span aria-hidden className="text-slate-600">•</span>
+              <li key={i} className="flex gap-2 text-[11px] text-[#9aa1ac]">
+                <span aria-hidden className="text-[#5c636c]">•</span>
                 <span>{r}</span>
               </li>
             ))}
@@ -447,18 +456,20 @@ function Detail({
 
       <Panel>
         <SectionTitle>Por qué</SectionTitle>
-        <p className="mb-2 text-[13px] leading-relaxed text-slate-300">{reasoning.text}</p>
+        <p className="mb-2 text-[13px] leading-relaxed text-[#c3c9d1]">{reasoning.text}</p>
         <dl className="space-y-1 text-[11px]">
           {reasoning.factors.map((f) => (
             <div key={f.key} className="flex justify-between gap-3">
-              <dt className="text-slate-400">{f.label}</dt>
-              <dd
-                className="shrink-0 tabular-nums"
-                style={{ color: f.pointsForHome >= 0 ? HOME_COLOR : AWAY_COLOR }}
-              >
-                {f.pointsForHome === 0
-                  ? '0 (neutral)'
-                  : `+${Math.abs(f.pointsForHome)} para ${f.pointsForHome > 0 ? home.name : away.name}`}
+              <dt className="text-[#9aa1ac]">{f.label}</dt>
+              <dd>
+                <FactorValue
+                  color={f.pointsForHome >= 0 ? HOME_COLOR : AWAY_COLOR}
+                  neutral={f.pointsForHome === 0}
+                >
+                  {f.pointsForHome === 0
+                    ? '0 (neutral)'
+                    : `+${Math.abs(f.pointsForHome)} para ${f.pointsForHome > 0 ? home.name : away.name}`}
+                </FactorValue>
               </dd>
             </div>
           ))}
@@ -512,7 +523,7 @@ function Detail({
             />
           ))}
         </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+        <p className="mt-2 text-[11px] leading-relaxed text-[#7b828d]">
           Fíjate en lo bajas que son: en béisbol el marcador más probable ronda el 3%, contra el 12%
           de un partido de fútbol. Hay muchísimos resultados plausibles, y por eso el ganador es casi
           una moneda.
@@ -524,21 +535,21 @@ function Detail({
           right={
             <>
               <span style={{ color: AWAY_COLOR }}>{h2h.awayWins}</span>
-              <span className="text-slate-600"> · </span>
+              <span className="text-[#5c636c]"> · </span>
               <span style={{ color: HOME_COLOR }}>{h2h.homeWins}</span>
-              <span className="ml-1.5 text-slate-600">({h2h.total})</span>
+              <span className="ml-1.5 text-[#5c636c]">({h2h.total})</span>
             </>
           }
         >
           Historial directo
         </SectionTitle>
         {h2h.recent.length === 0 ? (
-          <p className="text-[11px] text-slate-500">Sin enfrentamientos previos en el historial.</p>
+          <p className="text-[11px] text-[#7b828d]">Sin enfrentamientos previos en el historial.</p>
         ) : (
           <ul className="space-y-1 text-[11px]">
             {h2h.recent.map((m, i) => (
-              <li key={i} className="flex justify-between gap-3 text-slate-300">
-                <span className="shrink-0 text-slate-500">{formatDate(m.date)}</span>
+              <li key={i} className="flex justify-between gap-3 text-[#c3c9d1]">
+                <span className="shrink-0 text-[#7b828d]">{formatDate(m.date)}</span>
                 <span className="truncate text-right">
                   {m.awayId === away.id ? away.name : home.name} {m.awayRuns}–{m.homeRuns}{' '}
                   {m.homeId === home.id ? home.name : away.name}
@@ -554,7 +565,7 @@ function Detail({
           <SectionTitle right={`margen ${((market.market.overround - 1) * 100).toFixed(1)}%`}>
             Mercado
           </SectionTitle>
-          <p className="text-[11px] leading-relaxed text-slate-300">
+          <p className="text-[11px] leading-relaxed text-[#c3c9d1]">
             Cuotas {market.market.odds.away} / {market.market.odds.home} · implícitas sin vig{' '}
             {pct(market.market.away)} / {pct(market.market.home)}
           </p>
@@ -565,15 +576,15 @@ function Detail({
         <SectionTitle>Lectura completa</SectionTitle>
         <ul className="space-y-1.5">
           {prediction.summary.bullets.map((b, i) => (
-            <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-slate-400">
-              <span aria-hidden className="text-slate-600">•</span>
+            <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-[#9aa1ac]">
+              <span aria-hidden className="text-[#5c636c]">•</span>
               <span>{b}</span>
             </li>
           ))}
         </ul>
       </Panel>
 
-      <p className="text-[11px] leading-relaxed text-slate-500">{prediction.disclaimer}</p>
+      <p className="text-[11px] leading-relaxed text-[#7b828d]">{prediction.disclaimer}</p>
     </div>
   );
 }
