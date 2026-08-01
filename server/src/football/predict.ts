@@ -10,15 +10,26 @@ import {
   bothTeamsScoreProbability,
   expectedGoals,
   expectedTotalGoals,
+  gridForDisplay,
   impliedFrom1X2,
+  marginDistribution,
   outcomeProbabilities,
   overProbability,
   scoreDistribution,
   topScorelines,
+  GOAL_SENSITIVITY,
   HOME_ADVANTAGE,
+  type GoalMargin,
   type MarketProbabilities1X2,
   type ScoreLine,
 } from './model.ts';
+import {
+  describeAvailability,
+  hasSquadData,
+  squadAvailability,
+  NEUTRAL_AVAILABILITY,
+  type SquadAvailability,
+} from './players.ts';
 import {
   getEloRank,
   getLeagueLatestDate,
@@ -33,8 +44,10 @@ import type { FbRecord, LeagueId } from './types.ts';
 
 export const DISCLAIMER =
   'Estimación estadística basada en Elo con ventaja de campo, goles esperados y odds de mercado. ' +
-  'NO considera lesiones, alineaciones, sanciones, rotaciones por competición europea ni partidos ' +
-  'sin nada en juego. No es una certeza ni una recomendación para apostar.';
+  'En la Premier League tiene en cuenta las bajas conocidas (lesiones y sanciones) y las que marques ' +
+  'tú; en el resto de ligas no hay datos de plantilla, así que supone alineaciones habituales. ' +
+  'Nunca sabe la alineación real hasta que se publica, ni si el partido no vale nada. ' +
+  'No es una certeza ni una recomendación para apostar.';
 
 export type ReliabilityLevel = 'high' | 'medium' | 'low';
 
@@ -105,11 +118,30 @@ export interface FbPrediction {
     bothScore: number;
     /** Most likely exact scores, highest first. */
     scorelines: (ScoreLine & { label: string })[];
+    /**
+     * The complete probability of every scoreline, `cells[home][away]`.
+     *
+     * Not a separate calculation: it is the object the 1X2, the over/under and
+     * everything else above are sums of. `tail` is the mass beyond the printed
+     * grid, so the cells plus the tail add up to 1.
+     */
+    grid: { cells: number[][]; maxGoals: number; tail: number };
+    /** Probability of each winning margin, +N down to −N. */
+    margins: GoalMargin[];
+  };
+  /**
+   * Squad availability, where the league has player data. `null` means there is
+   * none for this competition — which is a different thing from "everyone is
+   * fit", and the interface says which.
+   */
+  squads: {
+    home: SquadAvailability | null;
+    away: SquadAvailability | null;
   };
   market: FbMarketComparison;
   h2h: FbHeadToHead;
   reasoning: {
-    factors: { key: 'rating' | 'home'; label: string; pointsForHome: number }[];
+    factors: { key: 'rating' | 'home' | 'squad'; label: string; pointsForHome: number }[];
     text: string;
   };
   reliability: FbReliability;
@@ -161,6 +193,27 @@ function buildSide(league: LeagueId, id: string, isHome: boolean): FbSide {
 const pct1 = (p: number) => (p * 100).toFixed(1);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * Express the net effect of both sides' absences as Elo points for the home team.
+ *
+ * The absences multiply expected goals; the other two factors in the breakdown
+ * are Elo points. Inverting the Elo→goals conversion (`tilt = 10^(gap·sens/400)`)
+ * puts them on one scale, so a reader can see at a glance that a missing striker
+ * was worth less than home advantage — which is the whole point of showing the
+ * three side by side.
+ */
+function availabilityAsElo(
+  homeSquad: SquadAvailability | null,
+  awaySquad: SquadAvailability | null,
+): number {
+  if (!homeSquad && !awaySquad) return 0;
+  const h = homeSquad ?? NEUTRAL_AVAILABILITY;
+  const a = awaySquad ?? NEUTRAL_AVAILABILITY;
+  // Net multiplier on the home side's goals relative to the away side's.
+  const ratio = (h.attack * a.defence) / (a.attack * h.defence);
+  return (Math.log10(ratio) * 400) / GOAL_SENSITIVITY;
+}
+
 /** Build the prediction for a fixture between two teams of the same league. */
 export function buildFootballPrediction(
   league: LeagueId,
@@ -171,14 +224,26 @@ export function buildFootballPrediction(
     oddsDraw: null,
     oddsAway: null,
   },
-  opts: { neutral?: boolean } = {},
+  opts: { neutral?: boolean; outHome?: string[]; outAway?: string[] } = {},
 ): FbPrediction {
   const neutral = !!opts.neutral;
   const home = buildSide(league, homeId, true);
   const away = buildSide(league, awayId, false);
   const leagueGoals = getLeagueGoalsPerMatch(league);
 
-  const lambda = expectedGoals(home.elo, away.elo, leagueGoals, { neutral });
+  // Squad availability, where the league has player data at all. Absences the
+  // source already knows about (injuries, suspensions) are applied automatically;
+  // outHome/outAway are what the caller adds on top, which is how the user tells
+  // the model something it cannot know — the published lineup.
+  const squadsKnown = hasSquadData(league);
+  const homeSquad = squadsKnown ? squadAvailability(league, homeId, opts.outHome ?? []) : null;
+  const awaySquad = squadsKnown ? squadAvailability(league, awayId, opts.outAway ?? []) : null;
+
+  const lambda = expectedGoals(home.elo, away.elo, leagueGoals, {
+    neutral,
+    homeAvailability: homeSquad ?? NEUTRAL_AVAILABILITY,
+    awayAvailability: awaySquad ?? NEUTRAL_AVAILABILITY,
+  });
   home.expectedGoals = round2(lambda.home);
   away.expectedGoals = round2(lambda.away);
 
@@ -327,14 +392,22 @@ export function buildFootballPrediction(
   // ---- reasoning ----
   const ratingGap = Math.round((home.elo - away.elo) * 10) / 10;
   const homeCourt = neutral ? 0 : HOME_ADVANTAGE;
-  const factors = [
-    { key: 'rating' as const, label: 'Elo (nivel del equipo)', pointsForHome: ratingGap },
+  const factors: FbPrediction['reasoning']['factors'] = [
+    { key: 'rating', label: 'Elo (nivel del equipo)', pointsForHome: ratingGap },
     {
-      key: 'home' as const,
+      key: 'home',
       label: neutral ? 'Campo neutral' : 'Ventaja de campo',
       pointsForHome: homeCourt,
     },
   ];
+  // Absences act on goals, not on the rating, so there is no Elo number to show.
+  // Converting the goal effect back to the Elo points that would have produced it
+  // puts it on the same scale as the other two factors, which is the only way the
+  // breakdown reads as one thing rather than two.
+  const squadElo = availabilityAsElo(homeSquad, awaySquad);
+  if (Math.abs(squadElo) >= 1) {
+    factors.push({ key: 'squad', label: 'Bajas y lesiones', pointsForHome: Math.round(squadElo) });
+  }
   const reasoningText =
     Math.abs(ratingGap) < 15
       ? `Los dos equipos están muy igualados en Elo${neutral ? '' : '; la ventaja de campo inclina la balanza'}.`
@@ -365,6 +438,16 @@ export function buildFootballPrediction(
   bullets.push(
     `Marcadores más probables: ${scorelines.slice(0, 3).map((s) => `${s.label} (${pct1(s.probability)}%)`).join(', ')}.`,
   );
+  const homeAbsences = homeSquad ? describeAvailability(homeSquad, home.name) : null;
+  const awayAbsences = awaySquad ? describeAvailability(awaySquad, away.name) : null;
+  if (homeAbsences) bullets.push(homeAbsences);
+  if (awayAbsences) bullets.push(awayAbsences);
+  if (squadsKnown && !homeAbsences && !awayAbsences) {
+    bullets.push(
+      'Sin bajas conocidas en ninguno de los dos: la predicción supone las alineaciones habituales. ' +
+        'Si sabes quién no juega, márcalo y los números se recalculan.',
+    );
+  }
   bullets.push(
     neutral
       ? 'Campo neutral: no se aplica ventaja de campo.'
@@ -439,7 +522,10 @@ export function buildFootballPrediction(
       under25: Math.round((1 - over25) * 100000) / 100000,
       bothScore: Math.round(bts * 100000) / 100000,
       scorelines,
+      grid: gridForDisplay(dist),
+      margins: marginDistribution(dist),
     },
+    squads: { home: homeSquad, away: awaySquad },
     market: marketComparison,
     h2h,
     reasoning: { factors, text: reasoningText },

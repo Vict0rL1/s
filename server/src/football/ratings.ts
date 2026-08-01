@@ -9,13 +9,50 @@ import { getDb } from '../db.ts';
 import {
   carryOver,
   eloExpectation,
+  expectedGoals,
   goalDifferenceMultiplier,
+  GOAL_SENSITIVITY,
   HOME_ADVANTAGE,
+  HOME_GOAL_SHARE,
   INITIAL_ELO,
   K_FACTOR,
   SEASON_CARRYOVER,
 } from './model.ts';
+import {
+  carryOverStrength,
+  neutralStrength,
+  shrinkStrength,
+  updateStrengths,
+  STRENGTH_ALPHA,
+  STRENGTH_CARRYOVER,
+  STRENGTH_MODE,
+  STRENGTH_SHRINK_MATCHES,
+  type StrengthMode,
+  type TeamStrength,
+} from './strength.ts';
+import {
+  daysBetween,
+  freshMomentum,
+  momentumElo,
+  restAdjustment,
+  updateMomentum,
+  CONGESTION_ELO,
+  MOMENTUM_ALPHA,
+  MOMENTUM_ELO,
+  type MomentumState,
+} from './momentum.ts';
 import type { LeagueId } from './types.ts';
+
+/**
+ * EWMA rate at which the league goals anchor follows the league's own scoring.
+ *
+ * 1/760 is about two seasons of memory — the same window the live app uses when
+ * it reads the anchor out of the database, so the backtest and the app are
+ * describing the same model. The optimum is a wide plateau (anything from one to
+ * four seasons of memory scores the same), which is what a real effect looks
+ * like; the thing that matters is that the anchor MOVES at all.
+ */
+export const ANCHOR_ALPHA = 1 / 760;
 
 export interface ReplayMatch {
   season: number;
@@ -47,6 +84,10 @@ export interface FbTeamState {
   goalsAgainst: number;
   /** Matches counted toward the scoring averages (recent window only). */
   scoringMatches: number;
+  /** Learned attack/defence multipliers — the goals model (see strength.ts). */
+  strength: TeamStrength;
+  /** Recent over/under-performance against the team's own rating. */
+  momentum: MomentumState;
 }
 
 export interface ReplayOptions {
@@ -57,11 +98,50 @@ export interface ReplayOptions {
   goalWeight?: number;
   /** Seasons counted toward goal averages; 0 = all. */
   scoringFromSeason?: number;
-  /** Called BEFORE ratings update, with the pre-match state. */
+
+  // --- the goals model ---
+  /** League goals per match. Defaults to the average over the FIRST season
+   * present, which is information available before the walk-forward starts. */
+  goalsAnchor?: number;
+  goalSensitivity?: number;
+  homeGoalShare?: number;
+  /**
+   * How fast the league goals anchor tracks the league's own recent scoring.
+   * 0 freezes it at `goalsAnchor` for the whole replay.
+   */
+  anchorAlpha?: number;
+  /** Learning rate for attack/defence. 0 turns the whole layer off. */
+  strengthAlpha?: number;
+  strengthShrink?: number;
+  strengthCarryover?: number;
+  /** Which half of the goal residual to learn (see strength.ts). */
+  strengthMode?: StrengthMode;
+
+  // --- the moment ---
+  /** Elo points a full-strength form surprise is worth. 0 turns form off. */
+  momentumWeight?: number;
+  momentumAlpha?: number;
+  /** Elo points lost at maximum fixture congestion. 0 turns the calendar off. */
+  restWeight?: number;
+
+  /**
+   * Called BEFORE anything updates, with the pre-match state AND the model's
+   * pre-match expectation. The λ handed over is the same one the replay uses to
+   * learn, so a backtest reading it is scoring the shipped model by construction
+   * rather than by a copy of its arithmetic.
+   */
   onMatch?: (info: {
     match: ReplayMatch;
     home: FbTeamState;
     away: FbTeamState;
+    lambda: { home: number; away: number };
+    /** Elo actually used, after form and calendar adjustments. */
+    effectiveElo: { home: number; away: number };
+    adjustments: {
+      momentum: { home: number; away: number };
+      rest: { home: number; away: number };
+      restDays: { home: number | null; away: number | null };
+    };
   }) => void;
 }
 
@@ -82,6 +162,8 @@ function fresh(): FbTeamState {
     goalsFor: 0,
     goalsAgainst: 0,
     scoringMatches: 0,
+    strength: neutralStrength(),
+    momentum: freshMomentum(),
   };
 }
 
@@ -101,6 +183,22 @@ export function replayMatches(
   const carry = opts.carryover ?? SEASON_CARRYOVER;
   const goalWeight = opts.goalWeight ?? 1;
   const scoringFrom = opts.scoringFromSeason ?? 0;
+  const goalSensitivity = opts.goalSensitivity ?? GOAL_SENSITIVITY;
+  const homeGoalShare = opts.homeGoalShare ?? HOME_GOAL_SHARE;
+  const strengthAlpha = opts.strengthAlpha ?? STRENGTH_ALPHA;
+  const strengthShrink = opts.strengthShrink ?? STRENGTH_SHRINK_MATCHES;
+  const strengthCarry = opts.strengthCarryover ?? STRENGTH_CARRYOVER;
+  const strengthMode = opts.strengthMode ?? STRENGTH_MODE;
+  const momentumWeight = opts.momentumWeight ?? MOMENTUM_ELO;
+  const momentumAlpha = opts.momentumAlpha ?? MOMENTUM_ALPHA;
+  const restWeight = opts.restWeight ?? CONGESTION_ELO;
+  // The anchor must not come from the future. Absent an explicit one, use the
+  // average of the earliest season present — known before the replay starts.
+  const anchorAlpha = opts.anchorAlpha ?? ANCHOR_ALPHA;
+  // Warm-started from the earliest season, then tracked forward. Scoring rates
+  // drift across a decade (the Premier League gained ~0.3 goals a match between
+  // 2007 and 2021), and a frozen anchor quietly biases every total.
+  let anchor = opts.goalsAnchor ?? firstSeasonGoalAverage(matches);
 
   const states = new Map<string, FbTeamState>();
   const get = (id: string): FbTeamState => {
@@ -116,14 +214,50 @@ export function replayMatches(
 
   for (const m of matches) {
     if (m.season !== season) {
-      for (const s of states.values()) s.elo = carryOver(s.elo, carry);
+      for (const s of states.values()) {
+        s.elo = carryOver(s.elo, carry);
+        s.strength = carryOverStrength(s.strength, strengthCarry);
+        // Form does NOT survive a summer: a run of results in May says nothing
+        // about a squad that has since been rebuilt and had a pre-season.
+        s.momentum.surprise = 0;
+      }
       season = m.season;
     }
 
     const home = get(m.home_id);
     const away = get(m.away_id);
 
-    opts.onMatch?.({ match: m, home, away });
+    // --- the moment: form and the calendar, as Elo offsets ---
+    const restDaysHome = home.lastDate ? daysBetween(home.lastDate, m.match_date) : null;
+    const restDaysAway = away.lastDate ? daysBetween(away.lastDate, m.match_date) : null;
+    const momHome = momentumElo(home.momentum, momentumWeight);
+    const momAway = momentumElo(away.momentum, momentumWeight);
+    const restHome = restAdjustment(restDaysHome, restWeight);
+    const restAway = restAdjustment(restDaysAway, restWeight);
+    const effHome = home.elo + momHome + restHome;
+    const effAway = away.elo + momAway + restAway;
+
+    // --- the goals model: what the model expected, BEFORE seeing the result ---
+    const lambda = expectedGoals(effHome, effAway, anchor, {
+      homeAdvantage: homeAdv,
+      goalSensitivity,
+      homeGoalShare,
+      homeStrength: shrinkStrength(home.strength, home.matches, strengthShrink),
+      awayStrength: shrinkStrength(away.strength, away.matches, strengthShrink),
+    });
+
+    opts.onMatch?.({
+      match: m,
+      home,
+      away,
+      lambda,
+      effectiveElo: { home: effHome, away: effAway },
+      adjustments: {
+        momentum: { home: momHome, away: momAway },
+        rest: { home: restHome, away: restAway },
+        restDays: { home: restDaysHome, away: restDaysAway },
+      },
+    });
 
     // --- update ---
     const expected = eloExpectation(home.elo, away.elo, homeAdv);
@@ -133,10 +267,31 @@ export function replayMatches(
     home.elo += shift;
     away.elo -= shift;
 
+    // Attack/defence learn from the part of the scoreline the model missed. Fed
+    // the same λ it was judged on, so what it absorbs is genuinely the residual.
+    updateStrengths(
+      home.strength,
+      away.strength,
+      lambda.home,
+      lambda.away,
+      m.home_goals,
+      m.away_goals,
+      { alpha: strengthAlpha, mode: strengthMode },
+    );
+
+    // Form is the surprise against the rating — the same expectation the Elo
+    // update just used, which is why it needs no separate notion of "good result".
+    updateMomentum(home.momentum, actual, expected, m.match_date, momentumAlpha);
+    updateMomentum(away.momentum, 1 - actual, 1 - expected, m.match_date, momentumAlpha);
+
     home.matches++;
     away.matches++;
     home.lastDate = m.match_date;
     away.lastDate = m.match_date;
+
+    if (anchorAlpha > 0) {
+      anchor = anchor * (1 - anchorAlpha) + anchorAlpha * (m.home_goals + m.away_goals);
+    }
 
     if (m.home_goals > m.away_goals) {
       home.wins++;
@@ -166,6 +321,20 @@ export function replayMatches(
   }
 
   return states;
+}
+
+/** Average goals per match over the earliest season in the list. */
+export function firstSeasonGoalAverage(matches: ReplayMatch[]): number {
+  if (matches.length === 0) return 2.7;
+  const first = matches[0].season;
+  let n = 0;
+  let goals = 0;
+  for (const m of matches) {
+    if (m.season !== first) break;
+    goals += m.home_goals + m.away_goals;
+    n++;
+  }
+  return n > 0 ? goals / n : 2.7;
 }
 
 /** Load every match of a league, chronologically. */

@@ -37,9 +37,21 @@ posible *value* cuando el modelo discrepa de las cuotas.
 - **Mercados de goles coherentes entre sí:** goles esperados de cada equipo, over/under 2.5, ambos
   marcan y los marcadores exactos más probables. Todos salen de **la misma distribución**, así que
   es imposible que se contradigan.
-- **Modelo verificado sobre 24.332 partidos reales** (Premier, LaLiga, Bundesliga, Championship):
-  **RPS 0.2072** frente a 0.2230 de la referencia, y una calibración del empate que pasó de errar
+- **La rejilla completa de marcadores**, 7×7, coloreada por resultado: se ve de un vistazo dónde
+  está la probabilidad, cuánta se lleva cada bloque (local / empate / visitante) y cuánta queda
+  lejos del marcador titular. Debajo, la **diferencia de goles** — que es otra pregunta distinta de
+  «quién gana». La interfaz recibe la rejilla del servidor, así que no puede contradecir los
+  porcentajes impresos encima.
+- **Quién juega (Premier League).** Las lesiones y sanciones del día vienen ya marcadas; si sabes la
+  alineación —se publica una hora antes— la marcas tú y **se recalcula la distribución entera**.
+  Medido sobre tres temporadas de alineaciones reales: es la única señal probada en este proyecto
+  que el Elo no contenía ya.
+- **Modelo verificado sobre 17.200 partidos reales** (Premier, LaLiga, Bundesliga, Championship):
+  **RPS 0.2063** frente a 0.2230 de la referencia, y una calibración del empate que pasó de errar
   5–8 pp a **±1 pp**.
+- **Tres señales que se probaron y se descartaron** —ataque/defensa por equipo, racha y congestión
+  de calendario— siguen en el código, apagadas y con su interruptor, para que el resultado negativo
+  se pueda reproducir en vez de tener que creérselo.
 - **Información de todos los equipos**: clasificación por Elo con goles a favor y en contra, y ficha
   por equipo (balance global / casa / fuera, puntos, últimos partidos).
 - **Ligas sin fuente de resultados** (Champions) muestran partidos y probabilidades del mercado,
@@ -128,6 +140,7 @@ posible *value* cuando el modelo discrepa de las cuotas.
 | Histórico NBA profundo | [FiveThirtyEight `nba-elo`](https://github.com/fivethirtyeight/data/tree/master/nba-elo) | 59.008 partidos reales 1946–2015. Con esto se **ajusta y valida** el modelo de baloncesto; termina en 2015, así que nunca es la fuente de los ratings de hoy. Detalles en [docs/BASKETBALL.md](docs/BASKETBALL.md). |
 | Fútbol: resultados + cuotas 1X2 | [football-data.co.uk](https://www.football-data.co.uk) | Fuente principal de fútbol: temporadas actuales de las grandes ligas **con cuotas de cierre 1X2**. |
 | Fútbol: histórico para ajustar | [footballcsv](https://github.com/footballcsv) | ~20 temporadas de Inglaterra, España y Alemania en GitHub. Es con lo que se ajustó y validó el modelo. |
+| Fútbol: plantillas y lesionados | [vaastav/Fantasy-Premier-League](https://github.com/vaastav/Fantasy-Premier-League) | Solo Premier League: minutos, goles y asistencias esperados por 90, y el parte de bajas del día. Dominio público, sin key. |
 
 ---
 
@@ -278,7 +291,8 @@ ves, en vez de fallar en silencio.
 | `npm run backtest` | Tenis: mide la exactitud del modelo |
 | `npm run update-data:bb` | **Baloncesto**: equipos, resultados, partidos próximos y cuotas |
 | `npm run backtest:bb` | **Baloncesto**: mide el modelo (incluye comparación con FiveThirtyEight) |
-| `npm run update-data:fb` | **Fútbol**: equipos, resultados, partidos próximos y cuotas |
+| `npm run update-data:fb` | **Fútbol**: equipos, resultados, partidos próximos, cuotas y plantillas |
+| `npm run update-squads:fb` | **Fútbol**: solo las plantillas y el parte de lesionados (cambia a diario) |
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
@@ -342,6 +356,8 @@ npm run update-data:fb -- --league epl              # solo una liga
 npm run update-data:fb -- --seasons 12              # más temporadas
 npm run update-data:fb -- --source footballcsv      # espejo en GitHub (sin cuotas, va atrasado)
 npm run update-data:fb -- --skip-odds               # solo resultados
+npm run update-data:fb -- --skip-squads             # sin tocar las plantillas
+npm run update-squads:fb                            # solo lesionados y sanciones (a diario)
 ```
 
 Por defecto usa **football-data.co.uk** (temporadas actuales *y* cuotas 1X2 históricas) y, si no lo

@@ -303,6 +303,41 @@ function createSchema(d: DatabaseSync): void {
       PRIMARY KEY (league, team_id)
     );
 
+    -- ------------------------------------------------------------------
+    -- Football squads.
+    --
+    -- The one thing the team model provably cannot see. Elo, goals and the
+    -- calendar were all measured and none of them knew whether the striker was
+    -- playing; this table is what makes that answerable. Per player: how much he
+    -- plays, how much attacking output he produces per 90 minutes, and whether he
+    -- is currently injured or suspended.
+    --
+    -- Deliberately NOT wiped by resetData(): squads survive a re-ingestion of
+    -- results, and the availability flags are the freshest thing in the app.
+    -- ------------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS fb_players (
+      id            TEXT NOT NULL,     -- source id, unique within the league
+      league        TEXT NOT NULL,
+      team_id       TEXT NOT NULL,
+      name          TEXT NOT NULL,
+      position      TEXT NOT NULL,     -- GK | DEF | MID | FWD
+      minutes       INTEGER NOT NULL DEFAULT 0,
+      starts        INTEGER NOT NULL DEFAULT 0,
+      -- Expected goal involvements (goals + assists) per 90 minutes. The
+      -- player-specific quantity the attack side of the model is built on.
+      xgi90         REAL,
+      goals         INTEGER NOT NULL DEFAULT 0,
+      assists       INTEGER NOT NULL DEFAULT 0,
+      -- Availability as the source reports it right now.
+      status        TEXT,              -- a | d | i | s | u
+      chance_next   INTEGER,           -- 0..100, NULL when the source says nothing
+      news          TEXT,
+      season        TEXT,
+      updated_at    TEXT,
+      PRIMARY KEY (league, id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_fb_players_team ON fb_players (league, team_id, minutes DESC);
+
     CREATE TABLE IF NOT EXISTS fb_upcoming (
       id            TEXT PRIMARY KEY,
       league        TEXT NOT NULL,

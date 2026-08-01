@@ -9,11 +9,18 @@
 //   football-data  — football-data.co.uk only.
 //   footballcsv    — the GitHub mirror only. Real matches with no odds, and it
 //                    lags a few seasons, so ratings won't describe this weekend.
+//
+// SQUADS (--skip-squads to leave them alone)
+//   Premier League player data comes from the FPL mirror on GitHub: minutes,
+//   attacking output per 90, and who is injured or suspended right now. It is the
+//   only signal measured in this project that the Elo did not already contain —
+//   see docs/FOOTBALL.md.
 
 import { getDb, setMeta } from '../../db.ts';
 import { footballConfig } from '../../config.ts';
 import { ingestFootballCsv } from '../ingest/footballcsv.ts';
 import { ingestFootballData } from '../ingest/footballData.ts';
+import { ingestFplPlayers } from '../ingest/fplPlayers.ts';
 import { refreshFootballOdds } from '../ingest/odds.ts';
 import { recomputeFootballRatings } from '../ratings.ts';
 import { countMatches, countTeams, getLeagueLatestDate } from '../repo.ts';
@@ -48,6 +55,7 @@ async function main() {
   const onlyLeague = typeof args.league === 'string' ? args.league : null;
   const seasonCount = Number(args.seasons) || footballConfig.history.seasons;
   const skipOdds = !!args['skip-odds'];
+  const skipSquads = !!args['skip-squads'];
   const source = typeof args.source === 'string' ? args.source : 'auto';
   if (!['auto', 'football-data', 'footballcsv'].includes(source)) {
     throw new Error(`--source desconocido: ${source} (usa auto, football-data o footballcsv)`);
@@ -157,6 +165,23 @@ async function main() {
         `  ⚠️  El historial de ${league.name} termina hace ~${Math.round(monthsOld)} meses.\n` +
           `      Los Elo NO describen a las plantillas actuales.`,
       );
+    }
+  }
+
+  // Squads come AFTER the results ingest, because matching FPL's club names
+  // needs the teams to already be in the database.
+  if (!skipSquads && leagues.some((l) => l.id === 'epl')) {
+    console.log('\n▸ Plantillas (Premier League)…');
+    try {
+      const sq = await ingestFplPlayers('epl');
+      console.log(
+        `  ${sq.players} jugadores de ${sq.teams} equipos · temporada ${sq.season}` +
+          (sq.unmatched.length ? `\n  ⚠️  sin emparejar: ${sq.unmatched.join(', ')}` : ''),
+      );
+    } catch (e) {
+      // Never fatal: squads are an extra layer, and the team model works without
+      // them. Saying so beats failing an otherwise successful update.
+      console.warn(`  ⚠️  plantillas no disponibles: ${(e as Error).message}`);
     }
   }
 

@@ -106,6 +106,21 @@ export function expectedGoals(
     neutral?: boolean;
     goalSensitivity?: number;
     homeGoalShare?: number;
+    /**
+     * Per-team attack/defence multipliers (see strength.ts). Omitted, the model
+     * is pure Elo → goals and every team of a given rating gets the same
+     * scoreline distribution — which is exactly what these correct.
+     */
+    homeStrength?: TeamStrengthMultipliers;
+    awayStrength?: TeamStrengthMultipliers;
+    /**
+     * Multiplier from squad availability (see players.ts). 1 = full strength.
+     * Kept separate from the learned strength so the breakdown can say which
+     * part of a number is "this team's scoring profile" and which is "and their
+     * striker is out".
+     */
+    homeAvailability?: TeamStrengthMultipliers;
+    awayAvailability?: TeamStrengthMultipliers;
   } = {},
 ): { home: number; away: number } {
   const adv = opts.neutral ? 0 : (opts.homeAdvantage ?? HOME_ADVANTAGE);
@@ -115,14 +130,32 @@ export function expectedGoals(
   const tilt = Math.pow(10, (gap * sens) / 400);
   const baseHome = leagueGoalsPerMatch * share;
   const baseAway = leagueGoalsPerMatch * (1 - share);
+  const hs = opts.homeStrength ?? NEUTRAL_MULTIPLIERS;
+  const as = opts.awayStrength ?? NEUTRAL_MULTIPLIERS;
+  const ha = opts.homeAvailability ?? NEUTRAL_MULTIPLIERS;
+  const aa = opts.awayAvailability ?? NEUTRAL_MULTIPLIERS;
+  // A team's goals are its own attack against the opponent's defence — both
+  // multipliers apply to the same λ, which is what lets a good attack against a
+  // bad defence produce the blowout distribution it should.
+  const homeMult = hs.attack * as.defence * ha.attack * aa.defence;
+  const awayMult = as.attack * hs.defence * aa.attack * ha.defence;
   // Clamp: a Poisson mean below ~0.15 or above ~5 produces score distributions
   // no real league match has ever looked like, and it only happens when a rating
   // is built from almost no data.
   return {
-    home: clamp(baseHome * tilt, 0.15, 5),
-    away: clamp(baseAway / tilt, 0.15, 5),
+    home: clamp(baseHome * tilt * homeMult, 0.15, 5),
+    away: clamp((baseAway / tilt) * awayMult, 0.15, 5),
   };
 }
+
+/** Attack/defence pair. Structural duplicate of strength.ts's TeamStrength, kept
+ * here so model.ts stays free of imports and can be reasoned about on its own. */
+export interface TeamStrengthMultipliers {
+  attack: number;
+  defence: number;
+}
+
+const NEUTRAL_MULTIPLIERS: TeamStrengthMultipliers = { attack: 1, defence: 1 };
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
@@ -262,6 +295,66 @@ export function topScorelines(dist: ScoreDistribution, count = 6): ScoreLine[] {
     }
   }
   return all.sort((x, y) => y.probability - x.probability).slice(0, count);
+}
+
+/**
+ * The whole grid, rounded for transport.
+ *
+ * Everything the app shows is already a sum over this — the 1X2, the over/under,
+ * both-teams-to-score, the likely scorelines — so handing over the grid itself
+ * gives the interface exactly what the model knows, with nothing recomputed on
+ * the far side that could disagree with it.
+ *
+ * Trimmed to `maxGoals` a side: the tail beyond 6-6 is a rounding error and
+ * printing it costs a column each way for nothing. The tail is not discarded,
+ * it is reported as `tail` so the visible cells and the tail still sum to 1.
+ */
+export function gridForDisplay(
+  dist: ScoreDistribution,
+  maxGoals = 6,
+): { cells: number[][]; maxGoals: number; tail: number } {
+  const cells: number[][] = [];
+  let shown = 0;
+  for (let h = 0; h <= maxGoals; h++) {
+    cells[h] = [];
+    for (let a = 0; a <= maxGoals; a++) {
+      const p = Math.round(dist.grid[h][a] * 1e6) / 1e6;
+      cells[h][a] = p;
+      shown += dist.grid[h][a];
+    }
+  }
+  return { cells, maxGoals, tail: Math.round(Math.max(0, 1 - shown) * 1e6) / 1e6 };
+}
+
+export interface GoalMargin {
+  /** Home goals minus away goals. Positive = home win, 0 = draw. */
+  margin: number;
+  probability: number;
+}
+
+/**
+ * Probability of each winning margin — the diagonals of the grid.
+ *
+ * A different question from "who wins", and the one that matters for handicap
+ * markets: two matches can both be 65% home wins while one of them is 65% by a
+ * single goal and the other is a likely thrashing.
+ */
+export function marginDistribution(dist: ScoreDistribution, maxMargin = 5): GoalMargin[] {
+  const byMargin = new Map<number, number>();
+  for (let h = 0; h < dist.grid.length; h++) {
+    for (let a = 0; a < dist.grid[h].length; a++) {
+      // Everything past the cut is piled onto the edge margin, so the list still
+      // sums to 1 and "+5 or more" means exactly that.
+      const raw = h - a;
+      const m = Math.max(-maxMargin, Math.min(maxMargin, raw));
+      byMargin.set(m, (byMargin.get(m) ?? 0) + dist.grid[h][a]);
+    }
+  }
+  const out: GoalMargin[] = [];
+  for (let m = maxMargin; m >= -maxMargin; m--) {
+    out.push({ margin: m, probability: Math.round((byMargin.get(m) ?? 0) * 1e6) / 1e6 });
+  }
+  return out;
 }
 
 /** Expected total goals implied by the distribution (≈ λ_home + λ_away). */

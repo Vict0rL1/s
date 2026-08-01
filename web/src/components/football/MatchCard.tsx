@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import type { FbFixtureWithPrediction, FbPrediction, FbReliability } from '../../lib/football';
+import { useEffect, useState } from 'react';
+import { fbApi, type FbFixtureWithPrediction, type FbPrediction, type FbReliability } from '../../lib/football';
 import { formatDateTime, formatDate } from '../../lib/format';
+import ScoreMatrix from './ScoreMatrix';
+import SquadPanel from './SquadPanel';
 
 export const HOME_COLOR = '#a3e635'; // lime
 export const DRAW_COLOR = '#94a3b8'; // slate — the draw needs a colour of its own
@@ -16,8 +18,38 @@ export default function MatchCard({
   onOpenTeam: (league: string, id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const { fixture, prediction, marketOnly, teams } = item;
+  // Players the user has marked unavailable, and the prediction the server
+  // returns for that lineup. Held here rather than inside the squad panel because
+  // EVERY figure on the card comes from the same distribution — mark a striker out
+  // and the 1X2, the goals markets and the whole matrix have to move together.
+  const [outHome, setOutHome] = useState<string[]>([]);
+  const [outAway, setOutAway] = useState<string[]>([]);
+  const [adjusted, setAdjusted] = useState<FbPrediction | null>(null);
+  const [adjusting, setAdjusting] = useState(false);
 
+  const { fixture, marketOnly, teams } = item;
+  const dirty = outHome.length > 0 || outAway.length > 0;
+
+  useEffect(() => {
+    if (!dirty) {
+      setAdjusted(null);
+      return;
+    }
+    let live = true;
+    setAdjusting(true);
+    fbApi
+      .fixture(fixture.id, { home: outHome, away: outAway })
+      .then((r) => live && setAdjusted(r.prediction))
+      // Falling back to the unadjusted prediction is right: a failed re-predict
+      // must never leave the card showing numbers for a lineup nobody asked for.
+      .catch(() => live && setAdjusted(null))
+      .finally(() => live && setAdjusting(false));
+    return () => {
+      live = false;
+    };
+  }, [fixture.id, outHome, outAway, dirty]);
+
+  const prediction = adjusted ?? item.prediction;
   const probs = prediction?.model ?? marketOnly ?? null;
   const fromModel = !!prediction;
 
@@ -57,9 +89,18 @@ export default function MatchCard({
         <>
           {/* 1X2 — three outcomes, so the draw gets equal billing */}
           <div className="grid grid-cols-3 gap-2 text-center">
-            <Outcome label="1" sub="Local" value={probs.home} color={HOME_COLOR} odds={fixture.odds_home} />
-            <Outcome label="X" sub="Empate" value={probs.draw} color={DRAW_COLOR} odds={fixture.odds_draw} />
-            <Outcome label="2" sub="Visitante" value={probs.away} color={AWAY_COLOR} odds={fixture.odds_away} />
+            <Outcome
+              label="1" sub="Local" value={probs.home} color={HOME_COLOR}
+              odds={fixture.odds_home} xg={prediction?.goals.expectedHome}
+            />
+            <Outcome
+              label="X" sub="Empate" value={probs.draw} color={DRAW_COLOR}
+              odds={fixture.odds_draw} xg={prediction?.goals.expectedTotal} xgLabel="goles"
+            />
+            <Outcome
+              label="2" sub="Visitante" value={probs.away} color={AWAY_COLOR}
+              odds={fixture.odds_away} xg={prediction?.goals.expectedAway}
+            />
           </div>
           {!fromModel && (
             <p className="mt-2 text-center text-[11px] text-amber-400">
@@ -73,9 +114,9 @@ export default function MatchCard({
               {/* Goals markets, all derived from the same distribution */}
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <Figure
-                  label="Goles"
-                  value={`${prediction.goals.expectedHome} – ${prediction.goals.expectedAway}`}
-                  hint={`total ${prediction.goals.expectedTotal}`}
+                  label="Marcador"
+                  value={prediction.goals.scorelines[0].label}
+                  hint={`el más probable · ${pct(prediction.goals.scorelines[0].probability)}`}
                 />
                 <Figure
                   label="+2.5 goles"
@@ -141,7 +182,18 @@ export default function MatchCard({
               >
                 {open ? '▲ Ocultar desglose' : '▼ Ver desglose (Elo · goles · marcadores · mercado)'}
               </button>
-              {open && <Detail prediction={prediction} />}
+              {open && (
+                <Detail
+                  prediction={prediction}
+                  league={fixture.league}
+                  outHome={outHome}
+                  outAway={outAway}
+                  onOutHome={setOutHome}
+                  onOutAway={setOutAway}
+                  adjusting={adjusting}
+                  adjusted={dirty}
+                />
+              )}
             </>
           )}
         </>
@@ -153,8 +205,11 @@ export default function MatchCard({
 }
 
 function Outcome({
-  label, sub, value, color, odds,
-}: { label: string; sub: string; value: number; color: string; odds: number | null }) {
+  label, sub, value, color, odds, xg, xgLabel = 'goles esp.',
+}: {
+  label: string; sub: string; value: number; color: string; odds: number | null;
+  xg?: number; xgLabel?: string;
+}) {
   return (
     <div className="rounded-lg bg-slate-900/50 p-2">
       <div className="text-[10px] uppercase tracking-wide text-slate-500">
@@ -164,6 +219,14 @@ function Outcome({
         {(value * 100).toFixed(1)}
         <span className="text-sm">%</span>
       </div>
+      {/* Probability and expected goals side by side: a 60% favourite expected to
+          win 1.2–0.7 and one expected to win 2.8–1.6 are the same bet on the
+          result and completely different ones on everything else. */}
+      {xg != null && (
+        <div className="text-[10px] tabular-nums text-slate-400">
+          {xg} {xgLabel}
+        </div>
+      )}
       {odds != null && <div className="text-[10px] text-slate-500">cuota {odds}</div>}
     </div>
   );
@@ -254,12 +317,54 @@ function MissingModel({ item }: { item: FbFixtureWithPrediction }) {
 }
 
 /** Full breakdown, all figures drawn from the same score distribution. */
-function Detail({ prediction }: { prediction: FbPrediction }) {
-  const { teams, goals, h2h, market, reasoning, reliability } = prediction;
+function Detail({
+  prediction, league, outHome, outAway, onOutHome, onOutAway, adjusting, adjusted,
+}: {
+  prediction: FbPrediction;
+  league: string;
+  outHome: string[];
+  outAway: string[];
+  onOutHome: (ids: string[]) => void;
+  onOutAway: (ids: string[]) => void;
+  adjusting: boolean;
+  adjusted: boolean;
+}) {
+  const { teams, goals, h2h, market, reasoning, reliability, squads } = prediction;
   const home = teams.home;
   const away = teams.away;
+  const hasSquads = squads.home !== null || squads.away !== null;
   return (
     <div className="mt-4 space-y-4 border-t border-slate-700/60 pt-4 text-sm">
+      {hasSquads && (
+        <div className="rounded-lg bg-slate-800/50 p-3">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-xs uppercase tracking-wide text-slate-500">
+              Quién juega
+            </span>
+            <span className="text-[10px] text-slate-500">
+              {adjusting ? 'recalculando…' : adjusted ? 'ajustado a tus bajas' : ''}
+            </span>
+          </div>
+          <p className="mb-2 text-[11px] leading-relaxed text-slate-400">
+            Las lesiones y sanciones conocidas ya vienen marcadas. Si sabes la alineación —
+            se publica una hora antes — marca al resto y se recalcula todo: el 1X2, los goles y
+            la matriz de marcadores.
+          </p>
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <SquadPanel
+              league={league} side="home" teamId={home.id} teamName={home.name}
+              color={HOME_COLOR} availability={squads.home} out={outHome} onChange={onOutHome}
+            />
+            <SquadPanel
+              league={league} side="away" teamId={away.id} teamName={away.name}
+              color={AWAY_COLOR} availability={squads.away} out={outAway} onChange={onOutAway}
+            />
+          </div>
+        </div>
+      )}
+
+      <ScoreMatrix prediction={prediction} />
+
       <div
         className={`rounded-lg border p-3 ${
           reliability.level === 'high'
@@ -299,8 +404,11 @@ function Detail({ prediction }: { prediction: FbPrediction }) {
                 className="tabular-nums"
                 style={{ color: f.pointsForHome >= 0 ? HOME_COLOR : AWAY_COLOR }}
               >
-                {f.pointsForHome > 0 ? '+' : ''}
-                {f.pointsForHome} para {f.pointsForHome >= 0 ? home.name : away.name}
+                {f.pointsForHome === 0
+                  ? '0 (neutral)'
+                  : `+${Math.abs(f.pointsForHome)} para ${
+                      f.pointsForHome > 0 ? home.name : away.name
+                    }`}
               </span>
             </div>
           ))}

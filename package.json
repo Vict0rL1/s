@@ -25,6 +25,7 @@
     "backtest:bb": "npm run backtest:bb --workspace server --",
     "seed:bb": "npm run seed:bb --workspace server --",
     "update-data:fb": "npm run update-data:fb --workspace server --",
+    "update-squads:fb": "npm run update-squads:fb --workspace server --",
     "backtest:fb": "npm run backtest:fb --workspace server --"
   },
   "devDependencies": {

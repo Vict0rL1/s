@@ -19,10 +19,13 @@
 //   --k <n>               base K-factor
 //   --carryover <0..1>    rating surviving the off-season
 //   --goals <weight>      goal-difference weighting on K (0 = result only)
+//   --attack <alpha>      attack/defence learning rate (0 = pure Elo → goals)
+//   --shrink <n>          matches before attack/defence is trusted fully
+//   --momentum <elo>      Elo worth of recent form (0 = off)
+//   --rest <elo>          Elo lost at full fixture congestion (0 = off)
 
 import { footballConfig } from '../config.ts';
 import {
-  expectedGoals,
   impliedFrom1X2,
   outcomeProbabilities,
   overProbability,
@@ -35,7 +38,9 @@ import {
   K_FACTOR,
   SEASON_CARRYOVER,
 } from './model.ts';
-import { loadMatches, replayMatches } from './ratings.ts';
+import { STRENGTH_ALPHA, STRENGTH_SHRINK_MATCHES } from './strength.ts';
+import { CONGESTION_ELO, MOMENTUM_ELO } from './momentum.ts';
+import { firstSeasonGoalAverage, loadMatches, replayMatches } from './ratings.ts';
 
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
@@ -65,11 +70,18 @@ function main() {
   const k = args.k !== undefined ? Number(args.k) : K_FACTOR;
   const carryover = args.carryover !== undefined ? Number(args.carryover) : SEASON_CARRYOVER;
   const goalWeight = args.goals !== undefined ? Number(args.goals) : 1;
+  const strengthAlpha = args.attack !== undefined ? Number(args.attack) : STRENGTH_ALPHA;
+  const strengthShrink =
+    args.shrink !== undefined ? Number(args.shrink) : STRENGTH_SHRINK_MATCHES;
+  const momentumWeight = args.momentum !== undefined ? Number(args.momentum) : MOMENTUM_ELO;
+  const restWeight = args.rest !== undefined ? Number(args.rest) : CONGESTION_ELO;
 
   console.log(
     `Ventaja de campo: ${homeAdvantage} · sensibilidad Elo→goles: ${goalSensitivity} · ` +
       `rho (Dixon-Coles): ${rho}\nCuota de goles del local: ${homeGoalShare} · K: ${k} · ` +
-      `arrastre: ${carryover} · peso de la diferencia de goles: ${goalWeight}`,
+      `arrastre: ${carryover} · peso de la diferencia de goles: ${goalWeight}\n` +
+      `Ataque/defensa: α=${strengthAlpha} (shrink ${strengthShrink}) · ` +
+      `momento: ${momentumWeight} Elo · congestión: ${restWeight} Elo`,
   );
 
   const leagues = footballConfig.leagues
@@ -99,12 +111,9 @@ function main() {
     if (matches.length === 0) continue;
 
     // The goals anchor must be known BEFORE the walk-forward, and it must not
-    // come from the future: use the league's average over the earliest season
+    // come from the future: the league's average over the earliest season
     // present, which is information available at the start.
-    const firstSeason = matches[0].season;
-    const early = matches.filter((m) => m.season === firstSeason);
-    const anchor =
-      early.reduce((a, m) => a + m.home_goals + m.away_goals, 0) / Math.max(1, early.length);
+    const anchor = firstSeasonGoalAverage(matches);
 
     let scored = 0;
     let rps = 0;
@@ -118,14 +127,18 @@ function main() {
       k,
       carryover,
       goalWeight,
-      onMatch: ({ match, home, away }) => {
+      goalsAnchor: anchor,
+      goalSensitivity,
+      homeGoalShare,
+      strengthAlpha,
+      strengthShrink,
+      momentumWeight,
+      restWeight,
+      // λ comes FROM the replay, not from a second call to expectedGoals here:
+      // the backtest must score the arithmetic the app runs, not a copy of it.
+      onMatch: ({ match, home, away, lambda }) => {
         if (home.matches < warmup || away.matches < warmup) return;
 
-        const lambda = expectedGoals(home.elo, away.elo, anchor, {
-          homeAdvantage,
-          goalSensitivity,
-          homeGoalShare,
-        });
         const dist = scoreDistribution(lambda.home, lambda.away, rho);
         const probs = outcomeProbabilities(dist);
         const actual = match.result as 'H' | 'D' | 'A';

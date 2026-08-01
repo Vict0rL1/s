@@ -31,6 +31,31 @@ export interface FbMarket {
   verdict: 'value_home' | 'value_draw' | 'value_away' | 'agree' | 'no_market';
 }
 
+export interface FbSquadPlayer {
+  id: string; team_id: string; name: string;
+  position: 'GK' | 'DEF' | 'MID' | 'FWD';
+  minutes: number; starts: number; xgi90: number | null;
+  goals: number; assists: number;
+  status: string | null; chance_next: number | null; news: string | null;
+  regular: boolean; attackShare: number; minutesShare: number;
+  flaggedOut: boolean; flagReason: string | null;
+}
+
+export interface FbAvailability {
+  attack: number; defence: number;
+  missingAttack: number; missingMinutes: number;
+  out: { id: string; name: string; position: string; attackShare: number; reason: string | null }[];
+}
+
+export interface FbSquad {
+  league: string; teamId: string;
+  season: string | null; updatedAt: string | null;
+  players: FbSquadPlayer[];
+  availability: FbAvailability;
+}
+
+export interface FbGoalMargin { margin: number; probability: number }
+
 export interface FbPrediction {
   league: string;
   neutral: boolean;
@@ -40,7 +65,12 @@ export interface FbPrediction {
     expectedHome: number; expectedAway: number; expectedTotal: number;
     over25: number; under25: number; bothScore: number;
     scorelines: { home: number; away: number; probability: number; label: string }[];
+    /** cells[homeGoals][awayGoals]; cells + tail sum to 1. */
+    grid: { cells: number[][]; maxGoals: number; tail: number };
+    margins: FbGoalMargin[];
   };
+  /** null for leagues with no player data at all — not the same as "no absences". */
+  squads: { home: FbAvailability | null; away: FbAvailability | null };
   market: FbMarket;
   h2h: {
     total: number; homeWins: number; draws: number; awayWins: number;
@@ -83,6 +113,7 @@ export interface FbMeta {
   dataSource: string; updatedAt: string | null;
   oddsSource: string | null; oddsRefreshedAt: string | null;
   hasOddsKey: boolean; autoRefreshMinutes: number;
+  squads: { season: string | null; updatedAt: string | null; leagues: string[] };
   counts: { teams: number; matches: number };
   leagues: {
     id: string; name: string; label: string; matches: number; teams: number;
@@ -128,6 +159,18 @@ export const fbApi = {
     get<FbFixtureWithPrediction[]>(
       `/fixtures/upcoming${league ? `?league=${encodeURIComponent(league)}` : ''}`,
     ),
+  squad: (league: string, id: string) =>
+    get<FbSquad>(`/squad/${encodeURIComponent(league)}/${encodeURIComponent(id)}`),
+  /** Re-predict a fixture with a set of players marked unavailable. */
+  fixture: (id: string, out: { home?: string[]; away?: string[] } = {}) => {
+    const q = new URLSearchParams();
+    if (out.home?.length) q.set('outHome', out.home.join(','));
+    if (out.away?.length) q.set('outAway', out.away.join(','));
+    const qs = q.toString();
+    return get<FbFixtureWithPrediction>(
+      `/fixtures/${encodeURIComponent(id)}${qs ? `?${qs}` : ''}`,
+    );
+  },
   team: (league: string, id: string) =>
     get<FbTeamInfo>(`/teams/${encodeURIComponent(league)}/${encodeURIComponent(id)}`),
   power: (league: string, limit = 40) =>

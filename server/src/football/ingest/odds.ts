@@ -10,6 +10,7 @@
 import { getDb, setMeta } from '../../db.ts';
 import { env, footballConfig } from '../../config.ts';
 import { eloExpectation, HOME_ADVANTAGE } from '../model.ts';
+import { buildTeamIndex as buildNameIndex, resolveTeam as resolve } from './teamNames.ts';
 import type { LeagueId } from '../types.ts';
 
 const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
@@ -72,36 +73,6 @@ async function fetchLive(sportKey: string): Promise<Aggregated[]> {
   });
 }
 
-const normalize = (s: string) =>
-  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-    .replace(/\b(fc|cf|afc|sc|ac|ss|as|cd|ud|rcd|club|de|the)\b/g, ' ')
-    .replace(/[^a-z0-9]+/g, ' ').trim();
-
-/**
- * Feeds spell clubs differently ("Manchester United" vs "Manchester United FC"
- * vs "Man United"), so the index drops common club suffixes and matches on what
- * is left. No fuzzy matching: it would cheerfully merge the two Manchester clubs.
- */
-function buildNameIndex(league: LeagueId): Map<string, string> {
-  const rows = getDb()
-    .prepare('SELECT id, name FROM fb_teams WHERE league = ?')
-    .all(league) as unknown as { id: string; name: string }[];
-  const idx = new Map<string, string>();
-  for (const r of rows) {
-    const k = normalize(r.name);
-    if (k && !idx.has(k)) idx.set(k, r.id);
-  }
-  return idx;
-}
-
-function resolve(idx: Map<string, string>, name: string): string | null {
-  const n = normalize(name);
-  if (idx.has(n)) return idx.get(n)!;
-  // A feed's shorter name is often a prefix of ours ("Man City" vs "Manchester
-  // City"): accept only an unambiguous single candidate.
-  const hits = [...idx.entries()].filter(([k]) => k.startsWith(n) || n.startsWith(k));
-  return hits.length === 1 ? hits[0][1] : null;
-}
 
 /** Demo fixtures from current Elo, so the tab works with no key / out of season. */
 function generateFixtures(league: LeagueId, count = 6): Aggregated[] {
