@@ -23,7 +23,9 @@
     "lint": "npm run lint --workspaces --if-present",
     "update-data:bb": "npm run update-data:bb --workspace server --",
     "backtest:bb": "npm run backtest:bb --workspace server --",
-    "seed:bb": "npm run seed:bb --workspace server --"
+    "seed:bb": "npm run seed:bb --workspace server --",
+    "update-data:fb": "npm run update-data:fb --workspace server --",
+    "backtest:fb": "npm run backtest:fb --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

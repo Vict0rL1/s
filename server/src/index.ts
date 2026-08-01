@@ -7,10 +7,13 @@ import { getDb } from './db.ts';
 import { countRows } from './repo.ts';
 import { refreshOdds } from './ingest/odds.ts';
 import { refreshBasketballOdds } from './basketball/ingest/odds.ts';
+import { refreshFootballOdds } from './football/ingest/odds.ts';
 import { registerRoutes } from './routes/api.ts';
 import { registerBasketballRoutes } from './routes/basketball.ts';
+import { registerFootballRoutes } from './routes/football.ts';
 import { resolvePredictions } from './trackRecord.ts';
 import { resolveGamePredictions } from './basketball/trackRecord.ts';
+import { resolveFootballPredictions } from './football/trackRecord.ts';
 
 /**
  * Keep odds current on their own: refresh once at startup and then on an
@@ -45,6 +48,14 @@ function startAutoRefresh(log: (msg: string) => void): void {
         log(`Basketball odds refresh failed: ${(e as Error).message}`);
       }
     }
+    if (countRows('fb_teams') > 0) {
+      try {
+        const r = await refreshFootballOdds();
+        log(`Football odds refreshed: ${r.count} fixtures (${r.source}).`);
+      } catch (e) {
+        log(`Football odds refresh failed: ${(e as Error).message}`);
+      }
+    }
   };
   void run(); // once at startup
   setInterval(run, env.autoRefreshMinutes * 60_000).unref();
@@ -59,6 +70,7 @@ async function main() {
   try {
     resolvePredictions();
     resolveGamePredictions();
+    resolveFootballPredictions();
   } catch {
     // Never block startup over the track record.
   }
@@ -68,12 +80,14 @@ async function main() {
   await app.register(registerRoutes, { prefix: '/api' });
   // Basketball lives in its own namespace: no endpoint can return both sports.
   await app.register(registerBasketballRoutes, { prefix: '/api/basketball' });
+  await app.register(registerFootballRoutes, { prefix: '/api/football' });
 
   app.get('/', async () => ({
     name: 'tennis-predictor API',
     docs:
       'Tenis: /api/health, /api/tours, /api/matches/upcoming, /api/predictions/:id · ' +
-      'Baloncesto: /api/basketball/leagues, /api/basketball/games/upcoming, /api/basketball/power',
+      'Baloncesto: /api/basketball/leagues, /api/basketball/games/upcoming · ' +
+      'Fútbol: /api/football/leagues, /api/football/fixtures/upcoming, /api/football/power',
   }));
 
   try {

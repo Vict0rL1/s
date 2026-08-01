@@ -256,6 +256,98 @@ function createSchema(d: DatabaseSync): void {
       updated_at    TEXT
     );
 
+    -- ==================================================================
+    -- FOOTBALL (soccer)
+    --
+    -- Its own tables, like basketball. The distinguishing feature is the
+    -- DRAW: roughly a quarter of matches end level, so the result is a
+    -- three-way outcome and the result column is stored rather than derived
+    -- from a comparison. Goals are kept because in a low-scoring sport the goal
+    -- distribution IS the model: 1X2, over/under and both-teams-to-score all
+    -- come out of it, which is also what keeps those markets consistent.
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS fb_teams (
+      id     TEXT NOT NULL,
+      league TEXT NOT NULL,
+      name   TEXT NOT NULL,
+      PRIMARY KEY (league, id)
+    );
+
+    CREATE TABLE IF NOT EXISTS fb_matches (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      league     TEXT NOT NULL,
+      season     INTEGER NOT NULL,
+      match_date TEXT NOT NULL,
+      home_id    TEXT NOT NULL,
+      away_id    TEXT NOT NULL,
+      home_goals INTEGER NOT NULL,
+      away_goals INTEGER NOT NULL,
+      result     TEXT NOT NULL,   -- H | D | A
+      -- Closing 1X2 odds where the source has them, so the model can be scored
+      -- against the market on identical matches.
+      odds_home  REAL, odds_draw REAL, odds_away REAL,
+      UNIQUE (league, match_date, home_id, away_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_fb_date ON fb_matches (league, match_date);
+    CREATE INDEX IF NOT EXISTS idx_fb_home ON fb_matches (league, home_id, match_date);
+    CREATE INDEX IF NOT EXISTS idx_fb_away ON fb_matches (league, away_id, match_date);
+
+    CREATE TABLE IF NOT EXISTS fb_team_ratings (
+      team_id         TEXT NOT NULL,
+      league          TEXT NOT NULL,
+      elo             REAL NOT NULL,
+      matches_played  INTEGER NOT NULL,
+      last_date       TEXT,
+      gf              REAL,
+      ga              REAL,
+      PRIMARY KEY (league, team_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS fb_upcoming (
+      id            TEXT PRIMARY KEY,
+      league        TEXT NOT NULL,
+      commence_time TEXT,
+      home_name     TEXT NOT NULL,
+      away_name     TEXT NOT NULL,
+      home_id       TEXT,
+      away_id       TEXT,
+      odds_home     REAL,
+      odds_draw     REAL,
+      odds_away     REAL,
+      books         INTEGER DEFAULT 0,
+      source        TEXT,
+      updated_at    TEXT
+    );
+
+    -- Football track record. Stores the full three-way forecast, because
+    -- scoring a 1X2 prediction with a two-outcome metric would throw away the
+    -- draw — the hardest part to get right.
+    CREATE TABLE IF NOT EXISTS fb_prediction_log (
+      match_key      TEXT PRIMARY KEY,   -- league|home|away|YYYYMMDD
+      league         TEXT NOT NULL,
+      upcoming_id    TEXT,
+      commence_time  TEXT,
+      home_id        TEXT NOT NULL,
+      away_id        TEXT NOT NULL,
+      home_name      TEXT,
+      away_name      TEXT,
+      prob_home      REAL NOT NULL,
+      prob_draw      REAL NOT NULL,
+      prob_away      REAL NOT NULL,
+      market_prob_home REAL,
+      market_prob_draw REAL,
+      market_prob_away REAL,
+      expected_home_goals REAL,
+      expected_away_goals REAL,
+      reliability    TEXT,
+      predicted_at   TEXT NOT NULL,
+      home_goals     INTEGER,
+      away_goals     INTEGER,
+      match_id       INTEGER,
+      resolved_at    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_fb_predlog ON fb_prediction_log (league, resolved_at);
+
     -- ------------------------------------------------------------------
     -- Stable numeric ids for sources that don't provide any.
     --

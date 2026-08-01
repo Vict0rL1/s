@@ -1,14 +1,20 @@
-# 🎾🏀 Sports Predictor
+# ⚽🏀🎾 Sports Predictor
 
 Aplicación web + API REST para **predecir resultados deportivos** combinando historial
 partido a partido, **ratings Elo**, forma reciente y **odds de casas de apuestas**.
 
-Dos deportes, en **pestañas separadas** (nunca mezclados):
+Tres deportes, en **pestañas separadas** (nunca mezclados):
 
-- **🎾 Tenis** — ATP y WTA singles: Elo por superficie, forma, head-to-head, marcador por sets.
+- **⚽ Fútbol** — las principales ligas del mundo, cada una en su **sub-pestaña**: Premier League,
+  LaLiga, Bundesliga, Serie A, Ligue 1, Eredivisie, Primeira, Championship, MLS, Liga MX,
+  Brasileirão, Argentina y Champions. **1X2** (con el empate como opción de primera), goles
+  esperados, over/under 2.5, ambos marcan y marcadores probables.
+  Ver [docs/FOOTBALL.md](docs/FOOTBALL.md).
 - **🏀 Baloncesto** — NBA, WNBA, NCAA (M y F), EuroLeague y NBL: Elo por equipo con ventaja de
   campo, margen de puntos y descanso, más **diferencia esperada (spread)** y **total de puntos**.
   Ver [docs/BASKETBALL.md](docs/BASKETBALL.md).
+- **🎾 Tenis** — ATP y WTA singles: Elo por superficie, forma, head-to-head, marcador por sets.
+  Ver [docs/MODEL.md](docs/MODEL.md).
 
 El modelo es **explicable, no una caja negra**: cada señal se expresa en puntos Elo y se
 muestra lado a lado con la probabilidad implícita del mercado, incluyendo la detección de
@@ -20,6 +26,24 @@ posible *value* cuando el modelo discrepa de las cuotas.
 ![dashboard](docs/dashboard.png)
 
 ---
+
+## Qué incluye — ⚽ Fútbol
+
+- **Las principales ligas del mundo, cada una en su sub-pestaña** dentro de la pestaña de fútbol —
+  nadie lee de corrido un listado que mezcla la Premier con el Brasileirão. La liga elegida se
+  recuerda entre visitas. Se amplía en `config/football.json`, sin tocar la lógica.
+- **1X2 completo:** local / empate / visitante con el empate tratado como lo que es, el resultado de
+  ~1 de cada 4 partidos, no una nota al pie.
+- **Mercados de goles coherentes entre sí:** goles esperados de cada equipo, over/under 2.5, ambos
+  marcan y los marcadores exactos más probables. Todos salen de **la misma distribución**, así que
+  es imposible que se contradigan.
+- **Modelo verificado sobre 24.332 partidos reales** (Premier, LaLiga, Bundesliga, Championship):
+  **RPS 0.2072** frente a 0.2230 de la referencia, y una calibración del empate que pasó de errar
+  5–8 pp a **±1 pp**.
+- **Información de todos los equipos**: clasificación por Elo con goles a favor y en contra, y ficha
+  por equipo (balance global / casa / fuera, puntos, últimos partidos).
+- **Ligas sin fuente de resultados** (Champions) muestran partidos y probabilidades del mercado,
+  diciéndolo claramente, en vez de inventar una predicción.
 
 ## Qué incluye — 🏀 Baloncesto
 
@@ -102,6 +126,8 @@ posible *value* cuando el modelo discrepa de las cuotas.
 | Odds | [The Odds API](https://the-odds-api.com) | Cuotas head-to-head de partidos próximos, **de tenis y de baloncesto**, con la misma key. Plan gratuito (500 req/mes). |
 | Resultados de baloncesto | [ESPN API pública](https://site.api.espn.com) | Gratis y sin key. Cubre NBA, WNBA y NCAA (M y F). |
 | Histórico NBA profundo | [FiveThirtyEight `nba-elo`](https://github.com/fivethirtyeight/data/tree/master/nba-elo) | 59.008 partidos reales 1946–2015. Con esto se **ajusta y valida** el modelo de baloncesto; termina en 2015, así que nunca es la fuente de los ratings de hoy. Detalles en [docs/BASKETBALL.md](docs/BASKETBALL.md). |
+| Fútbol: resultados + cuotas 1X2 | [football-data.co.uk](https://www.football-data.co.uk) | Fuente principal de fútbol: temporadas actuales de las grandes ligas **con cuotas de cierre 1X2**. |
+| Fútbol: histórico para ajustar | [footballcsv](https://github.com/footballcsv) | ~20 temporadas de Inglaterra, España y Alemania en GitHub. Es con lo que se ajustó y validó el modelo. |
 
 ---
 
@@ -252,6 +278,8 @@ ves, en vez de fallar en silencio.
 | `npm run backtest` | Tenis: mide la exactitud del modelo |
 | `npm run update-data:bb` | **Baloncesto**: equipos, resultados, partidos próximos y cuotas |
 | `npm run backtest:bb` | **Baloncesto**: mide el modelo (incluye comparación con FiveThirtyEight) |
+| `npm run update-data:fb` | **Fútbol**: equipos, resultados, partidos próximos y cuotas |
+| `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 
@@ -300,9 +328,28 @@ lo presenta como datos al día.
 Las cuotas usan **la misma `ODDS_API_KEY`** que el tenis. Sin key, la pestaña funciona igualmente
 con una jornada de demostración etiquetada como tal.
 
+## Puesta en marcha del fútbol
+
+```bash
+npm run update-data:fb     # equipos + resultados + partidos próximos y cuotas
+npm run dev                # → abre la pestaña ⚽ Fútbol
+```
+
+Opciones:
+
+```bash
+npm run update-data:fb -- --league epl              # solo una liga
+npm run update-data:fb -- --seasons 12              # más temporadas
+npm run update-data:fb -- --source footballcsv      # espejo en GitHub (sin cuotas, va atrasado)
+npm run update-data:fb -- --skip-odds               # solo resultados
+```
+
+Por defecto usa **football-data.co.uk** (temporadas actuales *y* cuotas 1X2 históricas) y, si no lo
+alcanza, cae al espejo de GitHub. Las cuotas de partidos próximos usan la misma `ODDS_API_KEY`.
+
 ## API REST (puerto 4000)
 
-Tenis y baloncesto viven en espacios de nombres distintos: ningún endpoint puede devolver los dos.
+Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede devolver dos.
 
 | Endpoint | Descripción |
 |----------|-------------|
@@ -325,27 +372,38 @@ Tenis y baloncesto viven en espacios de nombres distintos: ningún endpoint pued
 | `GET /api/basketball/power?league=` | Ranking por Elo de todos los equipos |
 | `GET /api/basketball/track-record?league=` | Acierto medido, incluido el error de margen |
 | `POST /api/basketball/predict` | Predicción ad-hoc `{league, home, away, homeOdds?, awayOdds?}` |
+| `GET /api/football/leagues` | Ligas con conteos y si tienen modelo Elo |
+| `GET /api/football/fixtures/upcoming?league=` | Partidos próximos con 1X2, goles y cuotas |
+| `GET /api/football/teams/:league/:id` | Ficha del equipo (balance, goles, forma) |
+| `GET /api/football/power?league=` | Clasificación por Elo |
+| `GET /api/football/track-record?league=` | Acierto medido en RPS |
+| `POST /api/football/predict` | Predicción ad-hoc `{league, home, away, oddsHome?, oddsDraw?, oddsAway?}` |
 
 ## Estructura del proyecto
 
 ```
-config/        tours.json + tournaments.json + basketball.json  (ampliar aquí, no en el código)
+config/        tours.json + tournaments.json + basketball.json + football.json
 data/          SQLite + datos crudos + dataset seed
-docs/          MODEL.md (tenis) · BASKETBALL.md (baloncesto)
+docs/          MODEL.md (tenis) · BASKETBALL.md · FOOTBALL.md
 server/
   src/            tenis: ingesta, modelo Elo, API
   src/basketball/ baloncesto: ingesta, modelo, backtest, track record propios
+  src/football/   fútbol: ingesta, modelo Poisson, backtest con RPS, track record
 web/
   src/components/            tenis
   src/components/basketball/ baloncesto
+  src/components/football/   fútbol (con sub-pestañas por liga)
 ```
 
-Los dos deportes están separados a propósito en todas las capas —tablas, modelo, endpoints y
-pestaña— porque discrepan justo en los campos que un modelo necesita. El razonamiento completo está
-en [docs/BASKETBALL.md](docs/BASKETBALL.md).
+Los tres deportes están separados a propósito en todas las capas —tablas, modelo, endpoints y
+pestaña— porque discrepan justo en los campos que un modelo necesita: el tenis tiene superficie y no
+tiene campo propio; el baloncesto tiene cancha y margen de puntos; el fútbol tiene **empate** y
+mercados de goles. El razonamiento está en [docs/BASKETBALL.md](docs/BASKETBALL.md) y
+[docs/FOOTBALL.md](docs/FOOTBALL.md).
 
 ## Cómo funciona el modelo
 
-Baloncesto: **[docs/BASKETBALL.md](docs/BASKETBALL.md)**. Tenis: ver **[docs/MODEL.md](docs/MODEL.md)** para la explicación completa del cálculo del Elo, cómo
+Fútbol: **[docs/FOOTBALL.md](docs/FOOTBALL.md)** · Baloncesto: **[docs/BASKETBALL.md](docs/BASKETBALL.md)** ·
+Tenis: **[docs/MODEL.md](docs/MODEL.md)** para la explicación completa del cálculo del Elo, cómo
 se combinan las señales y las limitaciones. La lógica también está comentada en el código
 (`server/src/model/`).

@@ -1,25 +1,30 @@
 import { useEffect, useState } from 'react';
 import TennisDashboard from './components/TennisDashboard';
 import BasketballDashboard from './components/basketball/BasketballDashboard';
+import FootballDashboard from './components/football/FootballDashboard';
 
 /**
  * Sports are separate tabs, not a merged feed.
  *
- * Tennis and basketball differ in almost everything a card needs to show — one has
- * a surface and a head-to-head between two people, the other a home court, a
- * spread and a total — so putting both in one list would mean a card that is half
- * empty whichever sport it is showing. Each tab owns its own state and talks only
- * to its own half of the API, which is also why switching back and forth doesn't
- * refetch or disturb the other sport.
+ * The three differ in almost everything a card needs to show — tennis has a
+ * surface and a head-to-head between two people; basketball a home court, a
+ * spread and a total; football a DRAW, goals markets and likely scorelines — so
+ * one shared list would mean a card that is mostly empty whichever sport it shows.
+ * Each tab owns its own state and talks only to its own slice of the API, which is
+ * also why switching back and forth doesn't refetch or disturb the others.
+ *
+ * Football then splits again into per-league sub-tabs (see FootballDashboard):
+ * nobody reads a merged feed of the Premier League, LaLiga and the Brasileirão.
  *
  * The choice is remembered in localStorage: reopening the app on the tab you were
  * last using is the behaviour anyone expects from a tab bar.
  */
-type Sport = 'tennis' | 'basketball';
+type Sport = 'tennis' | 'basketball' | 'football';
 
 const SPORTS: { id: Sport; label: string; emoji: string }[] = [
-  { id: 'tennis', label: 'Tenis', emoji: '🎾' },
+  { id: 'football', label: 'Fútbol', emoji: '⚽' },
   { id: 'basketball', label: 'Baloncesto', emoji: '🏀' },
+  { id: 'tennis', label: 'Tenis', emoji: '🎾' },
 ];
 
 const STORAGE_KEY = 'predictor.sport';
@@ -27,11 +32,11 @@ const STORAGE_KEY = 'predictor.sport';
 function initialSport(): Sport {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === 'tennis' || saved === 'basketball') return saved;
+    if (saved === 'tennis' || saved === 'basketball' || saved === 'football') return saved;
   } catch {
     // Private browsing / storage disabled — the default is fine.
   }
-  return 'tennis';
+  return 'football';
 }
 
 export default function App() {
@@ -48,7 +53,7 @@ export default function App() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-bold text-slate-100">
-        {sport === 'tennis' ? '🎾' : '🏀'} Sports Predictor
+        {SPORTS.find((s) => s.id === sport)?.emoji} Sports Predictor
       </h1>
 
       {/* Sport tabs */}
@@ -75,8 +80,10 @@ export default function App() {
       </nav>
 
       <div className="mt-6">
-        {/* Mounted one at a time on purpose: the inactive sport does no fetching. */}
-        {sport === 'tennis' ? <TennisDashboard /> : <BasketballDashboard />}
+        {/* Mounted one at a time on purpose: the inactive sports do no fetching. */}
+        {sport === 'tennis' && <TennisDashboard />}
+        {sport === 'basketball' && <BasketballDashboard />}
+        {sport === 'football' && <FootballDashboard />}
       </div>
 
       <footer className="mt-10 border-t border-slate-800 pt-4 text-xs text-slate-500">

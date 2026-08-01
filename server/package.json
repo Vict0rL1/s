@@ -13,7 +13,9 @@
     "typecheck": "tsc --noEmit",
     "update-data:bb": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/basketball/scripts/updateData.ts",
     "backtest:bb": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/basketball/backtest.ts",
-    "seed:bb": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/basketball/scripts/seed.ts"
+    "seed:bb": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/basketball/scripts/seed.ts",
+    "update-data:fb": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/football/scripts/updateData.ts",
+    "backtest:fb": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/football/backtest.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

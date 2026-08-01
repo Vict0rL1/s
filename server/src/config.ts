@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import dotenv from 'dotenv';
 import type { ToursConfig, TournamentsConfig } from './types.ts';
 import type { BasketballConfig } from './basketball/types.ts';
+import type { FootballConfig } from './football/types.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)); // server/src
 export const ROOT = path.resolve(HERE, '..', '..'); // repo root
@@ -31,6 +32,7 @@ export const tournamentsConfig = readJson<TournamentsConfig>(
 export const basketballConfig = readJson<BasketballConfig>(
   path.join(CONFIG_DIR, 'basketball.json'),
 );
+export const footballConfig = readJson<FootballConfig>(path.join(CONFIG_DIR, 'football.json'));
 
 export const env = {
   oddsApiKey: process.env.ODDS_API_KEY?.trim() || '',
@@ -52,4 +54,8 @@ export function tournamentById(id: string) {
 
 export function leagueById(id: string) {
   return basketballConfig.leagues.find((l) => l.id === id);
+}
+
+export function footballLeagueById(id: string) {
+  return footballConfig.leagues.find((l) => l.id === id);
 }
