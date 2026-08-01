@@ -400,6 +400,117 @@ function createSchema(d: DatabaseSync): void {
       PRIMARY KEY (tour, name)
     );
 
+    -- ==================================================================
+    -- BASEBALL
+    --
+    -- A fourth namespace, like the other three. Prefixed bsb_ and not bb_
+    -- because basketball got there first -- and CREATE TABLE IF NOT EXISTS does
+    -- nothing to a table that already exists, so a clash would not have errored,
+    -- it would have quietly written baseball games into the basketball table.
+    -- The one table the other sports have no equivalent of is bsb_pitchers: in baseball a single announced
+    -- player moves the forecast more than anything except the teams themselves,
+    -- and unlike a football lineup he is known the day before.
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS bsb_teams (
+      id     TEXT NOT NULL,
+      league TEXT NOT NULL,
+      name   TEXT NOT NULL,
+      PRIMARY KEY (league, id)
+    );
+
+    CREATE TABLE IF NOT EXISTS bsb_games (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      league      TEXT NOT NULL,
+      season      INTEGER NOT NULL,
+      game_date   TEXT NOT NULL,   -- YYYYMMDD
+      -- 0 for a single game; 1 and 2 for the halves of a doubleheader. Part of
+      -- the unique key, because two teams really can meet twice in one day.
+      game_number INTEGER NOT NULL DEFAULT 0,
+      home_id     TEXT NOT NULL,
+      away_id     TEXT NOT NULL,
+      home_runs   INTEGER NOT NULL,
+      away_runs   INTEGER NOT NULL,
+      home_sp     TEXT,
+      away_sp     TEXT,
+      site        TEXT,
+      UNIQUE (league, game_date, game_number, home_id, away_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_bb_date ON bsb_games (league, game_date);
+    CREATE INDEX IF NOT EXISTS idx_bb_home ON bsb_games (league, home_id, game_date);
+    CREATE INDEX IF NOT EXISTS idx_bb_away ON bsb_games (league, away_id, game_date);
+
+    CREATE TABLE IF NOT EXISTS bsb_team_ratings (
+      team_id      TEXT NOT NULL,
+      league       TEXT NOT NULL,
+      elo          REAL NOT NULL,
+      games_played INTEGER NOT NULL,
+      last_date    TEXT,
+      rs           REAL,
+      ra           REAL,
+      PRIMARY KEY (league, team_id)
+    );
+
+    -- Runs allowed, not EARNED runs: the model predicts the scoreboard, and the
+    -- scoreboard does not care whose error it was.
+    CREATE TABLE IF NOT EXISTS bsb_pitchers (
+      id           TEXT NOT NULL,
+      league       TEXT NOT NULL,
+      name         TEXT NOT NULL,
+      team_id      TEXT,
+      starts       INTEGER NOT NULL DEFAULT 0,
+      outs         INTEGER NOT NULL DEFAULT 0,
+      runs_allowed INTEGER NOT NULL DEFAULT 0,
+      runs_per_9   REAL,
+      rating       REAL,
+      last_date    TEXT,
+      season       INTEGER,
+      PRIMARY KEY (league, id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_bb_pitchers_team ON bsb_pitchers (league, team_id, starts DESC);
+
+    CREATE TABLE IF NOT EXISTS bsb_upcoming (
+      id            TEXT PRIMARY KEY,
+      league        TEXT NOT NULL,
+      commence_time TEXT,
+      home_name     TEXT NOT NULL,
+      away_name     TEXT NOT NULL,
+      home_id       TEXT,
+      away_id       TEXT,
+      home_sp       TEXT,
+      away_sp       TEXT,
+      odds_home     REAL,
+      odds_away     REAL,
+      books         INTEGER DEFAULT 0,
+      source        TEXT,
+      updated_at    TEXT
+    );
+
+    -- Write-once, like the other three sports': re-ingesting results must never
+    -- erase the record of what the model actually said beforehand.
+    CREATE TABLE IF NOT EXISTS bsb_prediction_log (
+      match_key      TEXT PRIMARY KEY,   -- league|away|home|YYYYMMDD|number
+      league         TEXT NOT NULL,
+      upcoming_id    TEXT,
+      commence_time  TEXT,
+      home_id        TEXT NOT NULL,
+      away_id        TEXT NOT NULL,
+      home_name      TEXT,
+      away_name      TEXT,
+      home_sp        TEXT,
+      away_sp        TEXT,
+      prob_home      REAL NOT NULL,
+      market_prob_home REAL,
+      expected_home_runs REAL,
+      expected_away_runs REAL,
+      reliability    TEXT,
+      predicted_at   TEXT NOT NULL,
+      home_runs      INTEGER,
+      away_runs      INTEGER,
+      game_id        INTEGER,
+      resolved_at    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_bb_predlog ON bsb_prediction_log (league, resolved_at);
+
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
       value TEXT

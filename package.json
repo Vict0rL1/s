@@ -26,7 +26,10 @@
     "seed:bb": "npm run seed:bb --workspace server --",
     "update-data:fb": "npm run update-data:fb --workspace server --",
     "update-squads:fb": "npm run update-squads:fb --workspace server --",
-    "backtest:fb": "npm run backtest:fb --workspace server --"
+    "backtest:fb": "npm run backtest:fb --workspace server --",
+    "backtest:bsb": "npm run backtest:bsb --workspace server --",
+    "update-data:bsb": "npm run update-data:bsb --workspace server --",
+    "verify:bsb": "npm run verify:bsb --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

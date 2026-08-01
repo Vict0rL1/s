@@ -1,15 +1,20 @@
-# ⚽🏀🎾 Sports Predictor
+# ⚽⚾🏀🎾 Sports Predictor
 
 Aplicación web + API REST para **predecir resultados deportivos** combinando historial
 partido a partido, **ratings Elo**, forma reciente y **odds de casas de apuestas**.
 
-Tres deportes, en **pestañas separadas** (nunca mezclados):
+Cuatro deportes, en **pestañas separadas** (nunca mezclados):
 
 - **⚽ Fútbol** — las principales ligas del mundo, cada una en su **sub-pestaña**: Premier League,
   LaLiga, Bundesliga, Serie A, Ligue 1, Eredivisie, Primeira, Championship, MLS, Liga MX,
   Brasileirão, Argentina y Champions. **1X2** (con el empate como opción de primera), goles
   esperados, over/under 2.5, ambos marcan y marcadores probables.
   Ver [docs/FOOTBALL.md](docs/FOOTBALL.md).
+- **⚾ Béisbol** — MLB (y NPB, KBO y universitario con probabilidades de mercado). El deporte donde
+  **un solo jugador anunciado el día antes**, el lanzador abridor, mueve más el pronóstico que nada
+  salvo los propios equipos — y puedes cambiarlo tú. Ganador, total, línea de carreras (±1.5) y
+  rejilla de marcadores, todo de la misma distribución.
+  Ver [docs/BASEBALL.md](docs/BASEBALL.md).
 - **🏀 Baloncesto** — NBA, WNBA, NCAA (M y F), EuroLeague y NBL: Elo por equipo con ventaja de
   campo, margen de puntos y descanso, más **diferencia esperada (spread)** y **total de puntos**.
   Ver [docs/BASKETBALL.md](docs/BASKETBALL.md).
@@ -56,6 +61,27 @@ posible *value* cuando el modelo discrepa de las cuotas.
   por equipo (balance global / casa / fuera, puntos, últimos partidos).
 - **Ligas sin fuente de resultados** (Champions) muestran partidos y probabilidades del mercado,
   diciéndolo claramente, en vez de inventar una predicción.
+
+## Qué incluye — ⚾ Béisbol
+
+- **El lanzador abridor como pieza central.** En ningún otro de los cuatro deportes un solo
+  jugador pesa tanto, y —a diferencia de una alineación de fútbol— **se anuncia el día antes**, así
+  que el modelo puede tenerlo. Cada abridor lleva una razón de supresión de carreras ajustada por
+  rival, y si sabes quién lanza (o lo han cambiado) **lo eliges tú y se recalcula todo**.
+- **Las carreras no son Poisson y aquí no se finge que lo sean.** Una entrada acaba con tres outs,
+  no con el reloj, así que las entradas grandes se agrupan: media 4,47 carreras, varianza 9,49. Una
+  binomial negativa lo recoge; usar Poisson cuesta 1,3 puntos de acierto en el over/under.
+- **La diagonal de la rejilla está vacía a propósito**: un marcador final nunca queda empatado. Esa
+  probabilidad es la de irse a entradas extra y se reparte en las casillas de una carrera.
+- **Ganador, total, línea de carreras (±1.5), marcador exacto y diferencia**, todo sumado de la
+  misma distribución, así que no pueden contradecirse.
+- **Modelo verificado sobre 36.235 partidos reales de MLB** (2010–2025): **Brier 0.2431** contra
+  0.25 de una moneda, y una calibración clavada dentro de ±0,4 pp en todas las bandas.
+- **El contador de carreras se verifica solo**: los ficheros de Retrosheet traen las jugadas pero no
+  el marcador, así que `npm run verify:bsb` recuenta una temporada entera y la compara con el
+  registro oficial — 2.426 de 2.426 exactos, abridores incluidos.
+- **Información de todos los equipos**: Elo, carreras a favor y en contra, balance en casa y fuera,
+  **pitagórico** (lo que dicen sus carreras que debería ser su balance) y la rotación completa.
 
 ## Qué incluye — 🏀 Baloncesto
 
@@ -141,6 +167,8 @@ posible *value* cuando el modelo discrepa de las cuotas.
 | Fútbol: resultados + cuotas 1X2 | [football-data.co.uk](https://www.football-data.co.uk) | Fuente principal de fútbol: temporadas actuales de las grandes ligas **con cuotas de cierre 1X2**. |
 | Fútbol: histórico para ajustar | [footballcsv](https://github.com/footballcsv) | ~20 temporadas de Inglaterra, España y Alemania en GitHub. Es con lo que se ajustó y validó el modelo. |
 | Fútbol: plantillas y lesionados | [vaastav/Fantasy-Premier-League](https://github.com/vaastav/Fantasy-Premier-League) | Solo Premier League: minutos, goles y asistencias esperados por 90, y el parte de bajas del día. Dominio público, sin key. |
+| Béisbol: histórico **con abridores** | [Retrosheet](https://www.retrosheet.org) vía [chadwickbureau/retrosheet](https://github.com/chadwickbureau/retrosheet) | 37.262 partidos de MLB (2010–2025) con el abridor de cada uno. El marcador se cuenta de las jugadas y se verifica con `npm run verify:bsb`. |
+| Béisbol: temporada en curso + abridores anunciados | [MLB Stats API](https://statsapi.mlb.com) | Gratis y sin clave. Retrosheet publica al acabar la temporada, así que sin esto los Elo irían un año atrasados. |
 
 ---
 
@@ -293,6 +321,9 @@ ves, en vez de fallar en silencio.
 | `npm run backtest:bb` | **Baloncesto**: mide el modelo (incluye comparación con FiveThirtyEight) |
 | `npm run update-data:fb` | **Fútbol**: equipos, resultados, partidos próximos, cuotas y plantillas |
 | `npm run update-squads:fb` | **Fútbol**: solo las plantillas y el parte de lesionados (cambia a diario) |
+| `npm run update-data:bsb` | **Béisbol**: equipos, resultados, lanzadores, partidos próximos y cuotas |
+| `npm run backtest:bsb` | **Béisbol**: mide el modelo con Brier, calibración y error del total |
+| `npm run verify:bsb` | **Béisbol**: recuenta una temporada y la compara con el registro oficial |
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
@@ -400,7 +431,7 @@ Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede
 ```
 config/        tours.json + tournaments.json + basketball.json + football.json
 data/          SQLite + datos crudos + dataset seed
-docs/          MODEL.md (tenis) · BASKETBALL.md · FOOTBALL.md
+docs/          MODEL.md (tenis) · BASKETBALL.md · FOOTBALL.md · BASEBALL.md
 server/
   src/            tenis: ingesta, modelo Elo, API
   src/basketball/ baloncesto: ingesta, modelo, backtest, track record propios
@@ -419,7 +450,7 @@ mercados de goles. El razonamiento está en [docs/BASKETBALL.md](docs/BASKETBALL
 
 ## Cómo funciona el modelo
 
-Fútbol: **[docs/FOOTBALL.md](docs/FOOTBALL.md)** · Baloncesto: **[docs/BASKETBALL.md](docs/BASKETBALL.md)** ·
+Fútbol: **[docs/FOOTBALL.md](docs/FOOTBALL.md)** · Béisbol: **[docs/BASEBALL.md](docs/BASEBALL.md)** · Baloncesto: **[docs/BASKETBALL.md](docs/BASKETBALL.md)** ·
 Tenis: **[docs/MODEL.md](docs/MODEL.md)** para la explicación completa del cálculo del Elo, cómo
 se combinan las señales y las limitaciones. La lógica también está comentada en el código
 (`server/src/model/`).
