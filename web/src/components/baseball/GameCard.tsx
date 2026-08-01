@@ -4,16 +4,26 @@ import {
   type BsbGameWithPrediction,
   type BsbPitcher,
   type BsbPrediction,
-  type BsbReliability,
   type BsbSide,
 } from '../../lib/baseball';
 import { formatDateTime, formatDate } from '../../lib/format';
+import { AWAY_COLOR, HOME_COLOR, pct } from '../../lib/theme';
+import {
+  Badge,
+  BarRow,
+  Card,
+  CompareRow,
+  Disclosure,
+  EmptyState,
+  FormDots,
+  HeroStat,
+  Panel,
+  ProbabilityBar,
+  ReliabilityChip,
+  SectionTitle,
+  StatTile,
+} from '../ui';
 import RunMatrix from './RunMatrix';
-
-export const HOME_COLOR = '#fbbf24'; // amber — baseball gets its own palette
-export const AWAY_COLOR = '#38bdf8'; // sky
-
-const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
 
 export default function GameCard({
   item,
@@ -22,7 +32,6 @@ export default function GameCard({
   item: BsbGameWithPrediction;
   onOpenTeam: (league: string, id: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
   // The starting pitchers the user has chosen, and the prediction the server
   // returns for them. Held here because EVERYTHING on the card comes out of the
   // same run distribution: change a starter and the winner, the total, the run
@@ -59,26 +68,22 @@ export default function GameCard({
   const fromModel = !!prediction;
 
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between text-xs text-slate-400">
-        <span>{formatDateTime(game.commence_time)}</span>
-        <div className="flex items-center gap-2">
+    <Card as="article" className="p-4">
+      <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+        <time>{formatDateTime(game.commence_time)}</time>
+        <div className="flex items-center gap-1.5">
+          {dirty && <Badge tone="accent">{adjusting ? 'recalculando…' : 'con tu abridor'}</Badge>}
           {!startersAnnounced && prediction && (
-            <span
-              className="rounded bg-slate-700/60 px-2 py-0.5 text-slate-300"
-              title="Ningún feed ha anunciado los abridores; se usa el número uno de cada rotación"
-            >
+            <Badge title="Ningún feed ha anunciado los abridores; se usa el número uno de cada rotación">
               abridores estimados
-            </span>
+            </Badge>
           )}
-          {game.source === 'fixture' && (
-            <span className="rounded bg-amber-900/40 px-2 py-0.5 text-amber-300">partido demo</span>
-          )}
+          {game.source === 'fixture' && <Badge tone="warning">partido demo</Badge>}
         </div>
       </div>
 
       {/* Away @ Home — baseball is written away-first, unlike the other three */}
-      <div className="mb-3 flex items-start justify-between gap-2">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <TeamName
           name={prediction?.teams.away.name ?? game.away_name}
           color={AWAY_COLOR}
@@ -87,7 +92,7 @@ export default function GameCard({
           odds={game.odds_away}
           onClick={game.away_id ? () => onOpenTeam(game.league, game.away_id!) : undefined}
         />
-        <span className="px-2 pt-1 text-xs text-slate-500">@</span>
+        <span className="shrink-0 pt-1 text-[11px] font-medium text-slate-600">@</span>
         <TeamName
           name={prediction?.teams.home.name ?? game.home_name}
           color={HOME_COLOR}
@@ -102,28 +107,40 @@ export default function GameCard({
 
       {probs ? (
         <>
-          <div className="grid grid-cols-2 gap-2 text-center">
-            <Outcome
+          <div className="flex items-end justify-between gap-3">
+            <HeroStat
+              value={pct(probs.away)}
               label="Visitante"
-              value={probs.away}
+              sub={[
+                prediction ? `${prediction.runs.expectedAway} carreras esp.` : null,
+                game.odds_away ? `cuota ${game.odds_away}` : null,
+              ].filter(Boolean).join(' · ') || undefined}
               color={AWAY_COLOR}
-              odds={game.odds_away}
-              runs={prediction?.runs.expectedAway}
             />
-            <Outcome
+            <HeroStat
+              value={pct(probs.home)}
               label="Local"
-              value={probs.home}
+              sub={[
+                prediction ? `${prediction.runs.expectedHome} carreras esp.` : null,
+                game.odds_home ? `cuota ${game.odds_home}` : null,
+              ].filter(Boolean).join(' · ') || undefined}
               color={HOME_COLOR}
-              odds={game.odds_home}
-              runs={prediction?.runs.expectedHome}
+              align="right"
+            />
+          </div>
+          <div className="mt-2.5">
+            <ProbabilityBar
+              segments={[
+                { value: probs.away, color: AWAY_COLOR, label: game.away_name },
+                { value: probs.home, color: HOME_COLOR, label: game.home_name },
+              ]}
             />
           </div>
           {!fromModel && (
-            <p className="mt-2 text-center text-[11px] text-amber-400">
+            <p className="mt-2 text-center text-[11px] text-amber-300/90">
               Probabilidades implícitas del mercado, no del modelo.
             </p>
           )}
-          <Bar home={probs.home} />
 
           {prediction && (
             <>
@@ -134,140 +151,133 @@ export default function GameCard({
                 <StarterChip side={prediction.teams.home} color={HOME_COLOR} />
               </div>
 
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                <Figure
-                  label="Carreras"
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <StatTile
+                  label="Carreras esp."
                   value={`${prediction.runs.expectedAway} – ${prediction.runs.expectedHome}`}
                   hint={`total ${prediction.runs.expectedTotal}`}
                 />
-                <Figure
-                  label={`+${prediction.runs.totalLine}`}
+                <StatTile
+                  label="Marcador"
+                  value={`${prediction.runs.scorelines[0].away}-${prediction.runs.scorelines[0].home}`}
+                  hint={`más probable · ${pct(prediction.runs.scorelines[0].probability)}`}
+                />
+                <StatTile
+                  label={`+${prediction.runs.totalLine} carreras`}
                   value={pct(prediction.runs.over)}
                   hint={`−${prediction.runs.totalLine}: ${pct(prediction.runs.under)}`}
                 />
-                <Figure
+                <StatTile
                   label="Línea −1.5"
                   value={pct(prediction.runs.runLine.homeCovers)}
-                  hint={`local por 2+`}
+                  hint="local por 2+"
                 />
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-3">
+                <p className="min-w-0 text-[13px] leading-snug text-slate-300">
                   {prediction.verdict.close ? (
-                    <span className="text-slate-300">
+                    <>
                       Muy igualado —{' '}
-                      <strong className="text-slate-100">{prediction.verdict.label}</strong> solo por
-                      poco ({pct(prediction.verdict.probability)})
-                    </span>
+                      <strong className="font-semibold text-slate-100">
+                        {prediction.verdict.label}
+                      </strong>{' '}
+                      solo por poco
+                    </>
                   ) : (
-                    <span>
-                      Más probable:{' '}
-                      <strong className="text-slate-100">{prediction.verdict.label}</strong>{' '}
-                      <span className="text-slate-400">({pct(prediction.verdict.probability)})</span>
-                    </span>
+                    <>
+                      Lo más probable:{' '}
+                      <strong className="font-semibold text-slate-100">
+                        {prediction.verdict.label}
+                      </strong>
+                    </>
                   )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <ReliabilityBadge reliability={prediction.reliability} />
+                </p>
+                <div className="flex shrink-0 items-center gap-1.5">
                   {prediction.market.verdict.startsWith('value_') && (
-                    <span className="rounded-full bg-emerald-900/50 px-3 py-1 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/40">
-                      Posible value:{' '}
+                    <Badge tone="good" title="El modelo da más probabilidad que el mercado">
+                      Value:{' '}
                       {prediction.market.verdict === 'value_home'
                         ? prediction.teams.home.name
                         : prediction.teams.away.name}
-                    </span>
+                    </Badge>
                   )}
+                  <ReliabilityChip
+                    level={prediction.reliability.level}
+                    label={prediction.reliability.label}
+                    marginPp={prediction.reliability.marginPp}
+                    title={[
+                      `Margen de incertidumbre: ±${prediction.reliability.marginPp} pp.`,
+                      `Partidos tras cada Elo: ${prediction.reliability.gamesBehind.home} y ${prediction.reliability.gamesBehind.away}.`,
+                      ...prediction.reliability.reasons,
+                    ].join('\n')}
+                  />
                 </div>
               </div>
 
-              <div className="mt-3 rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-700/50">
-                <div className="mb-1.5 text-xs uppercase tracking-wide text-slate-500">
-                  Qué es lo más probable
-                </div>
-                <p className="text-sm font-medium text-slate-100">{prediction.summary.headline}</p>
-                <ul className="mt-2 space-y-1">
-                  {prediction.summary.bullets.map((b, i) => (
-                    <li key={i} className="flex gap-2 text-xs text-slate-300">
-                      <span className="text-slate-600">•</span>
-                      <span>{b}</span>
-                    </li>
-                  ))}
-                </ul>
+              <div className="mt-1">
+                <Disclosure summary="Ver desglose · abridores, carreras, marcadores y mercado">
+                  <Detail
+                    prediction={prediction}
+                    league={game.league}
+                    homeSp={homeSp}
+                    awaySp={awaySp}
+                    onHomeSp={setHomeSp}
+                    onAwaySp={setAwaySp}
+                    adjusting={adjusting}
+                    adjusted={dirty}
+                  />
+                </Disclosure>
               </div>
-
-              <button
-                onClick={() => setOpen((o) => !o)}
-                className="mt-3 text-xs text-sky-400 hover:text-sky-300"
-              >
-                {open ? '▲ Ocultar desglose' : '▼ Ver desglose (abridores · carreras · mercado)'}
-              </button>
-              {open && (
-                <Detail
-                  prediction={prediction}
-                  league={game.league}
-                  homeSp={homeSp}
-                  awaySp={awaySp}
-                  onHomeSp={setHomeSp}
-                  onAwaySp={setAwaySp}
-                  adjusting={adjusting}
-                  adjusted={dirty}
-                />
-              )}
             </>
           )}
         </>
       ) : (
         <MissingModel item={item} />
       )}
-    </div>
+    </Card>
   );
 }
 
-function Outcome({
-  label, value, color, odds, runs,
-}: { label: string; value: number; color: string; odds: number | null; runs?: number }) {
-  return (
-    <div className="rounded-lg bg-slate-900/50 p-2">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="text-2xl font-bold tabular-nums" style={{ color }}>
-        {(value * 100).toFixed(1)}
-        <span className="text-sm">%</span>
-      </div>
-      {runs != null && <div className="text-[10px] tabular-nums text-slate-400">{runs} carreras esp.</div>}
-      {odds != null && <div className="text-[10px] text-slate-500">cuota {odds}</div>}
-    </div>
-  );
-}
 
-function Bar({ home }: { home: number }) {
-  return (
-    <div className="mt-2 flex h-4 overflow-hidden rounded">
-      <div style={{ width: `${(1 - home) * 100}%`, backgroundColor: AWAY_COLOR }} />
-      <div style={{ width: `${home * 100}%`, backgroundColor: HOME_COLOR }} />
-    </div>
-  );
-}
 
-function Figure({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <div className="rounded-lg bg-slate-900/50 p-2">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="truncate text-sm font-semibold tabular-nums text-slate-100">{value}</div>
-      <div className="truncate text-[10px] text-slate-500">{hint}</div>
-    </div>
-  );
-}
 
+/**
+ * The starter, given its own tile rather than a line of text.
+ *
+ * It is the single most important input on a baseball card, and the run-
+ * suppression figure next to the name is what the model actually uses — so it is
+ * shown, not hidden in a tooltip.
+ */
 function StarterChip({ side, color }: { side: BsbSide; color: string }) {
   const s = side.starter;
+  const delta = s.rating != null ? Math.round((1 - s.rating) * 100) : null;
   return (
-    <div className="min-w-0 rounded-lg bg-slate-900/50 p-2" title={s.label}>
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">Abridor</div>
-      <div className="truncate text-sm font-semibold" style={{ color }}>
+    <div
+      className="min-w-0 rounded-xl bg-white/[0.03] px-2.5 py-2 ring-1 ring-inset ring-white/[0.05]"
+      title={s.label}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-slate-500">
+          Abridor
+        </span>
+        {delta != null && Math.abs(delta) >= 4 && (
+          <span
+            className="shrink-0 text-[10px] font-semibold tabular-nums"
+            style={{ color: delta > 0 ? '#199e70' : '#e66767' }}
+            title="Carreras que permite frente a lo esperado de un abridor medio"
+          >
+            {delta > 0 ? '−' : '+'}
+            {Math.abs(delta)}% carreras
+          </span>
+        )}
+      </div>
+      <div className="truncate text-[13px] font-semibold" style={{ color }}>
         {s.name ?? 'sin anunciar'}
       </div>
-      <div className="truncate text-[10px] text-slate-500">{s.label}</div>
+      <div className="truncate text-[10px] text-slate-500">
+        {s.starts > 0 ? `${s.starts} aperturas` : 'sin datos'}
+      </div>
     </div>
   );
 }
@@ -298,23 +308,6 @@ function TeamName({
   );
 }
 
-function ReliabilityBadge({ reliability }: { reliability: BsbReliability }) {
-  const styles: Record<BsbReliability['level'], string> = {
-    high: 'bg-emerald-900/40 text-emerald-300 ring-emerald-500/40',
-    medium: 'bg-amber-900/40 text-amber-300 ring-amber-500/40',
-    low: 'bg-rose-900/40 text-rose-300 ring-rose-500/40',
-  };
-  const title = [
-    `Margen de incertidumbre: ±${reliability.marginPp} puntos porcentuales.`,
-    `Partidos tras cada Elo: ${reliability.gamesBehind.home} (local) y ${reliability.gamesBehind.away} (visitante).`,
-    ...reliability.reasons,
-  ].join('\n');
-  return (
-    <span title={title} className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ${styles[reliability.level]}`}>
-      {reliability.label} · ±{reliability.marginPp} pp
-    </span>
-  );
-}
 
 function MissingModel({ item }: { item: BsbGameWithPrediction }) {
   const { game } = item;
@@ -323,16 +316,15 @@ function MissingModel({ item }: { item: BsbGameWithPrediction }) {
     !game.home_id ? game.home_name : null,
   ].filter(Boolean) as string[];
   return (
-    <div className="rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
-      <p className="font-medium">Sin modelo ni cuotas para este partido.</p>
+    <EmptyState title="Sin modelo ni cuotas para este partido" tone="warning">
       {missing.length > 0 && (
-        <p className="mt-1">
-          No encuentro en el historial a: <strong>{missing.join(', ')}</strong>. Ocurre en ligas sin
+        <>
+          No encuentro en el historial a <strong>{missing.join(', ')}</strong>. Ocurre en ligas sin
           archivo abierto de resultados (NPB, KBO, universitario), donde solo se muestran las
           probabilidades del mercado.
-        </p>
+        </>
       )}
-    </div>
+    </EmptyState>
   );
 }
 
@@ -402,16 +394,14 @@ function Detail({
   const { teams, runs, h2h, market, reasoning, reliability } = prediction;
   const home = teams.home;
   const away = teams.away;
+  const formColors = { W: HOME_COLOR, D: '#64748b', L: AWAY_COLOR };
   return (
-    <div className="mt-4 space-y-4 border-t border-slate-700/60 pt-4 text-sm">
-      <div className="rounded-lg bg-slate-800/50 p-3">
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="text-xs uppercase tracking-wide text-slate-500">Quién abre</span>
-          <span className="text-[10px] text-slate-500">
-            {adjusting ? 'recalculando…' : adjusted ? 'ajustado a tu elección' : ''}
-          </span>
-        </div>
-        <p className="mb-2 text-[11px] leading-relaxed text-slate-400">
+    <div className="space-y-3">
+      <Panel>
+        <SectionTitle right={adjusting ? 'recalculando…' : adjusted ? 'ajustado a tu elección' : undefined}>
+          Quién abre
+        </SectionTitle>
+        <p className="mb-2.5 text-[11px] leading-relaxed text-slate-400">
           El abridor es lo que más mueve un partido de béisbol y se anuncia con un día de
           antelación. Si sabes quién lanza —o si lo han cambiado— elígelo aquí y se recalcula todo:
           el ganador, las carreras y la matriz de marcadores.
@@ -426,31 +416,28 @@ function Detail({
             value={homeSp} announced={home.starter.id} onChange={onHomeSp}
           />
         </div>
-      </div>
+      </Panel>
 
       <RunMatrix prediction={prediction} />
 
       <div
-        className={`rounded-lg border p-3 ${
+        className={`rounded-xl border p-3 text-[12px] ${
           reliability.level === 'high'
-            ? 'border-emerald-700/50 bg-emerald-950/30'
+            ? 'border-emerald-500/25 bg-emerald-500/[0.06]'
             : reliability.level === 'medium'
-              ? 'border-amber-700/50 bg-amber-950/30'
-              : 'border-rose-700/50 bg-rose-950/30'
+              ? 'border-amber-500/25 bg-amber-500/[0.06]'
+              : 'border-rose-500/25 bg-rose-500/[0.06]'
         }`}
       >
-        <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">
-          Cuánta confianza merece
-        </div>
         <p className="text-slate-200">
           <strong className="capitalize">{reliability.label}</strong> — margen ±{reliability.marginPp} pp.
           Partidos tras cada Elo: {reliability.gamesBehind.away} y {reliability.gamesBehind.home}.
         </p>
         {reliability.reasons.length > 0 && (
-          <ul className="mt-2 space-y-1">
+          <ul className="mt-1.5 space-y-1">
             {reliability.reasons.map((r, i) => (
-              <li key={i} className="flex gap-2 text-xs text-slate-300">
-                <span className="text-slate-600">•</span>
+              <li key={i} className="flex gap-2 text-[11px] text-slate-400">
+                <span aria-hidden className="text-slate-600">•</span>
                 <span>{r}</span>
               </li>
             ))}
@@ -458,105 +445,101 @@ function Detail({
         )}
       </div>
 
-      <div className="rounded-lg bg-slate-800/50 p-3">
-        <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">Por qué</div>
-        <p className="mb-2 text-slate-300">{reasoning.text}</p>
-        <div className="space-y-1 text-xs">
+      <Panel>
+        <SectionTitle>Por qué</SectionTitle>
+        <p className="mb-2 text-[13px] leading-relaxed text-slate-300">{reasoning.text}</p>
+        <dl className="space-y-1 text-[11px]">
           {reasoning.factors.map((f) => (
-            <div key={f.key} className="flex justify-between">
-              <span className="text-slate-400">{f.label}</span>
-              <span
-                className="tabular-nums"
+            <div key={f.key} className="flex justify-between gap-3">
+              <dt className="text-slate-400">{f.label}</dt>
+              <dd
+                className="shrink-0 tabular-nums"
                 style={{ color: f.pointsForHome >= 0 ? HOME_COLOR : AWAY_COLOR }}
               >
                 {f.pointsForHome === 0
                   ? '0 (neutral)'
                   : `+${Math.abs(f.pointsForHome)} para ${f.pointsForHome > 0 ? home.name : away.name}`}
-              </span>
+              </dd>
             </div>
           ))}
-        </div>
-      </div>
+        </dl>
+      </Panel>
 
-      <div className="rounded-lg bg-slate-800/50 p-3 text-xs">
-        <div className="mb-2 uppercase tracking-wide text-slate-500">Equipos</div>
-        <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+      <Panel>
+        <SectionTitle>Los dos equipos</SectionTitle>
+        <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[11px]">
           <div />
-          <div className="w-20 text-right" style={{ color: AWAY_COLOR }}>{away.name}</div>
-          <div className="w-20 text-right" style={{ color: HOME_COLOR }}>{home.name}</div>
-          <div className="text-slate-400">Elo</div>
-          <div className="w-20 text-right tabular-nums">{Math.round(away.elo)}</div>
-          <div className="w-20 text-right tabular-nums">{Math.round(home.elo)}</div>
-          <div className="text-slate-400">Carreras a favor / partido</div>
-          <div className="w-20 text-right tabular-nums">{away.rs ?? '—'}</div>
-          <div className="w-20 text-right tabular-nums">{home.rs ?? '—'}</div>
-          <div className="text-slate-400">Carreras en contra / partido</div>
-          <div className="w-20 text-right tabular-nums">{away.ra ?? '—'}</div>
-          <div className="w-20 text-right tabular-nums">{home.ra ?? '—'}</div>
-          <div className="text-slate-400" title="Lo que dicen sus carreras que debería ser su balance">
-            Pitagórico
+          <div className="w-20 truncate text-right font-medium" style={{ color: AWAY_COLOR }}>
+            {away.name}
           </div>
-          <div className="w-20 text-right tabular-nums">
-            {away.pythagorean != null ? pct(away.pythagorean) : '—'}
+          <div className="w-20 truncate text-right font-medium" style={{ color: HOME_COLOR }}>
+            {home.name}
           </div>
-          <div className="w-20 text-right tabular-nums">
-            {home.pythagorean != null ? pct(home.pythagorean) : '—'}
-          </div>
-          <div className="text-slate-400">Balance (G-P)</div>
-          <div className="w-20 text-right tabular-nums">{away.record.wins}-{away.record.losses}</div>
-          <div className="w-20 text-right tabular-nums">{home.record.wins}-{home.record.losses}</div>
-          <div className="text-slate-400">Últimos 10</div>
-          <div className="w-20 break-all text-right tracking-tight">{away.last10.join('') || '—'}</div>
-          <div className="w-20 break-all text-right tracking-tight">{home.last10.join('') || '—'}</div>
-        </div>
-      </div>
+          <CompareRow label="Elo" left={Math.round(away.elo)} right={Math.round(home.elo)} />
+          <CompareRow label="Carreras a favor / partido" left={away.rs ?? '—'} right={home.rs ?? '—'} />
+          <CompareRow label="Carreras en contra / partido" left={away.ra ?? '—'} right={home.ra ?? '—'} />
+          <CompareRow
+            label="Pitagórico"
+            title="Lo que dicen sus carreras que debería ser su balance. La diferencia con el real es la parte de suerte."
+            left={away.pythagorean != null ? pct(away.pythagorean) : '—'}
+            right={home.pythagorean != null ? pct(home.pythagorean) : '—'}
+          />
+          <CompareRow
+            label="Balance (G-P)"
+            left={`${away.record.wins}-${away.record.losses}`}
+            right={`${home.record.wins}-${home.record.losses}`}
+          />
+          <CompareRow
+            label="Últimos 10"
+            title="Azul = ganado · naranja = perdido"
+            left={<FormDots results={away.last10} colors={formColors} />}
+            right={<FormDots results={home.last10} colors={formColors} />}
+          />
+        </dl>
+      </Panel>
 
-      <div className="rounded-lg bg-slate-800/50 p-3 text-xs">
-        <div className="mb-2 uppercase tracking-wide text-slate-500">
-          Marcadores más probables
-        </div>
+      <Panel>
+        <SectionTitle>Marcadores más probables</SectionTitle>
         <div className="space-y-1">
           {runs.scorelines.map((s) => (
-            <div key={s.label} className="flex items-center gap-2">
-              <span className="w-10 tabular-nums text-slate-200">{s.away}-{s.home}</span>
-              <div className="h-2 flex-1 rounded bg-slate-700/50">
-                <div
-                  className="h-full rounded"
-                  style={{
-                    width: `${(s.probability / runs.scorelines[0].probability) * 100}%`,
-                    backgroundColor: s.home > s.away ? HOME_COLOR : AWAY_COLOR,
-                  }}
-                />
-              </div>
-              <span className="w-12 text-right tabular-nums text-slate-400">{pct(s.probability)}</span>
-            </div>
+            <BarRow
+              key={s.label}
+              label={`${s.away}-${s.home}`}
+              value={s.probability}
+              max={runs.scorelines[0].probability}
+              color={s.home > s.away ? HOME_COLOR : AWAY_COLOR}
+              valueLabel={pct(s.probability)}
+            />
           ))}
         </div>
-        <p className="mt-2 text-slate-500">
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
           Fíjate en lo bajas que son: en béisbol el marcador más probable ronda el 3%, contra el 12%
-          de un partido de fútbol. Hay muchísimos resultados plausibles, y por eso el ganador es
-          casi una moneda.
+          de un partido de fútbol. Hay muchísimos resultados plausibles, y por eso el ganador es casi
+          una moneda.
         </p>
-      </div>
+      </Panel>
 
-      <div className="rounded-lg bg-slate-800/50 p-3 text-xs">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="uppercase tracking-wide text-slate-500">Historial directo</span>
-          <span>
-            <span style={{ color: AWAY_COLOR }}>{h2h.awayWins}</span>
-            <span className="text-slate-500"> - </span>
-            <span style={{ color: HOME_COLOR }}>{h2h.homeWins}</span>
-            <span className="ml-2 text-slate-500">({h2h.total})</span>
-          </span>
-        </div>
+      <Panel>
+        <SectionTitle
+          right={
+            <>
+              <span style={{ color: AWAY_COLOR }}>{h2h.awayWins}</span>
+              <span className="text-slate-600"> · </span>
+              <span style={{ color: HOME_COLOR }}>{h2h.homeWins}</span>
+              <span className="ml-1.5 text-slate-600">({h2h.total})</span>
+            </>
+          }
+        >
+          Historial directo
+        </SectionTitle>
         {h2h.recent.length === 0 ? (
-          <p className="text-slate-400">Sin enfrentamientos previos en el historial.</p>
+          <p className="text-[11px] text-slate-500">Sin enfrentamientos previos en el historial.</p>
         ) : (
-          <ul className="space-y-1">
+          <ul className="space-y-1 text-[11px]">
             {h2h.recent.map((m, i) => (
-              <li key={i} className="flex justify-between text-slate-300">
-                <span className="text-slate-500">{formatDate(m.date)}</span>
-                <span>
+              <li key={i} className="flex justify-between gap-3 text-slate-300">
+                <span className="shrink-0 text-slate-500">{formatDate(m.date)}</span>
+                <span className="truncate text-right">
                   {m.awayId === away.id ? away.name : home.name} {m.awayRuns}–{m.homeRuns}{' '}
                   {m.homeId === home.id ? home.name : away.name}
                 </span>
@@ -564,18 +547,31 @@ function Detail({
             ))}
           </ul>
         )}
-      </div>
+      </Panel>
 
       {market.market && (
-        <div className="rounded-lg bg-slate-800/50 p-3 text-xs">
-          <div className="mb-2 uppercase tracking-wide text-slate-500">Mercado</div>
-          <p className="text-slate-300">
+        <Panel>
+          <SectionTitle right={`margen ${((market.market.overround - 1) * 100).toFixed(1)}%`}>
+            Mercado
+          </SectionTitle>
+          <p className="text-[11px] leading-relaxed text-slate-300">
             Cuotas {market.market.odds.away} / {market.market.odds.home} · implícitas sin vig{' '}
-            {pct(market.market.away)} / {pct(market.market.home)} · margen{' '}
-            {((market.market.overround - 1) * 100).toFixed(1)}%
+            {pct(market.market.away)} / {pct(market.market.home)}
           </p>
-        </div>
+        </Panel>
       )}
+
+      <Panel>
+        <SectionTitle>Lectura completa</SectionTitle>
+        <ul className="space-y-1.5">
+          {prediction.summary.bullets.map((b, i) => (
+            <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-slate-400">
+              <span aria-hidden className="text-slate-600">•</span>
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+      </Panel>
 
       <p className="text-[11px] leading-relaxed text-slate-500">{prediction.disclaimer}</p>
     </div>

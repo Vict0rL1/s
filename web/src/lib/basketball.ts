@@ -85,12 +85,29 @@ export interface BbHeadToHead {
   }[];
 }
 
+export interface BbMarginBand {
+  from: number; to: number; label: string; probability: number;
+}
+
+export interface BbDistribution {
+  marginSigma: number;
+  totalSigma: number;
+  spreadLine: number;
+  homeCovers: number;
+  totalLine: number | null;
+  over: number | null;
+  under: number | null;
+  bands: BbMarginBand[];
+}
+
 export interface BbProjection {
   margin: number;
   spreadLabel: string;
   home: number | null;
   away: number | null;
   total: number | null;
+  /** The spread and the total as probabilities, not just point estimates. */
+  distribution: BbDistribution;
 }
 
 export interface BbPrediction {

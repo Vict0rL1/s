@@ -21,11 +21,17 @@
 
 import {
   calibratedHomeWinProbability,
+  coverProbability,
   expectedMargin,
   expectedPoints,
+  marginBands,
+  overProbability,
   restAdjustment,
   HOME_ADVANTAGE,
   LONG_LAYOFF_DAYS,
+  MARGIN_SIGMA,
+  TOTAL_SIGMA,
+  type MarginBand,
 } from './elo.ts';
 import {
   compareToMarket,
@@ -136,6 +142,37 @@ export interface ScoreProjection {
   home: number | null;
   away: number | null;
   total: number | null;
+  /**
+   * The spread and the total as PROBABILITIES rather than point estimates.
+   *
+   * "Celtics −6.5" says how much; it does not say how likely, and those are the
+   * two markets people actually bet. The margin residual is close to normal
+   * (sd 11.7, ±1σ within 2 pp of textbook over 58k games), so a normal is an
+   * honest way to answer the second question.
+   *
+   * NOTE THE ABSENCE OF A WIN PROBABILITY HERE, on purpose. Integrating this
+   * normal above zero gives ~72% where the Elo curve gives ~76% for the same
+   * game: the two mappings (Elo→probability, and Elo→margin→probability) are
+   * calibrated separately and are not forced to agree, and the normal
+   * under-states big favourites because its tail is thinner than the logistic's.
+   * The Elo probability is the one that was MEASURED against 58k results
+   * (calibration within 0.7 pp in every band), so it stays the single answer to
+   * "who wins" and this distribution answers only the two questions it was
+   * measured for: covering the handicap (Brier 0.2495) and the total. Publishing
+   * both would put two different numbers for one question on the same card.
+   */
+  distribution: {
+    marginSigma: number;
+    totalSigma: number;
+    /** The line the app quotes: the projected margin rounded to a half point. */
+    spreadLine: number;
+    /** Probability the home team covers `spreadLine`. */
+    homeCovers: number;
+    totalLine: number | null;
+    over: number | null;
+    under: number | null;
+    bands: MarginBand[];
+  };
 }
 
 export interface GamePrediction {
@@ -388,6 +425,23 @@ export function buildGamePrediction(
     projAway = round1(total / 2 - margin / 2);
   }
 
+  // A half-point line never pushes, which is why books use them.
+  const spreadLine = -(Math.round(margin * 2) / 2 + (Number.isInteger(margin * 2) ? 0.5 : 0));
+  const totalLine =
+    projHome != null && projAway != null
+      ? Math.round((projHome + projAway) * 2) / 2 + 0.5
+      : null;
+  const distribution = {
+    marginSigma: MARGIN_SIGMA,
+    totalSigma: TOTAL_SIGMA,
+    spreadLine: round1(spreadLine),
+    homeCovers: round5(coverProbability(margin, spreadLine)),
+    totalLine,
+    over: totalLine != null ? round5(overProbability(projHome! + projAway!, totalLine)) : null,
+    under: totalLine != null ? round5(1 - overProbability(projHome! + projAway!, totalLine)) : null,
+    bands: marginBands(margin),
+  };
+
   let marketProbs: MarketProbabilities | null = null;
   if (market.homeOdds && market.awayOdds) {
     marketProbs = impliedProbabilities(market.homeOdds, market.awayOdds);
@@ -551,6 +605,7 @@ export function buildGamePrediction(
       home: projHome,
       away: projAway,
       total: projHome != null && projAway != null ? round1(projHome + projAway) : null,
+      distribution,
     },
     market: marketComparison,
     h2h,

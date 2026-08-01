@@ -24,10 +24,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { RAW_DIR } from '../config.ts';
 import {
+  coverProbability,
   CALIBRATION_SCALE,
   ELO_PER_POINT,
   HOME_ADVANTAGE,
   K_FACTOR,
+  MARGIN_SIGMA,
   SEASON_CARRYOVER,
 } from './elo.ts';
 import { loadGames, replayGames } from './ratings.ts';
@@ -90,6 +92,9 @@ function main() {
   let logloss = 0;
   let homeWinCount = 0;
   let marginAbsErr = 0;
+  const marginResid: number[] = [];
+  let coverBrier = 0;
+  let coverN = 0;
   let marginBias = 0;
   let bmN = 0;
   let bmModelCorrect = 0;
@@ -121,6 +126,14 @@ function main() {
       const actualMargin = game.home_pts - game.away_pts;
       marginAbsErr += Math.abs(predictedMargin - actualMargin);
       marginBias += predictedMargin - actualMargin;
+      // The spread as a PROBABILITY, not a point estimate. Scored with Brier
+      // rather than accuracy because a fair line is 50/50 by construction, so
+      // accuracy on it is a coin flip no matter how good the model is.
+      marginResid.push(actualMargin - predictedMargin);
+      const line = -(Math.round(predictedMargin * 2) / 2 + 0.5);
+      const covered = actualMargin + line > 0 ? 1 : 0;
+      coverBrier += (coverProbability(predictedMargin, line) - covered) ** 2;
+      coverN++;
 
       const pFav = Math.max(probHome, 1 - probHome);
       const favWon = probHome >= 0.5 === homeWon;
@@ -157,6 +170,21 @@ function main() {
   console.log(`Log loss:    ${(logloss / scored).toFixed(4)}   (0.693 = decir siempre 50/50)`);
   const bias = marginBias / scored;
   console.log(
+    (() => {
+      if (coverN === 0) return '';
+      const mu = marginResid.reduce((a, b) => a + b, 0) / marginResid.length;
+      const sd = Math.sqrt(
+        marginResid.reduce((a, b) => a + (b - mu) ** 2, 0) / marginResid.length,
+      );
+      const within = (k: number) =>
+        (marginResid.filter((e) => Math.abs(e - mu) <= k * sd).length / marginResid.length) * 100;
+      return (
+        `\nDistribución del margen (de dónde sale la probabilidad de cubrir):` +
+        `\n  desviación del residuo: ${sd.toFixed(2)} puntos  (la del modelo: ${MARGIN_SIGMA})` +
+        `\n  ±1σ ${within(1).toFixed(1)}% (normal 68.3) · ±2σ ${within(2).toFixed(1)}% (normal 95.4)` +
+        `\n  Brier de cubrir el hándicap: ${(coverBrier / coverN).toFixed(4)}   (0.25 = no saber nada)\n`
+      );
+    })() +
     `\nMargen (lo que importa para el spread):` +
       `\n  error absoluto medio: ${(marginAbsErr / scored).toFixed(2)} puntos` +
       `\n  sesgo medio: ${bias >= 0 ? '+' : ''}${bias.toFixed(2)} puntos (positivo = sobreestima al local)`,

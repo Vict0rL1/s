@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { SkeletonList } from '../ui';
 import {
   bsbApi,
   type BsbGameWithPrediction,
@@ -91,8 +92,8 @@ export default function BaseballDashboard() {
   return (
     <div>
       <header className="mb-6">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-prose text-[13px] leading-relaxed text-slate-400">
             Predicción con Elo por equipo, ventaja de campo, el <strong>lanzador abridor</strong> y
             una distribución de carreras que produce ganador, total y línea de una sola vez.
           </p>
@@ -100,7 +101,7 @@ export default function BaseballDashboard() {
             onClick={handleRefresh}
             disabled={refreshing}
             title="Vuelve a consultar los partidos próximos, sus cuotas y los abridores anunciados"
-            className="shrink-0 rounded-lg bg-slate-800 px-3 py-1 text-xs font-medium text-slate-200 ring-1 ring-slate-600 transition hover:bg-slate-700 disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-slate-200 ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
           >
             {refreshing ? 'Actualizando…' : '↻ Actualizar'}
           </button>
@@ -111,7 +112,7 @@ export default function BaseballDashboard() {
       </header>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-rose-800 bg-rose-950/50 p-3 text-sm text-rose-300">
+        <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[13px] text-rose-200">
           {error}
         </div>
       )}
@@ -123,10 +124,10 @@ export default function BaseballDashboard() {
               key={l.id}
               onClick={() => setLeague(l.id)}
               title={l.label}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
                 league === l.id
-                  ? 'bg-amber-400 text-slate-900'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  ? 'bg-white/[0.14] text-slate-100 ring-1 ring-inset ring-white/20'
+                  : 'bg-white/[0.04] text-slate-400 ring-1 ring-inset ring-white/[0.06] hover:bg-white/[0.08] hover:text-slate-200'
               }`}
             >
               {l.name}
@@ -136,7 +137,7 @@ export default function BaseballDashboard() {
           ))}
         </div>
       ) : (
-        <div className="mb-6 rounded-lg border border-rose-800/60 bg-rose-950/40 p-4 text-sm text-rose-200">
+        <div className="mb-6 rounded-2xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[13px] text-rose-200">
           <p className="font-medium">No hay datos de béisbol todavía.</p>
           <p className="mt-1 text-rose-300/90">
             Ejecuta <code className="rounded bg-rose-900/40 px-1">npm run update-data:bsb</code> para
@@ -146,7 +147,7 @@ export default function BaseballDashboard() {
       )}
 
       {activeLeague && !activeLeague.hasModel && (
-        <div className="mb-4 rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-sm text-amber-200">
+        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[13px] leading-relaxed text-amber-200/90">
           <strong>{activeLeague.name} sin modelo propio.</strong> No existe un archivo abierto,
           partido a partido, para esta liga —y menos aún con el abridor de cada encuentro, que es lo
           que de verdad hace falta en béisbol—, así que se muestran los partidos y las
@@ -155,7 +156,7 @@ export default function BaseballDashboard() {
       )}
 
       {loading ? (
-        <p className="text-slate-500">Cargando partidos…</p>
+        <SkeletonList />
       ) : games.length === 0 ? (
         <p className="mb-6 text-sm text-slate-500">
           No hay partidos próximos para {activeLeague?.name ?? 'esta liga'}.
@@ -169,7 +170,7 @@ export default function BaseballDashboard() {
       )}
 
       {power.length > 0 && (
-        <div className="mt-8 rounded-xl border border-slate-700/60 bg-slate-800/40 p-4">
+        <div className="mt-8 rounded-2xl border border-white/[0.07] bg-slate-900/70 p-4">
           <button
             onClick={() => setShowTeams((s) => !s)}
             className="flex w-full items-center justify-between text-left"
@@ -265,7 +266,7 @@ function StaleWarning({ name, through }: { name: string; through: string | null 
   // is normal rather than a problem worth shouting about.
   if (months <= 6) return null;
   return (
-    <div className="mt-2 rounded-lg border border-amber-700/60 bg-amber-950/40 p-2 text-xs text-amber-200">
+    <div className="mt-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-2.5 text-[12px] leading-relaxed text-amber-200/90">
       ⚠️ El historial de {name} termina en {m}/{y} (~{Math.round(months / 12 * 10) / 10} años). Los Elo
       no describen a las plantillas actuales. Vuelve a ejecutar{' '}
       <code className="rounded bg-amber-900/40 px-1">npm run update-data:bsb</code>.
@@ -282,7 +283,7 @@ function TrackRecordPanel({ league }: { league: string }) {
   if (!rec || (rec.resolved === 0 && rec.pending === 0)) return null;
 
   return (
-    <div className="mt-3 rounded-lg border border-slate-700/60 bg-slate-800/40 p-3 text-xs">
+    <div className="mt-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 text-[12px]">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between">
         <span className="text-slate-300">
           <span className="uppercase tracking-wide text-slate-500">Cómo va acertando</span>{' '}

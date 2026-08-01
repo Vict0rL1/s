@@ -156,6 +156,112 @@ export function expectedPoints(
   return { home: round1(h), away: round1(a), total: round1(h + a) };
 }
 
+// ===========================================================================
+// UNCERTAINTY: from a point estimate to a distribution
+// ===========================================================================
+// `expectedMargin` and `expectedPoints` answer "how much", not "how likely" — and
+// the two markets people actually bet in basketball are both questions of the
+// second kind: does the favourite cover, does the total go over. A single number
+// cannot answer either, and quoting one next to a spread invites the reader to
+// treat it as certain.
+//
+// Basketball is the easiest of the four sports to fix this for, because the
+// margin really is close to normal. Measured over 58.281 games, the residual
+// (actual margin minus predicted):
+//
+//     sd = 11.72,  within ±1σ 70.1% (a normal says 68.3%),
+//                  within ±2σ 95.1% (a normal says 95.4%)
+//
+// and it barely moves across eras — 11.67 before 1990, 11.68 in the 1990s and
+// 2000s, 11.93 from 2010. A distribution this stable is worth trusting.
+
+/**
+ * Spread of the margin around its prediction, in points.
+ *
+ * This is NOT the spread of margins in general (12.9): it is the spread of what
+ * the model gets WRONG, which is smaller because the rating explains some of it.
+ * Using the raw figure would make every forecast less confident than it earned.
+ */
+export const MARGIN_SIGMA = 11.7;
+
+/**
+ * Spread of the total around its prediction, in points.
+ *
+ * Wider in relative terms than the margin, and worse behaved: measured at 19.3
+ * from 2010 and 20.9 in the 1990s and 2000s. Without possession counts there is
+ * no real pace model here, so 20 is an honest number rather than a tuned one.
+ */
+export const TOTAL_SIGMA = 20;
+
+/** Standard normal CDF (Abramowitz & Stegun 7.1.26 via erf). */
+export function normalCdf(z: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989422804014327 * Math.exp((-z * z) / 2);
+  const p =
+    d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  return z >= 0 ? 1 - p : p;
+}
+
+/**
+ * Probability the home team beats a handicap.
+ *
+ * `line` is the home team's spread in the usual sign convention: −6.5 means the
+ * home side must win by 7 or more. Half-point lines never push, which is why
+ * books use them.
+ */
+export function coverProbability(
+  expectedHomeMargin: number,
+  line: number,
+  sigma = MARGIN_SIGMA,
+): number {
+  return normalCdf((expectedHomeMargin + line) / sigma);
+}
+
+/** Probability the combined score goes over `line`. */
+export function overProbability(
+  expectedTotal: number,
+  line: number,
+  sigma = TOTAL_SIGMA,
+): number {
+  return 1 - normalCdf((line - expectedTotal) / sigma);
+}
+
+export interface MarginBand {
+  /** Inclusive lower and upper bound of the home margin, in points. */
+  from: number;
+  to: number;
+  label: string;
+  probability: number;
+}
+
+/**
+ * The margin split into readable bands, for the card.
+ *
+ * Buckets rather than a continuous curve because that is how anyone reads a
+ * basketball game: a one-possession finish, a comfortable win, a blowout.
+ */
+export function marginBands(expectedHomeMargin: number, sigma = MARGIN_SIGMA): MarginBand[] {
+  const edges = [-Infinity, -20, -10, -5, 0, 5, 10, 20, Infinity];
+  const labels = [
+    'visitante por 20+', 'visitante por 10-20', 'visitante por 5-10', 'visitante por 1-5',
+    'local por 1-5', 'local por 5-10', 'local por 10-20', 'local por 20+',
+  ];
+  const out: MarginBand[] = [];
+  for (let i = 0; i < labels.length; i++) {
+    const lo = edges[i];
+    const hi = edges[i + 1];
+    const pLo = lo === -Infinity ? 0 : normalCdf((lo - expectedHomeMargin) / sigma);
+    const pHi = hi === Infinity ? 1 : normalCdf((hi - expectedHomeMargin) / sigma);
+    out.push({
+      from: lo === -Infinity ? -99 : lo,
+      to: hi === Infinity ? 99 : hi,
+      label: labels[i],
+      probability: Math.round((pHi - pLo) * 1e5) / 1e5,
+    });
+  }
+  return out;
+}
+
 /**
  * CALIBRATION
  * -----------

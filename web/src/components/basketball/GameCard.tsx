@@ -1,11 +1,34 @@
-import { useState } from 'react';
-import type { BbGameWithPrediction, BbReliability, BbTeamSide } from '../../lib/basketball';
+import type { BbGameWithPrediction, BbTeamSide } from '../../lib/basketball';
 import { formatDateTime } from '../../lib/format';
+import { AWAY_COLOR, HOME_COLOR, pct } from '../../lib/theme';
+import {
+  Badge,
+  BarRow,
+  Card,
+  Disclosure,
+  HeroStat,
+  Panel,
+  ProbabilityBar,
+  ReliabilityChip,
+  SectionTitle,
+  StatTile,
+} from '../ui';
 import GameDetail from './GameDetail';
 
-/** Away colour and home colour, reused across the basketball views. */
-export const HOME_COLOR = '#a3e635'; // lime — the home side
-export const AWAY_COLOR = '#38bdf8'; // sky — the away side
+/**
+ * A readable label for a margin band.
+ *
+ * The obvious shortcut — print the band's lower edge — produces "0" for the band
+ * "away team by 1 to 5", which is both wrong and the opposite of what the colour
+ * next to it says. Bands are ranges, so the label has to be a range.
+ */
+function marginBandLabel(b: { from: number; to: number }): string {
+  if (b.from <= -99) return `≤ −${Math.abs(b.to)}`;
+  if (b.to >= 99) return `≥ +${b.from}`;
+  const lo = b.from >= 0 ? b.from + 1 : Math.abs(b.to) + 1;
+  const hi = b.from >= 0 ? b.to : Math.abs(b.from);
+  return `${b.from >= 0 ? '+' : '−'}${lo}–${hi}`;
+}
 
 export default function GameCard({
   item,
@@ -14,12 +37,8 @@ export default function GameCard({
   item: BbGameWithPrediction;
   onOpenTeam: (league: string, id: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const { game, prediction, marketOnly, teams } = item;
+  const { game, prediction, teams } = item;
 
-  const probHome = prediction?.model.probHome ?? marketOnly?.implied1 ?? null;
-  const probAway = prediction?.model.probAway ?? marketOnly?.implied2 ?? null;
-  const fromModel = !!prediction;
   const value = prediction?.market.verdict;
   const valueTeam =
     value === 'value_p1'
@@ -29,41 +48,29 @@ export default function GameCard({
         : null;
 
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between text-xs text-slate-400">
-        <span>{formatDateTime(game.commence_time)}</span>
-        <span className="flex items-center gap-2">
-          {prediction?.neutral && (
-            <span className="rounded bg-slate-700/60 px-2 py-0.5">cancha neutral</span>
-          )}
-          {game.source === 'fixture' && (
-            <span className="rounded bg-amber-900/40 px-2 py-0.5 text-amber-300">
-              partido demo
-            </span>
-          )}
-        </span>
+    <Card as="article" className="p-4">
+      <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+        <time>{formatDateTime(game.commence_time)}</time>
+        <div className="flex items-center gap-1.5">
+          {prediction?.neutral && <Badge>cancha neutral</Badge>}
+          {game.source === 'fixture' && <Badge tone="warning">partido demo</Badge>}
+        </div>
       </div>
 
       {/* Away @ Home — the order North American basketball is always written in */}
-      <div className="mb-4 flex items-start justify-between gap-2">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <TeamName
           name={prediction?.teams.away.name ?? game.away_name}
           color={AWAY_COLOR}
-          odds={game.away_odds}
-          prob={probAway}
-          fromModel={fromModel}
           elo={prediction?.teams.away.elo ?? teams.away?.elo ?? null}
           eloRank={prediction?.teams.away.eloRank ?? teams.away?.eloRank ?? null}
           record={prediction?.teams.away.record ?? teams.away?.record ?? null}
           onClick={game.away_id ? () => onOpenTeam(game.league, game.away_id!) : undefined}
         />
-        <span className="px-2 pt-6 text-xs text-slate-500">@</span>
+        <span className="shrink-0 pt-1 text-[11px] font-medium text-slate-600">@</span>
         <TeamName
           name={prediction?.teams.home.name ?? game.home_name}
           color={HOME_COLOR}
-          odds={game.home_odds}
-          prob={probHome}
-          fromModel={fromModel}
           elo={prediction?.teams.home.elo ?? teams.home?.elo ?? null}
           eloRank={prediction?.teams.home.eloRank ?? teams.home?.eloRank ?? null}
           record={prediction?.teams.home.record ?? teams.home?.record ?? null}
@@ -75,151 +82,174 @@ export default function GameCard({
 
       {prediction ? (
         <>
-          <Bars prediction={prediction} />
-
-          {/* The three numbers a basketball bettor looks at */}
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <Figure
-              label="Ganador"
-              value={`${(Math.max(prediction.model.probHome, prediction.model.probAway) * 100).toFixed(1)}%`}
-              hint={prediction.verdict.favoredName ?? '—'}
+          <div className="flex items-end justify-between gap-3">
+            <HeroStat
+              value={pct(prediction.model.probAway)}
+              label="Visitante"
+              sub={game.away_odds ? `cuota ${game.away_odds}` : undefined}
+              color={AWAY_COLOR}
             />
-            <Figure
+            <HeroStat
+              value={pct(prediction.model.probHome)}
+              label="Local"
+              sub={game.home_odds ? `cuota ${game.home_odds}` : undefined}
+              color={HOME_COLOR}
+              align="right"
+            />
+          </div>
+          <div className="mt-2.5">
+            <ProbabilityBar
+              segments={[
+                { value: prediction.model.probAway, color: AWAY_COLOR, label: game.away_name },
+                { value: prediction.model.probHome, color: HOME_COLOR, label: game.home_name },
+              ]}
+            />
+          </div>
+          {prediction.market.market && (
+            <div className="mt-1.5">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.06em] text-slate-500">
+                Mercado, sin vig
+              </div>
+              <ProbabilityBar
+                height={5}
+                segments={[
+                  { value: prediction.market.market.implied2, color: AWAY_COLOR, label: 'mercado visitante' },
+                  { value: prediction.market.market.implied1, color: HOME_COLOR, label: 'mercado local' },
+                ]}
+              />
+            </div>
+          )}
+
+          {/* The numbers a basketball bettor looks at — as probabilities now, not
+              just point estimates. A spread with no likelihood attached invites
+              the reader to treat it as a certainty. */}
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <StatTile
               label="Diferencia"
               value={prediction.projection.spreadLabel}
               hint="margen esperado"
             />
-            <Figure
+            <StatTile
+              label={`Cubre ${prediction.projection.distribution.spreadLine > 0 ? '+' : ''}${prediction.projection.distribution.spreadLine}`}
+              value={pct(prediction.projection.distribution.homeCovers)}
+              hint="el local, con hándicap"
+              title="Probabilidad de que el local cubra ese hándicap, con σ = 11.7 puntos medida sobre 58.281 partidos"
+            />
+            <StatTile
               label="Total"
               value={prediction.projection.total != null ? String(Math.round(prediction.projection.total)) : '—'}
-              hint="puntos en total"
+              hint="puntos esperados"
+            />
+            <StatTile
+              label={
+                prediction.projection.distribution.totalLine != null
+                  ? `+${prediction.projection.distribution.totalLine}`
+                  : 'Over'
+              }
+              value={
+                prediction.projection.distribution.over != null
+                  ? pct(prediction.projection.distribution.over)
+                  : '—'
+              }
+              hint={
+                prediction.projection.distribution.under != null
+                  ? `under: ${pct(prediction.projection.distribution.under)}`
+                  : undefined
+              }
             />
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm">
+          <div className="mt-3">
+            <SectionTitle right="σ 11.7 puntos, medida">Por cuánto gana</SectionTitle>
+            <div className="space-y-1">
+              {prediction.projection.distribution.bands
+                .slice()
+                .reverse()
+                .map((b) => (
+                  <BarRow
+                    key={b.label}
+                    label={marginBandLabel(b)}
+                    value={b.probability}
+                    max={Math.max(
+                      ...prediction.projection.distribution.bands.map((x) => x.probability),
+                    )}
+                    color={b.from >= 0 ? HOME_COLOR : AWAY_COLOR}
+                    valueLabel={pct(b.probability)}
+                    title={`${b.label}: ${pct(b.probability)}`}
+                  />
+                ))}
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              Positivo = gana el local. La barra más larga es el resultado más probable, no el único.
+            </p>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-3">
+            <p className="min-w-0 text-[13px] leading-snug text-slate-300">
               {prediction.verdict.favored ? (
-                <span>
+                <>
                   El modelo favorece a{' '}
-                  <strong
-                    style={{
-                      color: prediction.verdict.favored === 'home' ? HOME_COLOR : AWAY_COLOR,
-                    }}
-                  >
+                  <strong className="font-semibold text-slate-100">
                     {prediction.verdict.favoredName}
-                  </strong>{' '}
-                  <span className="text-slate-400">({prediction.verdict.marginPct} pp)</span>
-                </span>
+                  </strong>
+                </>
               ) : (
-                <span className="text-slate-400">Partido muy parejo</span>
+                'Partido muy parejo'
               )}
-            </div>
-            <div className="flex items-center gap-2">
-              <ReliabilityBadge reliability={prediction.reliability} />
+            </p>
+            <div className="flex shrink-0 items-center gap-1.5">
               {valueTeam && (
-                <span className="rounded-full bg-emerald-900/50 px-3 py-1 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/40">
-                  Posible value: {valueTeam}
-                </span>
+                <Badge tone="good" title="El modelo da más probabilidad que el mercado">
+                  Value: {valueTeam}
+                </Badge>
               )}
+              <ReliabilityChip
+                level={prediction.reliability.level}
+                label={prediction.reliability.label}
+                marginPp={prediction.reliability.marginPp}
+                title={[
+                  `Margen de incertidumbre: ±${prediction.reliability.marginPp} pp.`,
+                  `Partidos tras cada Elo: ${prediction.reliability.gamesBehind.home} y ${prediction.reliability.gamesBehind.away}.`,
+                  ...prediction.reliability.reasons,
+                ].join('\n')}
+              />
             </div>
           </div>
 
-          <div className="mt-3 rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-700/50">
-            <div className="mb-1.5 text-xs uppercase tracking-wide text-slate-500">
-              Qué es lo más probable
-            </div>
-            <p className="text-sm font-medium text-slate-100">{prediction.summary.headline}</p>
-            <ul className="mt-2 space-y-1">
-              {prediction.summary.bullets.map((b, i) => (
-                <li key={i} className="flex gap-2 text-xs text-slate-300">
-                  <span className="text-slate-600">•</span>
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
+          <div className="mt-1">
+            <Disclosure summary="Ver desglose · Elo, campo, descanso y mercado">
+              <div className="space-y-3">
+                <GameDetail prediction={prediction} />
+                <Panel>
+                  <SectionTitle>Lectura completa</SectionTitle>
+                  <ul className="space-y-1.5">
+                    {prediction.summary.bullets.map((b, i) => (
+                      <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-slate-400">
+                        <span aria-hidden className="text-slate-600">•</span>
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Panel>
+              </div>
+            </Disclosure>
           </div>
-
-          <button
-            onClick={() => setOpen((o) => !o)}
-            className="mt-3 text-xs text-sky-400 hover:text-sky-300"
-          >
-            {open ? '▲ Ocultar desglose' : '▼ Ver desglose (Elo · campo · descanso · mercado)'}
-          </button>
-          {open && <GameDetail prediction={prediction} />}
         </>
       ) : (
         <MissingModel item={item} />
       )}
-    </div>
+    </Card>
   );
 }
 
-function Figure({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <div className="rounded-lg bg-slate-900/50 p-2">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="truncate text-sm font-semibold tabular-nums text-slate-100" title={value}>
-        {value}
-      </div>
-      <div className="truncate text-[10px] text-slate-500">{hint}</div>
-    </div>
-  );
-}
 
-function Bars({ prediction }: { prediction: NonNullable<BbGameWithPrediction['prediction']> }) {
-  const m = prediction.market.market;
-  return (
-    <div className="space-y-2">
-      <Bar
-        label="Modelo"
-        left={prediction.model.probAway}
-        right={prediction.model.probHome}
-      />
-      {m && <Bar label="Mercado (odds sin vig)" left={m.implied2} right={m.implied1} />}
-    </div>
-  );
-}
 
-function Bar({ label, left, right }: { label: string; left: number; right: number }) {
-  return (
-    <div>
-      <div className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="flex h-5 overflow-hidden rounded">
-        <div
-          className="flex items-center justify-start px-2 text-[10px] font-semibold text-slate-900"
-          style={{ width: `${left * 100}%`, backgroundColor: AWAY_COLOR }}
-        >
-          {(left * 100).toFixed(1)}%
-        </div>
-        <div
-          className="flex items-center justify-end px-2 text-[10px] font-semibold text-slate-900"
-          style={{ width: `${right * 100}%`, backgroundColor: HOME_COLOR }}
-        >
-          {(right * 100).toFixed(1)}%
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function TeamName({
-  name,
-  color,
-  odds,
-  prob,
-  fromModel,
-  elo,
-  eloRank,
-  record,
-  alignRight = false,
-  homeBadge = false,
-  onClick,
+  name, color, elo, eloRank, record, alignRight = false, homeBadge = false, onClick,
 }: {
   name: string;
   color: string;
-  odds: number | null;
-  prob: number | null;
-  fromModel: boolean;
   elo: number | null;
   eloRank: number | null;
   record: { wins: number; losses: number } | null;
@@ -232,25 +262,24 @@ function TeamName({
       <button
         onClick={onClick}
         disabled={!onClick}
-        className={`max-w-full truncate text-sm font-semibold ${
+        className={`max-w-full truncate text-[15px] font-semibold leading-tight ${
           onClick ? 'hover:underline' : 'cursor-default'
         }`}
         style={{ color }}
-        title={onClick ? 'Ver ficha del equipo' : undefined}
+        title={onClick ? 'Ver ficha del equipo' : name}
       >
         {name}
-        {homeBadge && <span className="ml-1.5 text-[10px] text-slate-500">(local)</span>}
       </button>
-      <div className="text-3xl font-bold tabular-nums" style={{ color }}>
-        {prob != null ? (prob * 100).toFixed(1) : '—'}
-        <span className="text-base">%</span>
+      <div className="truncate text-[11px] text-slate-500">
+        {homeBadge && 'local · '}
+        {elo != null && (
+          <>
+            Elo {Math.round(elo)}
+            {eloRank != null && ` (#${eloRank})`}
+          </>
+        )}
+        {record && ` · ${record.wins}–${record.losses}`}
       </div>
-      <div className="text-[11px] text-slate-500">
-        {!fromModel && prob != null && <span className="text-amber-400">solo mercado · </span>}
-        {elo != null && <>Elo {Math.round(elo)}{eloRank != null && ` (#${eloRank})`}</>}
-        {record && <> · {record.wins}–{record.losses}</>}
-      </div>
-      {odds != null && <div className="text-[11px] text-slate-500">cuota {odds}</div>}
     </div>
   );
 }
@@ -259,26 +288,6 @@ function TeamName({
  * How much data is behind this probability, shown where it changes the reading:
  * "62% (fiabilidad baja, ±11 pp)" is a very different claim from "62% (alta, ±3)".
  */
-function ReliabilityBadge({ reliability }: { reliability: BbReliability }) {
-  const styles: Record<BbReliability['level'], string> = {
-    high: 'bg-emerald-900/40 text-emerald-300 ring-emerald-500/40',
-    medium: 'bg-amber-900/40 text-amber-300 ring-amber-500/40',
-    low: 'bg-rose-900/40 text-rose-300 ring-rose-500/40',
-  };
-  const title = [
-    `Margen de incertidumbre: ±${reliability.marginPp} puntos porcentuales.`,
-    `Partidos tras cada Elo: ${reliability.gamesBehind.home} (local) y ${reliability.gamesBehind.away} (visitante).`,
-    ...reliability.reasons,
-  ].join('\n');
-  return (
-    <span
-      title={title}
-      className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ${styles[reliability.level]}`}
-    >
-      {reliability.label} · ±{reliability.marginPp} pp
-    </span>
-  );
-}
 
 /**
  * A prediction needs both teams in the history. Naming what is missing points at

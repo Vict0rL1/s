@@ -92,8 +92,8 @@ export default function TennisDashboard() {
   return (
     <div>
       <header className="mb-6">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-prose text-[13px] leading-relaxed text-slate-400">
             Predicción de partidos con Elo por superficie, forma reciente, head-to-head y odds del
             mercado.
           </p>
@@ -103,7 +103,7 @@ export default function TennisDashboard() {
               onClick={handleRefresh}
               disabled={refreshing}
               title="Vuelve a consultar las odds de los partidos próximos"
-              className="rounded-lg bg-slate-800 px-3 py-1 text-xs font-medium text-slate-200 ring-1 ring-slate-600 transition hover:bg-slate-700 disabled:opacity-50"
+              className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-slate-200 ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
             >
               {refreshing ? 'Actualizando…' : '↻ Actualizar'}
             </button>

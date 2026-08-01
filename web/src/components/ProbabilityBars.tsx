@@ -1,8 +1,11 @@
 import type { Prediction } from '../lib/api';
 import { pct } from '../lib/format';
 
-export const P1_COLOR = '#a3e635'; // lime-400
-export const P2_COLOR = '#38bdf8'; // sky-400
+// The shared, validated categorical pair — see lib/theme.ts. Player 1 wears the
+// same blue as every home side in the app and player 2 the same orange, so the
+// colour means one thing across all four tabs.
+export { HOME_COLOR as P1_COLOR, AWAY_COLOR as P2_COLOR } from '../lib/theme';
+import { AWAY_COLOR as P2, HOME_COLOR as P1 } from '../lib/theme';
 
 function SplitBar({
   leftFrac,
@@ -27,7 +30,7 @@ function SplitBar({
           className="flex items-center justify-start pl-2 text-xs font-semibold text-slate-900"
           style={{
             width: `${left}%`,
-            backgroundColor: hasData ? P1_COLOR : '#475569',
+            backgroundColor: hasData ? P1 : '#475569',
           }}
           aria-label={`${title} ${leftLabel}`}
         >
@@ -37,7 +40,7 @@ function SplitBar({
           className="flex items-center justify-end pr-2 text-xs font-semibold text-slate-900"
           style={{
             width: `${100 - left}%`,
-            backgroundColor: hasData ? P2_COLOR : '#334155',
+            backgroundColor: hasData ? P2 : '#334155',
           }}
           aria-label={`${title} ${rightLabel}`}
         >

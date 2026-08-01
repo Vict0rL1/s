@@ -85,6 +85,10 @@ posible *value* cuando el modelo discrepa de las cuotas.
 
 ## Qué incluye — 🏀 Baloncesto
 
+- **El hándicap y el total como probabilidades**, no solo como cifras. «Warriors −7.3» dice cuánto,
+  no cuánto de probable; el margen del baloncesto resulta ser casi exactamente normal (σ 11.72
+  medida sobre 58.281 partidos, ±1σ 70.1% contra el 68.3% teórico), así que de ahí salen la
+  probabilidad de cubrir, la de over/under y el desglose de por cuánto gana.
 - **Ligas apostables**, configurables en `config/basketball.json`: NBA, WNBA, NCAA masculino y
   femenino, EuroLeague y NBL. Qué ligas aparecen lo decide The Odds API según lo que esté activo
   ahora, no un calendario fijo.
@@ -425,6 +429,20 @@ Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede
 | `GET /api/football/power?league=` | Clasificación por Elo |
 | `GET /api/football/track-record?league=` | Acierto medido en RPS |
 | `POST /api/football/predict` | Predicción ad-hoc `{league, home, away, oddsHome?, oddsDraw?, oddsAway?}` |
+
+## Diseño
+
+Los cuatro deportes comparten un solo lenguaje visual (`web/src/lib/theme.ts` y
+`web/src/components/ui/`), con una regla que importa: **los colores de datos son compartidos y están
+validados; la identidad de cada deporte es solo cromo** (la línea bajo la pestaña activa).
+
+Antes cada deporte había inventado su paleta, y la del fútbol estaba medida-mente rota: el azul del
+visitante y el gris del empate quedaban a ΔE 11.6 en visión normal, por debajo del suelo de 15 — las
+dos barras que más falta hace distinguir eran difíciles de distinguir incluso con visión de color
+completa. La paleta actual (azul local · turquesa empate · naranja visitante) pasa **todos** los
+pares en la superficie oscura de la app: separación CVD ΔE 9.4, visión normal 20.9, contraste ≥3:1.
+Local es azul y visitante naranja en los cuatro deportes, así que el color significa lo mismo al
+cambiar de pestaña.
 
 ## Estructura del proyecto
 

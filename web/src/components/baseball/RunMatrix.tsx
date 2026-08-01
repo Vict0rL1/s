@@ -1,5 +1,6 @@
 import type { BsbPrediction, BsbRunMargin } from '../../lib/baseball';
-import { HOME_COLOR, AWAY_COLOR } from './GameCard';
+import { AWAY_COLOR, HOME_COLOR, inkOn, withAlpha } from '../../lib/theme';
+import { Panel, SectionTitle } from '../ui';
 
 /**
  * The full run-by-run grid.
@@ -30,15 +31,10 @@ export default function RunMatrix({ prediction }: { prediction: BsbPrediction })
   );
 
   return (
-    <div className="rounded-lg bg-slate-800/50 p-3">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="text-xs uppercase tracking-wide text-slate-500">
-          Probabilidad de cada marcador
-        </span>
-        <span className="text-[11px] text-slate-500">
-          filas = carreras de {home.name} · columnas = {away.name}
-        </span>
-      </div>
+    <Panel>
+      <SectionTitle right={`filas = ${home.name} · columnas = ${away.name}`}>
+        Probabilidad de cada marcador
+      </SectionTitle>
 
       <div className="-mx-1 overflow-x-auto px-1">
         <table className="w-full min-w-[26rem] border-separate border-spacing-0.5 text-center text-[10px] tabular-nums">
@@ -105,7 +101,7 @@ export default function RunMatrix({ prediction }: { prediction: BsbPrediction })
       </p>
 
       <Margins margins={margins} homeName={home.name} awayName={away.name} />
-    </div>
+    </Panel>
   );
 }
 
@@ -132,20 +128,14 @@ function Cell({
       title={title}
       className={`rounded px-0.5 py-1 ${top ? 'ring-1 ring-slate-200/70' : ''}`}
       style={{
-        backgroundColor: `${color}${toHexAlpha(strength * 0.85)}`,
-        color: strength > 0.55 ? '#0f172a' : '#cbd5e1',
+        backgroundColor: withAlpha(color, strength * 0.85),
+        color: inkOn(strength),
         fontWeight: top ? 700 : 400,
       }}
     >
       {p >= 0.001 ? (p * 100).toFixed(1) : '·'}
     </td>
   );
-}
-
-function toHexAlpha(a: number): string {
-  return Math.round(Math.max(0, Math.min(1, a)) * 255)
-    .toString(16)
-    .padStart(2, '0');
 }
 
 /**

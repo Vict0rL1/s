@@ -117,6 +117,48 @@ la liga para que una muestra pequeña no produzca totales absurdos. Está declar
 mostrado se recentra sobre la diferencia esperada, que está mucho mejor medida, para que las dos
 cifras nunca se contradigan.
 
+### De cifra puntual a probabilidad
+
+«Warriors −7.3» dice *cuánto*, no *cuánto de probable*, y las dos preguntas que de verdad se apuestan
+en baloncesto —¿cubre el hándicap? ¿pasa del total?— son de la segunda clase. Una cifra sola no
+puede contestarlas, y ponerla junto a un spread invita a leerla como una certeza.
+
+El baloncesto es el más fácil de los cuatro deportes para arreglar esto, porque **el margen sí es
+prácticamente normal**. Medido sobre 58.281 partidos, el residuo (margen real menos predicho):
+
+| | Valor | Lo que dice una normal |
+|---|---|---|
+| desviación | **11.72 puntos** | — |
+| dentro de ±1σ | **70.1%** | 68.3% |
+| dentro de ±2σ | **95.1%** | 95.4% |
+
+Y apenas se mueve entre épocas: 11.67 antes de 1990, 11.68 en los 90 y 2000, 11.93 desde 2010. Una
+distribución así de estable se puede usar con confianza. Para el total la dispersión es mayor y peor
+comportada (19.3 desde 2010, 20.9 en los 90 y 2000), y por eso σ = 20 es una cifra honesta más que
+una afinada.
+
+De ahí salen la **probabilidad de cubrir el hándicap**, la de **over/under** y el desglose de *por
+cuánto gana* en bandas. El backtest lo mide:
+
+```
+desviación del residuo: 11.72 puntos  (la del modelo: 11.7)
+±1σ 70.1% (normal 68.3) · ±2σ 95.1% (normal 95.4)
+Brier de cubrir el hándicap: 0.2495   (0.25 = no saber nada)
+```
+
+Ese 0.2495 **es el resultado correcto**, no un fracaso: una línea justa es un 50/50 por
+construcción, así que un Brier pegado a 0.25 confirma que la línea que cotiza el modelo está bien
+centrada. Un número mucho menor querría decir que la línea es sistemáticamente batible, que en un
+modelo sin información privada sería motivo de sospecha, no de celebración.
+
+**Lo que deliberadamente NO sale de aquí es la probabilidad de ganar.** Integrar esta normal por
+encima de cero da ~72% donde la curva Elo da ~76% para el mismo partido: las dos conversiones están
+calibradas por separado y no están obligadas a coincidir, y la normal se queda corta con los grandes
+favoritos porque su cola es más fina que la de la logística. La probabilidad Elo es la que está
+**medida** contra 58.000 resultados (calibración dentro de 0,7 pp en todas las bandas), así que sigue
+siendo la única respuesta a «quién gana». Publicar las dos pondría dos números distintos para una
+sola pregunta en la misma tarjeta.
+
 ---
 
 ## 3. Calibración

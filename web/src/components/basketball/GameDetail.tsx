@@ -1,6 +1,6 @@
 import type { BbPrediction, BbTeamSide } from '../../lib/basketball';
 import { formatDate } from '../../lib/format';
-import { AWAY_COLOR, HOME_COLOR } from './GameCard';
+import { AWAY_COLOR, HOME_COLOR } from '../../lib/theme';
 
 function Num({ value, plus = false }: { value: number; plus?: boolean }) {
   const sign = plus && value > 0 ? '+' : '';
