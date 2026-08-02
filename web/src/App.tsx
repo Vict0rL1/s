@@ -62,8 +62,10 @@ export default function App() {
         sport's identity colour appears — data marks use the shared, validated
         palette, so a blue bar means "home" on every tab.
       */}
-      <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#0b0d11]/85 backdrop-blur-xl">
-        <div className="mx-auto max-w-3xl px-4">
+      <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#0b0d11]/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+        {/* Safe-area padding so a notch or a rounded corner never clips the tab
+            bar when the app is opened from a phone's home screen. */}
+        <div className="mx-auto max-w-3xl px-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
           <div className="flex items-center gap-3 pb-1 pt-4">
             <span
               aria-hidden
@@ -121,7 +123,7 @@ export default function App() {
         {sport === 'tennis' && <TennisDashboard />}
       </main>
 
-      <footer className="mx-auto max-w-3xl px-4 pb-10">
+      <footer className="mx-auto max-w-3xl px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
         <p className="border-t border-white/[0.07] pt-4 text-[11px] leading-relaxed text-[#7b828d]">
           Estimación estadística. Cada modelo se mide contra resultados reales y la app registra sus
           propios aciertos, pero ninguno conoce las lesiones de última hora, el clima ni la

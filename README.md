@@ -240,6 +240,36 @@ próximos partidos con la predicción del modelo y las odds lado a lado.
 
 ---
 
+## Abrirla en el teléfono
+
+Con la app corriendo (`npm run dev`):
+
+```bash
+npm run phone
+```
+
+Imprime la dirección que hay que escribir en el navegador del móvil —algo como
+`http://192.168.1.42:5173`— y comprueba que la app y la API estén levantadas. El teléfono tiene que
+estar en **la misma red Wi-Fi**; no se publica nada en internet.
+
+Una vez abierta, en el menú del navegador: **«Añadir a pantalla de inicio»**. Queda con su icono, a
+pantalla completa y sin barra de navegador, porque la app trae `manifest.webmanifest`, iconos de
+192/512 px y el de 180 px que pide iOS.
+
+**Si carga en el ordenador pero no en el teléfono**, casi siempre es el cortafuegos del sistema
+bloqueando el puerto 5173 (macOS: Ajustes → Red → Firewall; Windows: permitir Node.js en redes
+privadas).
+
+Un detalle que evita un problema: el teléfono **no necesita alcanzar la API**. Llama a `/api/…` sobre
+la misma dirección de la web, y el ordenador que sirve la página hace de proxy hacia el backend.
+
+Para que vaya más rápido en el móvil, sirve el build en vez del servidor de desarrollo:
+
+```bash
+npm run build
+npm run preview --workspace web    # queda en el puerto 4173
+```
+
 ## Odds reales y partidos próximos (The Odds API)
 
 Los partidos próximos **reales** (los que se juegan hoy/esta semana) y sus cuotas vienen de
