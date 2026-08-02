@@ -1,0 +1,30 @@
+{
+  "$comment": "American football. Adding a league is appending an entry — nothing in the model or the API hardcodes these ids. `oddsSportKeys` are The Odds API keys for upcoming games and bookmaker prices. `nflverse` marks the leagues with a real game-by-game archive; a league without one still shows upcoming games and MARKET probabilities, and the card says so instead of inventing a model.",
+  "history": {
+    "$comment_source": "nflverse/nfldata is the community-maintained mirror of the NFL schedule and results. One file, one row per game since 1999, and it is the only free source that carries the CLOSING BETTING LINES alongside the result: spread_line and total_line on every game, moneylines from 2006. That is what makes this the one sport in the app whose model can be scored against the market instead of merely compared to it.",
+    "gamesUrl": "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv",
+    "$comment_seasons": "Seasons of results to ingest. NFL rosters turn over fast (the measured season carryover is 0.6, the lowest of the five sports), so distant history adds little to today's ratings — but the ratings still need a long run-in to converge, and the whole file is 2 MB, so we simply take it all and let the carryover do the forgetting.",
+    "fromSeason": 1999,
+    "$comment_schedule": "The same file carries NEXT season's schedule before it is played — rows with a date and no score. That is where upcoming games come from, so the tab works with no API key at all. Odds still need one.",
+    "$comment_teams": "Team names are resolved from nflverse's own abbreviations. Franchises that moved appear under both codes (OAK/LV, SD/LAC, STL/LA); the alias map folds them into one team so a 25-year rating is not split in two.",
+    "teamsUrl": "https://raw.githubusercontent.com/nflverse/nfldata/master/data/teams.csv"
+  },
+  "leagues": [
+    {
+      "id": "nfl",
+      "name": "NFL",
+      "label": "NFL · Estados Unidos",
+      "country": "US",
+      "oddsSportKeys": ["americanfootball_nfl"],
+      "nflverse": true
+    },
+    {
+      "id": "ncaaf",
+      "name": "NCAA",
+      "label": "NCAA · Universitario (EE. UU.)",
+      "country": "US",
+      "oddsSportKeys": ["americanfootball_ncaaf"],
+      "nflverse": false
+    }
+  ]
+}

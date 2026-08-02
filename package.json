@@ -30,7 +30,9 @@
     "backtest:bsb": "npm run backtest:bsb --workspace server --",
     "update-data:bsb": "npm run update-data:bsb --workspace server --",
     "verify:bsb": "npm run verify:bsb --workspace server --",
-    "audit": "npm run audit --workspace server --"
+    "audit": "npm run audit --workspace server --",
+    "update-data:naf": "npm run update-data:naf --workspace server --",
+    "backtest:naf": "npm run backtest:naf --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

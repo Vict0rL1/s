@@ -12,6 +12,7 @@ import { registerRoutes } from './routes/api.ts';
 import { registerBasketballRoutes } from './routes/basketball.ts';
 import { registerFootballRoutes } from './routes/football.ts';
 import { registerBaseballRoutes } from './routes/baseball.ts';
+import { registerNflRoutes } from './routes/nfl.ts';
 import { resolvePredictions } from './trackRecord.ts';
 import { resolveGamePredictions } from './basketball/trackRecord.ts';
 import { resolveFootballPredictions } from './football/trackRecord.ts';
@@ -83,6 +84,7 @@ async function main() {
   await app.register(registerBasketballRoutes, { prefix: '/api/basketball' });
   await app.register(registerFootballRoutes, { prefix: '/api/football' });
   await app.register(registerBaseballRoutes, { prefix: '/api/baseball' });
+  await app.register(registerNflRoutes, { prefix: '/api/nfl' });
 
   app.get('/', async () => ({
     name: 'tennis-predictor API',

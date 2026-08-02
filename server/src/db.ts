@@ -511,6 +511,110 @@ function createSchema(d: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_bb_predlog ON bsb_prediction_log (league, resolved_at);
 
+    -- ==================================================================
+    -- AMERICAN FOOTBALL
+    --
+    -- The fifth namespace, prefixed naf_ (football owns fb_, basketball bb_,
+    -- baseball bsb_). Two columns exist here that no other sport has:
+    --
+    --   close_spread / close_total on naf_games. This is the ONLY sport in the
+    --   app with a free archive of the closing betting line on every historical
+    --   game. Storing it turns "is the model any good?" from a comparison
+    --   against itself into a comparison against the sharpest price in sports.
+    --   Nothing in the model reads these columns -- the backtest does, and the
+    --   audit checks the model never peeks at them.
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS naf_teams (
+      id     TEXT NOT NULL,
+      league TEXT NOT NULL,
+      name   TEXT NOT NULL,
+      PRIMARY KEY (league, id)
+    );
+
+    CREATE TABLE IF NOT EXISTS naf_games (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      league       TEXT NOT NULL,
+      season       INTEGER NOT NULL,
+      week         INTEGER NOT NULL,
+      game_date    TEXT NOT NULL,   -- YYYYMMDD
+      home_id      TEXT NOT NULL,
+      away_id      TEXT NOT NULL,
+      home_points  INTEGER NOT NULL,
+      away_points  INTEGER NOT NULL,
+      -- 1 for a neutral site (London, the Super Bowl): no home advantage.
+      neutral      INTEGER NOT NULL DEFAULT 0,
+      playoff      INTEGER NOT NULL DEFAULT 0,
+      -- Days since each side last played. Measured and found worthless, kept
+      -- because the measurement should stay reproducible. See docs/NFL.md.
+      home_rest    INTEGER,
+      away_rest    INTEGER,
+      -- Closing line, home-positive. Backtest only, never the model.
+      close_spread REAL,
+      close_total  REAL,
+      close_ml_home REAL,
+      close_ml_away REAL,
+      UNIQUE (league, season, week, home_id, away_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_naf_date ON naf_games (league, game_date);
+    CREATE INDEX IF NOT EXISTS idx_naf_home ON naf_games (league, home_id, game_date);
+    CREATE INDEX IF NOT EXISTS idx_naf_away ON naf_games (league, away_id, game_date);
+
+    CREATE TABLE IF NOT EXISTS naf_team_ratings (
+      team_id      TEXT NOT NULL,
+      league       TEXT NOT NULL,
+      elo          REAL NOT NULL,
+      games_played INTEGER NOT NULL,
+      last_date    TEXT,
+      -- Points scored / allowed per game, the EWMA the total model reads.
+      pf           REAL,
+      pa           REAL,
+      PRIMARY KEY (league, team_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS naf_upcoming (
+      id            TEXT PRIMARY KEY,
+      league        TEXT NOT NULL,
+      season        INTEGER,
+      week          INTEGER,
+      commence_time TEXT,
+      home_name     TEXT NOT NULL,
+      away_name     TEXT NOT NULL,
+      home_id       TEXT,
+      away_id       TEXT,
+      neutral       INTEGER DEFAULT 0,
+      odds_home     REAL,
+      odds_away     REAL,
+      spread_line   REAL,
+      total_line    REAL,
+      books         INTEGER DEFAULT 0,
+      source        TEXT,
+      updated_at    TEXT
+    );
+
+    -- Write-once, like the other four: re-ingesting results must never erase
+    -- the record of what the model actually said beforehand.
+    CREATE TABLE IF NOT EXISTS naf_prediction_log (
+      match_key       TEXT PRIMARY KEY,   -- league|season|week|away|home
+      league          TEXT NOT NULL,
+      upcoming_id     TEXT,
+      commence_time   TEXT,
+      home_id         TEXT NOT NULL,
+      away_id         TEXT NOT NULL,
+      home_name       TEXT,
+      away_name       TEXT,
+      prob_home       REAL NOT NULL,
+      market_prob_home REAL,
+      expected_margin REAL,
+      expected_total  REAL,
+      reliability     TEXT,
+      predicted_at    TEXT NOT NULL,
+      home_points     INTEGER,
+      away_points     INTEGER,
+      game_id         INTEGER,
+      resolved_at     TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_naf_predlog ON naf_prediction_log (league, resolved_at);
+
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
       value TEXT

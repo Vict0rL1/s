@@ -1,8 +1,8 @@
 // ===========================================================================
 // DESIGN TOKENS
 // ===========================================================================
-// One place for every colour, so the four sports read as one product instead of
-// four apps that happen to share a tab bar.
+// One place for every colour, so the five sports read as one product instead of
+// five apps that happen to share a tab bar.
 //
 // THE RULE THAT MATTERS: data colours are SHARED and validated; sport identity is
 // chrome only.
@@ -15,7 +15,7 @@
 // colour vision. The slate also failed the chroma floor outright (it reads as
 // grey, which is what "no data" should look like, not "the draw").
 //
-// The replacement is one three-colour categorical set used by all four sports,
+// The replacement is one three-colour categorical set used by all five sports,
 // validated on this app's dark surface across ALL pairs (not just adjacent ones,
 // because the score matrix puts the three blocks in contact):
 //
@@ -83,7 +83,7 @@ export const SURFACE_CARD = '#14161b';
 export const SURFACE = SURFACE_CARD;
 
 // ---------------------------------------------------------------------------
-// Data colours — categorical, shared by all four sports
+// Data colours — categorical, shared by all five sports
 // ---------------------------------------------------------------------------
 export const HOME_COLOR = '#3987e5'; // blue  — home team / player 1
 export const AWAY_COLOR = '#d95926'; // orange — away team / player 2
@@ -111,7 +111,7 @@ export const RELIABILITY_STYLE: Record<'high' | 'medium' | 'low', string> = {
 // ---------------------------------------------------------------------------
 // Sport identity — CHROME ONLY. Never a data mark.
 // ---------------------------------------------------------------------------
-export type SportId = 'football' | 'basketball' | 'baseball' | 'tennis';
+export type SportId = 'football' | 'basketball' | 'baseball' | 'nfl' | 'tennis';
 
 export interface SportTheme {
   id: SportId;
@@ -126,6 +126,7 @@ export const SPORT_THEMES: Record<SportId, SportTheme> = {
   football: { id: 'football', label: 'Fútbol', emoji: '⚽', accent: '#4ade80', accentSoft: 'rgba(74,222,128,0.12)' },
   basketball: { id: 'basketball', label: 'Baloncesto', emoji: '🏀', accent: '#fb923c', accentSoft: 'rgba(251,146,60,0.12)' },
   baseball: { id: 'baseball', label: 'Béisbol', emoji: '⚾', accent: '#facc15', accentSoft: 'rgba(250,204,21,0.12)' },
+  nfl: { id: 'nfl', label: 'NFL', emoji: '🏈', accent: '#f472b6', accentSoft: 'rgba(244,114,182,0.12)' },
   tennis: { id: 'tennis', label: 'Tenis', emoji: '🎾', accent: '#a78bfa', accentSoft: 'rgba(167,139,250,0.12)' },
 };
 

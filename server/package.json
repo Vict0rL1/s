@@ -20,7 +20,9 @@
     "backtest:bsb": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/baseball/backtest.ts",
     "update-data:bsb": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/baseball/scripts/updateData.ts",
     "verify:bsb": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/baseball/scripts/verify.ts",
-    "audit": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/audit.ts"
+    "audit": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/audit.ts",
+    "update-data:naf": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/nfl/scripts/updateData.ts",
+    "backtest:naf": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/nfl/backtest.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

@@ -3,17 +3,20 @@ import TennisDashboard from './components/TennisDashboard';
 import BasketballDashboard from './components/basketball/BasketballDashboard';
 import FootballDashboard from './components/football/FootballDashboard';
 import BaseballDashboard from './components/baseball/BaseballDashboard';
+import NflDashboard from './components/nfl/NflDashboard';
 import { SPORT_THEMES, type SportId } from './lib/theme';
 
 /**
  * Sports are separate tabs, not a merged feed.
  *
- * The four differ in almost everything a card needs to show — tennis has a
+ * The five differ in almost everything a card needs to show — tennis has a
  * surface and a head-to-head between two people; basketball a home court, a
  * spread and a total; football a DRAW, goals markets and likely scorelines;
  * baseball a STARTING PITCHER, a single named player who moves the forecast more
- * than anything except the teams themselves. One shared list would mean a card
- * that is mostly empty whichever sport it happens to show.
+ * than anything except the teams themselves; American football a HANDICAP that
+ * is the headline market and a margin that lumps on 3 and 7 rather than
+ * following a curve. One shared list would mean a card that is mostly empty
+ * whichever sport it happens to show.
  *
  * Each tab owns its own state and talks only to its own slice of the API, which
  * is also why switching back and forth doesn't refetch or disturb the others.
@@ -24,7 +27,7 @@ import { SPORT_THEMES, type SportId } from './lib/theme';
  * The choice is remembered in localStorage: reopening the app on the tab you were
  * last using is the behaviour anyone expects from a tab bar.
  */
-const SPORTS: SportId[] = ['football', 'basketball', 'baseball', 'tennis'];
+const SPORTS: SportId[] = ['football', 'basketball', 'baseball', 'nfl', 'tennis'];
 
 const STORAGE_KEY = 'predictor.sport';
 
@@ -114,6 +117,7 @@ export default function App() {
         {sport === 'football' && <FootballDashboard />}
         {sport === 'basketball' && <BasketballDashboard />}
         {sport === 'baseball' && <BaseballDashboard />}
+        {sport === 'nfl' && <NflDashboard />}
         {sport === 'tennis' && <TennisDashboard />}
       </main>
 

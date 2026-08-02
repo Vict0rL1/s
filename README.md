@@ -1,9 +1,9 @@
-# ⚽⚾🏀🎾 Sports Predictor
+# ⚽⚾🏈🏀🎾 Sports Predictor
 
 Aplicación web + API REST para **predecir resultados deportivos** combinando historial
 partido a partido, **ratings Elo**, forma reciente y **odds de casas de apuestas**.
 
-Cuatro deportes, en **pestañas separadas** (nunca mezclados):
+Cinco deportes, en **pestañas separadas** (nunca mezclados):
 
 - **⚽ Fútbol** — las principales ligas del mundo, cada una en su **sub-pestaña**: Premier League,
   LaLiga, Bundesliga, Serie A, Ligue 1, Eredivisie, Primeira, Championship, MLS, Liga MX,
@@ -15,6 +15,11 @@ Cuatro deportes, en **pestañas separadas** (nunca mezclados):
   salvo los propios equipos — y puedes cambiarlo tú. Ganador, total, línea de carreras (±1.5) y
   rejilla de marcadores, todo de la misma distribución.
   Ver [docs/BASEBALL.md](docs/BASEBALL.md).
+- **🏈 Fútbol americano** — NFL: hándicap, total y ganador con una distribución de margen que
+  **conoce los números clave del deporte** (el margen acaba en 3 el 15 % de las veces y en 9 el
+  1.6 %). Es el único deporte de la app cuyo modelo **se puede medir contra la línea de cierre
+  real** — y el backtest dice, sin adornos, que no la bate.
+  Ver [docs/NFL.md](docs/NFL.md).
 - **🏀 Baloncesto** — NBA, WNBA, NCAA (M y F), EuroLeague y NBL: Elo por equipo con ventaja de
   campo, margen de puntos y descanso, más **diferencia esperada (spread)** y **total de puntos**.
   Ver [docs/BASKETBALL.md](docs/BASKETBALL.md).
@@ -64,7 +69,7 @@ posible *value* cuando el modelo discrepa de las cuotas.
 
 ## Qué incluye — ⚾ Béisbol
 
-- **El lanzador abridor como pieza central.** En ningún otro de los cuatro deportes un solo
+- **El lanzador abridor como pieza central.** En ningún otro de los cinco deportes un solo
   jugador pesa tanto, y —a diferencia de una alineación de fútbol— **se anuncia el día antes**, así
   que el modelo puede tenerlo. Cada abridor lleva una razón de supresión de carreras ajustada por
   rival, y si sabes quién lanza (o lo han cambiado) **lo eliges tú y se recalcula todo**.
@@ -82,6 +87,35 @@ posible *value* cuando el modelo discrepa de las cuotas.
   registro oficial — 2.426 de 2.426 exactos, abridores incluidos.
 - **Información de todos los equipos**: Elo, carreras a favor y en contra, balance en casa y fuera,
   **pitagórico** (lo que dicen sus carreras que debería ser su balance) y la rotación completa.
+
+## Qué incluye — 🏈 Fútbol americano (NFL)
+
+- **Los números clave del deporte, 3 y 7.** Un touchdown son 7 puntos y un field goal 3, así que
+  el margen final se amontona: acaba en 3 el **15.1 %** de las veces y en 9 solo el **1.6 %**. Todos
+  los demás deportes de la app valoran su hándicap con una curva suave; aquí eso se equivoca justo
+  donde le preguntan, porque −3 y −3.5 no son la misma apuesta. La distribución lleva una tabla de
+  pesos medidos, y vale **+0.141 nats por partido** (1.15× de verosimilitud) frente a la normal sola.
+- **La ventaja de campo la mide la liga, no la fija el código.** Valía +2.75 puntos en 1999–2007,
+  vale +1.92 en 2020–2025, y en 2020 con los estadios vacíos **el modelo la vio caer sola a +0.30**.
+  Se rastrea con dos temporadas de memoria: 0.6353 de log loss en la era moderna contra 0.6389 si se
+  deja fija.
+- **El único deporte que se puede medir contra el mercado — y no lo bate.** nflverse publica el
+  spread y el total de cierre del **100 %** de los partidos desde 1999. El modelo se queda a 0.34
+  puntos de la línea y acierta el **50.7 %** contra el hándicap, por debajo del 52.4 % que hace falta
+  solo para cubrir la comisión. Está escrito en el panel de aciertos, no en la letra pequeña: es la
+  razón de que la app no venda sus «posibles value» como dinero seguro.
+- **La banda de incertidumbre calibrada contra algo externo.** El modelo se separa 7.3 pp de media
+  de la línea de cierre, así que la tarjeta dice ±7.3 pp. Es la única de las cinco pestañas donde ese
+  número no es un juicio razonable sino una medición.
+- **Los tres mercados que ponen las casas**, en el orden en que los ponen: hándicap (aquí es *el*
+  mercado), total y ganador. El hándicap se cotiza **en cualquier línea**, con su probabilidad de
+  **nulo** — que en una línea entera de 3 puntos ocurre una de cada trece veces.
+- **Funciona sin ninguna API key.** El mismo fichero trae el calendario de la temporada que viene
+  antes de jugarse, así que hay partidos reales que predecir aunque no tengas cuotas configuradas.
+- Además: bandas de «por cuánto gana» en unidades de anotación, marcadores más probables, historial
+  directo, pitagórico con el exponente 2.37 de la NFL y ficha por equipo.
+
+Detalles y todas las mediciones en **[docs/NFL.md](docs/NFL.md)**.
 
 ## Qué incluye — 🏀 Baloncesto
 
@@ -173,6 +207,7 @@ posible *value* cuando el modelo discrepa de las cuotas.
 | Fútbol: plantillas y lesionados | [vaastav/Fantasy-Premier-League](https://github.com/vaastav/Fantasy-Premier-League) | Solo Premier League: minutos, goles y asistencias esperados por 90, y el parte de bajas del día. Dominio público, sin key. |
 | Béisbol: histórico **con abridores** | [Retrosheet](https://www.retrosheet.org) vía [chadwickbureau/retrosheet](https://github.com/chadwickbureau/retrosheet) | 37.262 partidos de MLB (2010–2025) con el abridor de cada uno. El marcador se cuenta de las jugadas y se verifica con `npm run verify:bsb`. |
 | Béisbol: temporada en curso + abridores anunciados | [MLB Stats API](https://statsapi.mlb.com) | Gratis y sin clave. Retrosheet publica al acabar la temporada, así que sin esto los Elo irían un año atrasados. |
+| Fútbol americano: resultados, **líneas de cierre** y calendario | [nflverse/nfldata](https://github.com/nflverse/nfldata) | 7.276 partidos (1999–2025) con el spread y el total de cierre en el 100 % y el moneyline desde 2006 — lo que convierte «¿es bueno el modelo?» en una comparación contra el precio real. Trae también el calendario de la temporada siguiente, así que la pestaña funciona sin API key. |
 
 ---
 
@@ -328,6 +363,8 @@ ves, en vez de fallar en silencio.
 | `npm run update-data:bsb` | **Béisbol**: equipos, resultados, lanzadores, partidos próximos y cuotas |
 | `npm run backtest:bsb` | **Béisbol**: mide el modelo con Brier, calibración y error del total |
 | `npm run verify:bsb` | **Béisbol**: recuenta una temporada y la compara con el registro oficial |
+| `npm run update-data:naf` | **Fútbol americano**: equipos, resultados, líneas de cierre y calendario |
+| `npm run backtest:naf` | **Fútbol americano**: mide el modelo **contra la línea de cierre real** |
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
@@ -336,7 +373,7 @@ ves, en vez de fallar en silencio.
 ### Comprobar que la información es correcta
 
 `npm run audit` no mide el acierto del modelo (para eso están los backtests): comprueba
-**propiedades que se tienen que cumplir por construcción**, en los cuatro deportes a la vez. Un fallo
+**propiedades que se tienen que cumplir por construcción**, en los cinco deportes a la vez. Un fallo
 ahí es un bug, nunca una cuestión de ajuste.
 
 Verifica, por deporte, que las probabilidades suman 1; que la rejilla de marcadores más su cola suma
@@ -349,19 +386,33 @@ ganar cuando el hándicap va en contra; que el veredicto es el resultado de mayo
 el signo de la diferencia esperada concuerda con el favorito; y que no hay ids de partido repetidos
 ni fechas inválidas.
 
+En fútbol americano comprueba además dos cosas que solo tienen sentido ahí: que **un hándicap de 0 es
+exactamente la probabilidad de ganar** (lo que ata los dos mercados y habría cazado el error de signo
+que tuvo la línea), y que **los factores del «por qué» suman el margen del titular** — un panel de
+explicación cuyos términos no reconstruyen el número de arriba es decoración, no una explicación.
+
 ```
 $ npm run audit
 ▸ Fútbol      32 predicciones · 24 partidos próximos
 ▸ Béisbol     12 predicciones · 8 partidos próximos
 ▸ Baloncesto  12 predicciones · 8 partidos próximos
+▸ NFL         12 predicciones · 32 partidos próximos
 ▸ Tenis       30 predicciones
-✅ 789 comprobaciones, todas correctas.
+✅ 1.249 comprobaciones, todas correctas.
 ```
 
 La primera vez que se ejecutó encontró cuatro fallos reales: en béisbol, la diagonal de la rejilla
 de carreras dejaba 5·10⁻⁶ de probabilidad en marcadores empatados, justo en el borde superior del
 rango, contradiciendo lo que la propia tarjeta afirma con palabras. Se arregló el reparto de esa
 masa en `runDistribution` en vez de relajar la comprobación.
+
+Y al extenderla al fútbol americano encontró otros dos, esta vez de verdad graves: el **lado
+visitante del hándicap** estaba mal calculado (se pedía la línea contraria al equipo local en vez de
+aplicar la línea al margen del visitante, así que «cubre» y «falla» no eran espejo: 0.284 contra
+0.469 en el mismo partido), y el panel del «por qué» **sumaba 7,3 puntos de razones bajo un
+pronóstico de 5,2**, porque usaba los Elo sin la regresión de pretemporada y colaba entre ellos el
+ataque y la defensa, que mueven el total y no el margen. Ninguno de los dos habría movido un solo
+punto de acierto en un backtest.
 
 ### Medir cambios del modelo
 
@@ -463,7 +514,7 @@ Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede
 
 ## Diseño
 
-Los cuatro deportes comparten un solo lenguaje visual (`web/src/lib/theme.ts` y
+Los cinco deportes comparten un solo lenguaje visual (`web/src/lib/theme.ts` y
 `web/src/components/ui/`), con una regla que importa: **los colores de datos son compartidos y están
 validados; la identidad de cada deporte es solo cromo** (la línea bajo la pestaña activa).
 
@@ -472,7 +523,7 @@ visitante y el gris del empate quedaban a ΔE 11.6 en visión normal, por debajo
 dos barras que más falta hace distinguir eran difíciles de distinguir incluso con visión de color
 completa. La paleta actual (azul local · turquesa empate · naranja visitante) pasa **todos** los
 pares en la superficie oscura de la app: separación CVD ΔE 9.4, visión normal 20.9, contraste ≥3:1.
-Local es azul y visitante naranja en los cuatro deportes, así que el color significa lo mismo al
+Local es azul y visitante naranja en los cinco deportes, así que el color significa lo mismo al
 cambiar de pestaña.
 
 Sobre esa base hay otras tres reglas, todas dirigidas a que la app se lea como una herramienta y no
@@ -495,7 +546,7 @@ sí significan algo. La rampa de texto es neutra y el paso de las etiquetas (`#7
 para llegar a 4.7:1 sobre la tarjeta, por encima del mínimo AA para texto pequeño; antes estaba en
 3.4:1 y no lo cumplía.
 
-Las cuatro pestañas comparten además un único tratamiento para las sub-pestañas (liga, circuito,
+Las cinco pestañas comparten además un único tratamiento para las sub-pestañas (liga, circuito,
 torneo): había cuatro distintos, incluida una fila de subrayados justo debajo de la fila de
 subrayados de la app.
 
@@ -504,26 +555,29 @@ subrayados de la app.
 ```
 config/        tours.json + tournaments.json + basketball.json + football.json
 data/          SQLite + datos crudos + dataset seed
-docs/          MODEL.md (tenis) · BASKETBALL.md · FOOTBALL.md · BASEBALL.md
+docs/          MODEL.md (tenis) · BASKETBALL.md · FOOTBALL.md · BASEBALL.md · NFL.md
 server/
   src/            tenis: ingesta, modelo Elo, API
   src/basketball/ baloncesto: ingesta, modelo, backtest, track record propios
   src/football/   fútbol: ingesta, modelo Poisson, backtest con RPS, track record
+  src/nfl/        fútbol americano: ingesta nflverse, números clave, backtest vs mercado
 web/
   src/components/            tenis
   src/components/basketball/ baloncesto
   src/components/football/   fútbol (con sub-pestañas por liga)
+  src/components/nfl/        fútbol americano
 ```
 
-Los tres deportes están separados a propósito en todas las capas —tablas, modelo, endpoints y
+Los cinco deportes están separados a propósito en todas las capas —tablas, modelo, endpoints y
 pestaña— porque discrepan justo en los campos que un modelo necesita: el tenis tiene superficie y no
 tiene campo propio; el baloncesto tiene cancha y margen de puntos; el fútbol tiene **empate** y
-mercados de goles. El razonamiento está en [docs/BASKETBALL.md](docs/BASKETBALL.md) y
+mercados de goles; el béisbol tiene **abridor**; y el fútbol americano tiene un margen que se
+amontona en el 3 y el 7 en vez de seguir una curva. El razonamiento está en [docs/BASKETBALL.md](docs/BASKETBALL.md) y
 [docs/FOOTBALL.md](docs/FOOTBALL.md).
 
 ## Cómo funciona el modelo
 
-Fútbol: **[docs/FOOTBALL.md](docs/FOOTBALL.md)** · Béisbol: **[docs/BASEBALL.md](docs/BASEBALL.md)** · Baloncesto: **[docs/BASKETBALL.md](docs/BASKETBALL.md)** ·
+Fútbol: **[docs/FOOTBALL.md](docs/FOOTBALL.md)** · Béisbol: **[docs/BASEBALL.md](docs/BASEBALL.md)** · Fútbol americano: **[docs/NFL.md](docs/NFL.md)** · Baloncesto: **[docs/BASKETBALL.md](docs/BASKETBALL.md)** ·
 Tenis: **[docs/MODEL.md](docs/MODEL.md)** para la explicación completa del cálculo del Elo, cómo
 se combinan las señales y las limitaciones. La lógica también está comentada en el código
 (`server/src/model/`).

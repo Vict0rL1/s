@@ -13,7 +13,7 @@
 // Every check below is a property that must hold BY CONSTRUCTION. A failure is a
 // bug, never a tuning question.
 
-import { baseballConfig, basketballConfig, footballConfig } from '../config.ts';
+import { baseballConfig, basketballConfig, footballConfig, nflConfig } from '../config.ts';
 import { getDb } from '../db.ts';
 
 import { buildFootballPrediction } from '../football/predict.ts';
@@ -24,6 +24,10 @@ import { listTeams as bsbTeams, listUpcoming as bsbUpcoming } from '../baseball/
 
 import { buildGamePrediction } from '../basketball/predict.ts';
 import { listTeams as bbTeams, listUpcoming as bbUpcoming } from '../basketball/repo.ts';
+
+import { buildPrediction as buildNflPrediction } from '../nfl/predict.ts';
+import { listTeams as nafTeams, listUpcoming as nafUpcoming } from '../nfl/repo.ts';
+import { coverProbability, buildDistribution, MAX_MARGIN } from '../nfl/model.ts';
 
 import { buildPrediction } from '../model/predict.ts';
 
@@ -378,6 +382,134 @@ function auditTennis(): void {
   console.log(`  ${sampled} predicciones comprobadas`);
 }
 
+
+// ---------------------------------------------------------------------------
+// American football
+//
+// The sport with the most ways for a card to contradict itself: five markets
+// (moneyline, handicap, total, margin bands, exact score) all read off one
+// distribution. If any of them were computed independently the numbers would
+// drift apart, and these checks are what proves they were not.
+// ---------------------------------------------------------------------------
+function auditNfl(): void {
+  section('Fútbol americano');
+  const leagues = nflConfig.leagues.filter((l) => nafTeams(l.id).length >= 2);
+  if (leagues.length === 0) {
+    console.log('  sin datos, saltado');
+    return;
+  }
+
+  let sampled = 0;
+  for (const league of leagues) {
+    const teams = nafTeams(league.id).slice(0, 24);
+    for (let i = 0; i + 1 < teams.length; i += 2) {
+      const p = buildNflPrediction({
+        league: league.id,
+        homeId: teams[i].id,
+        awayId: teams[i + 1].id,
+      });
+      if (!p) continue;
+      const tag = `nfl ${teams[i].id}-${teams[i + 1].id}`;
+      sampled++;
+
+      // 1. The three outcomes. The tie is tiny but it is not zero, and folding
+      //    it away is exactly the kind of quiet rounding this audit exists for.
+      near(`${tag}: local + empate + visitante = 1`, p.model.home + p.model.tie + p.model.away, 1);
+      check(`${tag}: el empate es pequeño pero existe`, p.model.tie > 0 && p.model.tie < 0.01, `${p.model.tie}`);
+
+      // 2. Margin bands partition the whole distribution.
+      near(`${tag}: las bandas de margen suman 1`, p.bands.reduce((a, b) => a + b.probability, 0), 1, 2e-3);
+      const tieBand = p.bands.find((b) => b.from === 0 && b.to === 0);
+      near(`${tag}: la banda de empate es P(empate)`, tieBand?.probability ?? -1, p.model.tie, 1e-6);
+
+      // 3. A handicap is exhaustive: cover + push + fail = 1, on both sides, and
+      //    the two sides of the SAME line must be mirror images.
+      near(`${tag}: hándicap local cubre+nulo+falla = 1`,
+        p.spread.home.cover + p.spread.home.push + p.spread.home.fail, 1);
+      near(`${tag}: hándicap visitante cubre+nulo+falla = 1`,
+        p.spread.away.cover + p.spread.away.push + p.spread.away.fail, 1);
+      near(`${tag}: los dos lados del hándicap son espejo`,
+        p.spread.home.cover, p.spread.away.fail, 1e-6);
+      near(`${tag}: el nulo es el mismo por los dos lados`,
+        p.spread.home.push, p.spread.away.push, 1e-6);
+
+      // 4. Total, same property.
+      near(`${tag}: over + nulo + under = 1`, p.total.over + p.total.push + p.total.under, 1);
+
+      // 5. A handicap of zero IS the moneyline. This is the check that would
+      //    have caught the spread sign bug: it ties the two markets together.
+      // Rebuilt from the figures the CARD shows, which are rounded to one
+      // decimal — so the tolerance is the rounding, not a fudge: half a tenth of
+      // a point of margin moves a probability by about 0.15 pp.
+      const dist = buildDistribution(p.spread.expectedMargin, p.total.expected);
+      const pk = coverProbability(dist, 0);
+      near(`${tag}: hándicap 0 = probabilidad de ganar`, pk.cover, p.model.home, 2e-3);
+      near(`${tag}: hándicap 0, el nulo es el empate`, pk.push, p.model.tie, 1e-4);
+
+      // 6. A handicap is monotone: giving the home team MORE points can never
+      //    make them less likely to cover.
+      let previous = -1;
+      let monotone = true;
+      for (let line = -14; line <= 14; line += 0.5) {
+        const c = coverProbability(dist, line).cover;
+        if (c < previous - 1e-9) monotone = false;
+        previous = c;
+      }
+      check(`${tag}: el hándicap es monótono en la línea`, monotone);
+
+      // 7. The key numbers really are what the model says they are, and 3 beats
+      //    every one of its neighbours — the whole reason this model exists.
+      const three = p.keyNumbers.find((k) => k.margin === 3)?.probability ?? 0;
+      const nine = 2 * (dist.margin[9 + MAX_MARGIN] ?? 0);
+      check(`${tag}: el margen de 3 es más probable que el de 9`, three > nine, `${three} vs ${nine}`);
+
+      // 8. Expected points must reproduce the margin and the total exactly.
+      near(`${tag}: puntos local − visitante = margen`,
+        p.points.home - p.points.away, p.spread.expectedMargin, 0.11);
+      near(`${tag}: puntos local + visitante = total`,
+        p.points.home + p.points.away, p.total.expected, 0.11);
+
+      // 9. Scorelines: sorted, consistent with their own labels, and each one
+      //    reachable (the parity constraint).
+      const ordered = p.scorelines.every((s, k) => k === 0 || p.scorelines[k - 1].probability >= s.probability);
+      check(`${tag}: los marcadores van de más a menos probable`, ordered);
+      for (const s of p.scorelines) {
+        check(`${tag}: la etiqueta del marcador coincide`, s.label === `${s.home}-${s.away}`, s.label);
+        check(`${tag}: marcador no negativo`, s.home >= 0 && s.away >= 0, s.label);
+      }
+
+      // 10. The verdict names the more likely side, and the expected margin
+      //     agrees with it in sign.
+      const homeFav = p.model.home >= p.model.away;
+      check(`${tag}: el veredicto señala al más probable`,
+        p.verdict.label.includes(homeFav ? p.teams.home.name : p.teams.away.name));
+      check(`${tag}: el margen y la probabilidad apuntan igual`,
+        homeFav === p.spread.expectedMargin >= 0,
+        `p=${p.model.home} margen=${p.spread.expectedMargin}`);
+
+      // 11. THE FACTORS MUST ADD UP TO THE HEADLINE. A "why" panel whose terms
+      //     do not reconstruct the number above it is decoration, not an
+      //     explanation — and this check is what caught one that listed 7.3
+      //     points of reasons under a 5.2-point forecast.
+      near(
+        `${tag}: los factores suman el margen esperado`,
+        p.reasoning.factors.reduce((a, f) => a + f.pointsForHome, 0),
+        p.spread.expectedMargin,
+        0.16,
+      );
+
+      // 12. The record on the card must be the record in the database.
+      for (const side of [p.teams.home, p.teams.away]) {
+        const played = side.record.wins + side.record.losses + side.record.ties;
+        check(`${tag}: el balance cuadra con los partidos`, played === side.gamesInDb,
+          `${side.name}: ${played} vs ${side.gamesInDb}`);
+      }
+    }
+  }
+  console.log(`  ${sampled} predicciones comprobadas`);
+  auditUpcoming('fútbol americano', nafUpcoming('nfl', 64));
+}
+
 // ---------------------------------------------------------------------------
 // Upcoming rows: shared shape checks
 // ---------------------------------------------------------------------------
@@ -406,6 +538,7 @@ function main(): void {
   auditFootball();
   auditBaseball();
   auditBasketball();
+  auditNfl();
   auditTennis();
 
   console.log('\n' + '='.repeat(46));

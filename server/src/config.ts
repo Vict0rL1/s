@@ -10,6 +10,7 @@ import type { ToursConfig, TournamentsConfig } from './types.ts';
 import type { BasketballConfig } from './basketball/types.ts';
 import type { FootballConfig } from './football/types.ts';
 import type { BaseballConfig } from './baseball/types.ts';
+import type { NafConfig } from './nfl/types.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)); // server/src
 export const ROOT = path.resolve(HERE, '..', '..'); // repo root
@@ -35,6 +36,7 @@ export const basketballConfig = readJson<BasketballConfig>(
 );
 export const footballConfig = readJson<FootballConfig>(path.join(CONFIG_DIR, 'football.json'));
 export const baseballConfig = readJson<BaseballConfig>(path.join(CONFIG_DIR, 'baseball.json'));
+export const nflConfig = readJson<NafConfig>(path.join(CONFIG_DIR, 'americanfootball.json'));
 
 export const env = {
   oddsApiKey: process.env.ODDS_API_KEY?.trim() || '',
@@ -64,4 +66,8 @@ export function footballLeagueById(id: string) {
 
 export function baseballLeagueById(id: string) {
   return baseballConfig.leagues.find((l) => l.id === id);
+}
+
+export function nflLeagueById(id: string) {
+  return nflConfig.leagues.find((l) => l.id === id);
 }
