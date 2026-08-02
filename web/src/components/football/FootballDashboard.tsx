@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { pillClass, SkeletonList } from '../ui';
+import { pillClass, SkeletonList, TeamCrest } from '../ui';
 import {
   fbApi,
   type FbFixtureWithPrediction,
@@ -9,7 +9,7 @@ import {
   type FbTeamInfo,
 } from '../../lib/football';
 import MatchCard from './MatchCard';
-import { formatDate } from '../../lib/format';
+import { formatDate, countryFlag } from '../../lib/format';
 
 /**
  * The ⚽ tab.
@@ -149,7 +149,10 @@ export default function FootballDashboard() {
                 title={l.label}
                 className={pillClass(on)}
               >
-                {l.name}
+                {countryFlag(l.country) && (
+                <span aria-hidden className="mr-1.5">{countryFlag(l.country)}</span>
+              )}
+              {l.name}
                 {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
                 {!l.hasModel && (
                   <span className="ml-1.5 text-amber-400" title="Sin modelo Elo: solo mercado">
@@ -234,12 +237,15 @@ export default function FootballDashboard() {
                     <tr key={t.id} className="border-t border-white/[0.07]">
                       <td className="py-1 pr-2 text-[#7b828d]">{i + 1}</td>
                       <td className="py-1 pr-2">
-                        <button
-                          onClick={() => setTeam({ league: league!, id: t.id })}
-                          className="text-[#c3c9d1] hover:underline"
-                        >
-                          {t.name}
-                        </button>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <TeamCrest league={league!} name={t.name} code={t.id} size={16} />
+                          <button
+                            onClick={() => setTeam({ league: league!, id: t.id })}
+                            className="truncate text-[#c3c9d1] hover:underline"
+                          >
+                            {t.name}
+                          </button>
+                        </span>
                       </td>
                       <td className="py-1 pr-2">{Math.round(t.elo)}</td>
                       <td className="py-1 pr-2">{t.gf ?? '—'}</td>

@@ -7,6 +7,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { INK, RELIABILITY_STYLE } from '../../lib/theme';
+import { crestColors, crestPaint, monogram } from '../../lib/teamColors';
 
 // ---------------------------------------------------------------------------
 // Surfaces
@@ -22,7 +23,15 @@ import { INK, RELIABILITY_STYLE } from '../../lib/theme';
 // So: the card is the only filled box on the page. Inside it, sections are
 // separated by a hairline and whitespace — which is what a printed table does.
 
-/** The one box. Everything inside it is flat. */
+/**
+ * The one box. Everything inside it is flat.
+ *
+ * The only motion in the app is here: the edge brightens a little on hover. Not
+ * a lift, not a shadow, not a scale — a card is a sheet of information, and
+ * animating it as a button would be a promise the card does not keep. What the
+ * brightening does say is "this row is the one you are reading", which on a page
+ * of eight near-identical cards is worth one CSS transition.
+ */
 export function Card({
   children,
   className = '',
@@ -33,7 +42,9 @@ export function Card({
   as?: 'div' | 'article' | 'section';
 }) {
   return (
-    <As className={`rounded-xl border border-white/[0.07] bg-[#14161b] ${className}`}>
+    <As
+      className={`rounded-xl border border-white/[0.07] bg-[#14161b] transition-colors duration-200 hover:border-white/[0.13] ${className}`}
+    >
       {children}
     </As>
   );
@@ -176,6 +187,80 @@ export function SeriesDot({ color, className = '' }: { color: string; className?
       className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${className}`}
       style={{ backgroundColor: color }}
     />
+  );
+}
+
+/**
+ * A team's crest: a small disc in the club's own colours with its monogram.
+ *
+ * The only place in the app where a team's own colour is allowed. Everything
+ * that carries meaning — the bars, the grid, the bands — stays on the shared
+ * validated palette, so blue is still the home side whatever the two clubs
+ * happen to wear. The crest answers "which club is this", and it answers it
+ * faster than reading a name does, which is the whole reason to spend the ink.
+ *
+ * When the colours are not known the crest goes neutral rather than inventing
+ * one, so a card never asserts that a club plays in a colour it does not.
+ *
+ * `logo` layers a real badge on top when the database happens to have one (the
+ * basketball ingest fetches them). It fades in only after it loads and removes
+ * itself if it 404s, so a missing image is never a broken-image icon — the
+ * coloured disc underneath is always a complete answer on its own.
+ */
+export function TeamCrest({
+  league,
+  name,
+  code,
+  logo,
+  size = 22,
+  className = '',
+}: {
+  league: string;
+  name: string;
+  code?: string | null;
+  logo?: string | null;
+  size?: number;
+  className?: string;
+}) {
+  const [logoOk, setLogoOk] = useState(false);
+  const paint = crestPaint(crestColors(league, name, code));
+  const text = monogram(name, code);
+  return (
+    <span
+      aria-hidden
+      title={name}
+      className={`relative inline-grid shrink-0 place-items-center overflow-hidden rounded-full ${className}`}
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: paint.fill,
+        boxShadow: `inset 0 0 0 1.5px ${paint.ring}`,
+      }}
+    >
+      <span
+        className="font-bold leading-none tracking-tight"
+        style={{
+          color: paint.ink,
+          // Three letters have to fit the same disc two letters do.
+          fontSize: size * (text.length > 2 ? 0.34 : 0.4),
+          opacity: logoOk ? 0 : 1,
+        }}
+      >
+        {text}
+      </span>
+      {logo && (
+        <img
+          src={logo}
+          alt=""
+          loading="lazy"
+          onLoad={() => setLogoOk(true)}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+          className="absolute inset-0 h-full w-full object-contain p-[2px]"
+        />
+      )}
+    </span>
   );
 }
 

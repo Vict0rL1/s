@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { bbApi, type BbTeamInfo } from '../../lib/basketball';
 import { formatDate } from '../../lib/format';
+import { TeamCrest } from '../ui';
 
 /** Full dossier for one team, opened from any game card or the power ranking. */
 export default function TeamProfile({
@@ -39,9 +40,9 @@ export default function TeamProfile({
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            {team?.logo && (
-              <img src={team.logo} alt="" className="h-10 w-10 object-contain" loading="lazy" />
-            )}
+            {/* The crest is always there; a real badge layers on top when the
+                ingest managed to fetch one, and disappears silently if it 404s. */}
+            <TeamCrest league={league} name={team?.name ?? id} code={id} logo={team?.logo} size={42} />
             <div>
               <h2 className="text-lg font-bold text-[#e8eaed]">{team?.name ?? id}</h2>
               {team && (

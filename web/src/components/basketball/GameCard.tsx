@@ -11,7 +11,7 @@ import {
   ProbabilityBar,
   ReliabilityChip,
   SectionTitle,
-  SeriesDot,
+  TeamCrest,
   StatRow,
   StatTile,
 } from '../ui';
@@ -62,8 +62,10 @@ export default function GameCard({
       {/* Away @ Home — the order North American basketball is always written in */}
       <div className="mb-3 flex items-start justify-between gap-3">
         <TeamName
+          league={game.league}
+          id={game.away_id}
+          logo={prediction?.teams.away.logo ?? teams.away?.logo ?? null}
           name={prediction?.teams.away.name ?? game.away_name}
-          color={AWAY_COLOR}
           elo={prediction?.teams.away.elo ?? teams.away?.elo ?? null}
           eloRank={prediction?.teams.away.eloRank ?? teams.away?.eloRank ?? null}
           record={prediction?.teams.away.record ?? teams.away?.record ?? null}
@@ -71,8 +73,10 @@ export default function GameCard({
         />
         <span className="shrink-0 pt-1 text-[11px] font-medium text-[#5c636c]">@</span>
         <TeamName
+          league={game.league}
+          id={game.home_id}
+          logo={prediction?.teams.home.logo ?? teams.home?.logo ?? null}
           name={prediction?.teams.home.name ?? game.home_name}
-          color={HOME_COLOR}
           elo={prediction?.teams.home.elo ?? teams.home?.elo ?? null}
           eloRank={prediction?.teams.home.eloRank ?? teams.home?.eloRank ?? null}
           record={prediction?.teams.home.record ?? teams.home?.record ?? null}
@@ -248,10 +252,13 @@ export default function GameCard({
 
 
 function TeamName({
-  name, color, elo, eloRank, record, alignRight = false, homeBadge = false, onClick,
+  league, id, logo, name, elo, eloRank, record, alignRight = false, homeBadge = false, onClick,
 }: {
+  league: string;
+  id: string | null;
+  /** The basketball ingest fetches real badges; use one when we have it. */
+  logo?: string | null;
   name: string;
-  color: string;
   elo: number | null;
   eloRank: number | null;
   record: { wins: number; losses: number } | null;
@@ -262,7 +269,9 @@ function TeamName({
   return (
     <div className={`min-w-0 flex-1 ${alignRight ? 'text-right' : ''}`}>
       <span className={`flex items-center gap-1.5 ${alignRight ? 'justify-end' : ''}`}>
-        {!alignRight && <SeriesDot color={color} />}
+        {/* The crest, not the series dot: the dot's job is done one line below
+            by the hero label, and two identity marks on one line is one too many. */}
+        {!alignRight && <TeamCrest league={league} name={name} code={id} logo={logo} />}
         <button
           onClick={onClick}
           disabled={!onClick}
@@ -273,7 +282,7 @@ function TeamName({
         >
           {name}
         </button>
-        {alignRight && <SeriesDot color={color} />}
+        {alignRight && <TeamCrest league={league} name={name} code={id} logo={logo} />}
       </span>
       <div className="truncate text-[11px] text-[#7b828d]">
         {homeBadge && 'local · '}

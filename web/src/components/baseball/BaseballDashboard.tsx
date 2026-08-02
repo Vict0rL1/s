@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { pillClass, SkeletonList } from '../ui';
+import { pillClass, SkeletonList, TeamCrest } from '../ui';
 import {
   bsbApi,
   type BsbGameWithPrediction,
@@ -10,7 +10,7 @@ import {
   type BsbTrackRecord,
 } from '../../lib/baseball';
 import GameCard from './GameCard';
-import { formatDate, formatDateTime } from '../../lib/format';
+import { formatDate, formatDateTime, countryFlag } from '../../lib/format';
 
 /**
  * The whole baseball tab. Holds its own state and talks only to /api/baseball/*,
@@ -126,6 +126,9 @@ export default function BaseballDashboard() {
               title={l.label}
               className={pillClass(league === l.id)}
             >
+              {countryFlag(l.country) && (
+                <span aria-hidden className="mr-1.5">{countryFlag(l.country)}</span>
+              )}
               {l.name}
               {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
               {!l.hasModel && <span className="ml-1.5 text-amber-400" title="Sin modelo Elo">◦</span>}
@@ -198,12 +201,15 @@ export default function BaseballDashboard() {
                     <tr key={t.id} className="border-t border-white/[0.07]">
                       <td className="py-1 pr-2 text-[#7b828d]">{i + 1}</td>
                       <td className="py-1 pr-2">
-                        <button
-                          className="text-[#d5d9df] hover:underline"
-                          onClick={() => setTeam({ league: league!, id: t.id })}
-                        >
-                          {t.name ?? t.id}
-                        </button>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <TeamCrest league={league!} name={t.name ?? t.id} code={t.id} size={16} />
+                          <button
+                            className="truncate text-[#d5d9df] hover:underline"
+                            onClick={() => setTeam({ league: league!, id: t.id })}
+                          >
+                            {t.name ?? t.id}
+                          </button>
+                        </span>
                       </td>
                       <td className="py-1 pr-2 text-right text-[#d5d9df]">{Math.round(t.elo)}</td>
                       <td className="py-1 pr-2 text-right text-[#9aa1ac]">{t.rs ?? '—'}</td>

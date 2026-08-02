@@ -16,7 +16,7 @@ import {
   ProbabilityBar,
   ReliabilityChip,
   SectionTitle,
-  SeriesDot,
+  TeamCrest,
   StatRow,
   StatTile,
 } from '../ui';
@@ -90,8 +90,9 @@ export default function MatchCard({
 
       <div className="mb-3 flex items-start justify-between gap-3">
         <TeamName
+          league={fixture.league}
+          id={fixture.home_id}
           name={homeName}
-          color={HOME_COLOR}
           elo={prediction?.teams.home.elo ?? teams.home?.elo ?? null}
           eloRank={prediction?.teams.home.eloRank ?? teams.home?.eloRank ?? null}
           homeBadge
@@ -99,8 +100,9 @@ export default function MatchCard({
         />
         <span className="shrink-0 pt-1 text-[11px] font-medium text-[#5c636c]">vs</span>
         <TeamName
+          league={fixture.league}
+          id={fixture.away_id}
           name={awayName}
-          color={AWAY_COLOR}
           elo={prediction?.teams.away.elo ?? teams.away?.elo ?? null}
           eloRank={prediction?.teams.away.eloRank ?? teams.away?.eloRank ?? null}
           alignRight
@@ -246,15 +248,19 @@ export default function MatchCard({
 }
 
 function TeamName({
-  name, color, elo, eloRank, alignRight = false, homeBadge = false, onClick,
+  league, id, name, elo, eloRank, alignRight = false, homeBadge = false, onClick,
 }: {
-  name: string; color: string; elo: number | null; eloRank: number | null;
+  league: string; id: string | null; logo?: string | null;
+  name: string; elo: number | null; eloRank: number | null;
   alignRight?: boolean; homeBadge?: boolean; onClick?: () => void;
 }) {
+  const logo = null;
   return (
     <div className={`min-w-0 flex-1 ${alignRight ? 'text-right' : ''}`}>
       <span className={`flex items-center gap-1.5 ${alignRight ? 'justify-end' : ''}`}>
-        {!alignRight && <SeriesDot color={color} />}
+        {/* The crest, not the series dot: the dot's job is done one line below
+            by the hero label, and two identity marks on one line is one too many. */}
+        {!alignRight && <TeamCrest league={league} name={name} code={id} logo={logo} />}
         <button
           onClick={onClick}
           disabled={!onClick}
@@ -265,7 +271,7 @@ function TeamName({
         >
           {name}
         </button>
-        {alignRight && <SeriesDot color={color} />}
+        {alignRight && <TeamCrest league={league} name={name} code={id} logo={logo} />}
       </span>
       <div className="truncate text-[11px] text-[#7b828d]">
         {homeBadge && 'local · '}

@@ -548,7 +548,23 @@ para llegar a 4.7:1 sobre la tarjeta, por encima del mínimo AA para texto peque
 
 Las cinco pestañas comparten además un único tratamiento para las sub-pestañas (liga, circuito,
 torneo): había cuatro distintos, incluida una fila de subrayados justo debajo de la fila de
-subrayados de la app.
+subrayados de la app. Cada una lleva la bandera de su país, que los ficheros de configuración ya
+tenían.
+
+**Los escudos de equipo son la excepción a la paleta, y solo esa.** Cada equipo aparece con un disco
+en sus colores oficiales y su monograma: azul marino y verde para Seattle, granate y oro para los
+Cardinals, rojo para el Liverpool. Es el único sitio donde entra el color de un club — las barras,
+la rejilla y las bandas siguen con la paleta compartida, así que **el azul sigue siendo el local en
+los cinco deportes** juegue de lo que juegue cada equipo. Sin esa regla, un Seahawks–Chiefs tendría
+cuatro colores saturados peleándose con los dos que llevan el pronóstico.
+
+Los colores salen de [`jimniels/teamcolors`](https://github.com/jimniels/teamcolors) y solo se usan
+las ligas que se pudieron comprobar: NFL 32/32, MLB 32/32, NBA 28/45 (los 17 que faltan son
+franquicias desaparecidas en los años 40) y Premier League 20/20. **Lo que no se sabe se pinta en
+gris**, no en un color inventado: suponer que el Real Madrid es morado sería inventar información, y
+eso no se hace en ninguna otra parte de la app. Cuando la base de datos tiene un escudo real —el
+baloncesto los descarga— se superpone al disco, y si la imagen falla desaparece sola en vez de dejar
+el icono de imagen rota.
 
 ## Estructura del proyecto
 

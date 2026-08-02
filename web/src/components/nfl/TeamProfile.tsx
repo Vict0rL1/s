@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { nflApi, type NflTeamInfo } from '../../lib/nfl';
 import { AWAY_COLOR, HOME_COLOR, NEUTRAL_COLOR, pct } from '../../lib/theme';
-import { FormDots } from '../ui';
+import { FormDots, TeamCrest } from '../ui';
 
 /** Full dossier for one team, opened from any game card or the power ranking. */
 export default function TeamProfile({
@@ -42,14 +42,17 @@ export default function TeamProfile({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-[#e8eaed]">{team?.name ?? id}</h2>
+          <div className="flex min-w-0 items-center gap-3">
+            <TeamCrest league={league} name={team?.name ?? id} code={id} size={42} />
+            <div className="min-w-0">
+            <h2 className="truncate text-lg font-bold text-[#e8eaed]">{team?.name ?? id}</h2>
             {team && (
               <p className="text-xs text-[#9aa1ac]">
                 Elo {Math.round(team.elo)} · #{team.eloRank} de la liga · {team.gamesInDb} partidos
                 en el historial
               </p>
             )}
+            </div>
           </div>
           <button onClick={onClose} className="text-[#9aa1ac] hover:text-[#d5d9df]">
             ✕

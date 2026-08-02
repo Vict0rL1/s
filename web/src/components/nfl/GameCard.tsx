@@ -15,7 +15,7 @@ import {
   ProbabilityBar,
   ReliabilityChip,
   SectionTitle,
-  SeriesDot,
+  TeamCrest,
   StatRow,
   StatTile,
 } from '../ui';
@@ -61,8 +61,9 @@ export default function GameCard({
       {/* Away @ Home — the order American football is always written in. */}
       <div className="mb-3 flex items-start justify-between gap-3">
         <TeamName
+          league={game.league}
+          id={game.away_id}
           name={prediction?.teams.away.name ?? game.away_name}
-          color={AWAY_COLOR}
           elo={prediction?.teams.away.elo ?? teams.away?.elo ?? null}
           eloRank={prediction?.teams.away.eloRank ?? teams.away?.eloRank ?? null}
           record={prediction?.teams.away.record ?? teams.away?.record ?? null}
@@ -70,8 +71,9 @@ export default function GameCard({
         />
         <span className="shrink-0 pt-1 text-[11px] font-medium text-[#5c636c]">@</span>
         <TeamName
+          league={game.league}
+          id={game.home_id}
           name={prediction?.teams.home.name ?? game.home_name}
-          color={HOME_COLOR}
           elo={prediction?.teams.home.elo ?? teams.home?.elo ?? null}
           eloRank={prediction?.teams.home.eloRank ?? teams.home?.eloRank ?? null}
           record={prediction?.teams.home.record ?? teams.home?.record ?? null}
@@ -246,10 +248,11 @@ function KeyNumbers({ prediction }: { prediction: NflPrediction }) {
 }
 
 function TeamName({
-  name, color, elo, eloRank, record, alignRight = false, homeBadge = false, onClick,
+  league, id, name, elo, eloRank, record, alignRight = false, homeBadge = false, onClick,
 }: {
+  league: string;
+  id: string | null;
   name: string;
-  color: string;
   elo: number | null;
   eloRank: number | null;
   record: { wins: number; losses: number; ties: number } | null;
@@ -260,7 +263,9 @@ function TeamName({
   return (
     <div className={`min-w-0 flex-1 ${alignRight ? 'text-right' : ''}`}>
       <span className={`flex min-w-0 items-center gap-1.5 ${alignRight ? 'justify-end' : ''}`}>
-        {!alignRight && <SeriesDot color={color} />}
+        {/* The crest, not the series dot: the dot's job is done one line below
+            by the hero label, and two identity marks on one line is one too many. */}
+        {!alignRight && <TeamCrest league={league} name={name} code={id} />}
         <button
           onClick={onClick}
           disabled={!onClick}
@@ -271,7 +276,7 @@ function TeamName({
         >
           {name}
         </button>
-        {alignRight && <SeriesDot color={color} />}
+        {alignRight && <TeamCrest league={league} name={name} code={id} />}
       </span>
       <div className="truncate text-[11px] text-[#7b828d]">
         {homeBadge && 'local · '}
@@ -403,8 +408,14 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
         <SectionTitle>Los dos equipos</SectionTitle>
         <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[11px]">
           <div />
-          <div className="w-20 truncate text-right font-medium text-[#e8eaed]">{away.name}</div>
-          <div className="w-20 truncate text-right font-medium text-[#e8eaed]">{home.name}</div>
+          <div className="flex w-20 items-center justify-end gap-1.5 font-medium text-[#e8eaed]">
+            <span className="truncate">{away.name}</span>
+            <TeamCrest league={prediction.league} name={away.name} code={away.id} size={14} />
+          </div>
+          <div className="flex w-20 items-center justify-end gap-1.5 font-medium text-[#e8eaed]">
+            <span className="truncate">{home.name}</span>
+            <TeamCrest league={prediction.league} name={home.name} code={home.id} size={14} />
+          </div>
           <CompareRow label="Elo" left={Math.round(away.elo)} right={Math.round(home.elo)} />
           <CompareRow label="Puntos a favor / partido" left={away.pf ?? '—'} right={home.pf ?? '—'} />
           <CompareRow label="Puntos en contra / partido" left={away.pa ?? '—'} right={home.pa ?? '—'} />

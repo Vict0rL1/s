@@ -82,3 +82,28 @@ export function flag(ioc: string | null): string {
   if (!/^[A-Z]{2}$/.test(iso2)) return '';
   return String.fromCodePoint(...[...iso2].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
 }
+
+/**
+ * The flag for a league's country.
+ *
+ * The five sports' config files spell the country two different ways: football
+ * stores a ready-made "🇪🇸 España" (because a league label wants the name too),
+ * the others store a bare ISO-2 code. Rather than migrate four config files for
+ * a decoration, this accepts both — and returns an empty string for anything it
+ * cannot resolve, so a missing flag is a missing flag and never a tofu box.
+ */
+export function countryFlag(country: string | null | undefined): string {
+  if (!country) return '';
+  const trimmed = country.trim();
+  // Already an emoji (regional indicators, or a tag sequence like the England
+  // flag): take the leading glyph cluster as-is.
+  const first = [...trimmed][0] ?? '';
+  if (first.codePointAt(0)! >= 0x1f1e6) {
+    const upTo = trimmed.indexOf(' ');
+    return upTo > 0 ? trimmed.slice(0, upTo) : trimmed;
+  }
+  const code = trimmed.slice(0, 2).toUpperCase();
+  if (code === 'EU') return '🇪🇺';
+  if (!/^[A-Z]{2}$/.test(code)) return '';
+  return String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}

@@ -23,6 +23,7 @@ import {
   ReliabilityChip,
   SectionTitle,
   SeriesDot,
+  TeamCrest,
   StatRow,
   StatTile,
 } from '../ui';
@@ -88,8 +89,9 @@ export default function GameCard({
       {/* Away @ Home — baseball is written away-first, unlike the other three */}
       <div className="mb-3 flex items-start justify-between gap-3">
         <TeamName
+          league={game.league}
+          id={game.away_id}
           name={prediction?.teams.away.name ?? game.away_name}
-          color={AWAY_COLOR}
           elo={prediction?.teams.away.elo ?? teams.away?.elo ?? null}
           eloRank={prediction?.teams.away.eloRank ?? teams.away?.eloRank ?? null}
           odds={game.odds_away}
@@ -97,8 +99,9 @@ export default function GameCard({
         />
         <span className="shrink-0 pt-1 text-[11px] font-medium text-[#5c636c]">@</span>
         <TeamName
+          league={game.league}
+          id={game.home_id}
           name={prediction?.teams.home.name ?? game.home_name}
-          color={HOME_COLOR}
           elo={prediction?.teams.home.elo ?? teams.home?.elo ?? null}
           eloRank={prediction?.teams.home.eloRank ?? teams.home?.eloRank ?? null}
           odds={game.odds_home}
@@ -289,15 +292,18 @@ function StarterChip({ side, color }: { side: BsbSide; color: string }) {
 }
 
 function TeamName({
-  name, color, elo, eloRank, odds, alignRight = false, homeBadge = false, onClick,
+  league, id, name, elo, eloRank, odds, alignRight = false, homeBadge = false, onClick,
 }: {
-  name: string; color: string; elo: number | null; eloRank: number | null;
+  league: string; id: string | null;
+  name: string; elo: number | null; eloRank: number | null;
   odds: number | null; alignRight?: boolean; homeBadge?: boolean; onClick?: () => void;
 }) {
   return (
     <div className={`min-w-0 flex-1 ${alignRight ? 'text-right' : ''}`}>
       <span className={`flex items-center gap-1.5 ${alignRight ? 'justify-end' : ''}`}>
-        {!alignRight && <SeriesDot color={color} />}
+        {/* The crest, not the series dot: the dot's job is done one line below
+            by the hero label, and two identity marks on one line is one too many. */}
+        {!alignRight && <TeamCrest league={league} name={name} code={id} />}
         <button
           onClick={onClick}
           disabled={!onClick}
@@ -307,7 +313,7 @@ function TeamName({
           {name}
           {homeBadge && <span className="ml-1.5 text-[10px] text-[#7b828d]">(local)</span>}
         </button>
-        {alignRight && <SeriesDot color={color} />}
+        {alignRight && <TeamCrest league={league} name={name} code={id} />}
       </span>
       <div className="text-[11px] text-[#7b828d]">
         {elo != null && <>Elo {Math.round(elo)}{eloRank != null && ` (#${eloRank})`}</>}
