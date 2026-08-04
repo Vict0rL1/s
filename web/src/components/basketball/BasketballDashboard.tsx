@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { pillClass, SkeletonList, TeamCrest } from '../ui';
-import { countryFlag } from '../../lib/format';
+import { pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading } from '../ui';
+import { countryFlag, dayChipLabel, groupByDay } from '../../lib/format';
 import {
   bbApi,
   type BbGameWithPrediction,
@@ -27,6 +27,9 @@ export default function BasketballDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [team, setTeam] = useState<{ league: string; id: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // null = every day, which is the default: someone who has not asked to filter
+  // should see the whole schedule.
+  const [day, setDay] = useState<string | null>(null);
   const [showTeams, setShowTeams] = useState(false);
 
   useEffect(() => {
@@ -88,6 +91,19 @@ export default function BasketballDashboard() {
       setRefreshing(false);
     }
   }
+
+  // Grouped by the reader's own local day, and filtered to one of them if asked.
+  const dayGroups = useMemo(() => groupByDay(games, (g) => g.game.commence_time), [games]);
+  const dayChips = useMemo(
+    () => dayGroups.map((d) => ({ key: d.key, label: dayChipLabel(d.key), count: d.items.length })),
+    [dayGroups],
+  );
+  const shownGroups = day ? dayGroups.filter((d) => d.key === day) : dayGroups;
+  // A day that no longer exists after switching league would filter everything
+  // away and look like "no games", so the choice is dropped rather than kept.
+  useEffect(() => {
+    if (day && !dayGroups.some((d) => d.key === day)) setDay(null);
+  }, [dayGroups, day]);
 
   const activeLeague = leagues.find((l) => l.id === league) ?? null;
   const leagueMeta = meta?.leagues.find((l) => l.id === league) ?? null;
@@ -165,15 +181,19 @@ export default function BasketballDashboard() {
           No hay partidos próximos para {activeLeague?.name ?? 'esta liga'}.
         </p>
       ) : (
-        <div className="space-y-4">
-          {games.map((g) => (
-            <GameCard
-              key={g.game.id}
-              item={g}
-              onOpenTeam={(lg, id) => setTeam({ league: lg, id })}
-            />
+        <>
+          <DayFilter days={dayChips} selected={day} onSelect={setDay} />
+          {shownGroups.map((group) => (
+            <section key={group.key} className="mb-6">
+              <DayHeading label={group.label} count={group.items.length} />
+              <div className="space-y-4">
+                {group.items.map((g) => (
+                  <GameCard key={g.game.id} item={g} onOpenTeam={(lg, id) => setTeam({ league: lg, id })} />
+                ))}
+              </div>
+            </section>
           ))}
-        </div>
+        </>
       )}
 
       {/* All teams, by Elo — "la información de todos los equipos" */}

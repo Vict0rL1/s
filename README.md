@@ -633,6 +633,49 @@ eso no se hace en ninguna otra parte de la app. Cuando la base de datos tiene un
 baloncesto los descarga— se superpone al disco, y si la imagen falla desaparece sola en vez de dejar
 el icono de imagen rota.
 
+## Fechas y horarios
+
+Los partidos van **agrupados por día**, no en una lista corrida. Cada grupo lleva una cabecera que se
+queda pegada arriba mientras lo recorres (`Hoy`, `Mañana`, `Ayer`, y para el resto la fecha larga —
+`Domingo, 13 de septiembre`— sin el año cuando es el año en curso), con el número de partidos de ese
+día al lado. Encima hay una fila de fichas, una por día con partidos, más `Todos`: pulsar una filtra
+a ese día, volver a pulsarla quita el filtro. Con 24 partidos de NFL repartidos en ocho días, eso es
+la diferencia entre buscar y mirar.
+
+En cada tarjeta ya no aparece la fecha completa repetida: basta **la hora** (`20:20`) y a cuánto está
+(`en 36 días`, `en 11 h`), porque el día ya lo dice la cabecera del grupo.
+
+Los días se cortan **en tu zona horaria**, no en UTC. Agrupar en UTC habría mandado los partidos de
+noche al día siguiente: un partido a las 22:00 en Madrid es 20:00 UTC el mismo día, pero uno a las
+01:30 es 23:30 UTC del día anterior, y habría aparecido bajo la cabecera equivocada.
+
+### El fallo de la hora de la NFL
+
+El calendario de la NFL publica el saque inicial como fecha y hora locales del este de Estados
+Unidos. Convertirlo estaba escrito como ``new Date(`${día}T${hora}:00-05:00`)`` — que es hora
+**estándar** del este, y la temporada de la NFL va de septiembre a febrero, así que casi todo el
+arranque cae en horario de **verano** (-04:00). **Todos los partidos desde la jornada 1 hasta
+noviembre se guardaban una hora tarde**: la tarjeta decía que un jueves por la noche empezaba a las
+21:20 cuando empieza a las 20:20.
+
+Un desplazamiento fijo está mal para cualquier ciudad con cambio de hora, y el signo del error se
+invierte dos veces al año. `server/src/timezone.ts` lo resuelve consultando el desplazamiento **de esa
+fecha concreta** en la base de datos de zonas horarias de la propia plataforma (`Intl`, sin
+dependencias), en dos pasadas: el desplazamiento depende del instante y el instante depende del
+desplazamiento, así que se estima con la lectura ingenua y se vuelve a comprobar en el instante
+corregido. Verificado en cuatro fechas, incluido el domingo del cambio de hora.
+
+### Nada caducado en la lista
+
+Los cinco deportes descartan ahora los partidos que ya empezaron hace más de **6 horas**
+(`STALE_AFTER_HOURS`). Antes, un partido que la API de odds hubiera dejado atrás seguía en «próximos»
+indefinidamente. Las 6 horas de margen existen para no tirar un partido que se está jugando ahora
+mismo.
+
+`npm run audit` comprueba esto además de la coherencia de los números: que ningún partido de la lista
+de próximos esté ya jugado (con esas 6 h de holgura) y que ninguna fecha caiga más allá de 400 días.
+Son **1325 comprobaciones**, todas verdes.
+
 ## Estructura del proyecto
 
 ```

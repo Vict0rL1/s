@@ -515,15 +515,35 @@ function auditNfl(): void {
 // ---------------------------------------------------------------------------
 function auditUpcoming(sport: string, rows: { id: string; commence_time: string }[]): void {
   const ids = new Set<string>();
+  // A few hours of slack: a game that kicked off an hour ago is still the one the
+  // reader is looking at, and dropping it mid-match would be worse than keeping
+  // it. A day-old fixture is stale data.
+  const cutoff = Date.now() - 6 * 3600_000;
+  let past = 0;
   for (const r of rows) {
     check(`${sport}: id de partido único`, !ids.has(r.id), r.id);
     ids.add(r.id);
+    const t = Date.parse(r.commence_time);
     check(
       `${sport}: fecha de partido válida`,
-      !!r.commence_time && !Number.isNaN(Date.parse(r.commence_time)),
+      !!r.commence_time && !Number.isNaN(t),
       `${r.id} → ${r.commence_time}`,
     );
+    // A "próximo" that already happened is the failure mode that makes the date
+    // grouping lie: it files under "Ayer" and sits above tomorrow's games.
+    if (!Number.isNaN(t) && t < cutoff) past++;
+    // Nothing should be scheduled decades out either — that is the shape a
+    // timezone or parsing bug takes, and it puts one card at the far end of a
+    // day filter where nobody will look for it.
+    if (!Number.isNaN(t)) {
+      check(
+        `${sport}: fecha dentro de un rango razonable`,
+        t < Date.now() + 400 * 24 * 3600_000,
+        `${r.id} → ${r.commence_time}`,
+      );
+    }
   }
+  check(`${sport}: ningún partido próximo ya jugado`, past === 0, `${past} de ${rows.length}`);
   console.log(`  ${rows.length} partidos próximos comprobados`);
 }
 

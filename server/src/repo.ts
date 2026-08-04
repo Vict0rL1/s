@@ -2,6 +2,7 @@
 // query lives here so the model modules stay pure and testable.
 
 import { getDb } from './db.ts';
+import { freshSince } from './freshness.ts';
 import { INITIAL_ELO } from './model/elo.ts';
 import type { FormResult } from './model/form.ts';
 import type { H2HMeeting } from './model/h2h.ts';
@@ -499,6 +500,11 @@ export function listUpcoming(filter: {
     clauses.push('tournament_id = ?');
     params.push(filter.tournament);
   }
+  // Finished matches are dropped here rather than in the interface: with the
+  // schedule grouped by day, yesterday's match files under "Ayer" and sits above
+  // tomorrow's. See freshness.ts for why the cutoff has slack.
+  clauses.push('commence_time >= ?');
+  params.push(freshSince());
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   return getDb()
     .prepare(`SELECT * FROM upcoming_matches ${where} ORDER BY commence_time ASC`)

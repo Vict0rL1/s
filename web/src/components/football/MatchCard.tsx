@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fbApi, type FbFixtureWithPrediction, type FbPrediction } from '../../lib/football';
-import { formatDateTime, formatDate } from '../../lib/format';
+import { formatDate } from '../../lib/format';
 import { AWAY_COLOR, DRAW_COLOR, HOME_COLOR, pct } from '../../lib/theme';
 import {
   Badge,
@@ -12,6 +12,7 @@ import {
   FactorValue,
   FormDots,
   HeroStat,
+  MatchTime,
   Panel,
   ProbabilityBar,
   ReliabilityChip,
@@ -81,7 +82,7 @@ export default function MatchCard({
   return (
     <Card as="article" className="p-4">
       <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-[#7b828d]">
-        <time>{formatDateTime(fixture.commence_time)}</time>
+        <MatchTime iso={fixture.commence_time} />
         <div className="flex items-center gap-1.5">
           {dirty && <Badge tone="accent">{adjusting ? 'recalculando…' : 'con tus bajas'}</Badge>}
           {fixture.source === 'fixture' && <Badge tone="warning">partido demo</Badge>}

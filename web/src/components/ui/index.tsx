@@ -8,6 +8,7 @@
 import { useState, type ReactNode } from 'react';
 import { INK, RELIABILITY_STYLE } from '../../lib/theme';
 import { crestColors, crestPaint, monogram } from '../../lib/teamColors';
+import { relativeTime, shortTime } from '../../lib/format';
 
 // ---------------------------------------------------------------------------
 // Surfaces
@@ -442,6 +443,109 @@ export function Badge({
     >
       {children}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Days
+// ---------------------------------------------------------------------------
+/**
+ * The heading above one day's matches.
+ *
+ * Sticky, and just under the app's own sticky header — so however far you scroll
+ * into a three-week schedule, the day you are looking at is still named. That is
+ * the whole reason to group at all: without it, a card in the middle of the list
+ * has to carry its own date, and thirty cards each stating their date is thirty
+ * copies of information that changes four times.
+ */
+export function DayHeading({
+  label,
+  count,
+  right,
+}: {
+  label: string;
+  count?: number;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="sticky top-[86px] z-20 -mx-1 mb-3 flex items-baseline justify-between gap-3 bg-[#0b0d11]/90 px-1 py-1.5 backdrop-blur-sm">
+      <h3 className="text-[13px] font-semibold text-[#e8eaed]">
+        {label}
+        {count != null && <span className="ml-2 text-[11px] font-normal text-[#7b828d]">{count}</span>}
+      </h3>
+      {right && <span className="text-[11px] text-[#7b828d]">{right}</span>}
+    </div>
+  );
+}
+
+/**
+ * The day strip: a chip per day that has matches.
+ *
+ * This is the "calendar" — and deliberately not a month grid. A month grid is
+ * mostly empty squares: the odds feed only knows about the next week or two, and
+ * a schedule knows about a season but with nothing to say about most of it. A
+ * strip of only the days that HAVE something shows the same information with no
+ * blank space, scrolls with a thumb, and cannot mislead you into tapping a
+ * Tuesday that was never going to have games.
+ *
+ * `null` selects every day, which is the default: a reader who has not asked to
+ * filter should see everything.
+ */
+export function DayFilter({
+  days,
+  selected,
+  onSelect,
+}: {
+  days: { key: string; label: string; count: number }[];
+  selected: string | null;
+  onSelect: (key: string | null) => void;
+}) {
+  if (days.length < 2) return null;
+  const total = days.reduce((a, d) => a + d.count, 0);
+  return (
+    <div
+      className="mb-4 flex gap-2 overflow-x-auto pb-1"
+      role="tablist"
+      aria-label="Filtrar por día"
+    >
+      <button
+        role="tab"
+        aria-selected={selected === null}
+        onClick={() => onSelect(null)}
+        className={pillClass(selected === null)}
+      >
+        Todos
+        <span className="ml-1.5 opacity-60">{total}</span>
+      </button>
+      {days.map((d) => (
+        <button
+          key={d.key}
+          role="tab"
+          aria-selected={selected === d.key}
+          onClick={() => onSelect(selected === d.key ? null : d.key)}
+          className={pillClass(selected === d.key)}
+        >
+          {d.label}
+          <span className="ml-1.5 opacity-60">{d.count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The time on a card: the clock, and how far away it is.
+ *
+ * "20:20" answers where in the day, "en 3 días" answers whether it matters yet.
+ * Both in the reader's own time zone.
+ */
+export function MatchTime({ iso, extra }: { iso: string; extra?: ReactNode }) {
+  return (
+    <time dateTime={iso} className="tabular-nums">
+      {shortTime(iso)}
+      <span className="ml-1.5 text-[#5c636c]">{relativeTime(iso)}</span>
+      {extra}
+    </time>
   );
 }
 

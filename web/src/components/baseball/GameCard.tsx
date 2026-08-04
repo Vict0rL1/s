@@ -6,7 +6,7 @@ import {
   type BsbPrediction,
   type BsbSide,
 } from '../../lib/baseball';
-import { formatDateTime, formatDate } from '../../lib/format';
+import { formatDate } from '../../lib/format';
 import { AWAY_COLOR, HOME_COLOR, pct } from '../../lib/theme';
 import {
   Badge,
@@ -18,6 +18,7 @@ import {
   FactorValue,
   FormDots,
   HeroStat,
+  MatchTime,
   Panel,
   ProbabilityBar,
   ReliabilityChip,
@@ -74,7 +75,7 @@ export default function GameCard({
   return (
     <Card as="article" className="p-4">
       <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-[#7b828d]">
-        <time>{formatDateTime(game.commence_time)}</time>
+        <MatchTime iso={game.commence_time} />
         <div className="flex items-center gap-1.5">
           {dirty && <Badge tone="accent">{adjusting ? 'recalculando…' : 'con tu abridor'}</Badge>}
           {!startersAnnounced && prediction && (

@@ -1,5 +1,4 @@
 import type { NflGameWithPrediction, NflPrediction, NflSpreadQuote } from '../../lib/nfl';
-import { formatDateTime } from '../../lib/format';
 import { AWAY_COLOR, HOME_COLOR, NEUTRAL_COLOR, pct } from '../../lib/theme';
 import {
   Badge,
@@ -11,6 +10,7 @@ import {
   FactorValue,
   FormDots,
   HeroStat,
+  MatchTime,
   Panel,
   ProbabilityBar,
   ReliabilityChip,
@@ -47,10 +47,13 @@ export default function GameCard({
   return (
     <Card as="article" className="p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#7b828d]">
-        <time>
-          {formatDateTime(game.commence_time)}
-          {game.week != null && <span className="ml-1.5">· semana {game.week}</span>}
-        </time>
+        {/* Only the clock: the day is in the heading above this group, and thirty
+            cards each restating their own date is thirty copies of a fact that
+            changes four times. */}
+        <MatchTime
+          iso={game.commence_time}
+          extra={game.week != null ? <span className="ml-1.5">· semana {game.week}</span> : undefined}
+        />
         <div className="flex items-center gap-1.5">
           {game.neutral === 1 && <Badge>campo neutral</Badge>}
           {game.source === 'schedule' && <Badge>calendario oficial</Badge>}

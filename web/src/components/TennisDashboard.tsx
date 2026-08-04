@@ -9,7 +9,8 @@ import {
 import MatchCard from './MatchCard';
 import PlayerProfile from './PlayerProfile';
 import TrackRecordPanel from './TrackRecordPanel';
-import { pillClass } from './ui';
+import { DayFilter, DayHeading, pillClass } from './ui';
+import { dayChipLabel, groupByDay } from '../lib/format';
 
 export default function TennisDashboard() {
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -22,6 +23,8 @@ export default function TennisDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<{ tour: string; id: number } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // null = every day. See the note in the other dashboards.
+  const [day, setDay] = useState<string | null>(null);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -62,6 +65,19 @@ export default function TennisDashboard() {
   }, [tour]);
 
   // Tournaments that actually have upcoming matches for the selected tour.
+  const dayGroups = useMemo(
+    () => groupByDay(matches, (m) => m.match.commence_time),
+    [matches],
+  );
+  const dayChips = useMemo(
+    () => dayGroups.map((d) => ({ key: d.key, label: dayChipLabel(d.key), count: d.items.length })),
+    [dayGroups],
+  );
+  const shownGroups = day ? dayGroups.filter((d) => d.key === day) : dayGroups;
+  useEffect(() => {
+    if (day && !dayGroups.some((d) => d.key === day)) setDay(null);
+  }, [dayGroups, day]);
+
   const tourTournaments = useMemo(
     () => tournaments.filter((t) => t.tours.includes(tour) && t.hasUpcoming),
     [tournaments, tour],
@@ -168,15 +184,23 @@ export default function TennisDashboard() {
       {loading ? (
         <p className="text-[#7b828d]">Cargando partidos…</p>
       ) : (
-        <div className="space-y-4">
-          {matches.map((m) => (
-            <MatchCard
-              key={m.match.id}
-              item={m}
-              onOpenPlayer={(t, id) => setProfile({ tour: t, id })}
-            />
+        <>
+          <DayFilter days={dayChips} selected={day} onSelect={setDay} />
+          {shownGroups.map((group) => (
+            <section key={group.key} className="mb-6">
+              <DayHeading label={group.label} count={group.items.length} />
+              <div className="space-y-4">
+                {group.items.map((m) => (
+                  <MatchCard
+                    key={m.match.id}
+                    item={m}
+                    onOpenPlayer={(t, id) => setProfile({ tour: t, id })}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
-        </div>
+        </>
       )}
 
       {profile && (

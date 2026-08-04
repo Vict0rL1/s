@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { pillClass, SkeletonList, TeamCrest } from '../ui';
+import { pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading } from '../ui';
 import {
   fbApi,
   type FbFixtureWithPrediction,
@@ -9,7 +9,7 @@ import {
   type FbTeamInfo,
 } from '../../lib/football';
 import MatchCard from './MatchCard';
-import { formatDate, countryFlag } from '../../lib/format';
+import { formatDate, countryFlag, dayChipLabel, groupByDay } from '../../lib/format';
 
 /**
  * The ⚽ tab.
@@ -31,6 +31,9 @@ export default function FootballDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [team, setTeam] = useState<{ league: string; id: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // null = every day, which is the default: someone who has not asked to filter
+  // should see the whole schedule.
+  const [day, setDay] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
 
   useEffect(() => {
@@ -101,6 +104,22 @@ export default function FootballDashboard() {
       setRefreshing(false);
     }
   }
+
+  // Grouped by the reader's own local day, and filtered to one of them if asked.
+  const dayGroups = useMemo(
+    () => groupByDay(fixtures, (f) => f.fixture.commence_time),
+    [fixtures],
+  );
+  const dayChips = useMemo(
+    () => dayGroups.map((d) => ({ key: d.key, label: dayChipLabel(d.key), count: d.items.length })),
+    [dayGroups],
+  );
+  const shownGroups = day ? dayGroups.filter((d) => d.key === day) : dayGroups;
+  // A day that no longer exists after switching league would filter everything
+  // away and look like "no fixtures", so the choice is dropped rather than kept.
+  useEffect(() => {
+    if (day && !dayGroups.some((d) => d.key === day)) setDay(null);
+  }, [dayGroups, day]);
 
   const active = leagues.find((l) => l.id === league) ?? null;
   const activeMeta = meta?.leagues.find((l) => l.id === league) ?? null;
@@ -192,15 +211,23 @@ export default function FootballDashboard() {
           No hay partidos próximos para {active?.name ?? 'esta liga'}.
         </p>
       ) : (
-        <div className="space-y-4">
-          {fixtures.map((f) => (
-            <MatchCard
-              key={f.fixture.id}
-              item={f}
-              onOpenTeam={(lg, id) => setTeam({ league: lg, id })}
-            />
+        <>
+          <DayFilter days={dayChips} selected={day} onSelect={setDay} />
+          {shownGroups.map((group) => (
+            <section key={group.key} className="mb-6">
+              <DayHeading label={group.label} count={group.items.length} />
+              <div className="space-y-4">
+                {group.items.map((f) => (
+                  <MatchCard
+                    key={f.fixture.id}
+                    item={f}
+                    onOpenTeam={(lg, id) => setTeam({ league: lg, id })}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
-        </div>
+        </>
       )}
 
       {/* All teams in the league, ranked by Elo */}

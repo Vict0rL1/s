@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import type { PlayerInfo, Reliability, UpcomingMatch, UpcomingWithPrediction } from '../lib/api';
-import { confidenceLabelEs, flag, formatDateTime, surfaceLabelEs } from '../lib/format';
+import { confidenceLabelEs, flag, surfaceLabelEs } from '../lib/format';
 import ProbabilityBars, { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import MatchDetail from './MatchDetail';
-import { Badge, SeriesDot } from './ui';
+import { Badge, MatchTime, SeriesDot } from './ui';
 
 export default function MatchCard({
   item,
@@ -23,7 +23,7 @@ export default function MatchCard({
   return (
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.04] p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between text-xs text-[#9aa1ac]">
-        <span>{formatDateTime(match.commence_time)}</span>
+        <MatchTime iso={match.commence_time} />
         <span className="flex items-center gap-2">
           <span className="rounded bg-white/[0.06] px-2 py-0.5">
             {surfaceLabelEs(match.surface)}

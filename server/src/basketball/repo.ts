@@ -6,6 +6,7 @@
 // 5 ms prediction into 600 ms.
 
 import { getDb } from '../db.ts';
+import { freshSince } from '../freshness.ts';
 import { INITIAL_ELO } from './elo.ts';
 import type {
   GameRow,
@@ -284,10 +285,14 @@ export function listUpcoming(league?: string): UpcomingGameRow[] {
     league
       ? db
           .prepare(
-            'SELECT * FROM bb_upcoming WHERE league = ? ORDER BY commence_time ASC, id ASC',
+            'SELECT * FROM bb_upcoming WHERE league = ? AND commence_time >= ? ORDER BY commence_time ASC, id ASC',
           )
-          .all(league)
-      : db.prepare('SELECT * FROM bb_upcoming ORDER BY commence_time ASC, id ASC').all()
+          .all(league, freshSince())
+      : db
+          .prepare(
+            'SELECT * FROM bb_upcoming WHERE commence_time >= ? ORDER BY commence_time ASC, id ASC',
+          )
+          .all(freshSince())
   ) as unknown as UpcomingGameRow[];
 }
 

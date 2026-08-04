@@ -16,6 +16,7 @@
 // every one of those a silent corruption.
 
 import { getDb } from '../../db.ts';
+import { zonedToUtc } from '../../timezone.ts';
 import type { LeagueId } from '../types.ts';
 
 /**
@@ -188,13 +189,18 @@ export function parseGames(
     const as = num(r.away_score);
 
     if (hs == null || as == null) {
-      const time = r.gametime && /^\d{2}:\d{2}$/.test(r.gametime) ? r.gametime : '17:00';
+      const time = r.gametime && /^\d{2}:\d{2}$/.test(r.gametime) ? r.gametime : '13:00';
+      // Kick-off times in the file are the US EASTERN wall clock, and the season
+      // straddles the DST change: September to early November is -04:00, the rest
+      // -05:00. A fixed offset put every early-season game an hour late (a
+      // Thursday night game read 21:20 instead of 20:20), so the offset is looked
+      // up for the actual date. See server/src/timezone.ts.
+      const commenceTime = zonedToUtc(day, time, 'America/New_York');
+      if (!commenceTime) continue;
       fixtures.push({
         season,
         week,
-        // Kick-off times in the file are US Eastern. Stored as UTC so the card
-        // shows the right local time wherever the reader is.
-        commenceTime: new Date(`${day}T${time}:00-05:00`).toISOString(),
+        commenceTime,
         homeId,
         awayId,
         neutral,
