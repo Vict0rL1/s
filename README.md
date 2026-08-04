@@ -281,20 +281,57 @@ The Odds API. Sin key, la app muestra un demo con partidos de ejemplo.
 
    ```bash
    ODDS_API_KEY=tu_clave_aqui
-   ODDS_REGIONS=eu,uk
+   ODDS_REGIONS=eu
    ```
 
-   (NUNCA subas tu `.env` — está en `.gitignore`.)
+   (NUNCA subas tu `.env` — está en `.gitignore`. Para cambiar de clave basta con editar esa línea
+   y reiniciar; no hay nada que tocar en el código.)
 3. Ejecuta `npm run update-data`. La ingesta **descubre automáticamente los torneos de tenis
    activos** en ese momento (Grand Slams, Masters/1000, 500…) y trae sus partidos, así aparece
    lo que realmente se juega hoy — no una lista fija.
 
+### El cupo gratuito, y cómo se agotó
+
+**The Odds API cobra un crédito por mercado y POR REGIÓN.** Una llamada pidiendo
+`h2h,spreads,totals` en `eu,uk` cuesta **seis** créditos, no uno. El listado `/sports` es gratis.
+
+Esa aritmética, que el código no estaba haciendo, agotaba el plan gratuito **en dos días y medio**:
+
+| Por ciclo de refresco (antes) | Créditos |
+|---|---:|
+| Tenis, ~4 torneos activos × 1 mercado × 2 regiones | 8 |
+| Baloncesto, 7 ligas × 1 × 2 | 14 |
+| Fútbol, 13 ligas × 1 × 2 | 26 |
+| **Total** | **48** |
+
+48 × 4 ciclos al día × 30 días = **5.760 al mes**, contra un cupo de 500.
+
+Lo que se cambió:
+
+1. **Una sola región** por defecto en vez de dos. `eu,uk` duplicaba el precio de cada llamada para
+   tener una segunda opinión sobre los mismos precios.
+2. **El cupo se lee y se recuerda.** Cada respuesta trae `x-requests-remaining`; ahora se guarda, se
+   comprueba antes de gastar y **se muestra en el pie de la app**, en todas las pestañas.
+3. **Una reserva de 25 créditos.** Por debajo de ahí el refresco automático se abstiene, para que los
+   últimos créditos queden para el botón **↻ Actualizar** que pulses tú, y no se los coma un
+   temporizador a las 4 de la mañana.
+4. **El listado `/sports` se pide una vez y se comparte.** Es gratis, pero cinco deportes hacían cada
+   uno su llamada en cada ciclo.
+5. **La NFL filtraba mal**: era el único deporte que pedía todas sus ligas sin comprobar si estaban
+   en temporada, y encima con tres mercados. En marzo pagaba 6 créditos por no traer nada.
+6. **`AUTO_REFRESH_MINUTES=0` no desactivaba nada.** `Number('0') || 720` es 720, así que lo primero
+   que prueba cualquiera para frenar el gasto no hacía absolutamente nada. Arreglado.
+
+Resultado: **~8 créditos por ciclo, dos veces al día, unos 480 al mes** — dentro del plan gratuito.
+
 ### Que se actualice solo
 
-Con la key configurada, el servidor **refresca las odds automáticamente** mientras corre
-(al arrancar y cada `AUTO_REFRESH_MINUTES`, 6 h por defecto). También puedes pulsar
-**↻ Actualizar** en el dashboard para refrescar al instante. La cabecera muestra la hora de la
-última actualización.
+Con la key configurada, el servidor **refresca las odds automáticamente** mientras corre (al arrancar
+y cada `AUTO_REFRESH_MINUTES`, **12 h** por defecto), en los cinco deportes. Las ligas fuera de
+temporada no gastan nada. También puedes pulsar **↻ Actualizar** en el dashboard para refrescar al
+instante, y el pie de la app te dice cuántas peticiones te quedan.
+
+Para desactivarlo del todo: `AUTO_REFRESH_MINUTES=0`.
 
 ## Actualizar datos (histórico + odds)
 

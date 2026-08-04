@@ -129,7 +129,62 @@ export default function App() {
           propios aciertos, pero ninguno conoce las lesiones de última hora, el clima ni la
           motivación. No es una recomendación para apostar.
         </p>
+        <OddsQuotaLine />
       </footer>
     </div>
+  );
+}
+
+/**
+ * How much of The Odds API's monthly allowance is left.
+ *
+ * In the footer, on every tab, because the free plan quietly running out is what
+ * broke the live odds — and nothing in the app mentioned it until the numbers
+ * simply stopped updating. One line of chrome is a cheap price for never being
+ * surprised by that again.
+ *
+ * Hidden entirely when no key is configured: there is no quota to report, and a
+ * line saying so would be noise on the majority of installs.
+ */
+function OddsQuotaLine() {
+  const [q, setQ] = useState<{
+    remaining: number | null;
+    used: number | null;
+    hasKey: boolean;
+    reserve: number;
+    autoRefreshMinutes: number;
+    lastError: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/odds-quota')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => alive && setQ(d))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!q?.hasKey) return null;
+  const { remaining, used, reserve, lastError } = q;
+  const low = remaining != null && remaining <= reserve;
+  const hours = Math.round(q.autoRefreshMinutes / 60);
+
+  return (
+    <p className={`mt-3 text-[11px] leading-relaxed ${low ? 'text-amber-300/90' : 'text-[#7b828d]'}`}>
+      Cuotas del mercado:{' '}
+      {remaining == null ? (
+        'sin consultar todavía'
+      ) : (
+        <>
+          <strong className="font-semibold tabular-nums">{remaining}</strong> peticiones restantes
+          este mes{used != null && <> · {used} usadas</>} · se refresca cada {hours} h
+        </>
+      )}
+      {low && ' · las últimas quedan reservadas para las actualizaciones que pidas a mano'}
+      {lastError && <> · {lastError}</>}
+    </p>
   );
 }

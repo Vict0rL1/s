@@ -9,6 +9,7 @@
 
 import { getDb, setMeta } from '../../db.ts';
 import { env, footballConfig } from '../../config.ts';
+import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
 import { eloExpectation, HOME_ADVANTAGE } from '../model.ts';
 import { buildTeamIndex as buildNameIndex, resolveTeam as resolve } from './teamNames.ts';
 import type { LeagueId } from '../types.ts';
@@ -38,9 +39,8 @@ const median = (xs: number[]): number => {
 };
 
 async function fetchActive(): Promise<{ key: string }[]> {
-  const res = await fetch(`${ODDS_API_BASE}/sports/?apiKey=${encodeURIComponent(env.oddsApiKey)}`);
-  if (!res.ok) throw new Error(`Odds API /sports: HTTP ${res.status}`);
-  const all = (await res.json()) as { key: string; active: boolean; has_outrights: boolean }[];
+  // Shared and cached — see the note in oddsQuota.ts.
+  const all = await listSports();
   const known = leagueByKey();
   return all.filter((s) => s.active && !s.has_outrights && known.has(s.key));
 }
@@ -49,8 +49,17 @@ async function fetchLive(sportKey: string): Promise<Aggregated[]> {
   const url =
     `${ODDS_API_BASE}/sports/${sportKey}/odds/?apiKey=${encodeURIComponent(env.oddsApiKey)}` +
     `&regions=${encodeURIComponent(env.oddsRegions)}&markets=h2h&oddsFormat=decimal`;
+  // The guard comes BEFORE the request, obviously: checking afterwards would be
+  // checking whether we could afford something already bought.
+  const allowed = canSpend(creditCost('h2h'));
+  if (!allowed.ok) {
+    console.warn(`[odds] ${sportKey} saltado: ${allowed.reason}`);
+    return [];
+  }
   const res = await fetch(url);
-  if (res.status === 404 || res.status === 422) return [];
+  // Every response carries x-requests-remaining, so this is free knowledge.
+  recordQuota(res);
+
   if (!res.ok) throw new Error(`Odds API ${sportKey}: HTTP ${res.status}`);
   const events = (await res.json()) as any[];
   return events.map((ev) => {

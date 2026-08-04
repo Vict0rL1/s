@@ -12,6 +12,7 @@
 
 import { getDb, setMeta } from '../db.ts';
 import { env, tournamentsConfig } from '../config.ts';
+import { canSpend, creditCost, listSports, recordQuota } from '../oddsQuota.ts';
 import { expectedScore } from '../model/elo.ts';
 import type { Surface, TourId } from '../types.ts';
 
@@ -42,12 +43,10 @@ interface TennisSport {
  * real matches show up automatically.
  */
 async function fetchActiveTennisSports(): Promise<TennisSport[]> {
-  const url = `${ODDS_API_BASE}/sports/?apiKey=${encodeURIComponent(env.oddsApiKey)}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Odds API /sports error: HTTP ${res.status} ${await res.text()}`);
-  }
-  const all = (await res.json()) as any[];
+  // Shared and cached: five sports were each making this call every cycle. It
+  // is free, but it also carries the quota headers, so going through one place
+  // means the app always knows where it stands.
+  const all = (await listSports()) as any[];
   return all
     .filter((s) => s.group === 'Tennis' && s.active && !s.has_outrights)
     .map((s) => ({ key: s.key as string, title: s.title as string }));
@@ -59,7 +58,16 @@ async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
     `?apiKey=${encodeURIComponent(env.oddsApiKey)}` +
     `&regions=${encodeURIComponent(env.oddsRegions)}` +
     `&markets=h2h&oddsFormat=decimal`;
+  // The guard comes BEFORE the request, obviously: checking afterwards would be
+  // checking whether we could afford something already bought.
+  const allowed = canSpend(creditCost('h2h'));
+  if (!allowed.ok) {
+    console.warn(`[odds] ${sportKey} saltado: ${allowed.reason}`);
+    return [];
+  }
   const res = await fetch(url);
+  // Every response carries x-requests-remaining, so this is free knowledge.
+  recordQuota(res);
   if (res.status === 404 || res.status === 422) return []; // no such sport / out of season
   if (!res.ok) {
     throw new Error(`Odds API error for ${sportKey}: HTTP ${res.status} ${await res.text()}`);

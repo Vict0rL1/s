@@ -14,10 +14,9 @@
 
 import { getDb } from '../../db.ts';
 import { env, nflConfig } from '../../config.ts';
+import { activeKeys, creditCost, fetchOdds } from '../../oddsQuota.ts';
 import { resolveTeam } from '../repo.ts';
 import type { LeagueId } from '../types.ts';
-
-const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
 
 const median = (xs: number[]): number => {
   const s = [...xs].sort((a, b) => a - b);
@@ -44,14 +43,30 @@ function leagueByKey(): Map<string, LeagueId> {
   return m;
 }
 
-async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
-  const url =
-    `${ODDS_API_BASE}/sports/${sportKey}/odds/?apiKey=${encodeURIComponent(env.oddsApiKey)}` +
-    `&regions=${encodeURIComponent(env.oddsRegions)}&markets=h2h,spreads,totals&oddsFormat=decimal`;
-  const res = await fetch(url);
-  if (res.status === 404 || res.status === 422) return [];
-  if (!res.ok) throw new Error(`Odds API ${sportKey}: HTTP ${res.status}`);
-  const events = (await res.json()) as Record<string, unknown>[];
+/**
+ * The three markets a sportsbook posts for an NFL game.
+ *
+ * THIS IS THE MOST EXPENSIVE CALL IN THE APP and it should be, because the
+ * handicap and the total are the point of this tab — but the price is worth
+ * saying out loud: The Odds API bills per market per region, so h2h+spreads+
+ * totals is THREE credits per region, not one. With one region and one league in
+ * season that is 3 credits a cycle, which is affordable. It was 6 before the
+ * region default changed, on every one of two league keys, whether the NFL was
+ * playing or not.
+ */
+const MARKETS = 'h2h,spreads,totals';
+
+async function fetchLive(
+  sportKey: string,
+  active: Set<string>,
+  manual: boolean,
+): Promise<AggregatedEvent[] | null> {
+  const result = await fetchOdds(sportKey, MARKETS, { active, manual });
+  if (result.events === null) {
+    console.warn(`[nfl] ${sportKey}: ${result.skipped}`);
+    return null;
+  }
+  const events = result.events as Record<string, unknown>[];
 
   return events.map((ev) => {
     const home = String(ev.home_team ?? '');
@@ -104,22 +119,39 @@ async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
  * beside them — otherwise the tab would show every game twice, once with prices
  * and once without.
  */
-export async function refreshOdds(): Promise<number> {
+export async function refreshOdds(manual = false): Promise<number> {
   if (!env.oddsApiKey) return 0;
   const db = getDb();
   const byKey = leagueByKey();
   const stamp = new Date().toISOString();
   let stored = 0;
 
+  // One free /sports call decides which keys are worth paying for. Without this
+  // the NFL was billed 6 credits every cycle in March, when it does not play.
+  let active: Set<string>;
+  try {
+    active = await activeKeys(byKey.keys());
+  } catch (err) {
+    console.warn(`[nfl] no se pudo listar deportes activos: ${(err as Error).message}`);
+    return 0;
+  }
+  if (active.size === 0) {
+    console.log('[nfl] ninguna competición en temporada; no se gasta cupo.');
+    return 0;
+  }
+  console.log(
+    `[nfl] ${active.size} competición(es) en temporada · ${active.size * creditCost(MARKETS)} créditos`,
+  );
+
   for (const [sportKey, league] of byKey) {
-    let events: AggregatedEvent[] = [];
+    let events: AggregatedEvent[] | null = [];
     try {
-      events = await fetchLive(sportKey);
+      events = await fetchLive(sportKey, active, manual);
     } catch (err) {
       console.warn(`[nfl] ${sportKey}: ${(err as Error).message}`);
       continue;
     }
-    if (events.length === 0) continue;
+    if (events === null || events.length === 0) continue;
 
     db.exec('BEGIN');
     try {

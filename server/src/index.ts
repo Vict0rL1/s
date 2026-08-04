@@ -8,6 +8,9 @@ import { countRows } from './repo.ts';
 import { refreshOdds } from './ingest/odds.ts';
 import { refreshBasketballOdds } from './basketball/ingest/odds.ts';
 import { refreshFootballOdds } from './football/ingest/odds.ts';
+import { refreshBaseballOdds } from './baseball/ingest/odds.ts';
+import { refreshOdds as refreshNflOdds } from './nfl/ingest/odds.ts';
+import { getQuota } from './oddsQuota.ts';
 import { registerRoutes } from './routes/api.ts';
 import { registerBasketballRoutes } from './routes/basketball.ts';
 import { registerFootballRoutes } from './routes/football.ts';
@@ -57,6 +60,32 @@ function startAutoRefresh(log: (msg: string) => void): void {
       } catch (e) {
         log(`Football odds refresh failed: ${(e as Error).message}`);
       }
+    }
+    // Baseball and American football were missing from this loop, so their odds
+    // only ever updated when someone pressed the button. Adding them is safe now
+    // that an out-of-season league costs nothing: the free /sports listing
+    // decides, and in February neither MLB nor the NFL spends a credit.
+    if (countRows('bsb_teams') > 0) {
+      try {
+        const r = await refreshBaseballOdds();
+        log(`Baseball odds refreshed: ${r.count} games (${r.source}).`);
+      } catch (e) {
+        log(`Baseball odds refresh failed: ${(e as Error).message}`);
+      }
+    }
+    if (countRows('naf_teams') > 0) {
+      try {
+        const n = await refreshNflOdds();
+        log(`NFL odds refreshed: ${n} games.`);
+      } catch (e) {
+        log(`NFL odds refresh failed: ${(e as Error).message}`);
+      }
+    }
+    // Say where the quota stands after every cycle. The whole reason the free
+    // plan ran out was that nothing ever mentioned it until it was gone.
+    const q = getQuota();
+    if (q.remaining != null) {
+      log(`The Odds API: quedan ${q.remaining} peticiones (usadas ${q.used ?? '?'}).`);
     }
   };
   void run(); // once at startup

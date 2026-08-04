@@ -3,6 +3,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { env, toursConfig, tournamentsConfig } from '../config.ts';
+import { getQuota, QUOTA_RESERVE } from '../oddsQuota.ts';
 import { getMeta } from '../db.ts';
 import {
   countRows,
@@ -71,6 +72,25 @@ function describeRow(row: UpcomingRow, withPrediction = true) {
 }
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * How much of The Odds API's monthly allowance is left.
+   *
+   * One endpoint rather than a field on all five /meta responses, because the
+   * quota is a property of the API KEY, not of a sport. Shown in the footer on
+   * every tab: the free plan running out silently is what caused all of this, and
+   * a number on screen is the cheapest possible fix for that.
+   */
+  app.get('/odds-quota', async () => {
+    const q = getQuota();
+    return {
+      ...q,
+      hasKey: !!env.oddsApiKey,
+      reserve: QUOTA_RESERVE,
+      autoRefreshMinutes: env.autoRefreshMinutes,
+      regions: env.oddsRegions,
+    };
+  });
+
   // --- meta / health ---
   app.get('/health', async () => ({ ok: true }));
 

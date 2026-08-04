@@ -38,14 +38,41 @@ export const footballConfig = readJson<FootballConfig>(path.join(CONFIG_DIR, 'fo
 export const baseballConfig = readJson<BaseballConfig>(path.join(CONFIG_DIR, 'baseball.json'));
 export const nflConfig = readJson<NafConfig>(path.join(CONFIG_DIR, 'americanfootball.json'));
 
+/**
+ * A number from the environment, where 0 is a legitimate value.
+ *
+ * `Number(v) || fallback` collapses 0 into the fallback, which is wrong for
+ * anything where 0 means "off".
+ */
+function numberFromEnv(raw: string | undefined, fallback: number): number {
+  const t = raw?.trim();
+  if (!t) return fallback;
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
 export const env = {
   oddsApiKey: process.env.ODDS_API_KEY?.trim() || '',
-  oddsRegions: process.env.ODDS_REGIONS?.trim() || 'eu,uk',
+  // ONE region by default, not two.
+  //
+  // The Odds API charges per market PER REGION, so "eu,uk" doubled the price of
+  // every single call to get a second opinion on the same prices — and it is what
+  // turned a 500-request monthly plan into a two-and-a-half-day plan. Add regions
+  // back only if you are on a paid tier; see server/src/oddsQuota.ts.
+  oddsRegions: process.env.ODDS_REGIONS?.trim() || 'eu',
   port: Number(process.env.PORT) || 4000,
-  // Minutes between automatic odds refreshes (0 disables). Only runs when a key
-  // is set. The /sports listing used to discover events is free; only the odds
-  // fetches count against the 500/month free quota, so keep this modest.
-  autoRefreshMinutes: Number(process.env.AUTO_REFRESH_MINUTES) || 360,
+  // Minutes between automatic odds refreshes (0 disables). Only runs with a key.
+  //
+  // 12 hours, and the number is arithmetic rather than taste. With one region and
+  // only the leagues that are in season, a cycle costs roughly 8 credits; twice a
+  // day over a month is ~480, which fits inside the free plan's 500 with the
+  // reserve in oddsQuota.ts as the backstop. The old 6-hour default spent 5,760.
+  //
+  // Read with a nullish check, NOT `|| 720`. `Number('0') || 720` is 720, so
+  // AUTO_REFRESH_MINUTES=0 — documented as the way to turn this off, and the
+  // first thing anyone tries when the quota is disappearing — silently did
+  // nothing and left the timer running at the default.
+  autoRefreshMinutes: numberFromEnv(process.env.AUTO_REFRESH_MINUTES, 720),
 };
 
 export function tourById(id: string) {
