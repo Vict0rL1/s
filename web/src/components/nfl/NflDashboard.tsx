@@ -112,7 +112,7 @@ export default function NflDashboard() {
     <div>
       <header className="mb-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-prose text-[13px] leading-relaxed text-[#9aa1ac]">
+          <p className="max-w-prose text-[15px] leading-relaxed text-[#9aa1ac]">
             Hándicap, total y ganador con Elo por equipo y una distribución de margen que conoce los
             números clave del deporte. Es el único deporte de la app cuyo modelo se puede medir
             contra la línea de cierre real.
@@ -121,7 +121,7 @@ export default function NflDashboard() {
             onClick={handleRefresh}
             disabled={refreshing}
             title="Vuelve a consultar los partidos próximos y sus cuotas"
-            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[14px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
           >
             {refreshing ? 'Actualizando…' : '↻ Actualizar'}
           </button>
@@ -132,7 +132,7 @@ export default function NflDashboard() {
       </header>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[13px] text-rose-200">
+        <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[15px] text-rose-200">
           {error}
         </div>
       )}
@@ -160,7 +160,7 @@ export default function NflDashboard() {
           ))}
         </div>
       ) : (
-        <div className="mb-6 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[13px] text-rose-200">
+        <div className="mb-6 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[15px] text-rose-200">
           <p className="font-medium">No hay datos de fútbol americano todavía.</p>
           <p className="mt-1 text-rose-300/90">
             Ejecuta <code className="rounded bg-rose-900/40 px-1">npm run update-data:naf</code> para
@@ -170,7 +170,7 @@ export default function NflDashboard() {
       )}
 
       {activeLeague && !activeLeague.hasModel && (
-        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[13px] leading-relaxed text-amber-200/90">
+        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[15px] leading-relaxed text-amber-200/90">
           <strong>{activeLeague.name} sin modelo Elo.</strong> No hay una fuente abierta de
           resultados partido a partido para esta competición, así que se muestran los partidos y las
           probabilidades <em>implícitas del mercado</em>, no una predicción propia.
@@ -180,7 +180,7 @@ export default function NflDashboard() {
       {loading ? (
         <SkeletonList />
       ) : games.length === 0 ? (
-        <p className="mb-6 text-sm text-[#7b828d]">
+        <p className="mb-6 text-[16px] text-[#7b828d]">
           No hay partidos próximos para {activeLeague?.name ?? 'esta liga'}.
         </p>
       ) : (
@@ -206,19 +206,19 @@ export default function NflDashboard() {
             className="flex w-full items-center justify-between text-left"
           >
             <span>
-              <span className="text-xs uppercase tracking-wide text-[#7b828d]">
+              <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
                 Todos los equipos · {activeLeague?.name}
               </span>
               <br />
-              <span className="text-sm text-[#d5d9df]">
+              <span className="text-[16px] text-[#d5d9df]">
                 {power.length} equipos ordenados por Elo
               </span>
             </span>
-            <span className="text-xs text-[#5c636c]">{showTeams ? '▲' : '▼'}</span>
+            <span className="text-[14px] text-[#5c636c]">{showTeams ? '▲' : '▼'}</span>
           </button>
           {showTeams && (
             <div className="mt-3 overflow-x-auto border-t border-white/[0.07] pt-3">
-              <table className="w-full text-left text-xs tabular-nums">
+              <table className="w-full text-left text-[14px] tabular-nums">
                 <thead className="text-[#7b828d]">
                   <tr>
                     <th className="py-1 pr-2 font-normal">#</th>
@@ -268,7 +268,7 @@ export default function NflDashboard() {
 
 function DataLine({ meta }: { meta: NflMeta }) {
   return (
-    <p className="mt-2 text-[11px] leading-relaxed text-[#7b828d]">
+    <p className="mt-2 text-[13px] leading-relaxed text-[#7b828d]">
       <span className="mr-1 rounded-full px-2 py-0.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30">
         datos reales (nflverse)
       </span>
@@ -300,7 +300,7 @@ function StaleWarning({ name, through }: { name: string; through: string | null 
   const missed = currentSeason - 1 - lastSeason;
   if (missed < 1) return null;
   return (
-    <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[13px] leading-relaxed text-amber-200/90">
+    <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[15px] leading-relaxed text-amber-200/90">
       ⚠️ El historial de {name} termina en la temporada {lastSeason}: falta
       {missed > 1 ? 'n' : ''} {missed} temporada{missed > 1 ? 's' : ''}. Vuelve a ejecutar{' '}
       <code className="rounded bg-amber-900/40 px-1">npm run update-data:naf</code>.
@@ -338,8 +338,8 @@ function NflTrackRecordPanel({ league }: { league: string }) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between gap-2 text-left"
       >
-        <span className="text-sm">
-          <span className="text-xs uppercase tracking-wide text-[#7b828d]">
+        <span className="text-[16px]">
+          <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
             Aciertos reales de la app
           </span>
           <br />
@@ -357,10 +357,10 @@ function NflTrackRecordPanel({ league }: { league: string }) {
             </span>
           )}
         </span>
-        <span className="shrink-0 text-xs text-[#5c636c]">{open ? '▲' : '▼'}</span>
+        <span className="shrink-0 text-[14px] text-[#5c636c]">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div className="mt-3 space-y-3 border-t border-white/[0.07] pt-3 text-xs text-[#c3c9d1]">
+        <div className="mt-3 space-y-3 border-t border-white/[0.07] pt-3 text-[14px] text-[#c3c9d1]">
           {data.vsMarket && (
             <p>
               <strong>Contra el mercado</strong>, en los {data.vsMarket.n} partidos donde había

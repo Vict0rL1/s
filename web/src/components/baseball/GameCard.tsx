@@ -74,7 +74,7 @@ export default function GameCard({
 
   return (
     <Card as="article" className="p-4">
-      <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-[#7b828d]">
+      <div className="mb-3 flex items-center justify-between gap-2 text-[13px] text-[#7b828d]">
         <MatchTime iso={game.commence_time} />
         <div className="flex items-center gap-1.5">
           {dirty && <Badge tone="accent">{adjusting ? 'recalculando…' : 'con tu abridor'}</Badge>}
@@ -98,7 +98,7 @@ export default function GameCard({
           odds={game.odds_away}
           onClick={game.away_id ? () => onOpenTeam(game.league, game.away_id!) : undefined}
         />
-        <span className="shrink-0 pt-1 text-[11px] font-medium text-[#5c636c]">@</span>
+        <span className="shrink-0 pt-1 text-[13px] font-medium text-[#5c636c]">@</span>
         <TeamName
           league={game.league}
           id={game.home_id}
@@ -144,7 +144,7 @@ export default function GameCard({
             />
           </div>
           {!fromModel && (
-            <p className="mt-2 text-center text-[11px] text-amber-300/90">
+            <p className="mt-2 text-center text-[13px] text-amber-300/90">
               Probabilidades implícitas del mercado, no del modelo.
             </p>
           )}
@@ -182,7 +182,7 @@ export default function GameCard({
               </StatRow>
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="min-w-0 text-[13px] leading-snug text-[#c3c9d1]">
+                <p className="min-w-0 text-[15px] leading-snug text-[#c3c9d1]">
                   {prediction.verdict.close ? (
                     <>
                       Muy igualado —{' '}
@@ -265,12 +265,12 @@ function StarterChip({ side, color }: { side: BsbSide; color: string }) {
           spread across half a card it landed beside the OTHER starter's label and
           read as belonging to them. */}
       <div className="flex items-baseline gap-2">
-        <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
+        <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
           Abridor
         </span>
         {delta != null && Math.abs(delta) >= 4 && (
           <span
-            className="shrink-0 text-[10px] font-semibold tabular-nums"
+            className="shrink-0 text-[11px] font-semibold tabular-nums"
             style={{ color: delta > 0 ? '#199e70' : '#e66767' }}
             title="Carreras que permite frente a lo esperado de un abridor medio"
           >
@@ -281,11 +281,14 @@ function StarterChip({ side, color }: { side: BsbSide; color: string }) {
       </div>
       <div className="flex items-center gap-1.5">
         <SeriesDot color={color} />
-        <span className="truncate text-[13px] font-semibold text-[#e8eaed]">
+        {/* The pitcher's name wraps: he is the single biggest named factor on a
+            baseball card, and "Madison Bumga…" in a two-column grid is the one
+            thing here that must not be elided. */}
+        <span className="min-w-0 break-words text-[15px] font-semibold leading-tight text-[#e8eaed]">
           {s.name ?? 'sin anunciar'}
         </span>
       </div>
-      <div className="truncate text-[10px] text-[#7b828d]">
+      <div className="text-[11px] text-[#7b828d]">
         {s.starts > 0 ? `${s.starts} aperturas` : 'sin datos'}
       </div>
     </div>
@@ -308,15 +311,18 @@ function TeamName({
         <button
           onClick={onClick}
           disabled={!onClick}
-          className={`max-w-full truncate text-base font-semibold text-[#e8eaed] ${onClick ? 'hover:underline' : 'cursor-default'}`}
+          // Wraps rather than truncates: at the larger type size the team name
+          // no longer fits half a phone-width card, and an ellipsis eats the one
+          // thing the card exists to tell you. See nfl/GameCard for the detail.
+          className={`max-w-full text-[17px] font-semibold break-words text-[#e8eaed] ${onClick ? 'hover:underline' : 'cursor-default'}`}
           title={onClick ? 'Ver ficha del equipo' : undefined}
         >
           {name}
-          {homeBadge && <span className="ml-1.5 text-[10px] text-[#7b828d]">(local)</span>}
+          {homeBadge && <span className="ml-1.5 text-[11px] text-[#7b828d]">(local)</span>}
         </button>
         {alignRight && <TeamCrest league={league} name={name} code={id} />}
       </span>
-      <div className="text-[11px] text-[#7b828d]">
+      <div className="text-[13px] text-[#7b828d]">
         {elo != null && <>Elo {Math.round(elo)}{eloRank != null && ` (#${eloRank})`}</>}
         {odds != null && <> · cuota {odds}</>}
       </div>
@@ -370,18 +376,18 @@ function StarterPicker({
     };
   }, [league, teamId]);
 
-  if (error) return <p className="text-[11px] text-[#7b828d]">Sin datos de lanzadores.</p>;
+  if (error) return <p className="text-[13px] text-[#7b828d]">Sin datos de lanzadores.</p>;
   const current = value !== undefined ? value : announced;
 
   return (
     <div className="min-w-0 flex-1">
-      <label className="mb-1 block truncate text-xs font-semibold" style={{ color }}>
+      <label className="mb-1 block truncate text-[14px] font-semibold" style={{ color }}>
         {teamName}
       </label>
       <select
         value={current ?? ''}
         onChange={(e) => onChange(e.target.value || null)}
-        className="w-full rounded border border-white/[0.12] bg-[#14161b] px-2 py-1 text-xs text-[#d5d9df]"
+        className="w-full rounded border border-white/[0.12] bg-[#14161b] px-2 py-1 text-[14px] text-[#d5d9df]"
         aria-label={`Abridor de ${teamName}`}
       >
         <option value="">— sin abridor conocido —</option>
@@ -417,7 +423,7 @@ function Detail({
         <SectionTitle right={adjusting ? 'recalculando…' : adjusted ? 'ajustado a tu elección' : undefined}>
           Quién abre
         </SectionTitle>
-        <p className="mb-2.5 text-[11px] leading-relaxed text-[#9aa1ac]">
+        <p className="mb-2.5 text-[13px] leading-relaxed text-[#9aa1ac]">
           El abridor es lo que más mueve un partido de béisbol y se anuncia con un día de
           antelación. Si sabes quién lanza —o si lo han cambiado— elígelo aquí y se recalcula todo:
           el ganador, las carreras y la matriz de marcadores.
@@ -437,7 +443,7 @@ function Detail({
       <RunMatrix prediction={prediction} />
 
       <div
-        className={`rounded-xl border p-3 text-[12px] ${
+        className={`rounded-xl border p-3 text-[14px] ${
           reliability.level === 'high'
             ? 'border-emerald-500/25 bg-emerald-500/[0.06]'
             : reliability.level === 'medium'
@@ -452,7 +458,7 @@ function Detail({
         {reliability.reasons.length > 0 && (
           <ul className="mt-1.5 space-y-1">
             {reliability.reasons.map((r, i) => (
-              <li key={i} className="flex gap-2 text-[11px] text-[#9aa1ac]">
+              <li key={i} className="flex gap-2 text-[13px] text-[#9aa1ac]">
                 <span aria-hidden className="text-[#5c636c]">•</span>
                 <span>{r}</span>
               </li>
@@ -463,8 +469,8 @@ function Detail({
 
       <Panel>
         <SectionTitle>Por qué</SectionTitle>
-        <p className="mb-2 text-[13px] leading-relaxed text-[#c3c9d1]">{reasoning.text}</p>
-        <dl className="space-y-1 text-[11px]">
+        <p className="mb-2 text-[15px] leading-relaxed text-[#c3c9d1]">{reasoning.text}</p>
+        <dl className="space-y-1 text-[13px]">
           {reasoning.factors.map((f) => (
             <div key={f.key} className="flex justify-between gap-3">
               <dt className="text-[#9aa1ac]">{f.label}</dt>
@@ -485,7 +491,7 @@ function Detail({
 
       <Panel>
         <SectionTitle>Los dos equipos</SectionTitle>
-        <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[11px]">
+        <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[13px]">
           <div />
           <div className="w-20 truncate text-right font-medium" style={{ color: AWAY_COLOR }}>
             {away.name}
@@ -530,7 +536,7 @@ function Detail({
             />
           ))}
         </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-[#7b828d]">
+        <p className="mt-2 text-[13px] leading-relaxed text-[#7b828d]">
           Fíjate en lo bajas que son: en béisbol el marcador más probable ronda el 3%, contra el 12%
           de un partido de fútbol. Hay muchísimos resultados plausibles, y por eso el ganador es casi
           una moneda.
@@ -551,9 +557,9 @@ function Detail({
           Historial directo
         </SectionTitle>
         {h2h.recent.length === 0 ? (
-          <p className="text-[11px] text-[#7b828d]">Sin enfrentamientos previos en el historial.</p>
+          <p className="text-[13px] text-[#7b828d]">Sin enfrentamientos previos en el historial.</p>
         ) : (
-          <ul className="space-y-1 text-[11px]">
+          <ul className="space-y-1 text-[13px]">
             {h2h.recent.map((m, i) => (
               <li key={i} className="flex justify-between gap-3 text-[#c3c9d1]">
                 <span className="shrink-0 text-[#7b828d]">{formatDate(m.date)}</span>
@@ -572,7 +578,7 @@ function Detail({
           <SectionTitle right={`margen ${((market.market.overround - 1) * 100).toFixed(1)}%`}>
             Mercado
           </SectionTitle>
-          <p className="text-[11px] leading-relaxed text-[#c3c9d1]">
+          <p className="text-[13px] leading-relaxed text-[#c3c9d1]">
             Cuotas {market.market.odds.away} / {market.market.odds.home} · implícitas sin vig{' '}
             {pct(market.market.away)} / {pct(market.market.home)}
           </p>
@@ -583,7 +589,7 @@ function Detail({
         <SectionTitle>Lectura completa</SectionTitle>
         <ul className="space-y-1.5">
           {prediction.summary.bullets.map((b, i) => (
-            <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-[#9aa1ac]">
+            <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-[#9aa1ac]">
               <span aria-hidden className="text-[#5c636c]">•</span>
               <span>{b}</span>
             </li>
@@ -591,7 +597,7 @@ function Detail({
         </ul>
       </Panel>
 
-      <p className="text-[11px] leading-relaxed text-[#7b828d]">{prediction.disclaimer}</p>
+      <p className="text-[13px] leading-relaxed text-[#7b828d]">{prediction.disclaimer}</p>
     </div>
   );
 }

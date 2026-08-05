@@ -22,12 +22,12 @@ function SplitBar({
   const left = hasData ? Math.round(leftFrac * 1000) / 10 : 50;
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-xs text-[#9aa1ac]">
+      <div className="mb-1 flex items-center justify-between text-[14px] text-[#9aa1ac]">
         <span>{title}</span>
       </div>
       <div className="flex h-6 w-full overflow-hidden rounded-md ring-1 ring-white/[0.07]">
         <div
-          className="flex items-center justify-start pl-2 text-xs font-semibold text-slate-900"
+          className="flex items-center justify-start pl-2 text-[14px] font-semibold text-slate-900"
           style={{
             width: `${left}%`,
             backgroundColor: hasData ? P1 : '#475569',
@@ -37,7 +37,7 @@ function SplitBar({
           {hasData && left >= 18 ? leftLabel : ''}
         </div>
         <div
-          className="flex items-center justify-end pr-2 text-xs font-semibold text-slate-900"
+          className="flex items-center justify-end pr-2 text-[14px] font-semibold text-slate-900"
           style={{
             width: `${100 - left}%`,
             backgroundColor: hasData ? P2 : '#334155',

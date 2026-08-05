@@ -81,7 +81,7 @@ export default function MatchCard({
 
   return (
     <Card as="article" className="p-4">
-      <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-[#7b828d]">
+      <div className="mb-3 flex items-center justify-between gap-2 text-[13px] text-[#7b828d]">
         <MatchTime iso={fixture.commence_time} />
         <div className="flex items-center gap-1.5">
           {dirty && <Badge tone="accent">{adjusting ? 'recalculando…' : 'con tus bajas'}</Badge>}
@@ -99,7 +99,7 @@ export default function MatchCard({
           homeBadge
           onClick={fixture.home_id ? () => onOpenTeam(fixture.league, fixture.home_id!) : undefined}
         />
-        <span className="shrink-0 pt-1 text-[11px] font-medium text-[#5c636c]">vs</span>
+        <span className="shrink-0 pt-1 text-[13px] font-medium text-[#5c636c]">vs</span>
         <TeamName
           league={fixture.league}
           id={fixture.away_id}
@@ -151,7 +151,7 @@ export default function MatchCard({
           </div>
 
           {!fromModel && (
-            <p className="mt-2 text-center text-[11px] text-amber-300/90">
+            <p className="mt-2 text-center text-[13px] text-amber-300/90">
               Probabilidades implícitas del mercado, no del modelo.
             </p>
           )}
@@ -182,7 +182,7 @@ export default function MatchCard({
               </StatRow>
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="min-w-0 text-[13px] leading-snug text-[#c3c9d1]">
+                <p className="min-w-0 text-[15px] leading-snug text-[#c3c9d1]">
                   {prediction.verdict.open ? (
                     <>
                       Partido abierto —{' '}
@@ -265,7 +265,10 @@ function TeamName({
         <button
           onClick={onClick}
           disabled={!onClick}
-          className={`max-w-full truncate text-[15px] font-semibold leading-tight text-[#e8eaed] ${
+          // Wraps rather than truncates: at the larger type size the team name
+          // no longer fits half a phone-width card, and an ellipsis eats the one
+          // thing the card exists to tell you. See nfl/GameCard for the detail.
+          className={`max-w-full text-[17px] font-semibold leading-tight break-words text-[#e8eaed] ${
             onClick ? 'hover:underline' : 'cursor-default'
           }`}
           title={onClick ? 'Ver ficha del equipo' : name}
@@ -274,7 +277,7 @@ function TeamName({
         </button>
         {alignRight && <TeamCrest league={league} name={name} code={id} logo={logo} />}
       </span>
-      <div className="truncate text-[11px] text-[#7b828d]">
+      <div className="text-[13px] text-[#7b828d]">
         {homeBadge && 'local · '}
         {elo != null && (
           <>
@@ -334,7 +337,7 @@ function Detail({
           >
             Quién juega
           </SectionTitle>
-          <p className="mb-2.5 text-[11px] leading-relaxed text-[#9aa1ac]">
+          <p className="mb-2.5 text-[13px] leading-relaxed text-[#9aa1ac]">
             Las lesiones y sanciones conocidas ya vienen marcadas. Si sabes la alineación — se
             publica una hora antes — marca al resto y se recalcula todo.
           </p>
@@ -355,8 +358,8 @@ function Detail({
 
       <Panel>
         <SectionTitle>Por qué</SectionTitle>
-        <p className="mb-2 text-[13px] leading-relaxed text-[#c3c9d1]">{reasoning.text}</p>
-        <dl className="space-y-1 text-[11px]">
+        <p className="mb-2 text-[15px] leading-relaxed text-[#c3c9d1]">{reasoning.text}</p>
+        <dl className="space-y-1 text-[13px]">
           {reasoning.factors.map((f) => (
             <div key={f.key} className="flex justify-between gap-3">
               <dt className="text-[#9aa1ac]">{f.label}</dt>
@@ -393,7 +396,7 @@ function Detail({
 
       <Panel>
         <SectionTitle>Los dos equipos</SectionTitle>
-        <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[11px]">
+        <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[13px]">
           <div />
           <div className="w-20 truncate text-right font-medium" style={{ color: HOME_COLOR }}>
             {home.name}
@@ -432,9 +435,9 @@ function Detail({
           Historial directo
         </SectionTitle>
         {h2h.recent.length === 0 ? (
-          <p className="text-[11px] text-[#7b828d]">Sin enfrentamientos previos.</p>
+          <p className="text-[13px] text-[#7b828d]">Sin enfrentamientos previos.</p>
         ) : (
-          <ul className="space-y-1 text-[11px]">
+          <ul className="space-y-1 text-[13px]">
             {h2h.recent.map((m, i) => (
               <li key={i} className="flex justify-between gap-3 text-[#c3c9d1]">
                 <span className="shrink-0 text-[#7b828d]">{formatDate(m.date)}</span>
@@ -453,7 +456,7 @@ function Detail({
           <SectionTitle right={`margen ${((market.market.overround - 1) * 100).toFixed(1)}%`}>
             Mercado
           </SectionTitle>
-          <p className="text-[11px] leading-relaxed text-[#c3c9d1]">
+          <p className="text-[13px] leading-relaxed text-[#c3c9d1]">
             Cuotas {market.market.odds.home} / {market.market.odds.draw} / {market.market.odds.away}{' '}
             · implícitas sin vig {pct(market.market.home)} / {pct(market.market.draw)} /{' '}
             {pct(market.market.away)}
@@ -465,7 +468,7 @@ function Detail({
         <SectionTitle>Lectura completa</SectionTitle>
         <ul className="space-y-1.5">
           {summary.bullets.map((b, i) => (
-            <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-[#9aa1ac]">
+            <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-[#9aa1ac]">
               <span aria-hidden className="text-[#5c636c]">
                 •
               </span>
@@ -476,7 +479,7 @@ function Detail({
       </Panel>
 
       <div
-        className={`rounded-xl border p-3 text-[12px] ${
+        className={`rounded-xl border p-3 text-[14px] ${
           reliability.level === 'high'
             ? 'border-emerald-500/25 bg-emerald-500/[0.06]'
             : reliability.level === 'medium'
@@ -492,7 +495,7 @@ function Detail({
         {reliability.reasons.length > 0 && (
           <ul className="mt-1.5 space-y-1">
             {reliability.reasons.map((r, i) => (
-              <li key={i} className="flex gap-2 text-[11px] text-[#9aa1ac]">
+              <li key={i} className="flex gap-2 text-[13px] text-[#9aa1ac]">
                 <span aria-hidden className="text-[#5c636c]">
                   •
                 </span>
@@ -503,7 +506,7 @@ function Detail({
         )}
       </div>
 
-      <p className="text-[11px] leading-relaxed text-[#7b828d]">{prediction.disclaimer}</p>
+      <p className="text-[13px] leading-relaxed text-[#7b828d]">{prediction.disclaimer}</p>
     </div>
   );
 }

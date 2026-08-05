@@ -17,9 +17,11 @@ import {
   likelyScorelines,
   marginBands,
   marginProb,
+  conditionsTotalAdjustment,
   outcomeProbabilities,
   overProbability,
   ELO_PER_POINT,
+  QB_CARRYOVER,
   MARGIN_KEY_WEIGHTS,
   MARGIN_SIGMA,
   TOTAL_SIGMA,
@@ -28,6 +30,7 @@ import {
   type Scoreline,
 } from './model.ts';
 import {
+  getCurrentQb,
   getHeadToHead,
   getLatestSeason,
   getLeagueState,
@@ -40,9 +43,10 @@ import type { LeagueId, NafRecord } from './types.ts';
 
 export const DISCLAIMER =
   'Estimación estadística basada en Elo por equipo, una ventaja de campo que la liga actualiza sola, ' +
-  'los ritmos de anotación de cada equipo y una distribución de margen con los números clave del ' +
-  'deporte (3 y 7). NO conoce el estado del quarterback, las bajas de última hora, el viento ni el ' +
-  'estado del campo. No es una certeza ni una recomendación para apostar.';
+  'los ritmos de anotación de cada equipo, el quarterback titular y una distribución de margen con ' +
+  'los números clave del deporte (3 y 7). Da por titular a quien jugó el último partido: NO conoce ' +
+  'las bajas de esta semana, ni el viento del día (no hay previsión en el calendario), ni el estado ' +
+  'del campo. No es una certeza ni una recomendación para apostar.';
 
 export type ReliabilityLevel = 'high' | 'medium' | 'low';
 
@@ -165,9 +169,31 @@ export interface NafSpreadQuote {
   label: string;
 }
 
+/**
+ * The starting quarterback the forecast assumed, and what he is worth.
+ *
+ * Surfaced rather than buried because it is the one model input a reader can
+ * check and correct from the news: if the app says it assumed Stidham and the
+ * reader knows Maye is back, the reader now knows the forecast is stale in a
+ * specific, quantified way instead of vaguely mistrusting it.
+ */
+export interface NafQbInfo {
+  name: string | null;
+  /** Elo points relative to a league-average starter. */
+  adjustment: number;
+  /** Points of expected margin the offset is worth. */
+  points: number;
+  starts: number;
+  /** True when the assumption is "whoever played last", which it always is. */
+  assumed: boolean;
+}
+
 export interface NafPrediction {
   league: LeagueId;
   teams: { home: NafSide; away: NafSide };
+  quarterbacks: { home: NafQbInfo | null; away: NafQbInfo | null };
+  /** How the roof moved the expected total, in points. Null when unknown. */
+  conditions: { roof: string | null; totalAdjustment: number } | null;
   /** Moneyline probabilities. `tie` is small but real, and never folded away. */
   model: { home: number; away: number; tie: number };
   spread: {
@@ -317,6 +343,12 @@ export interface PredictInput {
   totalLine?: number | null;
   /** Season the game belongs to. Drives the off-season regression below. */
   season?: number | null;
+  /**
+   * "dome", "closed", "outdoors", "open". Published for scheduled games, and the
+   * only conditions field that is — there is no weather forecast, so wind cannot
+   * inform a prediction even though it informs the replay.
+   */
+  roof?: string | null;
 }
 
 /**
@@ -344,6 +376,21 @@ function ageScoring(rate: number, leagueHalf: number, seasonsAhead: number): num
   let out = rate;
   for (let i = 0; i < seasonsAhead; i++) out = leagueHalf + (out - leagueHalf) * SCORING_CARRYOVER;
   return out;
+}
+
+/** Shape one side's quarterback for the card. */
+function qbInfo(
+  qb: { name: string | null; adjustment: number; starts: number } | null,
+  agedAdjustment: number,
+): NafQbInfo | null {
+  if (!qb) return null;
+  return {
+    name: qb.name,
+    adjustment: Math.round(agedAdjustment),
+    points: Number((agedAdjustment / ELO_PER_POINT).toFixed(1)),
+    starts: qb.starts,
+    assumed: true,
+  };
 }
 
 export function buildPrediction(input: PredictInput): NafPrediction | null {
@@ -375,12 +422,25 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
   const awayPf = ageScoring(ar.pf ?? half, half, seasonsAhead);
   const awayPa = ageScoring(ar.pa ?? half, half, seasonsAhead);
 
+  // --- who is playing quarterback ------------------------------------------
+  // The starter each side used most recently, because the schedule never names
+  // one in advance. The offsets are aged with the same off-season regression as
+  // the team ratings, so a February forecast for September does not assume a
+  // quarterback is exactly as good as his last game said.
+  const homeQb = getCurrentQb(league, homeId);
+  const awayQb = getCurrentQb(league, awayId);
+  const homeQbAdj = homeQb ? homeQb.adjustment * QB_CARRYOVER ** seasonsAhead : 0;
+  const awayQbAdj = awayQb ? awayQb.adjustment * QB_CARRYOVER ** seasonsAhead : 0;
+
   // --- the two numbers the distribution is built from -----------------------
   const edge = input.neutral ? 0 : state.homeAdvantage;
-  const eloDiff = homeElo - awayElo + edge;
+  const eloDiff = homeElo + homeQbAdj - (awayElo + awayQbAdj) + edge;
   const expectedMargin = eloDiff / ELO_PER_POINT;
 
-  const expectedTotal = (homePf + awayPa) / 2 + (awayPf + homePa) / 2;
+  // Conditions move the total, never the margin. There is no weather forecast in
+  // the schedule, so `wind` is null here and only the roof can contribute.
+  const conditionsAdj = conditionsTotalAdjustment(input.roof, null);
+  const expectedTotal = (homePf + awayPa) / 2 + (awayPf + homePa) / 2 + conditionsAdj;
 
   const dist = buildDistribution(expectedMargin, expectedTotal);
   const outcome = outcomeProbabilities(dist);
@@ -453,6 +513,17 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
       key: 'offseason',
       label: `Regresión de pretemporada (×${SEASON_CARRYOVER}${seasonsAhead > 1 ? `, ${seasonsAhead} veces` : ''})`,
       pointsForHome: round1(agedEloPoints - rawEloPoints),
+    });
+  }
+  // The quarterback line only appears when there is something to say: two
+  // league-average starters cancel to 0.0 and an empty row is worse than none.
+  const qbPoints = round1((homeQbAdj - awayQbAdj) / ELO_PER_POINT);
+  if (qbPoints !== 0) {
+    const named = [homeQb?.name, awayQb?.name].filter(Boolean).join(' vs ');
+    factors.push({
+      key: 'qb',
+      label: named ? `Quarterback titular (${named})` : 'Quarterback titular',
+      pointsForHome: qbPoints,
     });
   }
   factors.push({
@@ -552,6 +623,13 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
   return {
     league,
     teams: { home: side(homeInfo, points.home), away: side(awayInfo, points.away) },
+    quarterbacks: {
+      home: qbInfo(homeQb, homeQbAdj),
+      away: qbInfo(awayQb, awayQbAdj),
+    },
+    conditions: input.roof
+      ? { roof: input.roof, totalAdjustment: Number(conditionsAdj.toFixed(2)) }
+      : null,
     model: { home: outcome.home, away: outcome.away, tie: outcome.tie },
     spread: {
       expectedMargin: Number(expectedMargin.toFixed(1)),

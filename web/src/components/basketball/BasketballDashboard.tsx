@@ -112,7 +112,7 @@ export default function BasketballDashboard() {
     <div>
       <header className="mb-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-prose text-[13px] leading-relaxed text-[#9aa1ac]">
+          <p className="max-w-prose text-[15px] leading-relaxed text-[#9aa1ac]">
             Predicción de partidos con Elo por equipo, ventaja de campo, margen de puntos, descanso
             y odds del mercado.
           </p>
@@ -120,7 +120,7 @@ export default function BasketballDashboard() {
             onClick={handleRefresh}
             disabled={refreshing}
             title="Vuelve a consultar los partidos próximos y sus cuotas"
-            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[14px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
           >
             {refreshing ? 'Actualizando…' : '↻ Actualizar'}
           </button>
@@ -131,7 +131,7 @@ export default function BasketballDashboard() {
       </header>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[13px] text-rose-200">
+        <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[15px] text-rose-200">
           {error}
         </div>
       )}
@@ -156,7 +156,7 @@ export default function BasketballDashboard() {
           ))}
         </div>
       ) : (
-        <div className="mb-6 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[13px] text-rose-200">
+        <div className="mb-6 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[15px] text-rose-200">
           <p className="font-medium">No hay datos de baloncesto todavía.</p>
           <p className="mt-1 text-rose-300/90">
             Ejecuta <code className="rounded bg-rose-900/40 px-1">npm run update-data:bb</code> para
@@ -166,7 +166,7 @@ export default function BasketballDashboard() {
       )}
 
       {activeLeague && !activeLeague.hasModel && (
-        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[13px] leading-relaxed text-amber-200/90">
+        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[15px] leading-relaxed text-amber-200/90">
           <strong>{activeLeague.name} sin modelo Elo.</strong> No hay una fuente abierta de
           resultados para esta liga, así que se muestran los partidos y las probabilidades{' '}
           <em>implícitas del mercado</em>, no una predicción propia. Se indica en cada tarjeta.
@@ -177,7 +177,7 @@ export default function BasketballDashboard() {
       {loading ? (
         <SkeletonList />
       ) : games.length === 0 ? (
-        <p className="mb-6 text-sm text-[#7b828d]">
+        <p className="mb-6 text-[16px] text-[#7b828d]">
           No hay partidos próximos para {activeLeague?.name ?? 'esta liga'}.
         </p>
       ) : (
@@ -204,19 +204,19 @@ export default function BasketballDashboard() {
             className="flex w-full items-center justify-between text-left"
           >
             <span>
-              <span className="text-xs uppercase tracking-wide text-[#7b828d]">
+              <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
                 Todos los equipos · {activeLeague?.name}
               </span>
               <br />
-              <span className="text-sm text-[#d5d9df]">
+              <span className="text-[16px] text-[#d5d9df]">
                 {power.length} equipos ordenados por Elo
               </span>
             </span>
-            <span className="text-xs text-[#5c636c]">{showTeams ? '▲' : '▼'}</span>
+            <span className="text-[14px] text-[#5c636c]">{showTeams ? '▲' : '▼'}</span>
           </button>
           {showTeams && (
             <div className="mt-3 overflow-x-auto border-t border-white/[0.07] pt-3">
-              <table className="w-full text-left text-xs tabular-nums">
+              <table className="w-full text-left text-[14px] tabular-nums">
                 <thead className="text-[#7b828d]">
                   <tr>
                     <th className="py-1 pr-2 font-normal">#</th>
@@ -277,7 +277,7 @@ function DataLine({ meta }: { meta: BbMeta }) {
       })
     : '—';
   return (
-    <p className="mt-1 text-xs text-[#7b828d]">
+    <p className="mt-1 text-[14px] text-[#7b828d]">
       {meta.counts.games} partidos · {meta.counts.teams} equipos · actualizado {whenTxt}
       {meta.hasOddsKey
         ? meta.autoRefreshMinutes > 0
@@ -301,7 +301,7 @@ function StaleWarning({ name, through }: { name: string; through: string | null 
   const monthsOld = (new Date().getFullYear() - y) * 12 + (new Date().getMonth() + 1 - m);
   if (monthsOld <= 4) return null;
   return (
-    <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-sm text-amber-200">
+    <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-[16px] text-amber-200">
       ⚠️ Los resultados de {name} terminan en {m}/{y} (~{Math.round(monthsOld)} meses). Los Elo{' '}
       <strong>no describen a las plantillas actuales</strong>, así que estas predicciones son poco
       fiables. Vuelve a ejecutar{' '}
@@ -339,8 +339,8 @@ function BbTrackRecordPanel({ league }: { league: string }) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between gap-2 text-left"
       >
-        <span className="text-sm">
-          <span className="text-xs uppercase tracking-wide text-[#7b828d]">
+        <span className="text-[16px]">
+          <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
             Aciertos reales de la app
           </span>
           <br />
@@ -359,11 +359,11 @@ function BbTrackRecordPanel({ league }: { league: string }) {
             </span>
           )}
         </span>
-        <span className="shrink-0 text-xs text-[#5c636c]">{open ? '▲' : '▼'}</span>
+        <span className="shrink-0 text-[14px] text-[#5c636c]">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
-        <div className="mt-3 space-y-4 border-t border-white/[0.07] pt-3 text-xs">
+        <div className="mt-3 space-y-4 border-t border-white/[0.07] pt-3 text-[14px]">
           <p className="text-[#9aa1ac]">
             Cada predicción se guarda <strong>antes</strong> del partido y se puntúa cuando llega el
             resultado real (al ejecutar{' '}
@@ -447,7 +447,7 @@ function Cell({ label, value, hint }: { label: string; value: string; hint?: str
     <div className="min-w-0">
       <div className="text-[#7b828d]">{label}</div>
       <div className="tabular-nums text-[#e8eaed]">{value}</div>
-      {hint && <div className="text-[10px] text-[#5c636c]">{hint}</div>}
+      {hint && <div className="text-[11px] text-[#5c636c]">{hint}</div>}
     </div>
   );
 }

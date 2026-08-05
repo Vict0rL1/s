@@ -68,6 +68,15 @@ export interface NafGameRow {
   close_total: number | null;
   close_ml_home: number | null;
   close_ml_away: number | null;
+  /** Starting quarterback, from nflverse. Present for every game in the archive. */
+  home_qb_id: string | null;
+  away_qb_id: string | null;
+  home_qb_name: string | null;
+  away_qb_name: string | null;
+  /** Conditions. `wind` and `temp` are null indoors, where they do not apply. */
+  roof: string | null;
+  temp: number | null;
+  wind: number | null;
 }
 
 export interface NafTeamRatingRow {
@@ -99,6 +108,8 @@ export interface NafUpcomingRow {
   books: number;
   source: 'live' | 'schedule' | 'fixture';
   updated_at: string;
+  /** Stadium roof, from the schedule. Feeds the conditions adjustment. */
+  roof: string | null;
 }
 
 export interface NafRecord {

@@ -44,8 +44,8 @@ export default function TrackRecordPanel({ tour }: { tour: string }) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between gap-2 text-left"
       >
-        <span className="text-sm">
-          <span className="text-xs uppercase tracking-wide text-[#7b828d]">
+        <span className="text-[16px]">
+          <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
             Aciertos reales de la app
           </span>
           <br />
@@ -64,11 +64,11 @@ export default function TrackRecordPanel({ tour }: { tour: string }) {
             </span>
           )}
         </span>
-        <span className="shrink-0 text-xs text-[#5c636c]">{open ? '▲' : '▼'}</span>
+        <span className="shrink-0 text-[14px] text-[#5c636c]">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
-        <div className="mt-3 space-y-4 border-t border-white/[0.07] pt-3 text-xs">
+        <div className="mt-3 space-y-4 border-t border-white/[0.07] pt-3 text-[14px]">
           <p className="text-[#9aa1ac]">
             Cada predicción se guarda <strong>antes</strong> de que se juegue el partido y se
             puntúa cuando llega el resultado real (al ejecutar{' '}
@@ -220,7 +220,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
     <div className="min-w-0">
       <div className="text-[#7b828d]">{label}</div>
       <div className="tabular-nums text-[#e8eaed]">{value}</div>
-      {hint && <div className="text-[10px] text-[#5c636c]">{hint}</div>}
+      {hint && <div className="text-[11px] text-[#5c636c]">{hint}</div>}
     </div>
   );
 }

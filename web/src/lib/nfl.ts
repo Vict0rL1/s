@@ -9,6 +9,17 @@ export interface NflLeague {
 
 export interface NflRecord { wins: number; losses: number; ties: number }
 
+export interface NflQb {
+  name: string | null;
+  /** Elo points relative to a league-average starter. */
+  adjustment: number;
+  /** What that offset is worth in points of expected margin. */
+  points: number;
+  starts: number;
+  /** Always true today: the schedule never names a starter in advance. */
+  assumed: boolean;
+}
+
 export interface NflSide {
   id: string; name: string; elo: number; eloRank: number; gamesInDb: number;
   pf: number | null; pa: number | null; pythagorean: number | null;
@@ -45,6 +56,14 @@ export interface NflScoreline {
 export interface NflPrediction {
   league: string;
   teams: { home: NflSide; away: NflSide };
+  /**
+   * The starting quarterback the forecast assumed. Worth showing rather than
+   * hiding: it is the one input a reader can check against the news, so if the
+   * app says Stidham and the reader knows Maye is back, they know exactly how the
+   * forecast is stale instead of vaguely distrusting it.
+   */
+  quarterbacks: { home: NflQb | null; away: NflQb | null };
+  conditions: { roof: string | null; totalAdjustment: number } | null;
   model: { home: number; away: number; tie: number };
   spread: {
     expectedMargin: number;

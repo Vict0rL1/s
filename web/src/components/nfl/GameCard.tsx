@@ -46,7 +46,7 @@ export default function GameCard({
 
   return (
     <Card as="article" className="p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#7b828d]">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[13px] text-[#7b828d]">
         {/* Only the clock: the day is in the heading above this group, and thirty
             cards each restating their own date is thirty copies of a fact that
             changes four times. */}
@@ -72,7 +72,7 @@ export default function GameCard({
           record={prediction?.teams.away.record ?? teams.away?.record ?? null}
           onClick={game.away_id ? () => onOpenTeam(game.league, game.away_id!) : undefined}
         />
-        <span className="shrink-0 pt-1 text-[11px] font-medium text-[#5c636c]">@</span>
+        <span className="shrink-0 pt-1 text-[13px] font-medium text-[#5c636c]">@</span>
         <TeamName
           league={game.league}
           id={game.home_id}
@@ -113,7 +113,7 @@ export default function GameCard({
           </div>
 
           {!prediction && (
-            <p className="mt-2 text-center text-[11px] text-amber-300/90">
+            <p className="mt-2 text-center text-[13px] text-amber-300/90">
               Probabilidades implícitas del mercado, no del modelo.
             </p>
           )}
@@ -155,7 +155,7 @@ export default function GameCard({
               <KeyNumbers prediction={prediction} />
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="min-w-0 text-[13px] leading-snug text-[#c3c9d1]">
+                <p className="min-w-0 text-[15px] leading-snug text-[#c3c9d1]">
                   {prediction.verdict.close ? (
                     <>
                       Muy igualado —{' '}
@@ -233,16 +233,16 @@ function KeyNumbers({ prediction }: { prediction: NflPrediction }) {
       <div className="flex flex-wrap gap-x-5 gap-y-2">
         {prediction.keyNumbers.map((k) => (
           <div key={k.margin} className="min-w-0">
-            <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
+            <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
               {k.margin} puntos
             </div>
-            <div className="text-sm font-semibold tabular-nums text-[#e8eaed]">
+            <div className="text-[16px] font-semibold tabular-nums text-[#e8eaed]">
               {pct(k.probability)}
             </div>
           </div>
         ))}
       </div>
-      <p className="mt-1.5 text-[10px] leading-relaxed text-[#7b828d]">
+      <p className="mt-1.5 text-[11px] leading-relaxed text-[#7b828d]">
         En la NFL el marcador se mueve de 3 en 3 y de 7 en 7, así que el margen final se amontona en
         esos números. Por eso una línea de −3 y una de −3.5 no son la misma apuesta.
       </p>
@@ -272,16 +272,21 @@ function TeamName({
         <button
           onClick={onClick}
           disabled={!onClick}
-          className={`max-w-full truncate text-[15px] font-semibold leading-tight text-[#e8eaed] ${
-            onClick ? 'hover:underline' : 'cursor-default'
-          }`}
+          // Wraps rather than truncates. At the larger type size "New England
+          // Patriots" no longer fits half a 390px card, and `truncate` turned the
+          // two team names — the one thing a matchup card exists to tell you —
+          // into "New Engl…" and "Seattle S…". Two short lines cost a few pixels
+          // of height and lose nothing.
+          className={`max-w-full text-left text-[17px] font-semibold leading-tight break-words text-[#e8eaed] ${
+            alignRight ? 'text-right' : ''
+          } ${onClick ? 'hover:underline' : 'cursor-default'}`}
           title={onClick ? 'Ver ficha del equipo' : name}
         >
           {name}
         </button>
         {alignRight && <TeamCrest league={league} name={name} code={id} />}
       </span>
-      <div className="truncate text-[11px] text-[#7b828d]">
+      <div className="text-[13px] text-[#7b828d]">
         {homeBadge && 'local · '}
         {elo != null && (
           <>
@@ -308,8 +313,8 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
     <div className="space-y-3">
       <Panel>
         <SectionTitle>Por qué</SectionTitle>
-        <p className="mb-2 text-[13px] leading-relaxed text-[#c3c9d1]">{reasoning.text}</p>
-        <dl className="space-y-1 text-[11px]">
+        <p className="mb-2 text-[15px] leading-relaxed text-[#c3c9d1]">{reasoning.text}</p>
+        <dl className="space-y-1 text-[13px]">
           {reasoning.factors.map((f) => (
             <div key={f.key} className="flex justify-between gap-3">
               <dt className="text-[#9aa1ac]">{f.label}</dt>
@@ -328,18 +333,57 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
         </dl>
       </Panel>
 
+      {/* WHO IS PLAYING QUARTERBACK.
+          Its own panel because it is the only model input a reader can check and
+          correct from the news, and because the assumption behind it needs saying
+          out loud: the schedule never names a starter, so the model uses whoever
+          started last. Stating that is the difference between a reader who knows
+          the forecast is stale and one who only suspects it. */}
+      {(prediction.quarterbacks.home || prediction.quarterbacks.away) && (
+        <Panel>
+          <SectionTitle right="quien jugó el último partido">Quarterback titular</SectionTitle>
+          <dl className="space-y-1 text-[13px]">
+            {([
+              ['home', home.name, prediction.quarterbacks.home, HOME_COLOR],
+              ['away', away.name, prediction.quarterbacks.away, AWAY_COLOR],
+            ] as const).map(([key, teamName, qb, color]) => (
+              <div key={key} className="flex justify-between gap-3">
+                <dt className="text-[#9aa1ac]">
+                  {qb?.name ?? 'sin dato'}{' '}
+                  <span className="text-[#5c636c]">· {teamName}</span>
+                </dt>
+                <dd>
+                  <FactorValue color={color} neutral={!qb || qb.points === 0}>
+                    {!qb
+                      ? '—'
+                      : qb.points === 0
+                        ? 'nivel medio de la liga'
+                        : `${qb.points > 0 ? '+' : ''}${qb.points} pts · ${qb.starts} titularidades`}
+                  </FactorValue>
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-2 text-[13px] leading-relaxed text-[#7b828d]">
+            Medido sobre 27 temporadas: el 52% de los equipos usa más de un titular por temporada, así
+            que quién juega de quarterback mueve el pronóstico. Si sabes que hay un cambio esta semana,
+            el modelo aún no lo sabe.
+          </p>
+        </Panel>
+      )}
+
       {/* The handicap at the two lines the whole market is built around, priced
           at any line the reader might be looking at. */}
       <Panel>
         <SectionTitle right={spread.fromMarket ? 'línea del mercado' : 'línea del modelo'}>
           El hándicap, línea por línea
         </SectionTitle>
-        <div className="space-y-1 text-[11px]">
+        <div className="space-y-1 text-[13px]">
           {spread.keyLines.map((q) => (
             <SpreadLine key={q.line} quote={q} homeName={home.name} />
           ))}
         </div>
-        <p className="mt-1.5 text-[10px] leading-relaxed text-[#7b828d]">
+        <p className="mt-1.5 text-[11px] leading-relaxed text-[#7b828d]">
           «Nulo» es la probabilidad de que el margen caiga justo en la línea y te devuelvan la
           apuesta. En una línea entera de 3 puntos eso pasa una de cada trece veces.
         </p>
@@ -347,7 +391,7 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
 
       <Panel>
         <SectionTitle right={`${total.expected} esperados`}>Total de puntos</SectionTitle>
-        <div className="flex items-center gap-3 text-[11px]">
+        <div className="flex items-center gap-3 text-[13px]">
           <span className="w-16 shrink-0 text-[#9aa1ac]">Over {total.line}</span>
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
             <div
@@ -381,7 +425,7 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
             />
           ))}
         </div>
-        <p className="mt-1.5 text-[10px] leading-relaxed text-[#7b828d]">
+        <p className="mt-1.5 text-[11px] leading-relaxed text-[#7b828d]">
           Los tramos son de una, dos y tres anotaciones: «dentro de una anotación» es la frase con la
           que se sigue el último cuarto.
         </p>
@@ -401,7 +445,7 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
             />
           ))}
         </div>
-        <p className="mt-1.5 text-[10px] leading-relaxed text-[#7b828d]">
+        <p className="mt-1.5 text-[11px] leading-relaxed text-[#7b828d]">
           Salen de combinar el margen y el total, así que cuadran exactamente con los dos paneles de
           arriba. A cambio, no saben que 22 puntos es un marcador raro y 24 uno corriente.
         </p>
@@ -409,7 +453,7 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
 
       <Panel>
         <SectionTitle>Los dos equipos</SectionTitle>
-        <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[11px]">
+        <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[13px]">
           <div />
           <div className="flex w-20 items-center justify-end gap-1.5 font-medium text-[#e8eaed]">
             <span className="truncate">{away.name}</span>
@@ -447,9 +491,9 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
           Historial directo
         </SectionTitle>
         {h2h.recent.length === 0 ? (
-          <p className="text-[11px] text-[#7b828d]">Sin enfrentamientos previos en el archivo.</p>
+          <p className="text-[13px] text-[#7b828d]">Sin enfrentamientos previos en el archivo.</p>
         ) : (
-          <ul className="space-y-1 text-[11px]">
+          <ul className="space-y-1 text-[13px]">
             {h2h.recent.map((m, i) => (
               <li key={i} className="flex justify-between gap-3 text-[#c3c9d1]">
                 <span className="shrink-0 text-[#7b828d]">
@@ -470,7 +514,7 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
           <SectionTitle right={`margen ${((market.market.overround - 1) * 100).toFixed(1)}%`}>
             Mercado
           </SectionTitle>
-          <p className="text-[11px] leading-relaxed text-[#c3c9d1]">
+          <p className="text-[13px] leading-relaxed text-[#c3c9d1]">
             Cuotas {market.market.odds.away} / {market.market.odds.home} · implícitas sin vig{' '}
             {pct(market.market.away)} / {pct(market.market.home)}
           </p>
@@ -483,7 +527,7 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
         </SectionTitle>
         <ul className="space-y-1.5">
           {summary.bullets.map((b, i) => (
-            <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-[#9aa1ac]">
+            <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-[#9aa1ac]">
               <span aria-hidden className="text-[#5c636c]">
                 •
               </span>

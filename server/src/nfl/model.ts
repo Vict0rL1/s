@@ -152,6 +152,120 @@ export const LEAGUE_TOTAL_START = 44;
 export const LEAGUE_TOTAL_ALPHA = 1 / 512;
 
 // ---------------------------------------------------------------------------
+// The starting quarterback
+// ---------------------------------------------------------------------------
+// A team rating alone cannot answer "who is playing quarterback", and in this
+// sport that is the biggest single roster question there is: 52% of team-seasons
+// in the archive start more than one quarterback, so one team number silently
+// averages a starter and his backup and is wrong for both.
+//
+// THE DECOMPOSITION. A side's rating is `teamElo + qbAdjustment`, where the
+// adjustment is an offset around zero — a league-average quarterback adds
+// nothing. Each result's Elo shift is SPLIT between the two: the team takes
+// (1 − QB_SPLIT), the quarterback takes QB_SPLIT. Splitting rather than crediting
+// both in full is what keeps one win from being counted twice.
+//
+// MEASURED, walk-forward, on the 27-season archive. The weight was fitted at
+// three different train/test boundaries and came out at 0.35 every time, with the
+// out-of-sample win log loss improving 0.46%, 0.46% and 0.49%:
+//
+//   corte 2008:  0.62857 → 0.62570      corte 2012:  0.63018 → 0.62731
+//   corte 2016:  0.63375 → 0.63064
+//
+// The reason to believe it is signal and not a fitted curiosity is WHERE the gain
+// sits. On the 989 held-out games started by someone other than the team's usual
+// starter, log loss improves 1.78% — four times the overall figure — and the
+// margin's standard deviation drops from 13.51 to 13.21. The model got better
+// precisely in the games the quarterback column was added to explain.
+export const QB_SPLIT = 0.35;
+
+/**
+ * How much of a quarterback's offset survives the winter.
+ *
+ * Higher than the team's 0.6: a roster is rebuilt every spring, a quarterback's
+ * arm is not. Fitted alongside QB_SPLIT.
+ */
+export const QB_CARRYOVER = 0.85;
+
+// ---------------------------------------------------------------------------
+// Conditions
+// ---------------------------------------------------------------------------
+// Two adjustments to the expected TOTAL (never to the margin — wind hurts both
+// offences, so it does not favour either side).
+//
+// WIND. Monotone across every band in the archive, which is why this survived
+// where rest and bye weeks did not. Mean residual of the model's own expected
+// total, outdoor games only:
+//
+//     0–4 mph  +0.57      9–12 mph  −1.00      17–20 mph  −3.19
+//     5–8 mph   0.00     13–16 mph  −2.19       21+ mph   −5.06
+//
+// Fitted slope −0.2075 points per mph on 2001–2012, −0.2855 on 2013+ — same sign,
+// same order of magnitude, so it replicates.
+//
+// ROOF. Indoor games outscore the model's expectation by 2.44 points, and this is
+// NOT the wind effect wearing a different hat: fitted jointly, out-of-sample RMSE
+// of the total goes 13.6140 (neither) → 13.5692 (wind) → 13.5716 (roof) → 13.5245
+// (both). Each term earns its place.
+//
+// HONEST LIMIT, because it changes what these buy you. nflverse publishes the
+// roof for scheduled games but no weather forecast, so the roof term moves an
+// upcoming prediction and the wind term cannot. Wind still matters: applied
+// during the replay it stops a windy afternoon in Buffalo being charged to the
+// offence, so the scoring rates the forecast is built from measure the team
+// rather than the weather.
+export const WIND_TOTAL_PER_MPH = -0.2075;
+
+/**
+ * The wind speed the adjustment is measured against: the archive's mean outdoor
+ * wind. Centring on it rather than on zero means a typical breezy afternoon moves
+ * nothing, and only the unusual games get pushed.
+ */
+export const WIND_REFERENCE_MPH = 8.64;
+
+/** Points between an indoor game and an outdoor one, all else equal. */
+export const INDOOR_TOTAL_POINTS = 2.44;
+
+/**
+ * Share of games played under a roof — 24.95% across the archive.
+ *
+ * THE BUG THIS FIXES. The first version simply added 2.44 points indoors and
+ * nothing outdoors, and the backtest caught it immediately: the mean total error
+ * went from −0.04 to −0.61, meaning the model had started over-predicting every
+ * total. 2.44 × 0.2753 = 0.67 on the backtest's own indoor share, which is the
+ * whole discrepancy.
+ *
+ * The reason is that the expected total is built from each team's points-per-game
+ * EWMAs, and those are measured from real scores — so they ALREADY contain the
+ * average effect of the venues teams play in. An adjustment on top has to
+ * redistribute between games, not raise the league. Centring on the indoor share
+ * makes it sum to zero: 0.25 × (2.44 × 0.75) − 0.75 × (2.44 × 0.25) = 0.
+ */
+export const INDOOR_SHARE = 0.2495;
+
+/**
+ * The conditions adjustment to an expected total, in points. Zero-mean by
+ * construction — see INDOOR_SHARE.
+ *
+ * `wind` is null indoors and for any game not yet played, and null means "no
+ * information" rather than "no wind" — a dome and a still day in Buffalo are not
+ * the same thing, and treating a missing reading as zero would push every
+ * scheduled game as though it were unusually calm.
+ */
+export function conditionsTotalAdjustment(
+  roof: string | null | undefined,
+  wind: number | null | undefined,
+): number {
+  if (roof == null) return 0;
+  const indoor = /dome|closed/i.test(roof);
+  if (indoor) return INDOOR_TOTAL_POINTS * (1 - INDOOR_SHARE);
+  const roofTerm = -INDOOR_TOTAL_POINTS * INDOOR_SHARE;
+  // Wind is already centred on the mean outdoor reading, so it too averages out.
+  const windTerm = wind == null ? 0 : WIND_TOTAL_PER_MPH * (wind - WIND_REFERENCE_MPH);
+  return roofTerm + windTerm;
+}
+
+// ---------------------------------------------------------------------------
 // Distribution
 // ---------------------------------------------------------------------------
 /**

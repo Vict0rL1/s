@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import TennisDashboard from './components/TennisDashboard';
 import BasketballDashboard from './components/basketball/BasketballDashboard';
 import FootballDashboard from './components/football/FootballDashboard';
@@ -44,6 +44,29 @@ function initialSport(): SportId {
 export default function App() {
   const [sport, setSport] = useState<SportId>(initialSport);
   const theme = SPORT_THEMES[sport];
+  const headerRef = useRef<HTMLElement>(null);
+
+  /**
+   * Publish the header's height so sticky day headings can sit exactly under it.
+   *
+   * Measured rather than hardcoded. The offset was a literal 86px until the type
+   * scale grew and the headings started sliding beneath the tab bar — a constant
+   * that describes the size of a different element is wrong the moment that
+   * element changes. A ResizeObserver also covers what a constant never could:
+   * a phone rotating, a notch's safe-area inset, and the browser's own font-size
+   * setting.
+   */
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const publish = () =>
+      document.documentElement.style.setProperty('--header-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    publish();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     try {
@@ -62,29 +85,32 @@ export default function App() {
         sport's identity colour appears — data marks use the shared, validated
         palette, so a blue bar means "home" on every tab.
       */}
-      <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#0b0d11]/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+      <header ref={headerRef} className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#0b0d11]/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         {/* Safe-area padding so a notch or a rounded corner never clips the tab
             bar when the app is opened from a phone's home screen. */}
         <div className="mx-auto max-w-3xl px-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
           <div className="flex items-center gap-3 pb-1 pt-4">
             <span
               aria-hidden
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-base"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-[17px]"
               style={{ backgroundColor: theme.accentSoft }}
             >
               {theme.emoji}
             </span>
             <div className="min-w-0">
-              <h1 className="truncate text-[15px] font-semibold leading-tight text-[#e8eaed]">
+              <h1 className="truncate text-[17px] font-semibold leading-tight text-[#e8eaed]">
                 Sports Predictor
               </h1>
-              <p className="truncate text-[11px] leading-tight text-[#7b828d]">
+              {/* Hidden on the narrowest screens: at 390px it truncated to
+                  "…medidos contra resultados r…", which is header height spent on
+                  half a sentence. */}
+              <p className="hidden truncate text-[13px] leading-tight text-[#7b828d] sm:block">
                 Modelos explicables, medidos contra resultados reales
               </p>
             </div>
           </div>
 
-          <nav className="-mb-px flex gap-1 overflow-x-auto" role="tablist" aria-label="Deportes">
+          <nav className="-mb-px flex gap-0.5 overflow-x-auto sm:gap-1" role="tablist" aria-label="Deportes">
             {SPORTS.map((id) => {
               const s = SPORT_THEMES[id];
               const active = sport === id;
@@ -94,11 +120,14 @@ export default function App() {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setSport(id)}
-                  className={`relative shrink-0 rounded-t-lg px-3 py-2.5 text-[13px] font-medium transition ${
+                  className={`relative shrink-0 rounded-t-lg px-1.5 py-2.5 text-[15px] font-medium transition sm:px-3 ${
                     active ? 'text-[#e8eaed]' : 'text-[#7b828d] hover:text-[#c3c9d1]'
                   }`}
                 >
-                  <span className="mr-1.5" aria-hidden>
+                  {/* Decorative, and the first thing to go when five tabs have
+                      to share a phone's width — the word is what identifies the
+                      sport, the accent line under it carries the colour. */}
+                  <span className="mr-1.5 hidden sm:inline" aria-hidden>
                     {s.emoji}
                   </span>
                   {s.label}
@@ -124,7 +153,7 @@ export default function App() {
       </main>
 
       <footer className="mx-auto max-w-3xl px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
-        <p className="border-t border-white/[0.07] pt-4 text-[11px] leading-relaxed text-[#7b828d]">
+        <p className="border-t border-white/[0.07] pt-4 text-[13px] leading-relaxed text-[#7b828d]">
           Estimación estadística. Cada modelo se mide contra resultados reales y la app registra sus
           propios aciertos, pero ninguno conoce las lesiones de última hora, el clima ni la
           motivación. No es una recomendación para apostar.
@@ -173,7 +202,7 @@ function OddsQuotaLine() {
   const hours = Math.round(q.autoRefreshMinutes / 60);
 
   return (
-    <p className={`mt-3 text-[11px] leading-relaxed ${low ? 'text-amber-300/90' : 'text-[#7b828d]'}`}>
+    <p className={`mt-3 text-[13px] leading-relaxed ${low ? 'text-amber-300/90' : 'text-[#7b828d]'}`}>
       Cuotas del mercado:{' '}
       {remaining == null ? (
         'sin consultar todavía'

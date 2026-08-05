@@ -45,9 +45,9 @@ export default function TeamProfile({
           <div className="flex min-w-0 items-center gap-3">
             <TeamCrest league={league} name={team?.name ?? id} code={id} size={42} />
             <div className="min-w-0">
-            <h2 className="truncate text-lg font-bold text-[#e8eaed]">{team?.name ?? id}</h2>
+            <h2 className="truncate text-[20px] font-bold text-[#e8eaed]">{team?.name ?? id}</h2>
             {team && (
-              <p className="text-xs text-[#9aa1ac]">
+              <p className="text-[14px] text-[#9aa1ac]">
                 Elo {Math.round(team.elo)} · #{team.eloRank} de la liga · {team.gamesInDb} partidos
                 en el historial
               </p>
@@ -59,12 +59,12 @@ export default function TeamProfile({
           </button>
         </div>
 
-        {error && <p className="text-sm text-rose-300">{error}</p>}
-        {!team && !error && <p className="text-sm text-[#7b828d]">Cargando ficha…</p>}
+        {error && <p className="text-[16px] text-rose-300">{error}</p>}
+        {!team && !error && <p className="text-[16px] text-[#7b828d]">Cargando ficha…</p>}
 
         {team && (
-          <div className="space-y-4 text-sm">
-            <div className="grid grid-cols-3 gap-x-4 gap-y-3 border-y border-white/[0.07] py-3 text-xs">
+          <div className="space-y-4 text-[16px]">
+            <div className="grid grid-cols-3 gap-x-4 gap-y-3 border-y border-white/[0.07] py-3 text-[14px]">
               <Stat label="Balance" value={rec(team.record)} />
               <Stat label="En casa" value={rec(team.homeRecord)} />
               <Stat label="Fuera" value={rec(team.awayRecord)} />
@@ -82,7 +82,7 @@ export default function TeamProfile({
               as two numbers side by side, because the comparison is the point.
             */}
             {team.pythagorean != null && team.record.wins + team.record.losses > 0 && (
-              <p className="text-[11px] leading-relaxed text-[#7b828d]">
+              <p className="text-[13px] leading-relaxed text-[#7b828d]">
                 Los puntos anotados y encajados sugieren un {pct(team.pythagorean)} de victorias; el
                 balance real es {pct(team.record.wins / (team.record.wins + team.record.losses))}.
                 La diferencia entre ambos es lo que se suele leer como suerte.
@@ -91,7 +91,7 @@ export default function TeamProfile({
 
             <div>
               <div className="mb-1.5 flex items-baseline justify-between">
-                <h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
+                <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
                   Últimos partidos
                 </h3>
                 <FormDots
@@ -99,7 +99,7 @@ export default function TeamProfile({
                   colors={{ W: HOME_COLOR, D: NEUTRAL_COLOR, L: AWAY_COLOR }}
                 />
               </div>
-              <ul className="space-y-1 text-xs">
+              <ul className="space-y-1 text-[14px]">
                 {team.form.map((f, i) => (
                   <li key={i} className="flex items-center justify-between gap-2">
                     <span className="w-12 shrink-0 text-[#7b828d]">
@@ -134,7 +134,7 @@ export default function TeamProfile({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wide text-[#7b828d]">{label}</div>
+      <div className="text-[11px] uppercase tracking-wide text-[#7b828d]">{label}</div>
       <div className="tabular-nums text-[#e8eaed]">{value}</div>
     </div>
   );

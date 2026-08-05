@@ -22,7 +22,7 @@ export default function MatchCard({
 
   return (
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.04] p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between text-xs text-[#9aa1ac]">
+      <div className="mb-3 flex items-center justify-between text-[14px] text-[#9aa1ac]">
         <MatchTime iso={match.commence_time} />
         <span className="flex items-center gap-2">
           <span className="rounded bg-white/[0.06] px-2 py-0.5">
@@ -47,7 +47,7 @@ export default function MatchCard({
           tourLabel={match.tour.toUpperCase()}
           onClick={match.p1_id ? () => onOpenPlayer(match.tour, match.p1_id!) : undefined}
         />
-        <span className="px-3 pt-6 text-xs text-[#7b828d]">vs</span>
+        <span className="px-3 pt-6 text-[14px] text-[#7b828d]">vs</span>
         <PlayerName
           name={match.p2_name}
           country={prediction?.players.p2.country ?? players?.p2?.country ?? null}
@@ -67,7 +67,7 @@ export default function MatchCard({
           <ProbabilityBars prediction={prediction} />
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm">
+            <div className="text-[16px]">
               {verdict && verdict.favoredSide ? (
                 <span>
                   El modelo favorece a{' '}
@@ -91,13 +91,13 @@ export default function MatchCard({
 
           {/* What the model expects to happen, in plain language */}
           <div className="mt-3 border-t border-white/[0.07] pt-3">
-            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
               Qué es lo más probable
             </div>
-            <p className="text-sm font-medium text-[#e8eaed]">{prediction.summary.headline}</p>
+            <p className="text-[16px] font-medium text-[#e8eaed]">{prediction.summary.headline}</p>
             <ul className="mt-2 space-y-1">
               {prediction.summary.bullets.map((b, i) => (
-                <li key={i} className="flex gap-2 text-xs text-[#c3c9d1]">
+                <li key={i} className="flex gap-2 text-[14px] text-[#c3c9d1]">
                   <span className="text-[#5c636c]">•</span>
                   <span>{b}</span>
                 </li>
@@ -107,7 +107,7 @@ export default function MatchCard({
 
           <button
             onClick={() => setOpen((o) => !o)}
-            className="mt-3 text-xs text-[#9aa1ac] hover:text-[#e8eaed]"
+            className="mt-3 text-[14px] text-[#9aa1ac] hover:text-[#e8eaed]"
           >
             {open ? '▲ Ocultar desglose' : '▼ Ver desglose (Elo · forma · H2H · mercado)'}
           </button>
@@ -140,7 +140,7 @@ function ReliabilityBadge({ reliability }: { reliability: Reliability }) {
   return (
     <span
       title={title}
-      className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ${styles[reliability.level]}`}
+      className={`rounded-full px-3 py-1 text-[14px] font-medium ring-1 ${styles[reliability.level]}`}
     >
       {reliability.label} · ±{reliability.marginPp} pp
     </span>
@@ -172,12 +172,12 @@ function MissingPlayers({
     .map((s) => `${s.name}${s.info!.ranking ? ` (#${s.info!.ranking.rank})` : ''}`);
 
   return (
-    <div className="rounded-lg bg-white/[0.03] p-3 text-sm text-[#9aa1ac] ring-1 ring-white/[0.07]">
+    <div className="rounded-lg bg-white/[0.03] p-3 text-[16px] text-[#9aa1ac] ring-1 ring-white/[0.07]">
       {unknown.length > 0 && (
         <>
           Sin predicción del modelo: no hay datos de{' '}
           <strong className="text-[#d5d9df]">{unknown.join(' ni de ')}</strong>.
-          <div className="mt-1 text-xs text-[#7b828d]">
+          <div className="mt-1 text-[14px] text-[#7b828d]">
             Suele pasar si el historial descargado es antiguo y no cubre la carrera de este jugador.
             Ejecuta{' '}
             <code className="rounded bg-white/[0.04] px-1">npm run update-data -- --fresh</code> para
@@ -190,7 +190,7 @@ function MissingPlayers({
           Sin predicción del modelo: aún no hay partidos de{' '}
           <strong className="text-[#d5d9df]">{knownButUnrated.join(' ni de ')}</strong> en el
           historial, así que no se puede calcular su Elo.
-          <div className="mt-1 text-xs text-[#7b828d]">
+          <div className="mt-1 text-[14px] text-[#7b828d]">
             Arriba tienes su ranking oficial y la probabilidad del mercado.
           </div>
         </>
@@ -240,7 +240,7 @@ function PlayerName({
         <button
           onClick={onClick}
           disabled={!onClick}
-          className={`truncate font-semibold text-[#e8eaed] ${onClick ? 'hover:underline' : 'cursor-default'}`}
+          className={`font-semibold text-[#e8eaed] break-words ${onClick ? 'hover:underline' : 'cursor-default'}`}
         >
           {flag(country)} {name}
         </button>
@@ -260,14 +260,14 @@ function PlayerName({
           }
         >
           {(prob * 100).toFixed(1)}
-          <span className="text-2xl">%</span>
+          <span className="text-[26px]">%</span>
           {probSource === 'market' && (
-            <span className="ml-1 align-middle text-xs font-normal text-[#9aa1ac]">mercado</span>
+            <span className="ml-1 align-middle text-[14px] font-normal text-[#9aa1ac]">mercado</span>
           )}
         </div>
       )}
-      {facts.length > 0 && <div className="text-xs text-[#9aa1ac]">{facts.join(' · ')}</div>}
-      <div className="text-xs text-[#7b828d]">{odds != null ? `cuota ${odds}` : 'sin cuota'}</div>
+      {facts.length > 0 && <div className="text-[14px] text-[#9aa1ac]">{facts.join(' · ')}</div>}
+      <div className="text-[14px] text-[#7b828d]">{odds != null ? `cuota ${odds}` : 'sin cuota'}</div>
     </div>
   );
 }

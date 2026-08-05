@@ -11,11 +11,14 @@
 
 import {
   carryOver,
+  conditionsTotalAdjustment,
   eloExpectation,
   movMultiplier,
   BYE_WEEK_ELO,
   DIVISION_HOME_SCALE,
   ELO_PER_POINT,
+  QB_CARRYOVER,
+  QB_SPLIT,
   HOME_ADVANTAGE_ALPHA,
   HOME_ADVANTAGE_START,
   INITIAL_ELO,
@@ -40,6 +43,17 @@ export interface ReplayGame {
   playoff: number;
   home_rest: number | null;
   away_rest: number | null;
+  /**
+   * Starting quarterback. nflverse fills these for every played game; a game
+   * without them still replays, the quarterback split just has nothing to credit.
+   */
+  home_qb_id?: string | null;
+  away_qb_id?: string | null;
+  home_qb_name?: string | null;
+  away_qb_name?: string | null;
+  /** Conditions. `wind` is null indoors and before a game is played. */
+  roof?: string | null;
+  wind?: number | null;
 }
 
 export interface NafTeamState {
@@ -65,10 +79,31 @@ export interface NafTeamState {
   totalAgainst: number;
 }
 
+/**
+ * What the replay learns about one quarterback.
+ *
+ * `adjustment` is Elo points added to whatever team he starts for, so it is
+ * directly comparable across teams: +40 is a quarterback worth two points of
+ * margin more than a league-average starter.
+ */
+export interface NafQbState {
+  id: string;
+  name: string | null;
+  adjustment: number;
+  starts: number;
+  lastSeason: number | null;
+  lastDate: string | null;
+}
+
 export interface ReplayOptions {
   k?: number;
   carryover?: number;
   eloPerPoint?: number;
+  /** Share of each result credited to the quarterback. 0 disables the split. */
+  qbSplit?: number;
+  qbCarryover?: number;
+  /** false ignores roof and wind, for the measurement in docs/NFL.md. */
+  conditions?: boolean;
   /** Fix the home advantage instead of tracking it. Used by the backtest. */
   homeAdvantage?: number;
   homeAdvantageStart?: number;
@@ -93,6 +128,11 @@ export interface ReplayOptions {
     eloDiff: number;
     homeAdvantage: number;
     leagueTotal: number;
+    /** The quarterback offsets that went into `eloDiff`, for the "why" panel. */
+    homeQbAdjustment: number;
+    awayQbAdjustment: number;
+    /** Points the conditions moved the expected total by. */
+    conditionsAdjustment: number;
   }) => void;
 }
 
@@ -121,6 +161,16 @@ function freshTeam(): NafTeamState {
 
 export interface ReplayResult {
   teams: Map<string, NafTeamState>;
+  /** Every quarterback who started a game, with his offset. */
+  qbs: Map<string, NafQbState>;
+  /**
+   * The quarterback who most recently started for each team.
+   *
+   * The prediction path needs this because nflverse names the starter for played
+   * games but NOT for scheduled ones — so "who is playing quarterback next
+   * Sunday" has to be answered with "whoever played last Sunday".
+   */
+  currentQb: Map<string, string>;
   /** Where the trackers ended up. The prediction path needs both. */
   homeAdvantage: number;
   leagueTotal: number;
@@ -170,10 +220,30 @@ export function replayGames(games: ReplayGame[], opts: ReplayOptions = {}): Repl
   let homeEdge = fixedEdge ?? opts.homeAdvantageStart ?? HOME_ADVANTAGE_START;
   let leagueTotal = opts.leagueTotalStart ?? LEAGUE_TOTAL_START;
 
+  const qbSplit = opts.qbSplit ?? QB_SPLIT;
+  const qbCarry = opts.qbCarryover ?? QB_CARRYOVER;
+  const useConditions = opts.conditions !== false;
+
   const teams = new Map<string, NafTeamState>();
   const team = (id: string) => {
     let s = teams.get(id);
     if (!s) teams.set(id, (s = freshTeam()));
+    return s;
+  };
+
+  const qbs = new Map<string, NafQbState>();
+  const currentQb = new Map<string, string>();
+  /**
+   * A quarterback nobody has seen starts at 0 — assumed league-average for his
+   * team until results say otherwise, which is the right prior for a rookie and
+   * for a backup alike.
+   */
+  const qb = (id: string, name: string | null | undefined): NafQbState => {
+    let s = qbs.get(id);
+    if (!s) {
+      qbs.set(id, (s = { id, name: name ?? null, adjustment: 0, starts: 0, lastSeason: null, lastDate: null }));
+    }
+    if (name && !s.name) s.name = name;
     return s;
   };
 
@@ -193,23 +263,36 @@ export function replayGames(games: ReplayGame[], opts: ReplayOptions = {}): Repl
           s.pointsAgainst = leagueTotal / 2 + (s.pointsAgainst - leagueTotal / 2) * scoringCarry;
         }
       }
+      // Quarterbacks regress on their own, slower schedule: a roster is rebuilt
+      // every spring, an arm is not.
+      for (const q of qbs.values()) q.adjustment *= qbCarry;
       season = g.season;
     }
 
     const home = team(g.home_id);
     const away = team(g.away_id);
 
+    // The starting quarterback is part of how good a side is today, so his offset
+    // goes into the rating gap alongside the team's own Elo.
+    const homeQb = qbSplit > 0 && g.home_qb_id ? qb(g.home_qb_id, g.home_qb_name) : null;
+    const awayQb = qbSplit > 0 && g.away_qb_id ? qb(g.away_qb_id, g.away_qb_name) : null;
+    const homeQbAdj = homeQb?.adjustment ?? 0;
+    const awayQbAdj = awayQb?.adjustment ?? 0;
+
     const edge = homeEdgeFor(g, homeEdge, restWeight, byeElo, divScale);
-    const eloDiff = home.elo - away.elo + edge;
+    const eloDiff = home.elo + homeQbAdj - (away.elo + awayQbAdj) + edge;
     const expectedMargin = eloDiff / perPoint;
 
     // The total is a matchup of two offences against two defences, each an EWMA
     // of points per game, with the league average standing in for a team that
     // has not played yet.
     const half = leagueTotal / 2;
+    // Conditions move the total, never the margin: wind blows on both offences.
+    const conditions = useConditions ? conditionsTotalAdjustment(g.roof, g.wind) : 0;
     const expectedTotal =
       ((home.pointsFor ?? half) + (away.pointsAgainst ?? half)) / 2 +
-      ((away.pointsFor ?? half) + (home.pointsAgainst ?? half)) / 2;
+      ((away.pointsFor ?? half) + (home.pointsAgainst ?? half)) / 2 +
+      conditions;
 
     opts.onGame?.({
       game: g,
@@ -220,6 +303,9 @@ export function replayGames(games: ReplayGame[], opts: ReplayOptions = {}): Repl
       eloDiff,
       homeAdvantage: edge,
       leagueTotal,
+      homeQbAdjustment: homeQbAdj,
+      awayQbAdjustment: awayQbAdj,
+      conditionsAdjustment: conditions,
     });
 
     // ---- update ----
@@ -235,9 +321,26 @@ export function replayGames(games: ReplayGame[], opts: ReplayOptions = {}): Repl
     // explain, which is why it is computed against the post-update difference:
     // whatever home edge is left after both teams have been credited for the
     // game is the league's, not theirs.
+    // The shift is SPLIT, not applied twice: whatever share the quarterbacks take
+    // is share the teams do not, so one result still moves the league by exactly
+    // one result's worth.
+    const qbShare = homeQb && awayQb ? qbSplit : 0;
+    const teamShift = shift * (1 - qbShare);
+
     const preDiff = home.elo - away.elo;
-    home.elo += shift;
-    away.elo -= shift;
+    home.elo += teamShift;
+    away.elo -= teamShift;
+    if (qbShare > 0 && homeQb && awayQb) {
+      homeQb.adjustment += shift * qbShare;
+      awayQb.adjustment -= shift * qbShare;
+    }
+    for (const [q, side] of [[homeQb, g.home_id], [awayQb, g.away_id]] as const) {
+      if (!q) continue;
+      q.starts++;
+      q.lastSeason = g.season;
+      q.lastDate = g.game_date;
+      currentQb.set(side, q.id);
+    }
     if (edgeAlpha > 0 && !g.neutral) {
       const unexplained = (margin - preDiff / perPoint) * perPoint;
       homeEdge = homeEdge * (1 - edgeAlpha) + edgeAlpha * unexplained;
@@ -286,5 +389,5 @@ export function replayGames(games: ReplayGame[], opts: ReplayOptions = {}): Repl
     }
   }
 
-  return { teams, homeAdvantage: homeEdge, leagueTotal };
+  return { teams, qbs, currentQb, homeAdvantage: homeEdge, leagueTotal };
 }

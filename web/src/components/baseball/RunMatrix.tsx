@@ -37,7 +37,7 @@ export default function RunMatrix({ prediction }: { prediction: BsbPrediction })
       </SectionTitle>
 
       <div className="-mx-1 overflow-x-auto px-1">
-        <table className="w-full min-w-[26rem] border-separate border-spacing-0.5 text-center text-[10px] tabular-nums">
+        <table className="w-full min-w-[26rem] border-separate border-spacing-0.5 text-center text-[11px] tabular-nums">
           <thead>
             <tr>
               <th className="w-6" />
@@ -75,7 +75,7 @@ export default function RunMatrix({ prediction }: { prediction: BsbPrediction })
         </table>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2 text-center text-[11px]">
+      <div className="mt-2 grid grid-cols-2 gap-2 text-center text-[13px]">
         <div className="rounded bg-white/[0.03] px-1 py-1.5">
           <div className="mx-auto mb-1 h-1 w-8 rounded" style={{ backgroundColor: HOME_COLOR }} />
           <div className="truncate text-[#9aa1ac]" title={home.name}>Gana {home.name}</div>
@@ -91,7 +91,7 @@ export default function RunMatrix({ prediction }: { prediction: BsbPrediction })
           </div>
         </div>
       </div>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-[#7b828d]">
+      <p className="mt-1.5 text-[13px] leading-relaxed text-[#7b828d]">
         La diagonal está vacía porque un marcador final nunca queda empatado: esa probabilidad
         ({(extraInnings * 100).toFixed(1)}%, las entradas extra) ya está repartida en las casillas de
         una carrera de diferencia.
@@ -155,7 +155,7 @@ function Margins({
   const edge = Math.max(...shown.map((m) => Math.abs(m.margin)));
   return (
     <div className="mt-3 border-t border-white/[0.07] pt-2">
-      <div className="mb-1.5 text-xs uppercase tracking-wide text-[#7b828d]">
+      <div className="mb-1.5 text-[14px] uppercase tracking-wide text-[#7b828d]">
         Diferencia de carreras
       </div>
       <div className="space-y-0.5">
@@ -163,7 +163,7 @@ function Margins({
           const atEdge = Math.abs(m.margin) === edge;
           const label = `${m.margin > 0 ? homeName : awayName} por ${Math.abs(m.margin)}${atEdge ? ' o más' : ''}`;
           return (
-            <div key={m.margin} className="flex items-center gap-2 text-[11px]">
+            <div key={m.margin} className="flex items-center gap-2 text-[13px]">
               <span className="w-9 text-right tabular-nums text-[#c3c9d1]">
                 {atEdge ? `${m.margin > 0 ? '≥+' : '≤−'}${edge}` : m.margin > 0 ? `+${m.margin}` : m.margin}
               </span>
@@ -184,7 +184,7 @@ function Margins({
           );
         })}
       </div>
-      <p className="mt-1.5 text-[11px] text-[#7b828d]">
+      <p className="mt-1.5 text-[13px] text-[#7b828d]">
         La línea de carreras se juega a ±1.5, así que todo lo que sea ganar por una carrera —el
         margen más frecuente del béisbol— no cubre.
       </p>

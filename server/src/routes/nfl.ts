@@ -36,6 +36,7 @@ function predictRow(row: NafUpcomingRow): NafPrediction | null {
     spreadLine: row.spread_line,
     totalLine: row.total_line,
     season: row.season,
+    roof: row.roof,
   });
 }
 

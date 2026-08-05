@@ -51,7 +51,7 @@ export default function GameCard({
 
   return (
     <Card as="article" className="p-4">
-      <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-[#7b828d]">
+      <div className="mb-3 flex items-center justify-between gap-2 text-[13px] text-[#7b828d]">
         <MatchTime iso={game.commence_time} />
         <div className="flex items-center gap-1.5">
           {prediction?.neutral && <Badge>cancha neutral</Badge>}
@@ -71,7 +71,7 @@ export default function GameCard({
           record={prediction?.teams.away.record ?? teams.away?.record ?? null}
           onClick={game.away_id ? () => onOpenTeam(game.league, game.away_id!) : undefined}
         />
-        <span className="shrink-0 pt-1 text-[11px] font-medium text-[#5c636c]">@</span>
+        <span className="shrink-0 pt-1 text-[13px] font-medium text-[#5c636c]">@</span>
         <TeamName
           league={game.league}
           id={game.home_id}
@@ -113,7 +113,7 @@ export default function GameCard({
           </div>
           {prediction.market.market && (
             <div className="mt-1.5">
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
+              <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
                 Mercado, sin vig
               </div>
               <ProbabilityBar
@@ -185,13 +185,13 @@ export default function GameCard({
                   />
                 ))}
             </div>
-            <p className="mt-1.5 text-[11px] text-[#7b828d]">
+            <p className="mt-1.5 text-[13px] text-[#7b828d]">
               Positivo = gana el local. La barra más larga es el resultado más probable, no el único.
             </p>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-3">
-            <p className="min-w-0 text-[13px] leading-snug text-[#c3c9d1]">
+            <p className="min-w-0 text-[15px] leading-snug text-[#c3c9d1]">
               {prediction.verdict.favored ? (
                 <>
                   El modelo favorece a{' '}
@@ -230,7 +230,7 @@ export default function GameCard({
                   <SectionTitle>Lectura completa</SectionTitle>
                   <ul className="space-y-1.5">
                     {prediction.summary.bullets.map((b, i) => (
-                      <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-[#9aa1ac]">
+                      <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-[#9aa1ac]">
                         <span aria-hidden className="text-[#5c636c]">•</span>
                         <span>{b}</span>
                       </li>
@@ -275,7 +275,10 @@ function TeamName({
         <button
           onClick={onClick}
           disabled={!onClick}
-          className={`max-w-full truncate text-[15px] font-semibold leading-tight text-[#e8eaed] ${
+          // Wraps rather than truncates: at the larger type size the team name
+          // no longer fits half a phone-width card, and an ellipsis eats the one
+          // thing the card exists to tell you. See nfl/GameCard for the detail.
+          className={`max-w-full text-[17px] font-semibold leading-tight break-words text-[#e8eaed] ${
             onClick ? 'hover:underline' : 'cursor-default'
           }`}
           title={onClick ? 'Ver ficha del equipo' : name}
@@ -284,7 +287,7 @@ function TeamName({
         </button>
         {alignRight && <TeamCrest league={league} name={name} code={id} logo={logo} />}
       </span>
-      <div className="truncate text-[11px] text-[#7b828d]">
+      <div className="text-[13px] text-[#7b828d]">
         {homeBadge && 'local · '}
         {elo != null && (
           <>
@@ -315,7 +318,7 @@ function MissingModel({ item }: { item: BbGameWithPrediction }) {
     !game.away_id ? game.away_name : null,
   ].filter(Boolean) as string[];
   return (
-    <div className="rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
+    <div className="rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-[14px] text-amber-200">
       <p className="font-medium">Sin modelo para este partido.</p>
       {missing.length > 0 ? (
         <p className="mt-1">

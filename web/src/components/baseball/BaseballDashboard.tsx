@@ -109,7 +109,7 @@ export default function BaseballDashboard() {
     <div>
       <header className="mb-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-prose text-[13px] leading-relaxed text-[#9aa1ac]">
+          <p className="max-w-prose text-[15px] leading-relaxed text-[#9aa1ac]">
             Predicción con Elo por equipo, ventaja de campo, el <strong>lanzador abridor</strong> y
             una distribución de carreras que produce ganador, total y línea de una sola vez.
           </p>
@@ -117,7 +117,7 @@ export default function BaseballDashboard() {
             onClick={handleRefresh}
             disabled={refreshing}
             title="Vuelve a consultar los partidos próximos, sus cuotas y los abridores anunciados"
-            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[14px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
           >
             {refreshing ? 'Actualizando…' : '↻ Actualizar'}
           </button>
@@ -128,7 +128,7 @@ export default function BaseballDashboard() {
       </header>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[13px] text-rose-200">
+        <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[15px] text-rose-200">
           {error}
         </div>
       )}
@@ -152,7 +152,7 @@ export default function BaseballDashboard() {
           ))}
         </div>
       ) : (
-        <div className="mb-6 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[13px] text-rose-200">
+        <div className="mb-6 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[15px] text-rose-200">
           <p className="font-medium">No hay datos de béisbol todavía.</p>
           <p className="mt-1 text-rose-300/90">
             Ejecuta <code className="rounded bg-rose-900/40 px-1">npm run update-data:bsb</code> para
@@ -162,7 +162,7 @@ export default function BaseballDashboard() {
       )}
 
       {activeLeague && !activeLeague.hasModel && (
-        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[13px] leading-relaxed text-amber-200/90">
+        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[15px] leading-relaxed text-amber-200/90">
           <strong>{activeLeague.name} sin modelo propio.</strong> No existe un archivo abierto,
           partido a partido, para esta liga —y menos aún con el abridor de cada encuentro, que es lo
           que de verdad hace falta en béisbol—, así que se muestran los partidos y las
@@ -173,7 +173,7 @@ export default function BaseballDashboard() {
       {loading ? (
         <SkeletonList />
       ) : games.length === 0 ? (
-        <p className="mb-6 text-sm text-[#7b828d]">
+        <p className="mb-6 text-[16px] text-[#7b828d]">
           No hay partidos próximos para {activeLeague?.name ?? 'esta liga'}.
         </p>
       ) : (
@@ -199,17 +199,17 @@ export default function BaseballDashboard() {
             className="flex w-full items-center justify-between text-left"
           >
             <span>
-              <span className="text-xs uppercase tracking-wide text-[#7b828d]">
+              <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
                 Todos los equipos · {activeLeague?.name}
               </span>
               <br />
-              <span className="text-sm text-[#d5d9df]">{power.length} equipos ordenados por Elo</span>
+              <span className="text-[16px] text-[#d5d9df]">{power.length} equipos ordenados por Elo</span>
             </span>
-            <span className="text-xs text-[#5c636c]">{showTeams ? '▲' : '▼'}</span>
+            <span className="text-[14px] text-[#5c636c]">{showTeams ? '▲' : '▼'}</span>
           </button>
           {showTeams && (
             <div className="mt-3 overflow-x-auto border-t border-white/[0.07] pt-3">
-              <table className="w-full text-left text-xs tabular-nums">
+              <table className="w-full text-left text-[14px] tabular-nums">
                 <thead className="text-[#7b828d]">
                   <tr>
                     <th className="py-1 pr-2">#</th>
@@ -256,7 +256,7 @@ export default function BaseballDashboard() {
 function DataLine({ meta }: { meta: BsbMeta }) {
   const real = meta.dataSource === 'retrosheet';
   return (
-    <div className="mt-2 space-y-1 text-xs text-[#7b828d]">
+    <div className="mt-2 space-y-1 text-[14px] text-[#7b828d]">
       <p>
         <span
           className={`rounded px-1.5 py-0.5 ${
@@ -292,7 +292,7 @@ function StaleWarning({ name, through }: { name: string; through: string | null 
   // is normal rather than a problem worth shouting about.
   if (months <= 6) return null;
   return (
-    <div className="mt-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-2.5 text-[12px] leading-relaxed text-amber-200/90">
+    <div className="mt-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-2.5 text-[14px] leading-relaxed text-amber-200/90">
       ⚠️ El historial de {name} termina en {m}/{y} (~{Math.round(months / 12 * 10) / 10} años). Los Elo
       no describen a las plantillas actuales. Vuelve a ejecutar{' '}
       <code className="rounded bg-amber-900/40 px-1">npm run update-data:bsb</code>.
@@ -309,7 +309,7 @@ function TrackRecordPanel({ league }: { league: string }) {
   if (!rec || (rec.resolved === 0 && rec.pending === 0)) return null;
 
   return (
-    <div className="mt-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 text-[12px]">
+    <div className="mt-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 text-[14px]">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between">
         <span className="text-[#c3c9d1]">
           <span className="uppercase tracking-wide text-[#7b828d]">Cómo va acertando</span>{' '}
@@ -381,14 +381,14 @@ function TeamProfile({ league, id, onClose }: { league: string; id: string; onCl
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between">
-          <h3 className="text-lg font-semibold text-[#e8eaed]">{info?.name ?? 'Cargando…'}</h3>
+          <h3 className="text-[20px] font-semibold text-[#e8eaed]">{info?.name ?? 'Cargando…'}</h3>
           <button onClick={onClose} className="text-[#9aa1ac] hover:text-[#d5d9df]">✕</button>
         </div>
         {!info ? (
-          <p className="text-sm text-[#7b828d]">Cargando ficha…</p>
+          <p className="text-[16px] text-[#7b828d]">Cargando ficha…</p>
         ) : (
-          <div className="space-y-4 text-sm">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-white/[0.07] py-3 text-xs">
+          <div className="space-y-4 text-[16px]">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-white/[0.07] py-3 text-[14px]">
               <Stat label="Elo" value={`${Math.round(info.elo)} (#${info.eloRank})`} />
               <Stat label="Balance" value={`${info.record.wins}-${info.record.losses}`} />
               <Stat label="En casa" value={`${info.homeRecord.wins}-${info.homeRecord.losses}`} />
@@ -405,8 +405,8 @@ function TeamProfile({ league, id, onClose }: { league: string; id: string; onCl
 
             {info.rotation.length > 0 && (
               <div>
-                <div className="mb-1 text-xs uppercase tracking-wide text-[#7b828d]">Rotación</div>
-                <table className="w-full text-left text-xs tabular-nums">
+                <div className="mb-1 text-[14px] uppercase tracking-wide text-[#7b828d]">Rotación</div>
+                <table className="w-full text-left text-[14px] tabular-nums">
                   <thead className="text-[#7b828d]">
                     <tr>
                       <th className="py-1 pr-2">Lanzador</th>
@@ -440,10 +440,10 @@ function TeamProfile({ league, id, onClose }: { league: string; id: string; onCl
 
             {info.form.length > 0 && (
               <div>
-                <div className="mb-1 text-xs uppercase tracking-wide text-[#7b828d]">
+                <div className="mb-1 text-[14px] uppercase tracking-wide text-[#7b828d]">
                   Últimos partidos
                 </div>
-                <ul className="space-y-1 text-xs">
+                <ul className="space-y-1 text-[14px]">
                   {info.form.map((f, i) => (
                     <li key={i} className="flex justify-between text-[#c3c9d1]">
                       <span className="text-[#7b828d]">{formatDate(f.date)}</span>
@@ -468,7 +468,7 @@ function TeamProfile({ league, id, onClose }: { league: string; id: string; onCl
 function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <div className="min-w-0" title={hint}>
-      <div className="text-[10px] uppercase tracking-wide text-[#7b828d]">{label}</div>
+      <div className="text-[11px] uppercase tracking-wide text-[#7b828d]">{label}</div>
       <div className="font-semibold text-[#e8eaed]">{value}</div>
     </div>
   );

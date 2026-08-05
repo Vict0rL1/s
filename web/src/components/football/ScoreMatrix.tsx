@@ -41,7 +41,7 @@ export default function ScoreMatrix({ prediction }: { prediction: FbPrediction }
       </SectionTitle>
 
       <div className="-mx-1 overflow-x-auto px-1">
-        <table className="w-full min-w-[22rem] border-separate border-spacing-0.5 text-center text-[11px] tabular-nums">
+        <table className="w-full min-w-[22rem] border-separate border-spacing-0.5 text-center text-[13px] tabular-nums">
           <thead>
             <tr>
               <th className="w-7" />
@@ -118,7 +118,7 @@ function Legend({ prediction, tail }: { prediction: FbPrediction; tail: number }
   ];
   return (
     <>
-      <div className="mt-2 grid grid-cols-3 gap-2 text-center text-[11px]">
+      <div className="mt-2 grid grid-cols-3 gap-2 text-center text-[13px]">
         {items.map((i) => (
           <div key={i.label} className="rounded bg-white/[0.03] px-1 py-1.5">
             <div
@@ -132,7 +132,7 @@ function Legend({ prediction, tail }: { prediction: FbPrediction; tail: number }
           </div>
         ))}
       </div>
-      <p className="mt-1.5 text-[11px] text-[#7b828d]">
+      <p className="mt-1.5 text-[13px] text-[#7b828d]">
         Cada bloque de color suma exactamente la probabilidad de ese resultado.
         {tail > 0.0005 && (
           <> Marcadores con más de {prediction.goals.grid.maxGoals} goles por equipo: {(tail * 100).toFixed(2)}%.</>
@@ -159,7 +159,7 @@ function Margins({
   const edge = Math.max(...margins.map((m) => Math.abs(m.margin)));
   return (
     <div className="mt-3 border-t border-white/[0.07] pt-2">
-      <div className="mb-1.5 text-xs uppercase tracking-wide text-[#7b828d]">
+      <div className="mb-1.5 text-[14px] uppercase tracking-wide text-[#7b828d]">
         Diferencia de goles
       </div>
       <div className="space-y-0.5">
@@ -171,7 +171,7 @@ function Margins({
               ? 'empate'
               : `${m.margin > 0 ? homeName : awayName} por ${Math.abs(m.margin)}${atEdge ? '+' : ''}`;
           return (
-            <div key={m.margin} className="flex items-center gap-2 text-[11px]">
+            <div key={m.margin} className="flex items-center gap-2 text-[13px]">
               {/* The outermost rows absorb everything beyond them, so they are
                   "5 or more", not "exactly 5". */}
               <span className="w-9 text-right tabular-nums text-[#c3c9d1]">

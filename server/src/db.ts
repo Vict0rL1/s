@@ -548,6 +548,21 @@ function createSchema(d: DatabaseSync): void {
       -- because the measurement should stay reproducible. See docs/NFL.md.
       home_rest    INTEGER,
       away_rest    INTEGER,
+      -- The STARTING QUARTERBACK on each side, which nflverse fills for all
+      -- 7,276 games. 52% of team-seasons start more than one quarterback, so a
+      -- team rating alone silently averages a starter and his backup together
+      -- and cannot move when the starter is out -- the single largest roster
+      -- fact in the sport, invisible to plain Elo.
+      home_qb_id   TEXT,
+      away_qb_id   TEXT,
+      home_qb_name TEXT,
+      away_qb_name TEXT,
+      -- Conditions. Wind is the one that matters for scoring; the roof column
+      -- says whether it can matter at all (indoors wind is absent, not zero, and
+      -- that difference is why these are nullable).
+      roof         TEXT,
+      temp         REAL,
+      wind         REAL,
       -- Closing line, home-positive. Backtest only, never the model.
       close_spread REAL,
       close_total  REAL,
@@ -568,7 +583,25 @@ function createSchema(d: DatabaseSync): void {
       -- Points scored / allowed per game, the EWMA the total model reads.
       pf           REAL,
       pa           REAL,
+      -- The quarterback who started this team's most recent game. nflverse names
+      -- the starter for played games but not for scheduled ones, so "who is
+      -- playing on Sunday" is answered with "whoever played last Sunday".
+      current_qb   TEXT,
       PRIMARY KEY (league, team_id)
+    );
+
+    -- One row per quarterback who has ever started. The adjustment is Elo points
+    -- added to whatever team he starts for, so it compares across teams: +40 is a
+    -- quarterback worth two points of margin more than a league-average starter.
+    CREATE TABLE IF NOT EXISTS naf_qb_ratings (
+      qb_id       TEXT NOT NULL,
+      league      TEXT NOT NULL,
+      name        TEXT,
+      adjustment  REAL NOT NULL,
+      starts      INTEGER NOT NULL,
+      last_season INTEGER,
+      last_date   TEXT,
+      PRIMARY KEY (league, qb_id)
     );
 
     CREATE TABLE IF NOT EXISTS naf_upcoming (
@@ -648,6 +681,26 @@ function migrateSchema(d: DatabaseSync): void {
       loser_rank: 'INTEGER',
       w_odds: 'REAL',
       l_odds: 'REAL',
+    },
+    // Starting quarterback and conditions. These columns were always in the
+    // nflverse file we download; the parser simply ignored them until the model
+    // learned to use the quarterback.
+    naf_games: {
+      home_qb_id: 'TEXT',
+      away_qb_id: 'TEXT',
+      home_qb_name: 'TEXT',
+      away_qb_name: 'TEXT',
+      roof: 'TEXT',
+      temp: 'REAL',
+      wind: 'REAL',
+    },
+    naf_upcoming: {
+      home_qb_name: 'TEXT',
+      away_qb_name: 'TEXT',
+      roof: 'TEXT',
+    },
+    naf_team_ratings: {
+      current_qb: 'TEXT',
     },
   };
 

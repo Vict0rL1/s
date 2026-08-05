@@ -17,8 +17,9 @@ Cinco deportes, en **pestañas separadas** (nunca mezclados):
   Ver [docs/BASEBALL.md](docs/BASEBALL.md).
 - **🏈 Fútbol americano** — NFL: hándicap, total y ganador con una distribución de margen que
   **conoce los números clave del deporte** (el margen acaba en 3 el 15 % de las veces y en 9 el
-  1.6 %). Es el único deporte de la app cuyo modelo **se puede medir contra la línea de cierre
-  real** — y el backtest dice, sin adornos, que no la bate.
+  1.6 %) y que sabe **quién juega de quarterback**. Es el único deporte de la app cuyo modelo
+  **se puede medir contra la línea de cierre real** — y el backtest dice, sin adornos, que no la
+  bate, aunque ahora se queda más cerca.
   Ver [docs/NFL.md](docs/NFL.md).
 - **🏀 Baloncesto** — NBA, WNBA, NCAA (M y F), EuroLeague y NBL: Elo por equipo con ventaja de
   campo, margen de puntos y descanso, más **diferencia esperada (spread)** y **total de puntos**.
@@ -99,10 +100,20 @@ posible *value* cuando el modelo discrepa de las cuotas.
   vale +1.92 en 2020–2025, y en 2020 con los estadios vacíos **el modelo la vio caer sola a +0.30**.
   Se rastrea con dos temporadas de memoria: 0.6353 de log loss en la era moderna contra 0.6389 si se
   deja fija.
+- **Quién juega de quarterback.** Era la mayor omisión del modelo y el dato ya venía en el fichero
+  que descargábamos: nflverse trae el titular de los **7276** partidos del archivo. Importa porque el
+  **52 %** de los equipos-temporada usa más de un titular, así que un solo número por equipo promedia
+  al titular con su suplente y está mal en las dos direcciones. Ahora el crédito de cada resultado se
+  reparte entre el equipo y su quarterback (λ = 0.35, la misma cifra en tres cortes distintos de
+  validación). Mejora el log loss un 0.46 % en general — y un **1.78 % en los partidos que empieza un
+  suplente**, que es exactamente donde tenía que notarse.
+- **El viento y el techo, sobre el total.** El residuo del total cae de forma monótona con el viento
+  (+0.6 puntos con 0–4 mph, −5.1 con más de 21) y bajo techo se anota 2.44 puntos de más. Los dos
+  términos son independientes: juntos bajan el RMSE del total de 13.614 a **13.525** fuera de muestra.
 - **El único deporte que se puede medir contra el mercado — y no lo bate.** nflverse publica el
-  spread y el total de cierre del **100 %** de los partidos desde 1999. El modelo se queda a 0.34
-  puntos de la línea y acierta el **50.7 %** contra el hándicap, por debajo del 52.4 % que hace falta
-  solo para cubrir la comisión. Está escrito en el panel de aciertos, no en la letra pequeña: es la
+  spread y el total de cierre del **100 %** de los partidos desde 1999. El modelo se queda a 0.28
+  puntos de la línea (eran 0.34 antes del quarterback) y acierta el **50.6 %** contra el hándicap, por
+  debajo del 52.4 % que hace falta solo para cubrir la comisión. Está escrito en el panel de aciertos, no en la letra pequeña: es la
   razón de que la app no venda sus «posibles value» como dinero seguro.
 - **La banda de incertidumbre calibrada contra algo externo.** El modelo se separa 7.3 pp de media
   de la línea de cierre, así que la tarjeta dice ±7.3 pp. Es la única de las cinco pestañas donde ese
@@ -675,6 +686,30 @@ mismo.
 `npm run audit` comprueba esto además de la coherencia de los números: que ningún partido de la lista
 de próximos esté ya jugado (con esas 6 h de holgura) y que ninguna fecha caiga más allá de 400 días.
 Son **1325 comprobaciones**, todas verdes.
+
+### La escala tipográfica
+
+La app tenía **doce tamaños de letra distintos** y 222 usos a 12 px o menos, incluido uno a 9 px.
+Eso son dos problemas a la vez: cuesta leerla, y doce niveles no son una jerarquía sino la
+ausencia de una.
+
+Ahora son **ocho niveles y todos más grandes**: 11 · 13 · 14 · 15 · 16 · 17 · 20 · 26 px. El
+cuerpo pasó de 12 a 14 px (+17 %) y las etiquetas de 10-11 a 13. El texto más pequeño que se
+lee en cualquier pestaña es de 11 px, comprobado en el navegador.
+
+Tres cosas se rompieron al agrandar, y las tres están arregladas:
+
+- **Las cabeceras pegajosas de cada día** iban a un `top` de 86 px escrito a mano, que era la
+  altura de la cabecera *antes*. Un número que describe el tamaño de otro elemento está mal en
+  cuanto ese elemento cambia, así que ahora la cabecera publica su altura real y las fechas se
+  cuelgan de ella. Se comprueba sola: mide 95 px en móvil y 100 px en escritorio.
+- **Las cinco pestañas ya no cabían** en un móvil. Los emojis y el subtítulo aparecen a partir de
+  640 px de ancho; por debajo manda la palabra, que es lo que identifica al deporte. Verificado
+  a 360, 390, 412, 640 y 900 px.
+- **Los nombres se cortaban**: «New Engl…», «Manchester United F…», «Madison Bumga…». Había 35
+  textos recortados. Los nombres de equipo y de jugador ahora se parten en dos líneas en vez de
+  perder letras — dos líneas cortas no cuestan nada, unos puntos suspensivos se comen justo el
+  dato por el que existe la tarjeta. **Cero textos recortados** en las cinco pestañas.
 
 ## Estructura del proyecto
 

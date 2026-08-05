@@ -75,6 +75,15 @@ export interface ParsedGame {
   closeTotal: number | null;
   closeMlHome: number | null;
   closeMlAway: number | null;
+  // Starting quarterback and conditions. Present for every game in the file;
+  // see docs/NFL.md for what the model does with them and what it measured.
+  homeQbId: string | null;
+  awayQbId: string | null;
+  homeQbName: string | null;
+  awayQbName: string | null;
+  roof: string | null;
+  temp: number | null;
+  wind: number | null;
 }
 
 export interface ParsedFixture {
@@ -86,6 +95,11 @@ export interface ParsedFixture {
   neutral: number;
   spreadLine: number | null;
   totalLine: number | null;
+  /**
+   * Published for scheduled games, unlike wind and temperature. It is the only
+   * conditions field a forecast can use.
+   */
+  roof: string | null;
 }
 
 /** Minimal CSV reader: nflverse quotes stadium names that contain commas. */
@@ -135,6 +149,13 @@ const REQUIRED = [
   'season', 'game_type', 'week', 'gameday', 'away_team', 'away_score',
   'home_team', 'home_score', 'location', 'spread_line', 'total_line',
 ];
+
+/** Same missing-value discipline as `num`, for text columns. */
+const str = (v: string | undefined): string | null => {
+  if (v == null) return null;
+  const t = v.trim();
+  return t === '' || t === 'NA' || t === 'NULL' ? null : t;
+};
 
 const num = (v: string | undefined): number | null => {
   if (v == null) return null;
@@ -222,6 +243,7 @@ export function parseGames(
         // attached to the wrong side of the line.
         spreadLine: num(r.spread_line) != null ? -(num(r.spread_line) as number) : null,
         totalLine: num(r.total_line),
+        roof: str(r.roof),
       });
       continue;
     }
@@ -242,6 +264,16 @@ export function parseGames(
       closeTotal: num(r.total_line),
       closeMlHome: num(r.home_moneyline),
       closeMlAway: num(r.away_moneyline),
+      homeQbId: str(r.home_qb_id),
+      awayQbId: str(r.away_qb_id),
+      homeQbName: str(r.home_qb_name),
+      awayQbName: str(r.away_qb_name),
+      roof: str(r.roof),
+      // Indoors these are absent rather than zero, and `num` keeps them null —
+      // treating a missing wind reading as "no wind" would tell the model that a
+      // dome and a still day in Buffalo are the same thing.
+      temp: num(r.temp),
+      wind: num(r.wind),
     });
   }
 
@@ -294,8 +326,9 @@ export function storeGames(league: LeagueId, games: ParsedGame[], names: Map<str
       `INSERT INTO naf_games
          (league, season, week, game_date, home_id, away_id, home_points, away_points,
           neutral, playoff, home_rest, away_rest,
-          close_spread, close_total, close_ml_home, close_ml_away)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          close_spread, close_total, close_ml_home, close_ml_away,
+          home_qb_id, away_qb_id, home_qb_name, away_qb_name, roof, temp, wind)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (league, season, week, home_id, away_id) DO NOTHING`,
     );
     for (const g of games) {
@@ -303,6 +336,7 @@ export function storeGames(league: LeagueId, games: ParsedGame[], names: Map<str
         league, g.season, g.week, g.gameDate, g.homeId, g.awayId, g.homePoints, g.awayPoints,
         g.neutral, g.playoff, g.homeRest, g.awayRest,
         g.closeSpread, g.closeTotal, g.closeMlHome, g.closeMlAway,
+        g.homeQbId, g.awayQbId, g.homeQbName, g.awayQbName, g.roof, g.temp, g.wind,
       );
     }
     db.exec('COMMIT');
@@ -333,12 +367,13 @@ export function storeSchedule(league: LeagueId, fixtures: ParsedFixture[], names
     const ins = db.prepare(
       `INSERT INTO naf_upcoming
          (id, league, season, week, commence_time, home_name, away_name, home_id, away_id,
-          neutral, odds_home, odds_away, spread_line, total_line, books, source, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, 0, 'schedule', ?)
+          neutral, odds_home, odds_away, spread_line, total_line, books, source, updated_at, roof)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, 0, 'schedule', ?, ?)
        ON CONFLICT (id) DO UPDATE SET
          commence_time = excluded.commence_time,
          spread_line   = excluded.spread_line,
          total_line    = excluded.total_line,
+         roof          = excluded.roof,
          updated_at    = excluded.updated_at`,
     );
     const stamp = new Date().toISOString();
@@ -348,7 +383,7 @@ export function storeSchedule(league: LeagueId, fixtures: ParsedFixture[], names
         league, f.season, f.week, f.commenceTime,
         names.get(f.homeId) ?? TEAM_NAMES[f.homeId] ?? f.homeId,
         names.get(f.awayId) ?? TEAM_NAMES[f.awayId] ?? f.awayId,
-        f.homeId, f.awayId, f.neutral, f.spreadLine, f.totalLine, stamp,
+        f.homeId, f.awayId, f.neutral, f.spreadLine, f.totalLine, stamp, f.roof,
       );
     }
     db.exec('COMMIT');

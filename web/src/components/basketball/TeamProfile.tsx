@@ -44,9 +44,9 @@ export default function TeamProfile({
                 ingest managed to fetch one, and disappears silently if it 404s. */}
             <TeamCrest league={league} name={team?.name ?? id} code={id} logo={team?.logo} size={42} />
             <div>
-              <h2 className="text-lg font-bold text-[#e8eaed]">{team?.name ?? id}</h2>
+              <h2 className="text-[20px] font-bold text-[#e8eaed]">{team?.name ?? id}</h2>
               {team && (
-                <p className="text-xs text-[#9aa1ac]">
+                <p className="text-[14px] text-[#9aa1ac]">
                   Elo {Math.round(team.elo)} · #{team.eloRank} de la liga · {team.gamesInDb}{' '}
                   partidos en el historial
                 </p>
@@ -58,11 +58,11 @@ export default function TeamProfile({
           </button>
         </div>
 
-        {error && <p className="text-sm text-rose-300">{error}</p>}
-        {!team && !error && <p className="text-sm text-[#7b828d]">Cargando…</p>}
+        {error && <p className="text-[16px] text-rose-300">{error}</p>}
+        {!team && !error && <p className="text-[16px] text-[#7b828d]">Cargando…</p>}
 
         {team && (
-          <div className="space-y-4 text-sm">
+          <div className="space-y-4 text-[16px]">
             <div className="grid grid-cols-3 gap-2">
               <Stat label="Balance" value={`${team.record.wins}–${team.record.losses}`} />
               <Stat label="En casa" value={`${team.homeRecord.wins}–${team.homeRecord.losses}`} />
@@ -83,13 +83,13 @@ export default function TeamProfile({
             </div>
 
             <div>
-              <div className="mb-1 text-xs uppercase tracking-wide text-[#7b828d]">
+              <div className="mb-1 text-[14px] uppercase tracking-wide text-[#7b828d]">
                 Últimos partidos
               </div>
               {team.form.length === 0 ? (
                 <p className="text-[#7b828d]">Sin partidos registrados.</p>
               ) : (
-                <ul className="space-y-1 text-xs">
+                <ul className="space-y-1 text-[14px]">
                   {team.form.map((g, i) => (
                     <li key={i} className="flex items-center justify-between gap-2">
                       <span className={g.won ? 'text-emerald-400' : 'text-rose-400'}>
@@ -108,7 +108,7 @@ export default function TeamProfile({
               )}
             </div>
 
-            <p className="text-[11px] leading-relaxed text-[#7b828d]">
+            <p className="text-[13px] leading-relaxed text-[#7b828d]">
               El Elo resume el nivel del equipo a partir de resultados, margen de puntos y
               calendario. No conoce lesiones, traspasos de última hora ni rotaciones.
             </p>
@@ -122,9 +122,9 @@ export default function TeamProfile({
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wide text-[#7b828d]">{label}</div>
+      <div className="text-[11px] uppercase tracking-wide text-[#7b828d]">{label}</div>
       <div className="tabular-nums text-[#e8eaed]">{value}</div>
-      {hint && <div className="text-[10px] text-[#5c636c]">{hint}</div>}
+      {hint && <div className="text-[11px] text-[#5c636c]">{hint}</div>}
     </div>
   );
 }

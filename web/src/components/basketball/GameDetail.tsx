@@ -57,7 +57,7 @@ function LastGames({ side, color }: { side: BbTeamSide; color: string }) {
         <span
           key={i}
           title={`${g.won ? 'Victoria' : 'Derrota'} ${g.pts}-${g.oppPts} ${g.home ? '(casa)' : '(fuera)'}`}
-          className="inline-flex h-4 w-4 items-center justify-center rounded text-[10px] font-bold"
+          className="inline-flex h-4 w-4 items-center justify-center rounded text-[11px] font-bold"
           style={{
             backgroundColor: g.won ? color : 'transparent',
             color: g.won ? '#0a0f1e' : '#f87171',
@@ -105,27 +105,27 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
   ];
 
   return (
-    <div className="mt-4 space-y-5 border-t border-white/[0.07] pt-4 text-sm">
+    <div className="mt-4 space-y-5 border-t border-white/[0.07] pt-4 text-[16px]">
       {/* HOW SOLID — qualifies everything below, so it goes first */}
       <ReliabilityBlock prediction={prediction} />
 
       {/* WHY */}
       <div className="rounded-lg bg-white/[0.04] p-3">
-        <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">Por qué</div>
+        <div className="mb-2 text-[14px] uppercase tracking-wide text-[#7b828d]">Por qué</div>
         <p className="mb-3 text-[#c3c9d1]">{reasoning.text}</p>
         <div className="space-y-2">
           {reasoning.factors.map((f) => (
             <div key={f.key} className="grid grid-cols-[8rem_1fr_3rem] items-center gap-2">
-              <span className="text-xs text-[#9aa1ac]">{f.label}</span>
+              <span className="text-[14px] text-[#9aa1ac]">{f.label}</span>
               <FactorBar points={f.pointsForHome} max={maxFactor} />
-              <span className="text-right text-xs tabular-nums text-[#c3c9d1]">
+              <span className="text-right text-[14px] tabular-nums text-[#c3c9d1]">
                 {f.pointsForHome > 0 ? '+' : ''}
                 {f.pointsForHome}
               </span>
             </div>
           ))}
         </div>
-        <div className="mt-2 flex justify-between text-[10px] text-[#7b828d]">
+        <div className="mt-2 flex justify-between text-[11px] text-[#7b828d]">
           <span>◀ ventaja {away.name}</span>
           <span>ventaja {home.name} ▶</span>
         </div>
@@ -136,11 +136,11 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
         <div className="text-[#9aa1ac]">Señal</div>
         <div className="w-24 text-right font-semibold" style={{ color: AWAY_COLOR }}>
           {away.name}
-          <span className="ml-1 text-xs font-normal text-[#7b828d]">#{away.eloRank}</span>
+          <span className="ml-1 text-[14px] font-normal text-[#7b828d]">#{away.eloRank}</span>
         </div>
         <div className="w-24 text-right font-semibold" style={{ color: HOME_COLOR }}>
           {home.name}
-          <span className="ml-1 text-xs font-normal text-[#7b828d]">#{home.eloRank}</span>
+          <span className="ml-1 text-[14px] font-normal text-[#7b828d]">#{home.eloRank}</span>
         </div>
       </div>
       {rows.map((r) => (
@@ -153,7 +153,7 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
 
       {/* Score projection */}
       <div className="rounded-lg bg-white/[0.04] p-3">
-        <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">
+        <div className="mb-2 text-[14px] uppercase tracking-wide text-[#7b828d]">
           Marcador y diferencia estimados
         </div>
         {projection.home != null && projection.away != null ? (
@@ -174,7 +174,7 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
             {projection.spreadLabel}.
           </p>
         )}
-        <p className="mt-2 text-xs text-[#7b828d]">
+        <p className="mt-2 text-[14px] text-[#7b828d]">
           La diferencia sale de la brecha de Elo (~28 puntos de Elo = 1 punto de margen). En el
           backtest sobre 37.000 partidos reales el error absoluto medio fue de <strong>9,2
           puntos</strong> con sesgo cero: es un centro fiable, pero el rango es ancho. El total se
@@ -184,10 +184,10 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
 
       {/* Scoring rates */}
       <div className="rounded-lg bg-white/[0.04] p-3">
-        <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">
+        <div className="mb-2 text-[14px] uppercase tracking-wide text-[#7b828d]">
           Anotación (medias recientes)
         </div>
-        <div className="grid grid-cols-[1fr_auto_auto] gap-2 text-xs">
+        <div className="grid grid-cols-[1fr_auto_auto] gap-2 text-[14px]">
           <div />
           <div className="w-20 text-right" style={{ color: AWAY_COLOR }}>
             {away.abbreviation ?? away.name}
@@ -206,7 +206,7 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
 
       {/* Form + venue records */}
       <div className="rounded-lg bg-white/[0.04] p-3">
-        <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">
+        <div className="mb-2 text-[14px] uppercase tracking-wide text-[#7b828d]">
           Forma y balance por cancha
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -221,11 +221,11 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
               <div className="mt-1">
                 <LastGames side={side} color={color} />
               </div>
-              <div className="mt-1 text-xs text-[#9aa1ac]">
+              <div className="mt-1 text-[14px] text-[#9aa1ac]">
                 Global {side.record.wins}–{side.record.losses} · {venue}{' '}
                 {side.venueRecord.wins}–{side.venueRecord.losses}
               </div>
-              <div className="text-xs text-[#9aa1ac]">
+              <div className="text-[14px] text-[#9aa1ac]">
                 Descanso: {describeRest(side)}
               </div>
             </div>
@@ -236,8 +236,8 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
       {/* Head to head */}
       <div className="rounded-lg bg-white/[0.04] p-3">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs uppercase tracking-wide text-[#7b828d]">Historial directo</span>
-          <span className="text-sm">
+          <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">Historial directo</span>
+          <span className="text-[16px]">
             <span style={{ color: HOME_COLOR }}>{h2h.homeWins}</span>
             <span className="text-[#7b828d]"> – </span>
             <span style={{ color: AWAY_COLOR }}>{h2h.awayWins}</span>
@@ -245,7 +245,7 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
           </span>
         </div>
         {h2h.recentSeasons && (
-          <p className="mb-2 text-xs text-[#9aa1ac]">
+          <p className="mb-2 text-[14px] text-[#9aa1ac]">
             Últimas {h2h.recentSeasons.seasons} temporadas: {home.name}{' '}
             {h2h.recentSeasons.homeWins}–{h2h.recentSeasons.awayWins} {away.name}. Es la ventana
             informativa: un historial de décadas describe a otros jugadores.
@@ -254,7 +254,7 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
         {h2h.recent.length === 0 ? (
           <p className="text-[#9aa1ac]">Sin enfrentamientos previos.</p>
         ) : (
-          <ul className="space-y-1 text-xs">
+          <ul className="space-y-1 text-[14px]">
             {h2h.recent.map((m, i) => (
               <li key={i} className="flex items-center justify-between gap-2 text-[#c3c9d1]">
                 <span className="text-[#7b828d]">{formatDate(m.date)}</span>
@@ -270,7 +270,7 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
       </div>
 
       {/* Market */}
-      <div className="rounded-lg bg-white/[0.04] p-3 text-xs">
+      <div className="rounded-lg bg-white/[0.04] p-3 text-[14px]">
         <div className="mb-2 uppercase tracking-wide text-[#7b828d]">Mercado</div>
         {market.market ? (
           <>
@@ -292,7 +292,7 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
         )}
       </div>
 
-      <p className="text-[11px] leading-relaxed text-[#7b828d]">{prediction.disclaimer}</p>
+      <p className="text-[13px] leading-relaxed text-[#7b828d]">{prediction.disclaimer}</p>
     </div>
   );
 }
@@ -318,7 +318,7 @@ function ReliabilityBlock({ prediction }: { prediction: BbPrediction }) {
 
   return (
     <div className={`rounded-lg border p-3 ${tone}`}>
-      <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">
+      <div className="mb-2 text-[14px] uppercase tracking-wide text-[#7b828d]">
         Cuánta confianza merece este número
       </div>
       <p className="text-[#d5d9df]">
@@ -327,7 +327,7 @@ function ReliabilityBlock({ prediction }: { prediction: BbPrediction }) {
         <strong className="tabular-nums">{(hi * 100).toFixed(1)}%</strong>{' '}
         <span className="text-[#9aa1ac]">(±{rel.marginPp} pp)</span>
       </p>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+      <div className="mt-2 grid grid-cols-2 gap-2 text-[14px]">
         <div className="min-w-0">
           <div className="truncate text-[#9aa1ac]">{prediction.teams.away.name}</div>
           <div className="tabular-nums text-[#d5d9df]">{rel.gamesBehind.away} partidos</div>
@@ -340,7 +340,7 @@ function ReliabilityBlock({ prediction }: { prediction: BbPrediction }) {
       {rel.reasons.length > 0 && (
         <ul className="mt-2 space-y-1">
           {rel.reasons.map((r, i) => (
-            <li key={i} className="flex gap-2 text-xs text-[#c3c9d1]">
+            <li key={i} className="flex gap-2 text-[14px] text-[#c3c9d1]">
               <span className="text-[#5c636c]">•</span>
               <span>{r}</span>
             </li>

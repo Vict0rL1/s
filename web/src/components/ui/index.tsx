@@ -67,10 +67,10 @@ export function Panel({ children, className = '' }: { children: ReactNode; class
 export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
     <div className="mb-2 flex items-baseline justify-between gap-3">
-      <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
+      <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
         {children}
       </h4>
-      {right && <span className="text-[11px] text-[#7b828d]">{right}</span>}
+      {right && <span className="text-[13px] text-[#7b828d]">{right}</span>}
     </div>
   );
 }
@@ -116,18 +116,18 @@ export function HeroStat({
           the right one, so the two labels mirror instead of both pointing left. */}
       <div className={`flex items-center gap-1.5 ${row}`}>
         {align !== 'right' && <SeriesDot color={color} />}
-        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#7b828d]">
           {label}
         </span>
         {align === 'right' && <SeriesDot color={color} />}
       </div>
       <div
-        className={`mt-1 font-bold leading-none tabular-nums ${size === 'lg' ? 'text-[28px]' : 'text-xl'}`}
+        className={`mt-1 font-bold leading-none tabular-nums ${size === 'lg' ? 'text-[26px]' : 'text-[20px]'}`}
         style={{ color: INK.primary }}
       >
         {value}
       </div>
-      {sub && <div className="mt-1 text-[11px] tabular-nums text-[#9aa1ac]">{sub}</div>}
+      {sub && <div className="mt-1 text-[13px] tabular-nums text-[#9aa1ac]">{sub}</div>}
     </div>
   );
 }
@@ -163,11 +163,11 @@ export function StatTile({
 }) {
   return (
     <div className="min-w-0" title={title}>
-      <div className="truncate text-[10px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
+      <div className="truncate text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
         {label}
       </div>
-      <div className="mt-0.5 truncate text-sm font-semibold tabular-nums text-[#e8eaed]">{value}</div>
-      {hint != null && <div className="truncate text-[10px] tabular-nums text-[#7b828d]">{hint}</div>}
+      <div className="mt-0.5 truncate text-[16px] font-semibold tabular-nums text-[#e8eaed]">{value}</div>
+      {hint != null && <div className="truncate text-[11px] tabular-nums text-[#7b828d]">{hint}</div>}
     </div>
   );
 }
@@ -213,7 +213,11 @@ export function TeamCrest({
   name,
   code,
   logo,
-  size = 22,
+  // 26, up from 22. A three-letter monogram is sized at a fraction of the disc so
+  // it fits, and on a 22px disc that worked out to 7.5px — small enough that CHE
+  // and ARS were shapes rather than letters. The disc grew with the rest of the
+  // type scale so the floor below never has to clamp.
+  size = 26,
   className = '',
 }: {
   league: string;
@@ -242,8 +246,11 @@ export function TeamCrest({
         className="font-bold leading-none tracking-tight"
         style={{
           color: paint.ink,
-          // Three letters have to fit the same disc two letters do.
-          fontSize: size * (text.length > 2 ? 0.34 : 0.4),
+          // Three letters have to fit the same disc two letters do — but never
+          // below 10px, because past that a monogram stops being readable and the
+          // crest may as well be a plain dot. On a small disc the letters are
+          // allowed to crowd instead of shrinking out of legibility.
+          fontSize: Math.max(10, size * (text.length > 2 ? 0.34 : 0.4)),
           opacity: logoOk ? 0 : 1,
         }}
       >
@@ -365,7 +372,7 @@ export function BarRow({
   title?: string;
 }) {
   return (
-    <div className="flex items-center gap-2 text-[11px]" title={title}>
+    <div className="flex items-center gap-2 text-[13px]" title={title}>
       <span className="w-[3.75rem] shrink-0 text-right tabular-nums text-[#c3c9d1]">{label}</span>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
         <div
@@ -439,7 +446,7 @@ export function Badge({
   return (
     <span
       title={title}
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${tones[tone]}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[13px] font-medium ring-1 ring-inset ${tones[tone]}`}
     >
       {children}
     </span>
@@ -468,12 +475,20 @@ export function DayHeading({
   right?: ReactNode;
 }) {
   return (
-    <div className="sticky top-[86px] z-20 -mx-1 mb-3 flex items-baseline justify-between gap-3 bg-[#0b0d11]/90 px-1 py-1.5 backdrop-blur-sm">
-      <h3 className="text-[13px] font-semibold text-[#e8eaed]">
+    // The offset is the app header's MEASURED height, published as --header-h by
+    // App. It used to be a hardcoded 86px, which was right until the type scale
+    // grew and then silently let the heading slide under the tab bar. A magic
+    // number that encodes the size of something else goes stale the moment that
+    // something else changes; the fallback only covers the first paint.
+    <div
+      className="sticky z-20 -mx-1 mb-3 flex items-baseline justify-between gap-3 bg-[#0b0d11]/90 px-1 py-1.5 backdrop-blur-sm"
+      style={{ top: 'var(--header-h, 96px)' }}
+    >
+      <h3 className="text-[15px] font-semibold text-[#e8eaed]">
         {label}
-        {count != null && <span className="ml-2 text-[11px] font-normal text-[#7b828d]">{count}</span>}
+        {count != null && <span className="ml-2 text-[13px] font-normal text-[#7b828d]">{count}</span>}
       </h3>
-      {right && <span className="text-[11px] text-[#7b828d]">{right}</span>}
+      {right && <span className="text-[13px] text-[#7b828d]">{right}</span>}
     </div>
   );
 }
@@ -560,7 +575,7 @@ export function MatchTime({ iso, extra }: { iso: string; extra?: ReactNode }) {
  * Sport identity stays where it belongs: the accent under the main tab.
  */
 export function pillClass(active: boolean): string {
-  return `shrink-0 rounded-full px-3 py-1.5 text-[12px] font-medium ring-1 ring-inset transition ${
+  return `shrink-0 rounded-full px-3 py-1.5 text-[14px] font-medium ring-1 ring-inset transition ${
     active
       ? 'bg-white/[0.12] text-[#e8eaed] ring-white/[0.18]'
       : 'text-[#9aa1ac] ring-white/[0.08] hover:bg-white/[0.05] hover:text-[#e8eaed]'
@@ -582,7 +597,7 @@ export function ReliabilityChip({
   return (
     <span
       title={title}
-      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${RELIABILITY_STYLE[level]}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[13px] font-medium ring-1 ring-inset ${RELIABILITY_STYLE[level]}`}
     >
       <span aria-hidden>{level === 'high' ? '●' : level === 'medium' ? '◐' : '○'}</span>
       {label} · ±{marginPp} pp
@@ -606,7 +621,7 @@ export function Disclosure({
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 py-1.5 text-left text-[12px] font-medium text-[#9aa1ac] transition hover:text-[#e8eaed]"
+        className="flex w-full items-center justify-between gap-2 py-1.5 text-left text-[14px] font-medium text-[#9aa1ac] transition hover:text-[#e8eaed]"
       >
         <span>{summary}</span>
         <span aria-hidden className="text-[#5c636c]">{open ? '▲' : '▼'}</span>
@@ -674,7 +689,7 @@ export function EmptyState({
     critical: 'border-rose-500/25 bg-rose-500/[0.06] text-rose-200/90',
   };
   return (
-    <div className={`rounded-xl border p-5 text-sm ${tones[tone]}`}>
+    <div className={`rounded-xl border p-5 text-[16px] ${tones[tone]}`}>
       <p className="font-medium text-[#e8eaed]">{title}</p>
       {children && <div className="mt-1.5 leading-relaxed">{children}</div>}
     </div>

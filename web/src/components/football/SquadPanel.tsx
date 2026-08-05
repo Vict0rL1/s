@@ -51,12 +51,12 @@ export default function SquadPanel({
 
   if (error) {
     return (
-      <p className="text-[11px] text-[#7b828d]">
+      <p className="text-[13px] text-[#7b828d]">
         Sin datos de plantilla para {teamName}.
       </p>
     );
   }
-  if (!squad) return <p className="text-[11px] text-[#7b828d]">Cargando plantilla…</p>;
+  if (!squad) return <p className="text-[13px] text-[#7b828d]">Cargando plantilla…</p>;
 
   const xi = squad.players.filter((p) => p.regular);
   const bench = squad.players.filter((p) => !p.regular && p.minutes > 0);
@@ -69,7 +69,7 @@ export default function SquadPanel({
   return (
     <div className="min-w-0 flex-1">
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="truncate text-xs font-semibold" style={{ color }} title={teamName}>
+        <span className="truncate text-[14px] font-semibold" style={{ color }} title={teamName}>
           {teamName}
         </span>
         {availability && <Effect availability={availability} />}
@@ -88,7 +88,7 @@ export default function SquadPanel({
 
       {rest.length > 0 && (
         <>
-          <div className="mt-1.5 text-[10px] uppercase tracking-wide text-[#5c636c]">
+          <div className="mt-1.5 text-[11px] uppercase tracking-wide text-[#5c636c]">
             Resto de la plantilla
           </div>
           <ul className="space-y-0.5 opacity-70">
@@ -101,7 +101,7 @@ export default function SquadPanel({
               />
             ))}
           </ul>
-          <p className="mt-1 text-[10px] text-[#5c636c]">
+          <p className="mt-1 text-[11px] text-[#5c636c]">
             Marcar a un suplente no cambia el pronóstico: el modelo solo cuenta las bajas del once
             habitual.
           </p>
@@ -111,7 +111,7 @@ export default function SquadPanel({
       {bench.length > 0 && (
         <button
           onClick={() => setShowAll((s) => !s)}
-          className="mt-1 text-[11px] text-[#9aa1ac] hover:text-[#e8eaed]"
+          className="mt-1 text-[13px] text-[#9aa1ac] hover:text-[#e8eaed]"
         >
           {showAll ? '▲ Solo el once' : `▼ Ver plantilla completa (${bench.length})`}
         </button>
@@ -132,7 +132,7 @@ function PlayerRow({
   return (
     <li>
       <label
-        className={`flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-[11px] transition hover:bg-white/[0.06] ${
+        className={`flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-[13px] transition hover:bg-white/[0.06] ${
           isOut ? 'text-rose-300' : 'text-[#c3c9d1]'
         }`}
         title={player.flagReason ?? undefined}
@@ -144,7 +144,7 @@ function PlayerRow({
           className="h-3 w-3 shrink-0 accent-rose-500"
           aria-label={`${player.name} no juega`}
         />
-        <span className="w-7 shrink-0 text-[9px] uppercase text-[#7b828d]">{player.position}</span>
+        <span className="w-7 shrink-0 text-[11px] uppercase text-[#7b828d]">{player.position}</span>
         <span className={`min-w-0 flex-1 truncate ${isOut ? 'line-through' : ''}`}>
           {player.name}
         </span>
@@ -164,13 +164,13 @@ function PlayerRow({
 
 function Effect({ availability }: { availability: FbAvailability }) {
   if (availability.out.length === 0) {
-    return <span className="shrink-0 text-[10px] text-[#7b828d]">sin bajas</span>;
+    return <span className="shrink-0 text-[11px] text-[#7b828d]">sin bajas</span>;
   }
   const attack = Math.round((1 - availability.attack) * 100);
   const defence = Math.round((availability.defence - 1) * 100);
   return (
     <span
-      className="shrink-0 whitespace-nowrap text-[10px] text-rose-300"
+      className="shrink-0 whitespace-nowrap text-[11px] text-rose-300"
       title={`Goles esperados a favor ×${availability.attack.toFixed(3)}, en contra ×${availability.defence.toFixed(3)}`}
     >
       −{attack}% ataque · +{defence}% encajados

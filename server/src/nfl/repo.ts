@@ -206,7 +206,8 @@ export function listReplayGames(league: LeagueId): ReplayGame[] {
   return getDb()
     .prepare(
       `SELECT season, week, game_date, home_id, away_id, home_points, away_points,
-              neutral, playoff, home_rest, away_rest
+              neutral, playoff, home_rest, away_rest,
+              home_qb_id, away_qb_id, home_qb_name, away_qb_name, roof, wind
        FROM naf_games WHERE league = ?
        ORDER BY game_date, season, week, home_id`,
     )
@@ -219,7 +220,8 @@ export function listGamesWithMarket(league: LeagueId): NafGameRow[] {
     .prepare(
       `SELECT id, league, season, week, game_date, home_id, away_id, home_points, away_points,
               neutral, playoff, home_rest, away_rest,
-              close_spread, close_total, close_ml_home, close_ml_away
+              close_spread, close_total, close_ml_home, close_ml_away,
+              home_qb_id, away_qb_id, home_qb_name, away_qb_name, roof, temp, wind
        FROM naf_games WHERE league = ?
        ORDER BY game_date, season, week, home_id`,
     )
@@ -242,11 +244,23 @@ export function rebuildRatings(league: LeagueId): { teams: number; games: number
   try {
     db.prepare('DELETE FROM naf_team_ratings WHERE league = ?').run(league);
     const ins = db.prepare(
-      `INSERT INTO naf_team_ratings (team_id, league, elo, games_played, last_date, pf, pa)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO naf_team_ratings (team_id, league, elo, games_played, last_date, pf, pa, current_qb)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const [id, s] of result.teams) {
-      ins.run(id, league, s.elo, s.games, s.lastDate, s.pointsFor, s.pointsAgainst);
+      ins.run(
+        id, league, s.elo, s.games, s.lastDate, s.pointsFor, s.pointsAgainst,
+        result.currentQb.get(id) ?? null,
+      );
+    }
+
+    db.prepare('DELETE FROM naf_qb_ratings WHERE league = ?').run(league);
+    const insQb = db.prepare(
+      `INSERT INTO naf_qb_ratings (qb_id, league, name, adjustment, starts, last_season, last_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    for (const [id, q] of result.qbs) {
+      insQb.run(id, league, q.name, q.adjustment, q.starts, q.lastSeason, q.lastDate);
     }
     db.exec('COMMIT');
   } catch (err) {
@@ -259,6 +273,54 @@ export function rebuildRatings(league: LeagueId): { teams: number; games: number
   return { teams: result.teams.size, games: games.length };
 }
 
+/**
+ * The quarterback a team is expected to start, with his Elo offset.
+ *
+ * "Expected" is doing real work in that sentence. nflverse names the starter for
+ * games already played, never for scheduled ones, so this returns whoever started
+ * the team's most recent game. It is right most weeks and wrong exactly when a
+ * midweek injury or benching lands — which the app cannot know and says so rather
+ * than implying the forecast accounts for it.
+ */
+export function getCurrentQb(
+  league: LeagueId,
+  teamId: string,
+): { id: string; name: string | null; adjustment: number; starts: number } | null {
+  const row = getDb()
+    .prepare(
+      `SELECT q.qb_id AS id, q.name, q.adjustment, q.starts
+         FROM naf_team_ratings t
+         JOIN naf_qb_ratings q ON q.league = t.league AND q.qb_id = t.current_qb
+        WHERE t.league = ? AND t.team_id = ?`,
+    )
+    .get(league, teamId) as unknown as
+    | { id: string; name: string | null; adjustment: number; starts: number }
+    | undefined;
+  return row ?? null;
+}
+
+/** The quarterbacks with the largest offsets, for the league panel. */
+export function getQbRanking(league: LeagueId, limit = 12) {
+  return getDb()
+    .prepare(
+      `SELECT q.qb_id AS id, q.name, q.adjustment, q.starts, q.last_season,
+              (SELECT t.team_id FROM naf_team_ratings t
+                WHERE t.league = q.league AND t.current_qb = q.qb_id LIMIT 1) AS team_id
+         FROM naf_qb_ratings q
+        WHERE q.league = ? AND q.starts >= 16
+        ORDER BY q.adjustment DESC
+        LIMIT ?`,
+    )
+    .all(league, limit) as unknown as {
+    id: string;
+    name: string | null;
+    adjustment: number;
+    starts: number;
+    last_season: number | null;
+    team_id: string | null;
+  }[];
+}
+
 // ---------------------------------------------------------------------------
 // Upcoming
 // ---------------------------------------------------------------------------
@@ -266,7 +328,7 @@ export function listUpcoming(league: LeagueId, limit = 24): NafUpcomingRow[] {
   return getDb()
     .prepare(
       `SELECT id, league, season, week, commence_time, home_name, away_name, home_id, away_id,
-              neutral, odds_home, odds_away, spread_line, total_line, books, source, updated_at
+              neutral, odds_home, odds_away, spread_line, total_line, books, source, updated_at, roof
        FROM naf_upcoming WHERE league = ? AND commence_time >= ?
        ORDER BY commence_time
        LIMIT ?`,
@@ -279,7 +341,7 @@ export function getUpcoming(id: string): NafUpcomingRow | null {
     (getDb()
       .prepare(
         `SELECT id, league, season, week, commence_time, home_name, away_name, home_id, away_id,
-                neutral, odds_home, odds_away, spread_line, total_line, books, source, updated_at
+                neutral, odds_home, odds_away, spread_line, total_line, books, source, updated_at, roof
          FROM naf_upcoming WHERE id = ?`,
       )
       .get(id) as unknown as NafUpcomingRow) ?? null

@@ -128,20 +128,20 @@ export default function FootballDashboard() {
     <div>
       <header className="mb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-prose text-[13px] leading-relaxed text-[#9aa1ac]">
+          <p className="max-w-prose text-[15px] leading-relaxed text-[#9aa1ac]">
             Predicción 1X2, goles y marcadores con Elo por equipo, ventaja de campo y odds del
             mercado.
           </p>
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[14px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
           >
             {refreshing ? 'Actualizando…' : '↻ Actualizar'}
           </button>
         </div>
         {meta && (
-          <p className="mt-1 text-xs text-[#7b828d]">
+          <p className="mt-1 text-[14px] text-[#7b828d]">
             {meta.counts.matches} partidos · {meta.counts.teams} equipos
             {!meta.hasOddsKey && ' · configura ODDS_API_KEY para partidos y cuotas reales'}
           </p>
@@ -149,7 +149,7 @@ export default function FootballDashboard() {
       </header>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[13px] text-rose-200">
+        <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[15px] text-rose-200">
           {error}
         </div>
       )}
@@ -183,7 +183,7 @@ export default function FootballDashboard() {
           })}
         </nav>
       ) : (
-        <div className="mb-6 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[13px] text-rose-200">
+        <div className="mb-6 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[15px] text-rose-200">
           <p className="font-medium">No hay datos de fútbol todavía.</p>
           <p className="mt-1 text-rose-300/90">
             Ejecuta <code className="rounded bg-rose-900/40 px-1">npm run update-data:fb</code> para
@@ -193,7 +193,7 @@ export default function FootballDashboard() {
       )}
 
       {active && !active.hasModel && (
-        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[13px] leading-relaxed text-amber-200/90">
+        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[15px] leading-relaxed text-amber-200/90">
           <strong>{active.name} sin modelo Elo.</strong> Sus equipos vienen de ligas distintas y sus
           ratings viven en cada tabla doméstica, así que un Elo compartido necesitaría una
           calibración entre ligas que esta app no hace. Se muestran los partidos y las
@@ -207,7 +207,7 @@ export default function FootballDashboard() {
       {loading ? (
         <SkeletonList />
       ) : fixtures.length === 0 ? (
-        <p className="mb-6 text-sm text-[#7b828d]">
+        <p className="mb-6 text-[16px] text-[#7b828d]">
           No hay partidos próximos para {active?.name ?? 'esta liga'}.
         </p>
       ) : (
@@ -238,17 +238,17 @@ export default function FootballDashboard() {
             className="flex w-full items-center justify-between text-left"
           >
             <span>
-              <span className="text-xs uppercase tracking-wide text-[#7b828d]">
+              <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
                 Todos los equipos · {active?.name}
               </span>
               <br />
-              <span className="text-sm text-[#d5d9df]">{power.length} equipos por Elo</span>
+              <span className="text-[16px] text-[#d5d9df]">{power.length} equipos por Elo</span>
             </span>
-            <span className="text-xs text-[#5c636c]">{showTable ? '▲' : '▼'}</span>
+            <span className="text-[14px] text-[#5c636c]">{showTable ? '▲' : '▼'}</span>
           </button>
           {showTable && (
             <div className="mt-3 overflow-x-auto border-t border-white/[0.07] pt-3">
-              <table className="w-full text-left text-xs tabular-nums">
+              <table className="w-full text-left text-[14px] tabular-nums">
                 <thead className="text-[#7b828d]">
                   <tr>
                     <th className="py-1 pr-2 font-normal">#</th>
@@ -305,7 +305,7 @@ function StaleWarning({ name, through }: { name: string; through: string | null 
   // Football has a real summer break, so a few stale months is normal.
   if (monthsOld <= 5) return null;
   return (
-    <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[13px] leading-relaxed text-amber-200/90">
+    <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[15px] leading-relaxed text-amber-200/90">
       ⚠️ Los resultados de {name} terminan en {m}/{y} (~{Math.round(monthsOld)} meses). Los Elo{' '}
       <strong>no describen a las plantillas actuales</strong>. Vuelve a ejecutar{' '}
       <code className="rounded bg-amber-900/40 px-1">npm run update-data:fb</code> para datos al día.
@@ -335,8 +335,8 @@ function TrackRecordPanel({ league }: { league: string }) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between gap-2 text-left"
       >
-        <span className="text-sm">
-          <span className="text-xs uppercase tracking-wide text-[#7b828d]">
+        <span className="text-[16px]">
+          <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
             Aciertos reales de la app
           </span>
           <br />
@@ -355,10 +355,10 @@ function TrackRecordPanel({ league }: { league: string }) {
             </span>
           )}
         </span>
-        <span className="shrink-0 text-xs text-[#5c636c]">{open ? '▲' : '▼'}</span>
+        <span className="shrink-0 text-[14px] text-[#5c636c]">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div className="mt-3 space-y-3 border-t border-white/[0.07] pt-3 text-xs text-[#c3c9d1]">
+        <div className="mt-3 space-y-3 border-t border-white/[0.07] pt-3 text-[14px] text-[#c3c9d1]">
           <p className="text-[#9aa1ac]">
             El <strong>RPS</strong> (Ranked Probability Score) es la medida correcta para un 1X2:
             penaliza menos equivocarse por un escalón (decir «local» y salir empate) que por dos.
@@ -415,9 +415,9 @@ function TeamProfile({
       >
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-bold text-[#e8eaed]">{team?.name ?? id}</h2>
+            <h2 className="text-[20px] font-bold text-[#e8eaed]">{team?.name ?? id}</h2>
             {team && (
-              <p className="text-xs text-[#9aa1ac]">
+              <p className="text-[14px] text-[#9aa1ac]">
                 Elo {Math.round(team.elo)} · #{team.eloRank} · {team.matchesInDb} partidos ·{' '}
                 {team.points} puntos acumulados
               </p>
@@ -428,10 +428,10 @@ function TeamProfile({
           </button>
         </div>
         {!team ? (
-          <p className="text-sm text-[#7b828d]">Cargando…</p>
+          <p className="text-[16px] text-[#7b828d]">Cargando…</p>
         ) : (
-          <div className="space-y-4 text-sm">
-            <div className="grid grid-cols-3 gap-x-4 gap-y-3 border-y border-white/[0.07] py-3 text-xs">
+          <div className="space-y-4 text-[16px]">
+            <div className="grid grid-cols-3 gap-x-4 gap-y-3 border-y border-white/[0.07] py-3 text-[14px]">
               <Stat label="Global" value={`${team.record.wins}-${team.record.draws}-${team.record.losses}`} />
               <Stat label="Casa" value={`${team.homeRecord.wins}-${team.homeRecord.draws}-${team.homeRecord.losses}`} />
               <Stat label="Fuera" value={`${team.awayRecord.wins}-${team.awayRecord.draws}-${team.awayRecord.losses}`} />
@@ -447,10 +447,10 @@ function TeamProfile({
               />
             </div>
             <div>
-              <div className="mb-1 text-xs uppercase tracking-wide text-[#7b828d]">
+              <div className="mb-1 text-[14px] uppercase tracking-wide text-[#7b828d]">
                 Últimos partidos
               </div>
-              <ul className="space-y-1 text-xs">
+              <ul className="space-y-1 text-[14px]">
                 {team.form.map((m, i) => (
                   <li key={i} className="flex items-center justify-between gap-2">
                     <span
@@ -485,7 +485,7 @@ function TeamProfile({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wide text-[#7b828d]">{label}</div>
+      <div className="text-[11px] uppercase tracking-wide text-[#7b828d]">{label}</div>
       <div className="tabular-nums text-[#e8eaed]">{value}</div>
     </div>
   );

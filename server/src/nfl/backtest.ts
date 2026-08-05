@@ -151,6 +151,15 @@ function main(): void {
     playoff: r.playoff,
     home_rest: r.home_rest,
     away_rest: r.away_rest,
+    // Dropping these here silently disabled the quarterback split and the
+    // conditions adjustment for the whole backtest: the replay is shared, but it
+    // can only use the columns it is handed.
+    home_qb_id: r.home_qb_id,
+    away_qb_id: r.away_qb_id,
+    home_qb_name: r.home_qb_name,
+    away_qb_name: r.away_qb_name,
+    roof: r.roof,
+    wind: r.wind,
   }));
   const marketByKey = new Map(
     rows.map((r) => [`${r.season}|${r.week}|${r.home_id}|${r.away_id}`, r]),

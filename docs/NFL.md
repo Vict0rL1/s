@@ -96,22 +96,26 @@ de los partidos desde 1999 y los moneyline desde 2006.
 
 `npm run backtest:naf`, temporadas 2010+ (4.362 partidos con moneyline):
 
-| | Modelo | Mercado |
-|---|---:|---:|
-| Error del margen (sd) | 13.40 | **13.04** |
-| Error del total (sd) | 13.56 | **13.23** |
-| Log loss del ganador | 0.6306 | **0.6101** |
-| Brier del ganador | 0.2196 | **0.2106** |
+| | Modelo (antes del QB) | Modelo (ahora) | Mercado |
+|---|---:|---:|---:|
+| Error del margen (sd) | 13.40 | 13.32 | **13.04** |
+| Error del total (sd) | 13.56 | 13.47 | **13.23** |
+| Log loss del ganador | 0.6306 | 0.6278 | **0.6101** |
+| Brier del ganador | 0.2196 | 0.2184 | **0.2106** |
+
+La columna del medio es lo que añadieron el quarterback titular y las condiciones
+(sección siguiente). La distancia a la línea de cierre bajó de 0,36 a **0,28** puntos en
+el margen y de 0,33 a **0,24** en el total: cerró un 22 % y un 27 % de la brecha.
 
 | Apostando el lado que prefiere el modelo, a la línea de cierre | |
 |---|---:|
-| Contra el hándicap | 50.7 % |
-| Over / under | 50.3 % |
+| Contra el hándicap | 50.6 % |
+| Over / under | 50.9 % |
 | **Umbral para no perder dinero con comisión −110** | **52.4 %** |
 
 **El modelo no bate a la línea, y ese es el resultado correcto.** La línea de cierre de
 la NFL es el precio más afinado del deporte; un modelo que dijera batirla sobre 20 años
-de datos estaría anunciando un bug, no una ventaja. Lo que sí hace es quedarse a 0,34
+de datos estaría anunciando un bug, no una ventaja. Lo que sí hace es quedarse a 0,28
 puntos de ella, y «cerca de la línea de cierre» es un listón exigente y comprobable.
 
 Por eso la app **no vende sus etiquetas de «posible value» como dinero seguro**, y por
@@ -122,6 +126,108 @@ Esa misma comparación permite algo que ningún otro deporte de la app puede hac
 línea de cierre 7,3 pp de media (mediana 6,0, percentil 90 14,8), así que la tarjeta
 dice ±7,3 pp. Antes heredaba una constante del béisbol y decía ±18,5 pp en todos los
 partidos, que es a la vez falso y la señal de que no estaba midiendo nada.
+
+---
+
+## 4. Quién juega de quarterback
+
+Era la mayor omisión del modelo, y estaba en el fichero que ya descargábamos. nflverse
+trae `home_qb_id` / `away_qb_id` en **los 7.276 partidos** del archivo; el parser
+simplemente los ignoraba.
+
+Importa porque **el 52 % de los equipos-temporada usa más de un titular**. Un solo número
+por equipo promedia en silencio al titular con su suplente, y ese promedio está mal en las
+dos direcciones: infravalora al equipo cuando juega el bueno y lo sobrevalora cuando juega
+el otro. Y no puede moverse cuando el titular se lesiona, que es justo cuando la línea sí
+se mueve.
+
+### La descomposición
+
+La valoración de un lado pasa a ser `Elo del equipo + ajuste del quarterback`, donde el
+ajuste es un desvío alrededor de cero: un quarterback del montón no suma nada. El cambio
+de Elo de cada resultado se **reparte**: el equipo se lleva (1 − λ), el quarterback λ.
+Repartir en vez de acreditar a los dos por completo es lo que evita contar la misma
+victoria dos veces. Un quarterback que nadie ha visto empieza en 0 — el prior correcto
+tanto para un novato como para un suplente.
+
+| Parámetro | Valor | Cómo se eligió |
+|---|---:|---|
+| λ (reparto al quarterback) | 0.35 | Ajustado en tres cortes distintos (2008, 2012, 2016). **Salió 0.35 las tres veces** |
+| Carryover del quarterback | 0.85 | Más alto que el 0.6 del equipo: una plantilla se rehace cada primavera, un brazo no |
+
+### La medición, hacia delante en el tiempo
+
+Parámetros ajustados **solo** con las temporadas anteriores al corte y puntuados en las
+posteriores:
+
+| Corte | log loss sin QB → con QB | |
+|---|---:|---:|
+| 2008 | 0.62857 → 0.62570 | 0.46 % mejor |
+| 2012 | 0.63018 → 0.62731 | 0.46 % mejor |
+| 2016 | 0.63375 → 0.63064 | 0.49 % mejor |
+
+Lo que convence de que esto es señal y no una curiosidad del ajuste no es la media: es
+**dónde** está la ganancia. En los 989 partidos de validación que empezó alguien que no
+era el titular habitual de su equipo esa temporada, el log loss mejora un **1,78 %**
+—cuatro veces la cifra global— y la desviación del margen baja de 13,51 a 13,21. El modelo
+mejoró exactamente en los partidos que la columna del quarterback existía para explicar.
+
+Cara a cara, los ajustes salen donde uno esperaría:
+
+```
+Josh Allen      +105 Elo (+5.3 pts)      Gardner Minshew   -57 Elo (-2.9 pts)
+Sam Darnold     +102 Elo (+5.1 pts)      Jacoby Brissett   -54 Elo (-2.7 pts)
+Patrick Mahomes  +91 Elo (+4.6 pts)      Geno Smith        -40 Elo (-2.0 pts)
+Jalen Hurts      +80 Elo (+4.0 pts)      Joe Flacco        -39 Elo (-2.0 pts)
+```
+
+**Un límite que hay que decir en voz alta.** El ajuste mezcla al quarterback con el equipo
+que lo rodea: quien juega detrás de una gran línea ofensiva acumula crédito positivo que no
+es todo suyo. Es inherente a repartir el crédito de un resultado entre dos cosas que
+siempre aparecen juntas, y por eso la tarjeta lo llama «quarterback titular» y no «calidad
+del quarterback».
+
+**Y el más importante.** El calendario **nunca** dice quién va a ser titular el domingo que
+viene, así que el modelo usa *a quien jugó el último partido*. Acierta casi siempre y falla
+justo cuando hay una lesión entre semana. La tarjeta lo dice con esas palabras («quien jugó
+el último partido») en vez de dejar que parezca que lo sabe.
+
+---
+
+## 5. El viento y el techo, sobre el total
+
+Dos ajustes al **total** esperado, nunca al margen: el viento sopla contra los dos ataques,
+así que no favorece a ningún lado.
+
+**Viento.** Monótono en todas las franjas del archivo, que es por lo que este sí sobrevivió
+donde el descanso y la semana de bye no. Residuo medio del total esperado del propio
+modelo, solo al aire libre:
+
+| Viento | 0–4 | 5–8 | 9–12 | 13–16 | 17–20 | 21+ |
+|---|---:|---:|---:|---:|---:|---:|
+| Residuo | +0.57 | 0.00 | −1.00 | −2.19 | −3.19 | −5.06 |
+
+La pendiente ajustada es −0,2075 puntos por mph en 2001-2012 y −0,2855 en 2013+: mismo
+signo y mismo orden de magnitud, o sea que replica.
+
+**Techo.** Bajo techo se anota 2,44 puntos más de lo que el modelo espera, y **no** es el
+efecto del viento disfrazado. Ajustando los dos a la vez, el RMSE del total fuera de
+muestra va 13,6140 (ninguno) → 13,5692 (viento) → 13,5716 (techo) → **13,5245 (los dos)**.
+Cada término se gana su sitio.
+
+**El ajuste suma cero, y esto fue un bug.** La primera versión sumaba 2,44 bajo techo y
+nada al aire libre, y el backtest lo cazó de inmediato: el error medio del total pasó de
+−0,04 a **−0,61**. La razón es que el total esperado se construye con los puntos por
+partido de cada equipo, medidos de resultados reales, así que ya contienen el efecto medio
+de los estadios donde se juega. Un ajuste encima tiene que **repartir** entre partidos, no
+subir la liga entera. Centrado en la cuota de partidos bajo techo (24,95 %) vuelve a sumar
+cero, y el error medio del total volvió a **0,00**.
+
+**Lo que esto compra y lo que no.** nflverse publica el techo de los partidos programados
+pero **no una previsión meteorológica**, así que el techo mueve un pronóstico y el viento
+no. El viento sigue siendo útil: aplicado durante el replay evita que una tarde de viento
+en Buffalo se le cargue al ataque, de modo que los ritmos de anotación con los que se
+construye el pronóstico miden al equipo y no al tiempo que hizo.
 
 ---
 
@@ -232,10 +338,10 @@ eso la liga tendría 39 equipos, varios con media historia cada uno.
 
 ## Lo que el modelo NO sabe
 
-- **Quién juega de quarterback.** Es el equivalente al lanzador abridor del béisbol y
-  probablemente la mayor omisión del modelo: un cambio de titular mueve una línea de la
-  NFL más que casi cualquier otra cosa. El dato está en el fichero (`home_qb_name`), así
-  que es la siguiente pieza natural.
+- **Si cambia el quarterback esta semana.** El modelo ya sabe quién es el titular, pero
+  supone que será *el que jugó el último partido* — el calendario nunca lo anuncia. Una
+  lesión de miércoles es invisible para él y muy visible para el mercado.
 - Las bajas de la semana, que se publican en el parte oficial de los miércoles.
-- El viento y el frío, que hunden los totales en campos abiertos en diciembre.
+- **El viento del día concreto.** El efecto está medido y aplicado sobre el archivo, pero
+  no hay previsión meteorológica en el calendario, así que no puede mover un pronóstico.
 - Si el partido importa: un equipo ya clasificado en la semana 18 no juega igual.

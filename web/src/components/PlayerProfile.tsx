@@ -32,11 +32,11 @@ export default function PlayerProfile({
       >
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h2 className="text-xl font-bold">
+            <h2 className="text-[20px] font-bold">
               {profile ? `${flag(profile.country)} ${profile.name}` : 'Cargando…'}
             </h2>
             {profile && (
-              <div className="text-xs text-[#9aa1ac]">
+              <div className="text-[14px] text-[#9aa1ac]">
                 {profile.ranking && (
                   <>
                     <span className="text-[#d5d9df]">#{profile.ranking.rank} oficial</span>
@@ -58,7 +58,7 @@ export default function PlayerProfile({
 
         {profile && (
           <>
-            <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">Ratings Elo</div>
+            <div className="mb-2 text-[14px] uppercase tracking-wide text-[#7b828d]">Ratings Elo</div>
             <div className="mb-6 grid grid-cols-2 gap-3">
               <EloTile label="General" value={profile.rating.overall} color="#e2e8f0" big />
               <EloTile
@@ -75,10 +75,10 @@ export default function PlayerProfile({
 
             {profile.serve.matches > 0 && (
               <>
-                <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">
+                <div className="mb-2 text-[14px] uppercase tracking-wide text-[#7b828d]">
                   Saque y quiebre (promedio)
                 </div>
-                <div className="mb-6 grid grid-cols-2 gap-2 text-sm">
+                <div className="mb-6 grid grid-cols-2 gap-2 text-[16px]">
                   <ServeStat label="Aces/partido" value={profile.serve.acesPerMatch} />
                   <ServeStat label="Ace %" value={profile.serve.acePct} suffix="%" />
                   <ServeStat label="1er saque dentro" value={profile.serve.firstInPct} suffix="%" />
@@ -89,14 +89,14 @@ export default function PlayerProfile({
               </>
             )}
 
-            <div className="mb-2 text-xs uppercase tracking-wide text-[#7b828d]">
+            <div className="mb-2 text-[14px] uppercase tracking-wide text-[#7b828d]">
               Últimos resultados
             </div>
             <ul className="space-y-1">
               {profile.recent.map((m, i) => (
                 <li
                   key={i}
-                  className="flex items-center justify-between rounded bg-white/[0.04] px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded bg-white/[0.04] px-3 py-2 text-[16px]"
                 >
                   <span
                     className={`w-6 font-bold ${m.won ? 'text-emerald-400' : 'text-rose-400'}`}
@@ -106,7 +106,7 @@ export default function PlayerProfile({
                   <span className="flex-1 truncate px-2 text-[#c3c9d1]">
                     vs {m.opponent_name ?? `#${m.opponent_id}`}
                   </span>
-                  <span className="text-xs text-[#7b828d]">
+                  <span className="text-[14px] text-[#7b828d]">
                     {surfaceLabelEs(m.surface)} · {formatDate(m.date)}
                   </span>
                 </li>
@@ -133,7 +133,7 @@ function ServeStat({
 }) {
   return (
     <div className="flex items-baseline justify-between rounded bg-white/[0.04] px-3 py-1.5">
-      <span className="text-xs text-[#9aa1ac]">{label}</span>
+      <span className="text-[14px] text-[#9aa1ac]">{label}</span>
       <span className="font-semibold tabular-nums text-[#d5d9df]">
         {value == null ? '—' : `${value}${suffix}`}
       </span>
@@ -156,8 +156,8 @@ function EloTile({
 }) {
   return (
     <div className={`rounded-lg bg-white/[0.04] p-3 ${big ? 'col-span-1' : ''}`}>
-      <div className="text-xs text-[#9aa1ac]">{label}</div>
-      <div className="text-lg font-bold tabular-nums" style={{ color }}>
+      <div className="text-[14px] text-[#9aa1ac]">{label}</div>
+      <div className="text-[20px] font-bold tabular-nums" style={{ color }}>
         {integer ? value : Math.round(value)}
       </div>
     </div>

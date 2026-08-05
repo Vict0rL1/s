@@ -110,7 +110,7 @@ export default function TennisDashboard() {
     <div>
       <header className="mb-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-prose text-[13px] leading-relaxed text-[#9aa1ac]">
+          <p className="max-w-prose text-[15px] leading-relaxed text-[#9aa1ac]">
             Predicción de partidos con Elo por superficie, forma reciente, head-to-head y odds del
             mercado.
           </p>
@@ -120,7 +120,7 @@ export default function TennisDashboard() {
               onClick={handleRefresh}
               disabled={refreshing}
               title="Vuelve a consultar las odds de los partidos próximos"
-              className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
+              className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[14px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
             >
               {refreshing ? 'Actualizando…' : '↻ Actualizar'}
             </button>
@@ -132,7 +132,7 @@ export default function TennisDashboard() {
       </header>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-rose-800 bg-rose-950/50 p-3 text-sm text-rose-300">
+        <div className="mb-4 rounded-lg border border-rose-800 bg-rose-950/50 p-3 text-[16px] text-rose-300">
           {error}
         </div>
       )}
@@ -165,7 +165,7 @@ export default function TennisDashboard() {
           ))}
         </div>
       ) : meta && meta.counts.matches === 0 ? (
-        <div className="mb-6 rounded-lg border border-rose-800/60 bg-rose-950/40 p-4 text-sm text-rose-200">
+        <div className="mb-6 rounded-lg border border-rose-800/60 bg-rose-950/40 p-4 text-[16px] text-rose-200">
           <p className="font-medium">La base de datos está vacía.</p>
           <p className="mt-1 text-rose-300/90">
             Ejecuta <code className="rounded bg-rose-900/40 px-1">npm run update-data</code> para
@@ -175,7 +175,7 @@ export default function TennisDashboard() {
           </p>
         </div>
       ) : (
-        <p className="mb-6 text-sm text-[#7b828d]">
+        <p className="mb-6 text-[16px] text-[#7b828d]">
           No hay próximos partidos para {tour.toUpperCase()}.
         </p>
       )}
@@ -228,7 +228,7 @@ function StaleHistoryWarning({ meta }: { meta: Meta }) {
   if (monthsOld <= 6) return null;
   const years = Math.round((monthsOld / 12) * 10) / 10;
   return (
-    <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-sm text-amber-200">
+    <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-[16px] text-amber-200">
       ⚠️ El historial de partidos termina en {m}/{y} (~{years} años). Los Elo no reflejan a los
       jugadores actuales, así que estas predicciones son poco fiables. Vuelve a ejecutar{' '}
       <code className="rounded bg-amber-900/40 px-1">npm run update-data</code> desde una red que no
@@ -243,7 +243,7 @@ function RefreshInfo({ meta }: { meta: Meta }) {
     ? new Date(when).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
     : '—';
   return (
-    <p className="mt-1 text-xs text-[#7b828d]">
+    <p className="mt-1 text-[14px] text-[#7b828d]">
       Odds actualizadas: {whenTxt}
       {meta.hasOddsKey
         ? meta.autoRefreshMinutes > 0
@@ -260,7 +260,7 @@ function DataBadge({ meta }: { meta: Meta }) {
   if (meta.counts.matches === 0) {
     return (
       <span
-        className="rounded-full bg-rose-900/40 px-3 py-1 text-xs font-medium text-rose-300 ring-1 ring-rose-500/40"
+        className="rounded-full bg-rose-900/40 px-3 py-1 text-[14px] font-medium text-rose-300 ring-1 ring-rose-500/40"
         title="La base de datos está vacía. Ejecuta npm run update-data (o npm run seed)."
       >
         sin datos
@@ -270,7 +270,7 @@ function DataBadge({ meta }: { meta: Meta }) {
   const isSeed = meta.dataSource === 'seed';
   return (
     <span
-      className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ${
+      className={`rounded-full px-3 py-1 text-[14px] font-medium ring-1 ${
         isSeed
           ? 'bg-amber-900/40 text-amber-300 ring-amber-500/40'
           : 'bg-emerald-900/40 text-emerald-300 ring-emerald-500/40'
