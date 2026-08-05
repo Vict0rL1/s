@@ -10,7 +10,7 @@ import { refreshBasketballOdds } from './basketball/ingest/odds.ts';
 import { refreshFootballOdds } from './football/ingest/odds.ts';
 import { refreshBaseballOdds } from './baseball/ingest/odds.ts';
 import { refreshOdds as refreshNflOdds } from './nfl/ingest/odds.ts';
-import { getQuota } from './oddsQuota.ts';
+import { getQuota, planTotal, recommendedRefreshMinutes, recordCycleSpend } from './oddsQuota.ts';
 import { registerRoutes } from './routes/api.ts';
 import { registerBasketballRoutes } from './routes/basketball.ts';
 import { registerFootballRoutes } from './routes/football.ts';
@@ -34,7 +34,15 @@ function startAutoRefresh(log: (msg: string) => void): void {
     log('Auto-refresh disabled (AUTO_REFRESH_MINUTES=0).');
     return;
   }
+  // The interval is a live value, not a constant: every cycle measures what it
+  // spent and the next one is scheduled from the plan's budget. A fixed number
+  // would be wrong the day a plan changes or six football leagues come back into
+  // season, and neither of those is something anyone should have to remember.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let currentMinutes = env.autoRefreshMinutes;
+
   const run = async () => {
+    const before = getQuota().used;
     if (countRows('players') > 0) {
       try {
         const r = await refreshOdds();
@@ -85,12 +93,46 @@ function startAutoRefresh(log: (msg: string) => void): void {
     // plan ran out was that nothing ever mentioned it until it was gone.
     const q = getQuota();
     if (q.remaining != null) {
-      log(`The Odds API: quedan ${q.remaining} peticiones (usadas ${q.used ?? '?'}).`);
+      const plan = planTotal();
+      log(
+        `The Odds API: quedan ${q.remaining} peticiones (usadas ${q.used ?? '?'}` +
+          `${plan != null ? ` de ${plan}` : ''}).`,
+      );
     }
+
+    // What did this cycle cost? The difference in the API's own `used` counter,
+    // which is authoritative in a way that adding up our intentions is not.
+    if (before != null && q.used != null && q.used > before) {
+      recordCycleSpend(q.used - before);
+    }
+    schedule();
   };
-  void run(); // once at startup
-  setInterval(run, env.autoRefreshMinutes * 60_000).unref();
-  log(`Auto-refresh every ${env.autoRefreshMinutes} min.`);
+
+  const schedule = () => {
+    // An explicit AUTO_REFRESH_MINUTES always wins: someone who set it meant it.
+    const suggested = env.autoRefreshMinutesExplicit ? null : recommendedRefreshMinutes();
+    const next = suggested ?? env.autoRefreshMinutes;
+    if (next !== currentMinutes) {
+      log(`Auto-refresh: ${currentMinutes} → ${next} min (ajustado al plan de The Odds API).`);
+      currentMinutes = next;
+    }
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(run, currentMinutes * 60_000);
+    timer.unref?.();
+  };
+
+  void run(); // once at startup; `run` schedules the next one itself
+  if (env.autoRefreshMinutesExplicit) {
+    // Worth saying out loud. Anyone who copied the old .env.example has
+    // AUTO_REFRESH_MINUTES=720 sitting in their file, and would otherwise upgrade
+    // their plan, see nothing change, and have no way to know why.
+    log(
+      `Auto-refresh every ${env.autoRefreshMinutes} min (fijado por AUTO_REFRESH_MINUTES; ` +
+        'el ajuste automático al tamaño del plan está desactivado — quita esa línea del .env para activarlo).',
+    );
+  } else {
+    log(`Auto-refresh every ${env.autoRefreshMinutes} min de salida; se ajustará al plan tras el primer ciclo.`);
+  }
 }
 
 async function main() {

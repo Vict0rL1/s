@@ -63,16 +63,28 @@ export const env = {
   port: Number(process.env.PORT) || 4000,
   // Minutes between automatic odds refreshes (0 disables). Only runs with a key.
   //
-  // 12 hours, and the number is arithmetic rather than taste. With one region and
-  // only the leagues that are in season, a cycle costs roughly 8 credits; twice a
-  // day over a month is ~480, which fits inside the free plan's 500 with the
-  // reserve in oddsQuota.ts as the backstop. The old 6-hour default spent 5,760.
+  // This is only the STARTING value now. After the first cycle the server knows
+  // two things it cannot know before one — the size of the plan (from the API's
+  // own response headers) and what a cycle actually costs — and re-times itself
+  // from them. See recommendedRefreshMinutes in oddsQuota.ts.
+  //
+  // 12 hours is the safe opening bid: it is what fits the 500-credit free plan,
+  // so a first cycle on the smallest plan cannot overspend before the arithmetic
+  // has anything to work with. A bigger plan widens it within one cycle.
   //
   // Read with a nullish check, NOT `|| 720`. `Number('0') || 720` is 720, so
   // AUTO_REFRESH_MINUTES=0 — documented as the way to turn this off, and the
   // first thing anyone tries when the quota is disappearing — silently did
   // nothing and left the timer running at the default.
   autoRefreshMinutes: numberFromEnv(process.env.AUTO_REFRESH_MINUTES, 720),
+  /**
+   * Did someone actually set AUTO_REFRESH_MINUTES?
+   *
+   * If they did, it is honoured and the automatic tuning stays out of the way.
+   * Without this flag the two are indistinguishable and the server would happily
+   * overrule a deliberate setting with its own estimate.
+   */
+  autoRefreshMinutesExplicit: !!process.env.AUTO_REFRESH_MINUTES?.trim(),
 };
 
 export function tourById(id: string) {

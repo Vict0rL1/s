@@ -181,7 +181,12 @@ function OddsQuotaLine() {
     used: number | null;
     hasKey: boolean;
     reserve: number;
+    /** The plan's monthly allowance, learned from the API's own headers. */
+    plan: number | null;
+    creditsPerCycle: number | null;
     autoRefreshMinutes: number;
+    /** What the server worked out it can afford; null until a cycle is measured. */
+    recommendedRefreshMinutes: number | null;
     lastError: string | null;
   } | null>(null);
 
@@ -197,9 +202,18 @@ function OddsQuotaLine() {
   }, []);
 
   if (!q?.hasKey) return null;
-  const { remaining, used, reserve, lastError } = q;
+  const { remaining, used, reserve, plan, lastError } = q;
   const low = remaining != null && remaining <= reserve;
-  const hours = Math.round(q.autoRefreshMinutes / 60);
+  // The live interval, which is the recommended one unless it has not been
+  // measured yet. Shown in whichever unit reads better: "cada 2 h" on a big plan,
+  // "cada 3 días" on the free one, where the honest answer really is days.
+  const minutes = q.recommendedRefreshMinutes ?? q.autoRefreshMinutes;
+  const every =
+    minutes >= 1440
+      ? `${Math.round(minutes / 1440)} día(s)`
+      : minutes >= 90
+        ? `${Math.round(minutes / 60)} h`
+        : `${minutes} min`;
 
   return (
     <p className={`mt-3 text-[13px] leading-relaxed ${low ? 'text-amber-300/90' : 'text-[#7b828d]'}`}>
@@ -209,7 +223,9 @@ function OddsQuotaLine() {
       ) : (
         <>
           <strong className="font-semibold tabular-nums">{remaining}</strong> peticiones restantes
-          este mes{used != null && <> · {used} usadas</>} · se refresca cada {hours} h
+          este mes{plan != null && <> de {plan.toLocaleString('es')}</>}
+          {used != null && <> · {used} usadas</>} · se refresca cada {every}
+          {q.creditsPerCycle != null && <> · {q.creditsPerCycle} créditos por ciclo</>}
         </>
       )}
       {low && ' · las últimas quedan reservadas para las actualizaciones que pidas a mano'}

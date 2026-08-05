@@ -323,9 +323,9 @@ Lo que se cambió:
    tener una segunda opinión sobre los mismos precios.
 2. **El cupo se lee y se recuerda.** Cada respuesta trae `x-requests-remaining`; ahora se guarda, se
    comprueba antes de gastar y **se muestra en el pie de la app**, en todas las pestañas.
-3. **Una reserva de 25 créditos.** Por debajo de ahí el refresco automático se abstiene, para que los
-   últimos créditos queden para el botón **↻ Actualizar** que pulses tú, y no se los coma un
-   temporizador a las 4 de la mañana.
+3. **Una reserva** (2 % del plan, mínimo 25). Por debajo de ahí el refresco automático se abstiene,
+   para que los últimos créditos queden para el botón **↻ Actualizar** que pulses tú, y no se los
+   coma un temporizador a las 4 de la mañana.
 4. **El listado `/sports` se pide una vez y se comparte.** Es gratis, pero cinco deportes hacían cada
    uno su llamada en cada ciclo.
 5. **La NFL filtraba mal**: era el único deporte que pedía todas sus ligas sin comprobar si estaban
@@ -334,6 +334,42 @@ Lo que se cambió:
    que prueba cualquiera para frenar el gasto no hacía absolutamente nada. Arreglado.
 
 Resultado: **~8 créditos por ciclo, dos veces al día, unos 480 al mes** — dentro del plan gratuito.
+
+### Y cuando el plan crece, el ritmo crece solo
+
+Nada de lo anterior debería tener que reescribirse por cambiar de plan, así que ya no hace falta:
+**la app aprende cuánto puede gastar y se ajusta sola.**
+
+`x-requests-remaining` + `x-requests-used` **es** el tamaño del plan, y llega gratis en cada
+respuesta. Con ese número la app calcula tres cosas que antes eran constantes escritas a mano:
+
+| | Cómo sale | Plan de 500 | Plan de 20.000 |
+|---|---|---:|---:|
+| Reserva para el botón ↻ | 2 % del plan (mínimo 25) | 25 | **400** |
+| Presupuesto automático | 60 % del plan | 300 | **12.000** |
+| Intervalo de refresco | presupuesto ÷ coste de un ciclo | cada ~3,4 días | **cada ~2 h** |
+
+El coste de un ciclo también se mide en vez de suponerse: es la diferencia del contador `used` de
+la propia API entre el principio y el final del ciclo. Con las ligas de hoy sale **34 créditos**
+(13 de fútbol + 7 de baloncesto + 4 de béisbol + 6 de NFL + ~4 de tenis, a una región).
+
+El 40 % que no se presupuesta no es timidez: absorbe lo que una recta no puede prever — trece ligas
+de fútbol configuradas de las que juegan cinco en una semana cualquiera, y los refrescos que pidas
+tú a mano.
+
+**Dos límites, y hacen cosas distintas.** La reserva protege el *final* del plan; la **guarda de
+ritmo** protege la mitad del mes, que es donde un plan cuarenta veces mayor se pierde de verdad —
+no llegando a cero, sino gastando tres semanas en tres días. Si el gasto va por delante del
+calendario, el refresco automático se abstiene hasta que el mes lo alcance; **el botón ↻ nunca se
+bloquea por esto**.
+
+Si prefieres fijarlo tú, `AUTO_REFRESH_MINUTES` en el `.env` manda y el ajuste automático se aparta.
+
+**¿Y si mejor gasto los créditos en más casas de apuestas?** Es la otra opción legítima con un plan
+grande: `ODDS_REGIONS=eu,uk` duplica el coste de cada llamada pero cruza más casas, así que el
+consenso sin vig sale de más precios. Con 20.000 créditos cabe: el ciclo pasa a 68 y el intervalo a
+unas 4 h, todo calculado solo. No lo he cambiado por defecto porque **mueve todos los números de
+mercado de la app** y esa es una decisión tuya, no mía.
 
 ### Que se actualice solo
 

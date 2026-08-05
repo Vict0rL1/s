@@ -53,11 +53,34 @@ export const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
  * actually asked for is the one that fails. Manual refreshes may dip into the
  * reserve; automatic ones may not.
  */
-export const QUOTA_RESERVE = 25;
+const RESERVE_FLOOR = 25;
+const RESERVE_SHARE = 0.02;
+
+/**
+ * Credits held back for the ↻ button, as a share of the plan.
+ *
+ * A background timer that spends the last credit means the refresh a person
+ * actually asked for is the one that fails. Manual refreshes may dip into the
+ * reserve; automatic ones may not.
+ *
+ * It scales because it has to: 25 credits was a meaningful cushion on the 500
+ * free plan and is less than one refresh cycle on a 20,000 one. Two per cent —
+ * 25 on the free plan, 400 on 20,000 — keeps it worth roughly the same number of
+ * manual refreshes on any plan.
+ */
+export function quotaReserve(): number {
+  const total = planTotal();
+  if (total == null) return RESERVE_FLOOR;
+  return Math.max(RESERVE_FLOOR, Math.round(total * RESERVE_SHARE));
+}
 
 const KEY_REMAINING = 'odds:requestsRemaining';
 const KEY_USED = 'odds:requestsUsed';
 const KEY_CHECKED = 'odds:quotaCheckedAt';
+/** Largest remaining+used ever seen — i.e. the size of the plan. */
+const KEY_PLAN = 'odds:planTotal';
+/** Credits the last completed auto-refresh cycle spent. */
+const KEY_CYCLE = 'odds:lastCycleCredits';
 /** Set when a key is rejected, so the UI can say WHY rather than "0 partidos". */
 const KEY_ERROR = 'odds:lastError';
 
@@ -95,6 +118,123 @@ export function recordQuota(res: Response): void {
   if (remaining != null) setMeta(KEY_REMAINING, remaining);
   if (used != null) setMeta(KEY_USED, used);
   if (remaining != null || used != null) setMeta(KEY_CHECKED, new Date().toISOString());
+
+  // LEARN THE SIZE OF THE PLAN instead of being told it.
+  //
+  // remaining + used is the plan's monthly allowance, and it arrives free on
+  // every response. Nothing else in the app has to be configured when the plan
+  // changes — going from 500 to 20,000 credits is noticed on the first call, and
+  // the reserve and the refresh interval follow from it.
+  //
+  // The maximum is kept rather than the latest: mid-month the two numbers still
+  // add up to the plan, but a reset can be observed between two responses and a
+  // momentary low reading should not shrink the plan permanently.
+  const r = Number(remaining);
+  const u = Number(used);
+  if (Number.isFinite(r) && Number.isFinite(u)) {
+    const total = r + u;
+    const known = planTotal();
+    if (total > 0 && (known == null || total > known)) setMeta(KEY_PLAN, String(total));
+  }
+}
+
+/** The plan's monthly credit allowance, learned from the response headers. */
+export function planTotal(): number | null {
+  const v = Number(getMeta(KEY_PLAN));
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/** Remember what a full refresh cycle cost, so the interval can be derived. */
+export function recordCycleSpend(credits: number): void {
+  if (credits > 0) setMeta(KEY_CYCLE, String(credits));
+}
+
+export function lastCycleCredits(): number | null {
+  const v = Number(getMeta(KEY_CYCLE));
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/**
+ * Target share of the plan to spend on automatic refreshes.
+ *
+ * The rest absorbs what a straight-line estimate cannot see coming: leagues
+ * arriving in season (thirteen football leagues are configured and maybe five
+ * play in any given week), and manual refreshes.
+ */
+const AUTO_BUDGET_SHARE = 0.6;
+
+/** Half an hour. These markets do not move fast enough to justify closer. */
+const MIN_REFRESH_MINUTES = 30;
+/**
+ * A week.
+ *
+ * It has to be longer than a day, and that is not hypothetical: on the 500-credit
+ * free plan a 34-credit cycle can only run about nine times a month, so the
+ * honest interval is roughly every three days. Clamping at 24 h instead made the
+ * arithmetic recommend 1,020 credits a month against a 500 plan — 204% of it —
+ * and quietly handed the job of not overspending to the pace guard, which is a
+ * backstop and should not be load-bearing.
+ */
+const MAX_REFRESH_MINUTES = 10_080;
+
+/**
+ * How often to refresh, derived from the plan rather than guessed.
+ *
+ * A hardcoded interval is wrong the moment the plan or the number of leagues
+ * changes — the same failure as any constant that describes something else. This
+ * divides the month's automatic budget by what a cycle actually costs, measured
+ * on the last cycle:
+ *
+ *     cycles a month = plan × 0.6 / credits per cycle
+ *     minutes apart  = 43,200 / cycles a month
+ *
+ * With 34 credits a cycle: the 500 free plan lands on ~24 h, a 20,000 plan on
+ * ~1 h. Returns null until a cycle has been measured, so the caller keeps its
+ * configured default for the first run.
+ */
+export function recommendedRefreshMinutes(): number | null {
+  const total = planTotal();
+  const perCycle = lastCycleCredits();
+  if (total == null || perCycle == null) return null;
+  const cyclesPerMonth = (total * AUTO_BUDGET_SHARE) / perCycle;
+  if (!Number.isFinite(cyclesPerMonth) || cyclesPerMonth <= 0) return null;
+  const minutes = Math.round(43_200 / cyclesPerMonth);
+  return Math.min(MAX_REFRESH_MINUTES, Math.max(MIN_REFRESH_MINUTES, minutes));
+}
+
+/**
+ * Are we ahead of a straight-line burn for the month?
+ *
+ * The interval above sets the pace; this is the backstop for when reality
+ * disagrees with it — a dozen leagues coming into season at once, or a day of
+ * enthusiastic manual refreshing. Automatic spending stops until the calendar
+ * catches up; manual refreshes are never blocked by it.
+ *
+ * The plan's reset date is not published, so this assumes the calendar month.
+ * If the real reset falls mid-month the guard is merely conservative early and
+ * relaxes afterwards, which is the right way round to be wrong.
+ */
+export function withinMonthlyPace(credits: number): { ok: true } | { ok: false; reason: string } {
+  const total = planTotal();
+  const { used } = getQuota();
+  if (total == null || used == null) return { ok: true };
+
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  // +1 so the first day of the month has a day's worth of budget, not zero.
+  const elapsed = Math.min(daysInMonth, now.getDate());
+  const allowedSoFar = (total * AUTO_BUDGET_SHARE * elapsed) / daysInMonth;
+
+  if (used + credits > allowedSoFar) {
+    return {
+      ok: false,
+      reason:
+        `ritmo mensual: llevas ${used} de las ${Math.round(allowedSoFar)} peticiones que tocan a día ` +
+        `${elapsed} de ${daysInMonth} (presupuesto automático ${Math.round(total * AUTO_BUDGET_SHARE)} de ${total}). ` +
+        'Las actualizaciones manuales siguen disponibles.',
+    };
+  }
+  return { ok: true };
 }
 
 export function setOddsError(message: string | null): void {
@@ -118,14 +258,22 @@ export function creditCost(markets: string): number {
 export function canSpend(credits: number, manual = false): { ok: true } | { ok: false; reason: string } {
   const { remaining } = getQuota();
   if (remaining == null) return { ok: true }; // never called yet — find out by trying
-  const floor = manual ? 0 : QUOTA_RESERVE;
+  const reserve = quotaReserve();
+  const floor = manual ? 0 : reserve;
   if (remaining - credits < floor) {
     return {
       ok: false,
       reason:
         `quedan ${remaining} peticiones del plan de The Odds API y esta operación cuesta ${credits}` +
-        (manual ? '' : ` (se reservan ${QUOTA_RESERVE} para las actualizaciones manuales)`),
+        (manual ? '' : ` (se reservan ${reserve} para las actualizaciones manuales)`),
     };
+  }
+  // The reserve protects the END of the plan; the pace guard protects the middle
+  // of the month, which is where a plan forty times bigger actually gets lost —
+  // not by running to zero but by spending three weeks' worth in three days.
+  if (!manual) {
+    const pace = withinMonthlyPace(credits);
+    if (!pace.ok) return pace;
   }
   return { ok: true };
 }

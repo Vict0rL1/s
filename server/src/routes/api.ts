@@ -3,7 +3,13 @@
 
 import type { FastifyInstance } from 'fastify';
 import { env, toursConfig, tournamentsConfig } from '../config.ts';
-import { getQuota, QUOTA_RESERVE } from '../oddsQuota.ts';
+import {
+  getQuota,
+  lastCycleCredits,
+  planTotal,
+  quotaReserve,
+  recommendedRefreshMinutes,
+} from '../oddsQuota.ts';
 import { getMeta } from '../db.ts';
 import {
   countRows,
@@ -82,11 +88,17 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get('/odds-quota', async () => {
     const q = getQuota();
+    const plan = planTotal();
     return {
       ...q,
       hasKey: !!env.oddsApiKey,
-      reserve: QUOTA_RESERVE,
+      reserve: quotaReserve(),
+      // The plan size, learned from the response headers rather than configured.
+      plan,
+      creditsPerCycle: lastCycleCredits(),
+      // What the app has worked out it can afford, next to what it is doing.
       autoRefreshMinutes: env.autoRefreshMinutes,
+      recommendedRefreshMinutes: recommendedRefreshMinutes(),
       regions: env.oddsRegions,
     };
   });
