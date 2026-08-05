@@ -4,6 +4,7 @@ import BasketballDashboard from './components/basketball/BasketballDashboard';
 import FootballDashboard from './components/football/FootballDashboard';
 import BaseballDashboard from './components/baseball/BaseballDashboard';
 import NflDashboard from './components/nfl/NflDashboard';
+import BetsDashboard from './components/bets/BetsDashboard';
 import { SPORT_THEMES, type SportId } from './lib/theme';
 
 /**
@@ -27,7 +28,7 @@ import { SPORT_THEMES, type SportId } from './lib/theme';
  * The choice is remembered in localStorage: reopening the app on the tab you were
  * last using is the behaviour anyone expects from a tab bar.
  */
-const SPORTS: SportId[] = ['football', 'basketball', 'baseball', 'nfl', 'tennis'];
+const SPORTS: SportId[] = ['football', 'basketball', 'baseball', 'nfl', 'tennis', 'bets'];
 
 const STORAGE_KEY = 'predictor.sport';
 
@@ -45,6 +46,7 @@ export default function App() {
   const [sport, setSport] = useState<SportId>(initialSport);
   const theme = SPORT_THEMES[sport];
   const headerRef = useRef<HTMLElement>(null);
+  const activeTabRef = useRef<HTMLButtonElement>(null);
 
   /**
    * Publish the header's height so sticky day headings can sit exactly under it.
@@ -56,6 +58,17 @@ export default function App() {
    * a phone rotating, a notch's safe-area inset, and the browser's own font-size
    * setting.
    */
+  /**
+   * Scroll the selected tab fully into view.
+   *
+   * Six tabs do not fit a 360px phone, and a row that rests half-way through
+   * "Fútbol" looks broken rather than scrollable. `nearest` nudges only when the
+   * tab is actually clipped, so on a wide screen this does nothing at all.
+   */
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }, [sport]);
+
   useEffect(() => {
     const el = headerRef.current;
     if (!el) return;
@@ -104,13 +117,13 @@ export default function App() {
               {/* Hidden on the narrowest screens: at 390px it truncated to
                   "…medidos contra resultados r…", which is header height spent on
                   half a sentence. */}
-              <p className="hidden truncate text-[13px] leading-tight text-[#7b828d] sm:block">
+              <p className="hidden truncate text-[13px] leading-tight text-[#7b828d] md:block">
                 Modelos explicables, medidos contra resultados reales
               </p>
             </div>
           </div>
 
-          <nav className="-mb-px flex gap-0.5 overflow-x-auto sm:gap-1" role="tablist" aria-label="Deportes">
+          <nav className="-mb-px flex gap-0.5 overflow-x-auto md:gap-1" role="tablist" aria-label="Deportes">
             {SPORTS.map((id) => {
               const s = SPORT_THEMES[id];
               const active = sport === id;
@@ -119,18 +132,22 @@ export default function App() {
                   key={id}
                   role="tab"
                   aria-selected={active}
+                  ref={active ? activeTabRef : undefined}
                   onClick={() => setSport(id)}
-                  className={`relative shrink-0 rounded-t-lg px-1.5 py-2.5 text-[15px] font-medium transition sm:px-3 ${
+                  className={`relative shrink-0 rounded-t-lg px-1.5 py-2.5 text-[14px] font-medium transition md:px-3 md:text-[15px] ${
                     active ? 'text-[#e8eaed]' : 'text-[#7b828d] hover:text-[#c3c9d1]'
                   }`}
                 >
                   {/* Decorative, and the first thing to go when five tabs have
                       to share a phone's width — the word is what identifies the
                       sport, the accent line under it carries the colour. */}
-                  <span className="mr-1.5 hidden sm:inline" aria-hidden>
+                  <span className="mr-1.5 hidden md:inline" aria-hidden>
                     {s.emoji}
                   </span>
-                  {s.label}
+                  {/* Two spans rather than JS width detection: CSS decides, so
+                      there is no resize listener and no flash of the wrong one. */}
+                  <span className={s.shortLabel ? 'md:hidden' : ''}>{s.shortLabel ?? s.label}</span>
+                  {s.shortLabel && <span className="hidden md:inline">{s.label}</span>}
                   <span
                     aria-hidden
                     className="absolute inset-x-1 -bottom-px h-0.5 rounded-full transition"
@@ -145,6 +162,7 @@ export default function App() {
 
       <main className="mx-auto max-w-3xl px-4 pb-16 pt-6">
         {/* Mounted one at a time on purpose: the inactive sports do no fetching. */}
+        {sport === 'bets' && <BetsDashboard />}
         {sport === 'football' && <FootballDashboard />}
         {sport === 'basketball' && <BasketballDashboard />}
         {sport === 'baseball' && <BaseballDashboard />}

@@ -648,6 +648,55 @@ function createSchema(d: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_naf_predlog ON naf_prediction_log (league, resolved_at);
 
+    -- ==================================================================
+    -- THE BET LOG
+    --
+    -- Everything above this line is the app's own forecasts and how they
+    -- scored. This table is the other half: what the PERSON actually staked.
+    -- The two are deliberately separate — a model prediction is a claim about
+    -- the world and exists whether or not anyone backs it, and conflating them
+    -- would make "the model's accuracy" depend on which games someone felt like
+    -- betting.
+    --
+    -- They are LINKED though, by model_prob and market_prob captured at the
+    -- moment the bet was logged. That is what lets the tracker answer the one
+    -- question a bettor actually has and no bookmaker's app can: when I agreed
+    -- with the model, did I do better than when I did not?
+    --
+    -- WHAT IS NOT STORED: profit. It is derived from status, stake, odds and
+    -- payout every time it is read (see profitOf in bets.ts). A stored profit is
+    -- a second source of truth that goes stale the moment a status is corrected,
+    -- and correcting a status is the single most common edit here.
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS bets (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at  TEXT NOT NULL,
+      -- The day the bet counts for, as a local YYYY-MM-DD. Separate from
+      -- created_at because a bet placed at 01:00 on a game earlier that evening
+      -- belongs to the evening, and because a bet can be logged after the fact.
+      placed_on   TEXT NOT NULL,
+      sport       TEXT NOT NULL,   -- football | basketball | baseball | nfl | tennis | other
+      league      TEXT,
+      event       TEXT NOT NULL,   -- "Seattle Seahawks vs New England Patriots"
+      market      TEXT NOT NULL,   -- moneyline | spread | total | btts | other
+      selection   TEXT NOT NULL,   -- "Seahawks -3.5"
+      -- Decimal odds. One format only, converted at the edge if needed: storing
+      -- "either decimal or American" is how a 2.50 becomes a +250.
+      odds        REAL NOT NULL,
+      stake       REAL NOT NULL,
+      status      TEXT NOT NULL,   -- pending | won | lost | void | half_won | half_lost | cashout
+      -- Only for cashout, where the returned amount is not a function of the odds.
+      payout      REAL,
+      settled_at  TEXT,
+      notes       TEXT,
+      -- The app's own numbers at the time of the bet, for the agreement report.
+      model_prob  REAL,
+      market_prob REAL,
+      match_key   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_bets_day ON bets (placed_on);
+    CREATE INDEX IF NOT EXISTS idx_bets_status ON bets (status);
+
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
       value TEXT

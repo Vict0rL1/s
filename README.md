@@ -3,7 +3,7 @@
 Aplicación web + API REST para **predecir resultados deportivos** combinando historial
 partido a partido, **ratings Elo**, forma reciente y **odds de casas de apuestas**.
 
-Cinco deportes, en **pestañas separadas** (nunca mezclados):
+Cinco deportes en **pestañas separadas** (nunca mezclados), más una pestaña para tus propias apuestas:
 
 - **⚽ Fútbol** — las principales ligas del mundo, cada una en su **sub-pestaña**: Premier League,
   LaLiga, Bundesliga, Serie A, Ligue 1, Eredivisie, Primeira, Championship, MLS, Liga MX,
@@ -26,6 +26,9 @@ Cinco deportes, en **pestañas separadas** (nunca mezclados):
   Ver [docs/BASKETBALL.md](docs/BASKETBALL.md).
 - **🎾 Tenis** — ATP y WTA singles: Elo por superficie, forma, head-to-head, marcador por sets.
   Ver [docs/MODEL.md](docs/MODEL.md).
+- **🎟️ Apuestas** — *no es un deporte*: es tu registro. Qué apostaste, cuánto, a qué cuota y cómo
+  acabó, con beneficio, ROI, calendario del mes y rachas. Y lo que ningún historial de casa de
+  apuestas te dice: **si seguir al modelo te sirvió o no**.
 
 El modelo es **explicable, no una caja negra**: cada señal se expresa en puntos Elo y se
 muestra lado a lado con la probabilidad implícita del mercado, incluyendo la detección de
@@ -679,6 +682,38 @@ gris**, no en un color inventado: suponer que el Real Madrid es morado sería in
 eso no se hace en ninguna otra parte de la app. Cuando la base de datos tiene un escudo real —el
 baloncesto los descarga— se superpone al disco, y si la imagen falla desaparece sola en vez de dejar
 el icono de imagen rota.
+
+## Qué incluye — 🎟️ Apuestas (tu registro)
+
+Las cinco pestañas anteriores dicen lo que piensa el **modelo**. Esta dice lo que hiciste **tú**, y
+están deliberadamente separadas: la precisión de un modelo no puede depender de a qué partidos te
+apeteció apostar, y tu beneficio no puede maquillarse contando solo los partidos que al modelo le
+gustaban.
+
+- **Registrar en dos clics, o a mano.** Eliges un partido de los próximos —los 99 que tenga cargados,
+  de los cinco deportes—, pulsas el lado al que apostaste, y escribes cuota y cantidad. La cuota se
+  pre-rellena con la del mercado si la hay, pero **siempre es editable**: la de tu boleto es la única
+  que cuenta. También puedes registrar cualquier cosa a mano.
+- **El beneficio no se guarda, se calcula.** Sale de (estado, cantidad, cuota, retorno) cada vez que
+  se lee, así que corregir un estado —lo que más se hace— nunca deja un número viejo detrás.
+  Ganada, perdida, **anulada**, **media ganada / media perdida** (hándicap asiático) y **cashout**.
+- **El ROI se calcula sobre lo que estuvo en riesgo**, no sobre todo lo apostado. Una anulada se
+  devuelve: ni ganó ni perdió, así que no infla el denominador. Con una ganada y cinco anuladas el
+  ROI sigue siendo +100 %, no +17 % — lo comprueba un test.
+- **Las pendientes valen `null`, no 0.** Un cero diría «empataste», y promediar lo que aún no se sabe
+  como ceros es exactamente cómo un tracker informa de un 0 % en una semana sin terminar.
+- **Calendario del mes** con el resultado de cada día, en verde/naranja según el signo y con la
+  intensidad proporcional al mayor día del mes. Pulsa un día para ver solo sus apuestas.
+- **¿Te sirvió seguir al modelo?** Cuando eliges la apuesta desde un partido de la app, se guarda lo
+  que pensaban el modelo y el mercado **en ese momento** — algo que no se puede recuperar después,
+  porque las cuotas se mueven y los ratings se recalculan. Con eso la pestaña separa tus apuestas en
+  «fui con el modelo» y «fui contra el modelo» y compara el ROI de cada grupo. Se oculta por debajo de
+  diez apuestas comparables: con cuatro, eso es ruido con titular.
+- **Sin símbolo de moneda.** Los mismos números sirvan euros, pesos o unidades; inventar una moneda
+  que no elegiste sería incorrecto en la mayoría de instalaciones.
+
+Todo vive en su propia tabla y su propio espacio de la API (`/api/bets`). Ningún modelo lee tus
+apuestas y las apuestas no puntúan a ningún modelo.
 
 ## Fechas y horarios
 

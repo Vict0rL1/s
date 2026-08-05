@@ -16,9 +16,12 @@ import { registerBasketballRoutes } from './routes/basketball.ts';
 import { registerFootballRoutes } from './routes/football.ts';
 import { registerBaseballRoutes } from './routes/baseball.ts';
 import { registerNflRoutes } from './routes/nfl.ts';
+import { registerBetRoutes } from './routes/bets.ts';
 import { resolvePredictions } from './trackRecord.ts';
 import { resolveGamePredictions } from './basketball/trackRecord.ts';
 import { resolveFootballPredictions } from './football/trackRecord.ts';
+import { resolveBaseballPredictions } from './baseball/trackRecord.ts';
+import { resolveNflPredictions } from './nfl/trackRecord.ts';
 
 /**
  * Keep odds current on their own: refresh once at startup and then on an
@@ -135,18 +138,50 @@ function startAutoRefresh(log: (msg: string) => void): void {
   }
 }
 
+/**
+ * Score every prediction whose result has since arrived, for all five sports.
+ *
+ * TWO BUGS THIS FIXES, and they had the same shape as each other.
+ *
+ * 1. BASEBALL AND THE NFL WERE NEVER SCORED. Both have a working resolver and
+ *    neither was called, so both logged predictions forever and resolved none —
+ *    their track-record panels were permanently stuck on "esperando resultado".
+ *    They were the last two sports added and they got left out of this loop the
+ *    same way they were left out of the odds auto-refresh.
+ *
+ * 2. IT ONLY EVER RAN AT STARTUP. A game finishing while the server was up was
+ *    not scored until someone restarted it, which on a machine left running is
+ *    never. Now it runs on a timer too.
+ *
+ * Each sport is wrapped on its own: a resolver throwing must not stop the other
+ * four, which is exactly how one missing sport could have hidden the others.
+ */
+function resolveAllPredictions(log?: (msg: string) => void): void {
+  const jobs: [string, () => { resolved: number }][] = [
+    ['tennis', resolvePredictions],
+    ['basketball', resolveGamePredictions],
+    ['football', resolveFootballPredictions],
+    ['baseball', resolveBaseballPredictions],
+    ['nfl', resolveNflPredictions],
+  ];
+  const done: string[] = [];
+  for (const [name, run] of jobs) {
+    try {
+      const r = run();
+      if (r?.resolved > 0) done.push(`${name} ${r.resolved}`);
+    } catch (e) {
+      log?.(`Track record (${name}) failed: ${(e as Error).message}`);
+    }
+  }
+  if (done.length && log) log(`Predicciones puntuadas: ${done.join(' · ')}.`);
+}
+
+/** How often to look for results. Cheap: local queries, no network, no quota. */
+const RESOLVE_EVERY_MINUTES = 30;
+
 async function main() {
   getDb(); // open + create schema up front
 
-  // Catch up on any prediction whose result arrived while the server was down
-  // (history is normally ingested by a separate `update-data` process).
-  try {
-    resolvePredictions();
-    resolveGamePredictions();
-    resolveFootballPredictions();
-  } catch {
-    // Never block startup over the track record.
-  }
 
   const app = Fastify({ logger: { level: 'info', transport: undefined } });
   await app.register(cors, { origin: true });
@@ -156,6 +191,9 @@ async function main() {
   await app.register(registerFootballRoutes, { prefix: '/api/football' });
   await app.register(registerBaseballRoutes, { prefix: '/api/baseball' });
   await app.register(registerNflRoutes, { prefix: '/api/nfl' });
+  // The bet log is not a sixth sport: it records what the person staked, not what
+  // any model claimed, so it gets its own namespace rather than living under one.
+  await app.register(registerBetRoutes, { prefix: '/api/bets' });
 
   app.get('/', async () => ({
     name: 'tennis-predictor API',
@@ -169,6 +207,14 @@ async function main() {
     await app.listen({ port: env.port, host: '0.0.0.0' });
     app.log.info(`Tennis Predictor API listening on http://localhost:${env.port}`);
     startAutoRefresh((msg) => app.log.info(msg));
+
+    // Catch up on results that arrived while the server was down, then keep
+    // looking. Local queries only — no network, no quota — so a short interval
+    // costs nothing and means a finished game shows up in the track record
+    // within half an hour instead of at the next restart.
+    const resolveLog = (msg: string) => app.log.info(msg);
+    resolveAllPredictions(resolveLog);
+    setInterval(() => resolveAllPredictions(resolveLog), RESOLVE_EVERY_MINUTES * 60_000).unref();
   } catch (err) {
     app.log.error(err);
     process.exit(1);
