@@ -46,3 +46,17 @@ def get_service() -> MarketDataService:
 @lru_cache(maxsize=1)
 def get_limiter() -> RateLimiter:
     return get_service().router.limiter
+
+
+@lru_cache(maxsize=1)
+def _build_llm():
+    if not settings.anthropic_api_key:
+        return None
+    from app.llm.anthropic_provider import AnthropicProvider  # import perezoso
+
+    return AnthropicProvider(settings.anthropic_api_key, settings.anthropic_model)
+
+
+def get_llm():
+    """Proveedor LLM o None si no hay ANTHROPIC_API_KEY (la app funciona igual)."""
+    return _build_llm()

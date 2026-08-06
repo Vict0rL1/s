@@ -241,6 +241,29 @@ export interface MacroIndicator {
   ts: string | null
 }
 
+export interface NewsItem {
+  headline: string
+  summary: string | null
+  url: string
+  published_at: string | null
+  source: string | null
+  related: string | null
+}
+
+export interface NewsFeed extends Sourced {
+  symbol: string | null
+  items: NewsItem[]
+}
+
+export interface Interpretation {
+  generated_by: 'llm'
+  content_md: string
+  model: string
+  created_at: string | null
+  cached: boolean
+  disclaimer: string
+}
+
 export interface EarningsEvent {
   symbol: string
   date: string

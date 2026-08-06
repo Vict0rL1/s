@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { DashboardPage } from './pages/DashboardPage'
+import { NewsPage } from './pages/NewsPage'
 import { Placeholder } from './pages/Placeholder'
 import { TickerPage } from './pages/TickerPage'
 
@@ -13,10 +14,7 @@ export default function App() {
           <Route path="/ticker" element={<TickerPage />} />
           <Route path="/ticker/:symbol" element={<TickerPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route
-            path="/noticias"
-            element={<Placeholder title="Noticias e interpretación" phase={3} />}
-          />
+          <Route path="/noticias" element={<NewsPage />} />
           <Route path="/etfs" element={<Placeholder title="ETFs" phase={4} />} />
           <Route path="/screener" element={<Placeholder title="Screener" phase={4} />} />
           <Route

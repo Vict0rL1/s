@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     alphavantage_api_key: str = ""
     fred_api_key: str = ""
     anthropic_api_key: str = ""
+    anthropic_model: str = "claude-opus-5"
     edgar_user_agent: str = ""
 
     database_path: str = str(BACKEND_DIR / "data" / "app.db")

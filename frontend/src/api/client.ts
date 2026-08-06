@@ -1,6 +1,8 @@
 import type {
   DcfResponse,
   EarningsEvent,
+  Interpretation,
+  NewsFeed,
   FilingsResponse,
   Financials,
   Fundamentals,
@@ -89,6 +91,12 @@ export const api = {
   peers: (symbol: string) => fetchJson<PeersResponse>(`/api/stocks/${symbol}/peers`),
   risk: (symbol: string) => fetchJson<RiskResponse>(`/api/stocks/${symbol}/risk`),
   filings: (symbol: string) => fetchJson<FilingsResponse>(`/api/stocks/${symbol}/filings`),
+  news: (symbol: string | null, days = 7) =>
+    fetchJson<NewsFeed>(
+      `/api/news?days=${days}${symbol ? `&symbol=${symbol}` : ''}`,
+    ),
+  interpretNews: (body: { headline: string; summary: string | null; symbol: string | null }) =>
+    postJson<Interpretation>('/api/news/interpret', body),
   marketOverview: () => fetchJson<{ indices: IndexEntry[] }>('/api/market/overview'),
   marketSectors: () => fetchJson<{ sectors: SectorEntry[]; note: string }>('/api/market/sectors'),
   yieldCurve: () => fetchJson<YieldCurve>('/api/market/yield-curve'),
