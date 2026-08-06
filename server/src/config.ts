@@ -60,7 +60,10 @@ export const env = {
   // turned a 500-request monthly plan into a two-and-a-half-day plan. Add regions
   // back only if you are on a paid tier; see server/src/oddsQuota.ts.
   oddsRegions: process.env.ODDS_REGIONS?.trim() || 'eu',
-  port: Number(process.env.PORT) || 4000,
+  // 7374, not 4000. `npm run dev` always passes PORT explicitly, so this fallback
+  // only applies when the server is started on its own — but it has to agree with
+  // scripts/ports.mjs, which is the source of truth for the number.
+  port: Number(process.env.PORT) || 7374,
   // Minutes between automatic odds refreshes (0 disables). Only runs with a key.
   //
   // This is only the STARTING value now. After the first cycle the server knows

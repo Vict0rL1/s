@@ -242,10 +242,10 @@ cp .env.example .env    # opcional: para odds reales, ver abajo
 
 ```bash
 npm run seed     # carga un dataset de muestra en data/tennis.db
-npm run dev      # levanta API (:4000) + frontend (:5173)
+npm run dev      # levanta API (:7374) + frontend (:7373)
 ```
 
-Abre **http://localhost:5173**. Elige ATP/WTA y un torneo (Wimbledon, US Open…), verás los
+Abre **http://localhost:7373**. Elige ATP/WTA y un torneo (Wimbledon, US Open…), verás los
 próximos partidos con la predicción del modelo y las odds lado a lado.
 
 > El seed usa **datos sintéticos** (nombres reales, partidos simulados) para que la app
@@ -254,40 +254,55 @@ próximos partidos con la predicción del modelo y las odds lado a lado.
 
 ---
 
-### Correrla junto a otra app (los puertos se eligen solos)
+### La dirección de la app: 7373 (y por qué no 5173)
 
-La API usaba el puerto 4000 y el frontend el 5173, los dos fijos. Con otro proyecto
-ocupando el 4000 —otra API, un contenedor, otra copia de esto— el backend moría con
-`EADDRINUSE: address already in use 0.0.0.0:4000`, **y el frontend cargaba igual**: una app
+**La app vive en `http://localhost:7373`** y su API en el `7374`. Esa dirección es estable:
+puedes guardarla en marcadores o en la pantalla de inicio del móvil y siempre será esta app.
+
+Antes eran el 5173 y el 4000, y eso era el problema: el 5173 es el puerto **por defecto de
+Vite**, así que lo quiere cualquier proyecto de Vite del ordenador, y el 4000 es el de la mitad
+de las APIs de Node que existen. Con dos proyectos, `http://localhost:5173` era una app
+distinta según lo que hubieras arrancado esa mañana — una dirección así no se puede guardar. El
+7373/7374 no es el defecto de ninguna herramienta común, los dos números son contiguos para que
+se recuerden juntos, y son solo de esta app.
+
+Si además el puerto elegido estuviera ocupado, el backend moría con
+`EADDRINUSE: address already in use 0.0.0.0:7374` **y el frontend cargaba igual**: una app
 perfectamente pintada sin un solo dato, que es un fallo bastante más confuso que un error claro.
-
-Ahora `npm run dev` **elige los puertos antes de que nada se ate** y se los pasa a los dos
+Así que `npm run dev` **elige los puertos antes de que nada se ate** y se los pasa a los dos
 procesos. Ese orden es todo el asunto: si cada proceso eligiera el suyo, el proxy `/api` del
 frontend apuntaría a un puerto donde el backend no acabó.
 
 ```
-ℹ️  Puertos por defecto ocupados (¿otra app corriendo?), uso otros:
-   API  4000 → 4001
-   web  5173 → 5174
-
 ====================================================
-  App        http://localhost:5174
-  API        http://localhost:4001/api
-  En el móvil  http://192.168.1.34:5174
+  App        http://localhost:7373
+  API        http://localhost:7374/api
+  En el móvil  http://192.168.1.34:7373
 ====================================================
 ```
 
-Verificado con tres copias a la vez (5173, 5174 y 5321): cada una carga con sus datos y
-**cada proxy llega a su propia API**, que es la propiedad que importa.
+Con el 7373 ocupado (una segunda copia de esto, por ejemplo) lo dice y se corre, sin que nadie
+edite un archivo de configuración. Salta el 7375, que está reservado para `npm run preview`:
+
+```
+ℹ️  Puertos por defecto ocupados (¿otra app corriendo?), uso otros:
+   API  7374 → 7376
+   web  7373 → 7377
+```
+
+Verificado con otra app ocupando el 5173: esta arranca en el 7373/7374 y **no toca el 5173**.
+Y con dos copias a la vez, cada una recibe **puertos distintos** y —matando la API de la
+segunda— su web devuelve 500 mientras la primera sigue sirviendo: **cada proxy llega a su
+propia API**, que es la propiedad que importa.
 
 Si quieres números concretos, `PORT` y `WEB_PORT` en el `.env` los fijan. Un puerto fijado que
-esté ocupado **no se mueve**: se para y lo dice, porque si pediste el 4000 mereces una respuesta
-sobre el 4000.
+esté ocupado **no se mueve**: se para y lo dice, porque si pediste el 7400 mereces una respuesta
+sobre el 7400.
 
 ```bash
-npm run dev                      # elige puertos libres solo
-PORT=4100 WEB_PORT=5200 npm run dev   # o los que tú digas
-npm run dev:fixed                # el par de siempre, 4000 y 5173, sin red de seguridad
+npm run dev                            # 7373 + 7374, con red de seguridad si están ocupados
+PORT=7400 WEB_PORT=7401 npm run dev    # o los que tú digas (dos números distintos)
+npm run dev:fixed                      # 7373 y 7374 a pelo, sin red de seguridad
 ```
 
 ## Abrirla en el teléfono
@@ -299,7 +314,7 @@ npm run phone
 ```
 
 Imprime la dirección que hay que escribir en el navegador del móvil —algo como
-`http://192.168.1.42:5173`— y comprueba que la app y la API estén levantadas. El teléfono tiene que
+`http://192.168.1.42:7373`— y comprueba que la app y la API estén levantadas. El teléfono tiene que
 estar en **la misma red Wi-Fi**; no se publica nada en internet.
 
 Una vez abierta, en el menú del navegador: **«Añadir a pantalla de inicio»**. Queda con su icono, a
@@ -307,7 +322,7 @@ pantalla completa y sin barra de navegador, porque la app trae `manifest.webmani
 192/512 px y el de 180 px que pide iOS.
 
 **Si carga en el ordenador pero no en el teléfono**, casi siempre es el cortafuegos del sistema
-bloqueando el puerto 5173 (macOS: Ajustes → Red → Firewall; Windows: permitir Node.js en redes
+bloqueando el puerto 7373 (macOS: Ajustes → Red → Firewall; Windows: permitir Node.js en redes
 privadas).
 
 Un detalle que evita un problema: el teléfono **no necesita alcanzar la API**. Llama a `/api/…` sobre
@@ -317,7 +332,7 @@ Para que vaya más rápido en el móvil, sirve el build en vez del servidor de d
 
 ```bash
 npm run build
-npm run preview --workspace web    # queda en el puerto 4173
+npm run preview --workspace web    # queda en el puerto 7375
 ```
 
 ## Odds reales y partidos próximos (The Odds API)
@@ -633,7 +648,7 @@ npm run update-squads:fb                            # solo lesionados y sancione
 Por defecto usa **football-data.co.uk** (temporadas actuales *y* cuotas 1X2 históricas) y, si no lo
 alcanza, cae al espejo de GitHub. Las cuotas de partidos próximos usan la misma `ODDS_API_KEY`.
 
-## API REST (puerto 4000)
+## API REST (puerto 7374)
 
 Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede devolver dos.
 

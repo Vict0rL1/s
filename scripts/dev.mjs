@@ -3,11 +3,16 @@
 // ===========================================================================
 // WHY THIS EXISTS INSTEAD OF JUST RUNNING THE TWO DEV SERVERS
 // ===========================================================================
-// The API bound port 4000 and the frontend 5173, both hardcoded. Anything else on
-// the machine already using 4000 — another project's API, a Docker container, a
-// second copy of this app — made the backend die with
+// Two separate problems, and they need different answers.
 //
-//     Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+// FIRST, the ports used to be 4000 and 5173 — the defaults of half the Node APIs
+// and of every Vite project respectively. See ports.mjs: they are now 7374 and
+// 7373, so the app has an address of its own that can be bookmarked.
+//
+// SECOND, even a well-chosen port can be taken. Anything else already using it — a
+// container, a second copy of this app — made the backend die with
+//
+//     Error: listen EADDRINUSE: address already in use 0.0.0.0:<port>
 //
 // and the frontend then loaded fine and showed an app with no data, which is a
 // much more confusing failure than a clear crash.
@@ -21,15 +26,14 @@
 // for a number, without anyone editing a config file.
 //
 // Set PORT or WEB_PORT to pin either one; a pinned port that is busy is reported
-// rather than silently moved, because "I told it 4000" deserves an answer about
-// 4000.
+// rather than silently moved, because "I told it 4100" deserves an answer about
+// 4100.
 
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { networkInterfaces } from 'node:os';
+import { DEFAULT_API, DEFAULT_PREVIEW, DEFAULT_WEB } from './ports.mjs';
 
-const DEFAULT_API = 4000;
-const DEFAULT_WEB = 5173;
 /** How far to walk up looking for a free port before giving up. */
 const SEARCH_RANGE = 20;
 
@@ -50,8 +54,38 @@ function free(port) {
   });
 }
 
-async function pick(desired, pinned, label) {
-  if (await free(desired)) return { port: desired, moved: false };
+/**
+ * Ports the fallback walk steps over even when the OS says they are free.
+ *
+ * The preview port belongs to `npm run preview`; a number that is reserved only in
+ * a comment is not reserved at all. This does NOT block an explicitly pinned port —
+ * if you ask for it by name you get it.
+ */
+const RESERVED = new Set([DEFAULT_PREVIEW]);
+
+/**
+ * Choose a port for `label`, avoiding both what the OS has taken and what an
+ * earlier call to this function already claimed.
+ *
+ * `claimed` is not redundant with free(): nothing has bound yet at this point, so a
+ * port handed out a moment ago still tests as free. Without it, two busy defaults
+ * would both fall back to the same number and the frontend would end up proxying
+ * /api to itself.
+ */
+async function pick(desired, pinned, label, claimed) {
+  // "Already claimed by the other half of this same app" is a different mistake
+  // from "taken by something else", and needs a different fix, so it says which.
+  if (claimed.has(desired)) {
+    console.error(
+      `\n❌ Has puesto PORT y WEB_PORT al mismo número (${desired}).\n` +
+        `   La API y la web son dos servidores: necesitan un puerto cada uno.\n`,
+    );
+    process.exit(1);
+  }
+  if (await free(desired)) {
+    claimed.add(desired);
+    return { port: desired, moved: false };
+  }
   if (pinned) {
     console.error(
       `\n❌ El puerto ${desired} (${label}) está ocupado y lo has fijado a mano.\n` +
@@ -60,7 +94,11 @@ async function pick(desired, pinned, label) {
     process.exit(1);
   }
   for (let p = desired + 1; p <= desired + SEARCH_RANGE; p++) {
-    if (await free(p)) return { port: p, moved: true };
+    if (claimed.has(p) || RESERVED.has(p)) continue;
+    if (await free(p)) {
+      claimed.add(p);
+      return { port: p, moved: true };
+    }
   }
   console.error(
     `\n❌ No encuentro ningún puerto libre entre ${desired} y ${desired + SEARCH_RANGE} para ${label}.\n`,
@@ -85,8 +123,10 @@ function lanAddresses() {
 
 const apiPinned = !!process.env.PORT?.trim();
 const webPinned = !!process.env.WEB_PORT?.trim();
-const api = await pick(Number(process.env.PORT) || DEFAULT_API, apiPinned, 'API');
-const web = await pick(Number(process.env.WEB_PORT) || DEFAULT_WEB, webPinned, 'web');
+/** Ports handed out in this run — see the note in pick(). */
+const claimed = new Set();
+const api = await pick(Number(process.env.PORT) || DEFAULT_API, apiPinned, 'API', claimed);
+const web = await pick(Number(process.env.WEB_PORT) || DEFAULT_WEB, webPinned, 'web', claimed);
 
 if (api.moved || web.moved) {
   console.log(

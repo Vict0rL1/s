@@ -10,13 +10,14 @@
 // No dependencies — node's own os.networkInterfaces() knows all of this.
 
 import { networkInterfaces } from 'node:os';
+import { DEFAULT_API, DEFAULT_WEB } from './ports.mjs';
 
 // The same names scripts/dev.mjs sets, so `npm run phone` reports the ports the
 // app is actually on rather than the ones it would have preferred. (This used to
-// read PORT_WEB, which nothing else set — so it always printed 5173 even when the
-// dev server had moved.)
-const PORT = Number(process.env.WEB_PORT) || 5173;
-const API_PORT = Number(process.env.PORT) || 4000;
+// read PORT_WEB, which nothing else set — so it always printed Vite's default even
+// when the dev server had moved.)
+const PORT = Number(process.env.WEB_PORT) || DEFAULT_WEB;
+const API_PORT = Number(process.env.PORT) || DEFAULT_API;
 
 /**
  * The addresses another device could actually reach.
