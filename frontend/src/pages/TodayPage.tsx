@@ -258,7 +258,9 @@ export function TodayPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">Hoy</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          {/* Altura acotada: la cabecera no debe crecer con lo larga que sea
+              la descripción del mercado que toque. */}
+          <p className="mt-0.5 max-w-3xl text-sm leading-snug text-slate-500">
             {data?.market_description ??
               'Empresas puntuadas contra sus comparables de sector. Sin elegir nada.'}
           </p>

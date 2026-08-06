@@ -81,9 +81,42 @@ def build_sp500() -> list[dict]:
     return sorted(out, key=lambda r: r["symbol"])
 
 
-def build_canada(exclude: set[str]) -> list[dict]:
+def _findb_rows() -> list[dict]:
     raw = bz2.decompress(fetch(FINDB_URL)).decode("utf-8", "replace")
-    rows = list(csv.DictReader(io.StringIO(raw)))
+    return list(csv.DictReader(io.StringIO(raw)))
+
+
+def build_nasdaq(rows: list[dict]) -> list[dict]:
+    """Grandes cotizadas del NASDAQ, por bolsa y tamaño.
+
+    NO es el índice Nasdaq-100: no hay fuente pública y fiable de su
+    composición que se pueda automatizar, y afirmar que lo es sería atribuirle
+    una precisión que el dato no tiene. Es lo que dice ser — las mayores
+    cotizadas del NASDAQ — y así se etiqueta en la UI.
+
+    A diferencia de Canadá, este mercado **no** deduplica contra el S&P 500:
+    los mercados son vistas, no particiones. Que NVDA salga en ambas listas es
+    correcto, y su puntuación difiere en cada una porque cambia con quién se
+    la compara.
+    """
+    out = []
+    for row in rows:
+        if row["exchange"] != "NMS":
+            continue
+        if (row["delisted"] or "").strip().lower() in {"true", "1", "yes"}:
+            continue
+        if row["market_cap"] not in {"Mega Cap", "Large Cap"}:
+            continue
+        symbol, name, sector = row["symbol"], row["name"], row["sector"]
+        if not (symbol and name and sector) or not is_common_stock(symbol, name):
+            continue
+        if symbol in KNOWN_BAD:
+            continue
+        out.append({"symbol": symbol, "name": name.strip(), "sector": sector})
+    return sorted(out, key=lambda r: r["symbol"])
+
+
+def build_canada(rows: list[dict], exclude: set[str]) -> list[dict]:
     out = []
     for row in rows:
         if row["country"] != "Canada" or row["exchange"] not in {"NMS", "NYQ"}:
@@ -101,6 +134,9 @@ def build_canada(exclude: set[str]) -> list[dict]:
             continue
         # Una empresa ya presente en el S&P 500 no se duplica: se puntúa una vez,
         # en el mercado donde la comparación con sus pares es más limpia.
+        # Canadá es un mercado residual: recoge empresas que no cubre ya el
+        # S&P 500, donde sus comparables son más limpios. Por eso deduplica y
+        # el NASDAQ no.
         if symbol in exclude:
             continue
         out.append({"symbol": symbol, "name": name.strip(), "sector": sector})
@@ -120,13 +156,18 @@ def main() -> None:
     sp500 = build_sp500()
     write_csv(DATA_DIR / "universe_us_sp500.csv", sp500)
 
-    canada = build_canada(exclude={r["symbol"] for r in sp500})
+    findb = _findb_rows()  # se descarga una vez y lo usan los dos mercados
+    nasdaq = build_nasdaq(findb)
+    write_csv(DATA_DIR / "universe_nasdaq.csv", nasdaq)
+
+    canada = build_canada(findb, exclude={r["symbol"] for r in sp500})
     write_csv(DATA_DIR / "universe_canada.csv", canada)
 
     meta = {
         "retrieved_at": datetime.now(timezone.utc).date().isoformat(),
         "markets": {
             "us_sp500": {"source": SP500_URL, "companies": len(sp500)},
+            "nasdaq": {"source": FINDB_URL, "companies": len(nasdaq)},
             "canada": {"source": FINDB_URL, "companies": len(canada)},
         },
     }
@@ -134,6 +175,7 @@ def main() -> None:
         json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     print(f"S&P 500: {len(sp500)} empresas")
+    print(f"NASDAQ:  {len(nasdaq)} empresas")
     print(f"Canadá:  {len(canada)} empresas")
 
 

@@ -38,6 +38,31 @@ def test_el_sp500_tiene_tamano_y_sectores_plausibles():
     assert len(simbolos) == len(set(simbolos))  # sin duplicados
 
 
+def test_nasdaq_se_solapa_con_el_sp500_a_proposito():
+    """Los mercados son vistas, no particiones: el solapamiento es correcto.
+
+    Una empresa puntúa distinto en cada lista porque cambia con quién se la
+    compara, y eso es justamente lo que aporta mirar las dos.
+    """
+    nasdaq = load_market("nasdaq")
+    assert 200 <= len(nasdaq["companies"]) <= 450
+    assert len(nasdaq["sectors"]) == 11
+    simbolos = [c["symbol"] for c in nasdaq["companies"]]
+    assert len(simbolos) == len(set(simbolos))  # sin duplicados dentro del mercado
+
+    sp500 = {c["symbol"] for c in load_market("us_sp500")["companies"]}
+    solapan = set(simbolos) & sp500
+    assert len(solapan) > 50, "se esperaba solapamiento con el S&P 500"
+    assert set(simbolos) - sp500, "el NASDAQ debe aportar empresas propias"
+
+
+def test_el_nasdaq_no_se_presenta_como_el_indice_nasdaq_100():
+    """No hay fuente automatizable del índice: la UI no debe afirmar que lo es."""
+    nasdaq = load_market("nasdaq")
+    assert "Nasdaq-100" not in nasdaq["name"]
+    assert "no es el índice nasdaq-100" in nasdaq["description"].lower()
+
+
 def test_canada_usa_tickers_estadounidenses_y_no_duplica_el_sp500():
     """Se usan los tickers de NYSE/NASDAQ para que EDGAR siga cubriéndolas."""
     canada = load_market("canada")

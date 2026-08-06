@@ -24,19 +24,26 @@ MARKETS: dict[str, dict] = {
         "name": "EE. UU. — S&P 500",
         "file": "universe_us_sp500.csv",
         "description": (
-            "Los componentes del S&P 500, agrupados por sector GICS. Cobertura "
-            "completa de fundamentales: todas reportan a la SEC, así que EDGAR "
-            "las cubre gratis."
+            "Los componentes del índice, por sector GICS. Todas reportan a la "
+            "SEC, así que EDGAR cubre sus fundamentales gratis."
+        ),
+    },
+    "nasdaq": {
+        "name": "NASDAQ — grandes cotizadas",
+        "file": "universe_nasdaq.csv",
+        "description": (
+            "Las mayores cotizadas del NASDAQ, por sector. No es el índice "
+            "Nasdaq-100 (no hay fuente pública automatizable de su composición). "
+            "Se solapa con el S&P 500 a propósito: son vistas distintas."
         ),
     },
     "canada": {
         "name": "Canadá — cotizadas en EE. UU.",
         "file": "universe_canada.csv",
         "description": (
-            "Grandes canadienses con cotización en NYSE/NASDAQ. Se usan sus "
-            "tickers estadounidenses a propósito: presentan ante la SEC "
-            "(formulario 40-F), así que tienen los mismos datos que una "
-            "estadounidense y no dependen de fuentes peores."
+            "Grandes canadienses cotizadas en NYSE/NASDAQ. Se usan sus tickers "
+            "estadounidenses: presentan ante la SEC (formulario 40-F), así que "
+            "tienen los mismos datos que una estadounidense."
         ),
     },
 }

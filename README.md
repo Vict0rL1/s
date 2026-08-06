@@ -153,7 +153,7 @@ endpoint HTTP → MarketDataService → CacheStore (SQLite, TTL por tipo de dato
 
 | Vista | Qué hace |
 |---|---|
-| **Hoy** | Pantalla de entrada. S&P 500 y grandes canadienses puntuadas y ordenadas en una sola lista, sin elegir nada. Ver abajo. |
+| **Hoy** | Pantalla de entrada. S&P 500, NASDAQ y grandes canadienses puntuadas y ordenadas en una sola lista, sin elegir nada. Ver abajo. |
 | **Mercado** | Índices vía ETFs proxy, sectores SPDR, curva de rendimientos y spread 10A-2A, macro FRED, próximos resultados. |
 | **Acciones** | Gráfico de velas con SMA/RSI/MACD, fundamentales, estados financieros de EDGAR, DCF por escenarios con sensibilidad, Altman Z / Piotroski F, riesgo (beta, volatilidad, drawdown), filings e insiders. |
 | **Noticias** | Feed por ticker o general, con interpretación de IA bajo demanda claramente etiquetada. |
@@ -202,7 +202,15 @@ para ver de dónde sale la puntuación.
 | Mercado | Empresas | Por qué así |
 |---|---|---|
 | **EE. UU. — S&P 500** | 502 | Los componentes del índice, por sector GICS. Todas reportan a la SEC, así que EDGAR cubre sus fundamentales gratis. |
+| **NASDAQ — grandes cotizadas** | 310 | Las mayores del NASDAQ por bolsa y tamaño. **No se presenta como el índice Nasdaq-100**: no hay fuente pública de su composición que se pueda automatizar, y afirmar que lo es sería atribuirle una precisión que el dato no tiene. |
 | **Canadá — cotizadas en EE. UU.** | 44 | Grandes canadienses con cotización en NYSE/NASDAQ. **Se usan sus tickers estadounidenses a propósito**: esas empresas presentan formulario 40-F ante la SEC, así que tienen los mismos datos que una estadounidense. Con los tickers de Toronto habría que bajar a yfinance, que el proyecto solo admite como respaldo. |
+
+**Los mercados son vistas, no particiones.** El NASDAQ se solapa con el S&P 500
+(unas 150 empresas) y eso es correcto: se mira un mercado cada vez, y una
+empresa puntúa distinto en cada lista porque cambia con quién se la compara —
+NVDA frente a las tecnológicas del S&P no es lo mismo que frente a las del
+NASDAQ. La excepción es Canadá, que es un mercado *residual*: excluye lo que ya
+cubre el S&P 500, donde esas empresas tienen comparables más limpios.
 
 **Se puntúa dentro de cada sector y luego se mezclan los resultados.** Es más
 caro que un z-score global (uno por sector en vez de uno solo) pero es la única
@@ -234,7 +242,7 @@ cd backend && python scripts/refresh_universes.py
 ```
 
 - **S&P 500:** [datasets/s-and-p-500-companies](https://github.com/datasets/s-and-p-500-companies) (Open Data Commons PDDL).
-- **Canadá:** [JerBouma/FinanceDatabase](https://github.com/JerBouma/FinanceDatabase) (MIT), filtrado a canadienses en NYSE/NASDAQ.
+- **NASDAQ y Canadá:** [JerBouma/FinanceDatabase](https://github.com/JerBouma/FinanceDatabase) (MIT), filtrando por bolsa, tamaño y país.
 
 El script descarta lo que no es acción ordinaria (warrants tipo `CVE-WT`,
 preferentes, notas), deduplica contra el S&P 500 y lleva una lista corta de
