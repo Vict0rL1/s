@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db.engine import init_db
 from app.routers import (
+    deep_dive,
     etfs,
     market,
     meta,
@@ -51,4 +52,5 @@ app.include_router(portfolio.router)
 app.include_router(portfolio.watchlist_router)
 app.include_router(theses.router)
 app.include_router(signals.router)
+app.include_router(deep_dive.router)
 app.include_router(meta.router)

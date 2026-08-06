@@ -7,6 +7,8 @@ import type {
   Interpretation,
   NewsFeed,
   BacktestResponse,
+  DeepDiveNarrative,
+  DeepDiveReport,
   Portfolio,
   PriceAlert,
   QuantSignal,
@@ -179,6 +181,11 @@ export const api = {
       body,
     ),
   trackRecord: () => fetchJson<TrackRecord>('/api/theses/track-record'),
+  // Informe de analista
+  deepDive: (symbol: string, years = 10) =>
+    fetchJson<DeepDiveReport>(`/api/deep-dive/${symbol}?history_years=${years}`),
+  deepDiveNarrative: (symbol: string, report: DeepDiveReport) =>
+    postJson<DeepDiveNarrative>(`/api/deep-dive/${symbol}/narrative`, report),
   // Motor de señales cuantitativas
   universes: () =>
     fetchJson<{ universes: UniverseInfo[]; note: string }>('/api/signals/universes'),

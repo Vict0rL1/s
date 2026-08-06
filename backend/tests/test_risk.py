@@ -48,3 +48,13 @@ def test_max_drawdown_calculado_a_mano():
 def test_max_drawdown_serie_alcista_es_cero():
     closes = pd.Series([100.0, 101.0, 102.0])
     assert max_drawdown(closes)["max_drawdown"] == pytest.approx(0.0)
+
+
+def test_max_drawdown_tolera_fechas_duplicadas():
+    # Un proveedor puede devolver dos barras con la misma fecha. Con
+    # indexación por etiqueta esto rompía el cálculo.
+    closes = pd.Series(
+        [100.0, 120.0, 80.0, 90.0], index=["d1", "d1", "d2", "d2"]
+    )
+    result = max_drawdown(closes)
+    assert result["max_drawdown"] == pytest.approx(-1 / 3)  # 80/120 − 1

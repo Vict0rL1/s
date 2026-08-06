@@ -67,6 +67,24 @@ número:
 - [ ] **Sesgo de supervivencia**: el universo lo eliges tú hoy, con empresas
       que existen hoy. Un backtest riguroso incluiría las que quebraron.
 
+### Informe de analista
+- [ ] **Los múltiplos históricos usan EPS y patrimonio ANUALES**, no TTM
+      trimestral: la serie de P/E es escalonada (salta al publicarse cada
+      10-K) en vez de suave. Suficiente para situar el percentil, no para
+      comparar con un terminal profesional.
+- [ ] **Sin desglose por segmento ni concentración de clientes**: EDGAR no lo
+      expone estructurado en companyfacts. Para eso hay que leer el 10-K.
+- [ ] **Riesgos solo cuantitativos.** Los umbrales detectan apalancamiento,
+      cobertura, compresión de márgenes y valoración exigente. Competencia,
+      regulación, calidad de la gestión o riesgo de disrupción no salen de las
+      cifras — la UI lo dice, pero no lo suple.
+- [ ] **Catalizadores limitados a lo que hay en los datos**: próximos
+      resultados, filings recientes y eventos de noticias clasificados. No
+      cubre vencimientos de patentes, litigios en curso ni días del inversor.
+- [ ] El DCF precargado acota el crecimiento al 15 % y usa WACC fijos por
+      escenario (9/10/12 %). Es un punto de partida, no una valoración
+      afinada: edítalo en la pestaña Valoración.
+
 ### Producto
 - [ ] **Las alertas no notifican**: se evalúan cuando abres la pestaña. Es una
       app local sin proceso en marcha. Un cron + notificación de escritorio

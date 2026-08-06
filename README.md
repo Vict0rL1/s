@@ -135,6 +135,32 @@ endpoint HTTP → MarketDataService → CacheStore (SQLite, TTL por tipo de dato
 | **Señales** | Modelo cuantitativo de factores con validación walk-forward. Ver abajo. |
 | **Tesis** | Tesis fechadas con criterios de invalidación, escenarios anclados al precio del día y **registro de aciertos** con tasa de acierto y error mediano. |
 
+## Informe de analista (pestaña «Informe completo»)
+
+Deep dive por empresa que reúne negocio, crecimiento, márgenes, deuda, caja,
+valoración, riesgos, catalizadores y una lectura conjunta. **Todo se calcula a
+partir de datos** (EDGAR + precios cacheados); la narrativa en prosa es un
+botón aparte, opcional, y va etiquetada como IA.
+
+La pieza que no existía en ningún otro sitio de la app es **valoración frente
+a su propia historia**: series de P/E, P/B y FCF yield reconstruidas mes a mes
+con disciplina point-in-time (cada punto usa el ejercicio que ya estaba
+publicado en esa fecha), y el percentil donde cae el múltiplo actual dentro de
+su propio rango de 10 años. Responde a "¿está cara o barata frente a sí
+misma?", que suele informar más que compararla con el mercado.
+
+Va con dos advertencias que el módulo no esconde: los múltiplos usan el EPS
+anual publicado (no TTM trimestral), así que la serie es más rugosa que la de
+un terminal profesional; y **cotizar barato frente a su historia no implica
+estar infravalorada** — una empresa en declive estructural se abarata de forma
+permanente. Esa es la trampa de valor clásica, y la app la nombra.
+
+La sección **Lectura conjunta** sintetiza qué dicen los datos con su postura
+(constructiva / mixta / cautelosa), lo que juega a favor y en contra, y —
+siempre — **qué observaciones futuras romperían esa lectura**. No dice
+"comprar": qué hacer depende de tu cartera, horizonte y tolerancia al riesgo,
+que el modelo no conoce.
+
 ## Motor de señales cuantitativas
 
 Puntúa un universo de empresas **unas contra otras** (z-score transversal, no

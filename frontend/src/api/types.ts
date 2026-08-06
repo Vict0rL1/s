@@ -571,3 +571,141 @@ export interface EarningsEvent {
   revenue_estimate: number | null
   revenue_actual: number | null
 }
+
+// ---- Informe de analista (deep dive) ----
+
+export interface MultipleStats {
+  available: boolean
+  n: number
+  reason?: string
+  current?: number | null
+  median?: number
+  min?: number
+  max?: number
+  p25?: number
+  p75?: number
+  percentile?: number | null
+  cheapness_percentile?: number | null
+  vs_median_pct?: number | null
+  series?: { ts: string; value: number }[]
+}
+
+export interface ValuationHistory {
+  multiples: Record<string, MultipleStats>
+  cheapness_score: number | null
+  reading: string
+  years_covered: number
+  caveats: string[]
+}
+
+export interface DeepDiveRisk {
+  type: string
+  severity: string
+  evidence: string
+  why: string
+}
+
+export interface DeepDiveCatalyst {
+  type: string
+  when: string | null
+  detail: string | null
+  source: string
+  url?: string
+}
+
+export interface Verdict {
+  stance: string
+  positives: string[]
+  negatives: string[]
+  quant_label: string | null
+  quant_score: number | null
+  summary: string
+  what_would_change_it: string[]
+  disclaimer: string
+}
+
+export interface DeepDiveReport {
+  symbol: string
+  generated_at: string | null
+  price: number | null
+  business: {
+    name: string | null
+    sector: string | null
+    country: string | null
+    website: string | null
+    market_cap: number | null
+    latest_revenue: number | null
+    latest_fiscal_year: string | null
+    revenue_by_year: { year: string; revenue: number | null }[]
+    years_of_history: number
+    note: string
+  }
+  growth: {
+    years: number
+    revenue_cagr: number | null
+    eps_cagr: number | null
+    fcf_cagr: number | null
+    revenue_cagr_3y: number | null
+    yoy: { year: string; growth: number | null }[]
+    acceleration: string | null
+    reading: string
+  }
+  margins: {
+    by_year: { year: string; gross_margin: number | null; operating_margin: number | null; net_margin: number | null }[]
+    current: { gross_margin: number | null; operating_margin: number | null; net_margin: number | null }
+    trends: Record<string, string | null>
+    reading: string
+  }
+  debt: {
+    net_debt: number | null
+    total_debt: number | null
+    cash: number | null
+    debt_to_equity: number | null
+    interest_coverage: number | null
+    altman_z: AltmanZ
+    piotroski_f: { score: number | null; max_possible: number; signals: PiotroskiSignal[] }
+    by_year: { year: string; total_debt: number | null; cash: number | null }[]
+    leverage_trend: string | null
+    reading: string
+  }
+  cash_flow: {
+    by_year: {
+      year: string
+      cfo: number | null
+      capex: number | null
+      fcf: number | null
+      fcf_margin: number | null
+      fcf_conversion: number | null
+      capex_intensity: number | null
+    }[]
+    current: Record<string, number | null | string>
+    fcf_trend: string | null
+    reading: string
+  }
+  valuation: ValuationHistory
+  dcf: {
+    scenarios: Record<string, DcfScenarioResult>
+    base_fcf: number
+    net_debt: number
+    shares_outstanding: number
+    current_price: number | null
+    note: string
+  } | null
+  quant_signal: QuantSignal | null
+  risk_metrics: {
+    annualized_volatility: number | null
+    max_drawdown: { max_drawdown: number; peak: string; trough: string } | null
+  } | null
+  risks: DeepDiveRisk[]
+  catalysts: DeepDiveCatalyst[]
+  verdict: Verdict
+  data_sources: { financials: string; quote: string | null; as_of: string }
+  computed_by: string
+}
+
+export interface DeepDiveNarrative {
+  generated_by: 'llm'
+  content_md: string
+  model: string
+  disclaimer: string
+}

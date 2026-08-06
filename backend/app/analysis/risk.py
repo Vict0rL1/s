@@ -33,16 +33,20 @@ def beta(asset_returns: pd.Series, benchmark_returns: pd.Series) -> float | None
 
 
 def max_drawdown(closes: pd.Series) -> dict | None:
-    """Máxima caída pico-a-valle del periodo, con fechas si el índice las trae."""
+    """Máxima caída pico-a-valle del periodo, con fechas si el índice las trae.
+
+    Usa indexación **posicional**, no por etiqueta: un histórico con fechas
+    repetidas (dos barras el mismo día, duplicados del proveedor) haría que
+    `.loc[]` devolviera una Series en vez de un escalar y rompiera el cálculo.
+    """
     if len(closes) < 2:
         return None
     running_max = closes.cummax()
     drawdown = closes / running_max - 1.0
-    trough_idx = drawdown.idxmin()
-    dd = float(drawdown.loc[trough_idx])
-    peak_idx = closes.loc[:trough_idx].idxmax()
+    trough_pos = int(drawdown.to_numpy().argmin())
+    peak_pos = int(closes.iloc[: trough_pos + 1].to_numpy().argmax())
     return {
-        "max_drawdown": dd,
-        "peak": str(peak_idx),
-        "trough": str(trough_idx),
+        "max_drawdown": float(drawdown.iloc[trough_pos]),
+        "peak": str(closes.index[peak_pos]),
+        "trough": str(closes.index[trough_pos]),
     }
