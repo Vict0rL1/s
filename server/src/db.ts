@@ -450,6 +450,18 @@ function createSchema(d: DatabaseSync): void {
       PRIMARY KEY (league, team_id)
     );
 
+    -- How much each STADIUM moves the run total, measured against what the model
+    -- expected there. Coors Field comes out at 1.23, Seattle at 0.90 — see
+    -- baseball/parkFactors.ts for the measurement and its validation.
+    CREATE TABLE IF NOT EXISTS bsb_park_factors (
+      league     TEXT NOT NULL,
+      site       TEXT NOT NULL,   -- Retrosheet park id, e.g. DEN02
+      factor     REAL NOT NULL,
+      games      INTEGER NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (league, site)
+    );
+
     -- Runs allowed, not EARNED runs: the model predicts the scoreboard, and the
     -- scoreboard does not care whose error it was.
     CREATE TABLE IF NOT EXISTS bsb_pitchers (

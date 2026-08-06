@@ -34,14 +34,15 @@ import {
   getRotation,
   getTeam,
 } from './repo.ts';
+import { getHomePark, getParkFactor } from './parkFactors.ts';
 import { getLeagueRunsPerGame } from './ratings.ts';
 import type { BsbRecord, LeagueId } from './types.ts';
 
 export const DISCLAIMER =
   'Estimación estadística basada en Elo con ventaja de campo, el lanzador abridor anunciado, ' +
-  'una distribución binomial negativa de carreras y las cuotas del mercado. NO conoce el bullpen, ' +
-  'ni la alineación, ni las lesiones de última hora, ni el clima o las dimensiones del estadio. ' +
-  'No es una certeza ni una recomendación para apostar.';
+  'el factor del estadio y una distribución binomial negativa de carreras, comparada con las ' +
+  'cuotas del mercado. NO conoce el bullpen, ni la alineación, ni las lesiones de última hora, ' +
+  'ni el clima del día. No es una certeza ni una recomendación para apostar.';
 
 /** The over/under line the app quotes when the market doesn't supply one. */
 export const DEFAULT_TOTAL_LINE = 8.5;
@@ -132,6 +133,22 @@ export interface BsbPrediction {
     grid: { cells: number[][]; maxRuns: number; tail: number };
     margins: RunMargin[];
   };
+  /**
+   * The ballpark, when it is known.
+   *
+   * On the prediction and not just inside the arithmetic, because this app's whole
+   * claim is that every signal is visible. A reader who sees "202 carreras
+   * esperadas" at Coors deserves to know that 23 % of it is the altitude, not the
+   * two line-ups.
+   */
+  park: {
+    site: string;
+    name: string;
+    factor: number;
+    games: number;
+    /** Runs the stadium adds or removes versus a neutral one, for this matchup. */
+    runsVsNeutral: number;
+  } | null;
   market: BsbMarketComparison;
   h2h: {
     total: number;
@@ -246,9 +263,14 @@ export function buildBaseballPrediction(
   const homeSp = getPitcher(league, homeSpId ?? '')?.rating ?? null;
   const awaySp = getPitcher(league, awaySpId ?? '')?.rating ?? null;
 
+  // The ballpark. Read from the home team's recent schedule rather than
+  // configured, so a club that changed stadium is followed automatically.
+  const park = getParkFactor(league, getHomePark(league, homeId));
+
   const lambda = expectedRuns(home.elo, away.elo, leagueRuns, {
     homePitcher: homeSp,
     awayPitcher: awaySp,
+    parkFactor: park?.factor ?? null,
   });
   home.expectedRuns = round2(lambda.home);
   away.expectedRuns = round2(lambda.away);
@@ -258,6 +280,9 @@ export function buildBaseballPrediction(
   away.starter = buildStarter(league, awaySpId, round2(lambda.home / lambda.baseHome));
 
   const dist = runDistribution(lambda.home, lambda.away);
+  // Named once and used everywhere it is quoted, so the total on the card, the
+  // park's contribution and the bullet text cannot come from different bases.
+  const expectedTotal = round2(expectedTotalRuns(dist));
   const win = winProbability(dist);
   const over = overProbability(dist, totalLine);
   const line = runLine(dist);
@@ -401,6 +426,15 @@ export function buildBaseballPrediction(
     `Más de ${totalLine} carreras: ${pct1(over)}% · menos: ${pct1(1 - over)}%. ` +
       `Línea de carreras: ${home.name} −1.5 al ${pct1(line.homeCovers)}%.`,
   );
+  if (park && Math.abs(park.factor - 1) >= 0.02) {
+    const pct = Math.round((park.factor - 1) * 100);
+    const runs = round2(expectedTotal - expectedTotal / park.factor);
+    bullets.push(
+      `Estadio: ${park.name} ${pct > 0 ? 'sube' : 'baja'} el total un ${Math.abs(pct)}% ` +
+        `(${runs > 0 ? '+' : ''}${runs} carreras) sobre un estadio neutro, medido en ${park.games} partidos allí. ` +
+        `Ya está dentro de las carreras esperadas.`,
+    );
+  }
   bullets.push(
     `Probabilidad de entradas extra: ${pct1(dist.extraInnings)}% (en MLB ocurre en ~8-9% de los partidos).`,
   );
@@ -458,7 +492,7 @@ export function buildBaseballPrediction(
     runs: {
       expectedHome: home.expectedRuns,
       expectedAway: away.expectedRuns,
-      expectedTotal: round2(expectedTotalRuns(dist)),
+      expectedTotal,
       totalLine,
       over: Math.round(over * 100000) / 100000,
       under: Math.round((1 - over) * 100000) / 100000,
@@ -471,6 +505,23 @@ export function buildBaseballPrediction(
       grid: gridForDisplay(dist),
       margins: marginDistribution(dist),
     },
+    park: park
+      ? {
+          site: park.site,
+          name: park.name,
+          factor: park.factor,
+          games: park.games,
+          // What the factor is WORTH here, in runs — the unit the over/under is
+          // priced in. A percentage is not actionable; "+1.9 carreras" is.
+          //
+          // Derived from expectedTotal and NOT from the raw lambdas, even though the
+          // factor was applied to the lambdas: the distribution is truncated, so its
+          // mean sits a little under their sum. Using the lambdas made the card claim
+          // "+2.00 carreras" next to a total that had only moved 1.93 — two numbers
+          // on one card computed from two different bases. The audit caught it.
+          runsVsNeutral: round2(expectedTotal - expectedTotal / park.factor),
+        }
+      : null,
     market: marketComparison,
     h2h: { total: meetings.length, homeWins: hw, awayWins: aw, recent: meetings },
     reasoning: { factors, text: reasoningText },

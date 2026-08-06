@@ -9,7 +9,8 @@ import {
 import MatchCard from './MatchCard';
 import PlayerProfile from './PlayerProfile';
 import TrackRecordPanel from './TrackRecordPanel';
-import { DayFilter, DayHeading, pillClass } from './ui';
+import { DayFilter, DayHeading, pillClass, StaleHistoryWarning } from './ui';
+import { staleness } from '../lib/staleness';
 import { dayChipLabel, groupByDay } from '../lib/format';
 
 export default function TennisDashboard() {
@@ -127,7 +128,11 @@ export default function TennisDashboard() {
           </div>
         </div>
         {meta && <RefreshInfo meta={meta} />}
-        {meta && <StaleHistoryWarning meta={meta} />}
+        <StaleHistoryWarning
+          info={staleness('tennis', meta?.historyThrough, meta?.dataSource === 'seed')}
+          what="Los Elo por superficie"
+          fix="npm run update-data"
+        />
         <TrackRecordPanel tour={tour} />
       </header>
 
@@ -210,29 +215,6 @@ export default function TennisDashboard() {
           onClose={() => setProfile(null)}
         />
       )}
-    </div>
-  );
-}
-
-/**
- * Elo is only as current as the match history behind it. If the newest match is
- * months old (e.g. the download fell back to an outdated mirror), say so plainly
- * instead of presenting stale ratings as if they were current.
- */
-function StaleHistoryWarning({ meta }: { meta: Meta }) {
-  if (meta.dataSource === 'seed' || !meta.historyThrough) return null;
-  const y = Number(meta.historyThrough.slice(0, 4));
-  const m = Number(meta.historyThrough.slice(4, 6));
-  if (!y || !m) return null;
-  const monthsOld = (new Date().getFullYear() - y) * 12 + (new Date().getMonth() + 1 - m);
-  if (monthsOld <= 6) return null;
-  const years = Math.round((monthsOld / 12) * 10) / 10;
-  return (
-    <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-[16px] text-amber-200">
-      ⚠️ El historial de partidos termina en {m}/{y} (~{years} años). Los Elo no reflejan a los
-      jugadores actuales, así que estas predicciones son poco fiables. Vuelve a ejecutar{' '}
-      <code className="rounded bg-amber-900/40 px-1">npm run update-data</code> desde una red que no
-      bloquee GitHub para obtener datos al día.
     </div>
   );
 }

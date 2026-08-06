@@ -228,6 +228,14 @@ export function expectedRuns(
     homePitcher?: number | null;
     awayPitcher?: number | null;
     pitcherWeight?: number;
+    /**
+     * How much this STADIUM moves the run total. 1.23 at Coors, 0.90 in Seattle.
+     *
+     * Applies to BOTH sides, unlike the pitcher factors: thin air and a deep
+     * outfield do not care who is batting. Undefined leaves it out entirely, which
+     * is what the replay that FITS the factors has to do — see parkFactors.ts.
+     */
+    parkFactor?: number | null;
   } = {},
 ): ExpectedRuns {
   const adv = opts.neutral ? 0 : (opts.homeAdvantage ?? HOME_ADVANTAGE);
@@ -240,11 +248,16 @@ export function expectedRuns(
   // model that thinks an ace helps his own offence.
   const homeFactor = pitcherRunFactor(opts.awayPitcher ?? null, opts.pitcherWeight);
   const awayFactor = pitcherRunFactor(opts.homePitcher ?? null, opts.pitcherWeight);
-  const baseHome = clamp(leagueRunsPerGame * share * tilt, 1.2, 12);
-  const baseAway = clamp((leagueRunsPerGame * (1 - share)) / tilt, 1.2, 12);
+  // The stadium scales both sides equally. Note it multiplies the BASE too, so the
+  // "both starters average" denominator a pitcher's rating is measured against is
+  // also a Coors-adjusted denominator — otherwise an ace pitching in Denver would
+  // be blamed for the altitude.
+  const park = opts.parkFactor ?? 1;
+  const baseHome = clamp(leagueRunsPerGame * share * tilt * park, 1.2, 14);
+  const baseAway = clamp(((leagueRunsPerGame * (1 - share)) / tilt) * park, 1.2, 14);
   return {
-    home: clamp(baseHome * homeFactor, 1.2, 12),
-    away: clamp(baseAway * awayFactor, 1.2, 12),
+    home: clamp(baseHome * homeFactor, 1.2, 14),
+    away: clamp(baseAway * awayFactor, 1.2, 14),
     baseHome,
     baseAway,
   };

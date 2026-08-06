@@ -24,6 +24,7 @@ import {
   RUN_SENSITIVITY,
   SEASON_CARRYOVER,
 } from './model.ts';
+import { factorsFrom, storeParkFactors, type ParkAccumulator } from './parkFactors.ts';
 import type { LeagueId } from './types.ts';
 
 export interface ReplayGame {
@@ -36,6 +37,15 @@ export interface ReplayGame {
   away_runs: number;
   home_sp: string | null;
   away_sp: string | null;
+  /**
+   * Retrosheet park id (e.g. DEN02 = Coors Field).
+   *
+   * Carried through the replay because the park is worth ~23 % of the run total at
+   * Coors and −10 % in Seattle — see parkFactors.ts. It has to be HERE and not
+   * only in the live row, because a park factor fitted on a replay that cannot see
+   * the park is a park factor of 1.
+   */
+  site: string | null;
 }
 
 export interface BsbTeamState {
@@ -141,6 +151,15 @@ function freshPitcher(): PitcherState {
 export interface ReplayResult {
   teams: Map<string, BsbTeamState>;
   pitchers: Map<string, PitcherState>;
+  /**
+   * Per-stadium tally of runs scored there against runs the model expected.
+   *
+   * Collected in this same pass because it costs nothing here and because the
+   * validated experiment fitted the factors against exactly these lambdas — the
+   * ones computed WITHOUT a park factor. Fitting against park-adjusted lambdas
+   * would be fitting a correction to its own output.
+   */
+  parks: Map<string, ParkAccumulator>;
 }
 
 export function replayGames(games: ReplayGame[], opts: ReplayOptions = {}): ReplayResult {
@@ -159,6 +178,7 @@ export function replayGames(games: ReplayGame[], opts: ReplayOptions = {}): Repl
 
   const teams = new Map<string, BsbTeamState>();
   const pitchers = new Map<string, PitcherState>();
+  const parks = new Map<string, ParkAccumulator>();
   const team = (id: string) => {
     let s = teams.get(id);
     if (!s) teams.set(id, (s = freshTeam()));
@@ -215,6 +235,15 @@ export function replayGames(games: ReplayGame[], opts: ReplayOptions = {}): Repl
       pitchers: { home: homeSpRating, away: awaySpRating },
       anchor,
     });
+
+    // What the stadium saw, against what the model thought it would see.
+    if (g.site) {
+      const a = parks.get(g.site) ?? { observed: 0, expected: 0, games: 0 };
+      a.observed += g.home_runs + g.away_runs;
+      a.expected += lambda.home + lambda.away;
+      a.games += 1;
+      parks.set(g.site, a);
+    }
 
     // --- update ---
     const expected = eloExpectation(home.elo, away.elo, homeAdv);
@@ -275,7 +304,7 @@ export function replayGames(games: ReplayGame[], opts: ReplayOptions = {}): Repl
     }
   }
 
-  return { teams, pitchers };
+  return { teams, pitchers, parks };
 }
 
 export function firstSeasonRunAverage(games: ReplayGame[]): number {
@@ -295,7 +324,7 @@ export function loadGames(league: LeagueId, fromSeason = 0): ReplayGame[] {
   return getDb()
     .prepare(
       `SELECT season, game_date, game_number, home_id, away_id, home_runs, away_runs,
-              home_sp, away_sp
+              home_sp, away_sp, site
        FROM bsb_games WHERE league = ? AND season >= ?
        ORDER BY game_date ASC, game_number ASC, id ASC`,
     )
@@ -346,7 +375,7 @@ export function recomputeBaseballRatings(): Record<string, number> {
     const latest = games[games.length - 1].season;
     // Run averages from the last two seasons only: a 2016 offence says little
     // about this one, and the scoring environment itself has moved since.
-    const { teams, pitchers } = replayGames(games, { scoringFromSeason: latest - 1 });
+    const { teams, pitchers, parks } = replayGames(games, { scoringFromSeason: latest - 1 });
 
     db.exec('BEGIN');
     try {
@@ -382,6 +411,10 @@ export function recomputeBaseballRatings(): Record<string, number> {
       db.exec('ROLLBACK');
       throw e;
     }
+    // Park factors come from the same replay — see ReplayResult.parks. Stored
+    // after the ratings commit, in its own transaction, so a failure here leaves
+    // the ratings intact rather than rolling back a full archive replay.
+    storeParkFactors(league as LeagueId, factorsFrom(parks), parks);
     out[league] = teams.size;
   }
   return out;

@@ -61,6 +61,10 @@ export interface BsbPrediction {
     grid: { cells: number[][]; maxRuns: number; tail: number };
     margins: BsbRunMargin[];
   };
+  /** The ballpark, when the archive knows it. Null = unknown, NOT "neutral". */
+  park: {
+    site: string; name: string; factor: number; games: number; runsVsNeutral: number;
+  } | null;
   market: BsbMarket;
   h2h: {
     total: number; homeWins: number; awayWins: number;

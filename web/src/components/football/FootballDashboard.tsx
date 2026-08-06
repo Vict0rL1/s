@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading } from '../ui';
+import {
+  pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning,
+} from '../ui';
+import { staleness } from '../../lib/staleness';
 import {
   fbApi,
   type FbFixtureWithPrediction,
@@ -201,7 +204,11 @@ export default function FootballDashboard() {
         </div>
       )}
 
-      {activeMeta && <StaleWarning name={activeMeta.name} through={activeMeta.historyThrough} />}
+      <StaleHistoryWarning
+        info={staleness('football', activeMeta?.historyThrough, meta?.dataSource === 'seed')}
+        what="Los Elo y los goles esperados"
+        fix="npm run update-data:fb"
+      />
       {league && <TrackRecordPanel league={league} />}
 
       {loading ? (
@@ -292,23 +299,6 @@ export default function FootballDashboard() {
       )}
 
       {team && <TeamProfile league={team.league} id={team.id} onClose={() => setTeam(null)} />}
-    </div>
-  );
-}
-
-function StaleWarning({ name, through }: { name: string; through: string | null }) {
-  if (!through) return null;
-  const y = Number(through.slice(0, 4));
-  const m = Number(through.slice(4, 6));
-  if (!y || !m) return null;
-  const monthsOld = (new Date().getFullYear() - y) * 12 + (new Date().getMonth() + 1 - m);
-  // Football has a real summer break, so a few stale months is normal.
-  if (monthsOld <= 5) return null;
-  return (
-    <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[15px] leading-relaxed text-amber-200/90">
-      ⚠️ Los resultados de {name} terminan en {m}/{y} (~{Math.round(monthsOld)} meses). Los Elo{' '}
-      <strong>no describen a las plantillas actuales</strong>. Vuelve a ejecutar{' '}
-      <code className="rounded bg-amber-900/40 px-1">npm run update-data:fb</code> para datos al día.
     </div>
   );
 }

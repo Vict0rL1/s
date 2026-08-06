@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading } from '../ui';
+import {
+  pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning,
+} from '../ui';
+import { staleness } from '../../lib/staleness';
 import {
   bsbApi,
   type BsbGameWithPrediction,
@@ -123,7 +126,11 @@ export default function BaseballDashboard() {
           </button>
         </div>
         {meta && <DataLine meta={meta} />}
-        {leagueMeta && <StaleWarning name={leagueMeta.name} through={leagueMeta.historyThrough} />}
+        <StaleHistoryWarning
+          info={staleness('baseball', leagueMeta?.historyThrough, meta?.dataSource === 'seed')}
+          what="Los Elo y la distribución de carreras"
+          fix="npm run update-data:bsb"
+        />
         {league && <TrackRecordPanel league={league} />}
       </header>
 
@@ -253,17 +260,58 @@ export default function BaseballDashboard() {
   );
 }
 
+/**
+ * The origin badge.
+ *
+ * THREE states, not two. `dataSource` is only written by `update-data`, so a
+ * database populated some other way — restored from a copy, or by an older version
+ * — leaves it unset. The old version treated anything that was not "retrosheet" as
+ * "sin datos", which printed the badge SIN DATOS immediately to the left of
+ * "37.262 partidos · 32 equipos". Two claims on one line, one of them false.
+ *
+ * The game count is the fact that settles whether there is data; the meta key only
+ * says where it came from. So an unlabelled but populated database says so, rather
+ * than being called empty. (The tennis tab already got this right — this is the
+ * check it had and baseball did not.)
+ */
+function originBadge(meta: BsbMeta): { text: string; className: string; title: string } {
+  if (meta.counts.games === 0) {
+    return {
+      text: 'sin datos',
+      className: 'bg-rose-900/40 text-rose-300',
+      title: 'La base está vacía. Ejecuta npm run update-data:bsb.',
+    };
+  }
+  if (meta.dataSource === 'retrosheet') {
+    return {
+      text: 'datos reales (Retrosheet)',
+      className: 'bg-emerald-900/40 text-emerald-300',
+      title: 'Jugada a jugada desde los ficheros de eventos de Retrosheet.',
+    };
+  }
+  if (meta.dataSource === 'seed') {
+    return {
+      text: 'datos demo',
+      className: 'bg-amber-900/40 text-amber-300',
+      title: 'Partidos sintéticos. Ejecuta npm run update-data:bsb para datos reales.',
+    };
+  }
+  return {
+    text: 'origen sin registrar',
+    className: 'bg-white/[0.06] text-[#9aa1ac]',
+    title:
+      'Hay partidos en la base, pero nada anotó de dónde salieron. Ejecuta ' +
+      'npm run update-data:bsb para dejarlo registrado.',
+  };
+}
+
 function DataLine({ meta }: { meta: BsbMeta }) {
-  const real = meta.dataSource === 'retrosheet';
+  const origin = originBadge(meta);
   return (
     <div className="mt-2 space-y-1 text-[14px] text-[#7b828d]">
       <p>
-        <span
-          className={`rounded px-1.5 py-0.5 ${
-            real ? 'bg-emerald-900/40 text-emerald-300' : 'bg-amber-900/40 text-amber-300'
-          }`}
-        >
-          {real ? 'datos reales (Retrosheet)' : 'sin datos'}
+        <span className={`rounded px-1.5 py-0.5 ${origin.className}`} title={origin.title}>
+          {origin.text}
         </span>{' '}
         · {meta.counts.games.toLocaleString('es')} partidos · {meta.counts.teams} equipos
         {meta.updatedAt && <> · actualizado {formatDate(meta.updatedAt.slice(0, 10).replace(/-/g, ''))}</>}
@@ -279,23 +327,6 @@ function DataLine({ meta }: { meta: BsbMeta }) {
         )}
         {!meta.hasOddsKey && <> · configura ODDS_API_KEY para cuotas reales</>}
       </p>
-    </div>
-  );
-}
-
-function StaleWarning({ name, through }: { name: string; through: string | null }) {
-  if (!through) return null;
-  const y = Number(through.slice(0, 4));
-  const m = Number(through.slice(4, 6));
-  const months = (new Date().getUTCFullYear() - y) * 12 + (new Date().getUTCMonth() + 1 - m);
-  // Baseball's off-season runs November to March, so a five-month gap in February
-  // is normal rather than a problem worth shouting about.
-  if (months <= 6) return null;
-  return (
-    <div className="mt-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-2.5 text-[14px] leading-relaxed text-amber-200/90">
-      ⚠️ El historial de {name} termina en {m}/{y} (~{Math.round(months / 12 * 10) / 10} años). Los Elo
-      no describen a las plantillas actuales. Vuelve a ejecutar{' '}
-      <code className="rounded bg-amber-900/40 px-1">npm run update-data:bsb</code>.
     </div>
   );
 }

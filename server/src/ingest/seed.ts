@@ -15,6 +15,7 @@
 import { getDb, resetData, setMeta } from '../db.ts';
 import { recomputeRatings } from './ratings.ts';
 import { expectedScore } from '../model/elo.ts';
+import { demoKickoffs } from '../demoSchedule.ts';
 import { tournamentsConfig } from '../config.ts';
 import type { Surface, TourId } from '../types.ts';
 
@@ -327,7 +328,14 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
 
   const tconf = (id: string) => tournamentsConfig.tournaments.find((t) => t.id === id);
   let count = 0;
-  let slot = 0; // spreads demo fixtures across the next few days, starting today
+  // Plausible kick-off times across the next few days, always still ahead. One
+  // per pair, taken in order — see demoSchedule.ts for why the old version (a
+  // fixed number of hours from `now`) put every match at the seed's wall clock.
+  const kickoffs = demoKickoffs(
+    'tennis',
+    plan.reduce((n, b) => n + b.pairs.length, 0),
+  );
+  let slot = 0;
   db.exec('BEGIN');
   plan.forEach((block) => {
     const conf = tconf(block.tournamentId);
@@ -347,7 +355,7 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
         block.tournamentId,
         conf?.name ?? block.tournamentId,
         block.surface,
-        nearTermISO(slot++),
+        kickoffs[slot++],
         a.name,
         b.name,
         a.id,
@@ -363,16 +371,6 @@ function seedUpcoming(tour: TourId, players: SeedPlayer[], rng: () => number): n
   });
   db.exec('COMMIT');
   return count;
-}
-
-/**
- * Spread demo fixtures across the next few days starting a couple of hours from
- * now, so there is always something "today/soon" to show (real upcoming matches
- * come from The Odds API via `npm run update-data`).
- */
-function nearTermISO(slot: number): string {
-  const hoursFromNow = 3 + slot * 7; // first ~3h out, then ~every 7h → ~4 days
-  return new Date(Date.now() + hoursFromNow * 3600 * 1000).toISOString();
 }
 
 function round2(n: number): number {

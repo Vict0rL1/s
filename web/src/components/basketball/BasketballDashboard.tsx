@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading } from '../ui';
+import {
+  pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning,
+} from '../ui';
+import { staleness } from '../../lib/staleness';
 import { countryFlag, dayChipLabel, groupByDay } from '../../lib/format';
 import {
   bbApi,
@@ -126,7 +129,11 @@ export default function BasketballDashboard() {
           </button>
         </div>
         {meta && <DataLine meta={meta} />}
-        {leagueMeta && <StaleWarning name={leagueMeta.name} through={leagueMeta.historyThrough} />}
+        <StaleHistoryWarning
+          info={staleness('basketball', leagueMeta?.historyThrough, meta?.dataSource === 'seed')}
+          what="Los Elo, el margen y el total"
+          fix="npm run update-data:bb"
+        />
         {league && <BbTrackRecordPanel league={league} />}
       </header>
 
@@ -293,23 +300,6 @@ function DataLine({ meta }: { meta: BbMeta }) {
  * matters even more than in tennis: a roster can change completely over one
  * summer, so a rating from a past season describes a team that no longer exists.
  */
-function StaleWarning({ name, through }: { name: string; through: string | null }) {
-  if (!through) return null;
-  const y = Number(through.slice(0, 4));
-  const m = Number(through.slice(4, 6));
-  if (!y || !m) return null;
-  const monthsOld = (new Date().getFullYear() - y) * 12 + (new Date().getMonth() + 1 - m);
-  if (monthsOld <= 4) return null;
-  return (
-    <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-[16px] text-amber-200">
-      ⚠️ Los resultados de {name} terminan en {m}/{y} (~{Math.round(monthsOld)} meses). Los Elo{' '}
-      <strong>no describen a las plantillas actuales</strong>, así que estas predicciones son poco
-      fiables. Vuelve a ejecutar{' '}
-      <code className="rounded bg-amber-900/40 px-1">npm run update-data:bb</code> con acceso a
-      ESPN para datos al día.
-    </div>
-  );
-}
 
 /**
  * The app's own scorecard for basketball. Unlike tennis it can also report how far

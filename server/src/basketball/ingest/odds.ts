@@ -18,6 +18,7 @@
 import { getDb, setMeta } from '../../db.ts';
 import { basketballConfig, env } from '../../config.ts';
 import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
+import { demoKickoffs } from '../../demoSchedule.ts';
 import { homeWinProbability } from '../elo.ts';
 import type { LeagueId } from '../types.ts';
 
@@ -186,7 +187,9 @@ function generateFixtures(league: LeagueId, count = 8): AggregatedEvent[] {
   if (teams.length < 2) return [];
 
   const out: AggregatedEvent[] = [];
-  const now = Date.now();
+  // Plausible kick-off times on the clock, always still ahead — see
+  // demoSchedule.ts for why this is not `Date.now() + n days`.
+  const kickoffs = demoKickoffs('basketball', count);
   for (let i = 0; i + 1 < teams.length && out.length < count; i += 2) {
     const home = teams[i];
     const away = teams[i + 1];
@@ -198,7 +201,7 @@ function generateFixtures(league: LeagueId, count = 8): AggregatedEvent[] {
     const vig = 1.05;
     out.push({
       id: `fixture-${league}-${i / 2}`,
-      commence_time: new Date(now + (i / 2 + 1) * 86_400_000).toISOString(),
+      commence_time: kickoffs[out.length],
       home: home.name,
       away: away.name,
       price: {

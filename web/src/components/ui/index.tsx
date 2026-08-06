@@ -764,3 +764,53 @@ export function EmptyState({
     </div>
   );
 }
+
+/**
+ * "The history behind these ratings ends in 2015."
+ *
+ * WHY THIS IS IN THE DESIGN SYSTEM AND NOT IN ONE DASHBOARD. It used to live
+ * inside the tennis tab, which is the one sport whose data is synthetic and
+ * therefore never triggers it — while the NBA tab, whose history genuinely ends in
+ * June 2015, said nothing at all. A confidently drawn 63 % looks exactly the same
+ * whether it rests on last week's games or on games from eleven years ago, so this
+ * banner is the only thing standing between the reader and a number they have no
+ * way to distrust.
+ *
+ * `lib/staleness.ts` decides WHEN, per sport, against that sport's own off-season —
+ * so the NFL tab does not cry wolf every August. This decides how it looks.
+ *
+ * It names the date, the size of the gap, and the one command that fixes it,
+ * because a warning the reader cannot act on is just an apology.
+ */
+export function StaleHistoryWarning({
+  info,
+  what,
+  fix,
+}: {
+  /** From `staleness(sport, through, isDemo)`. Renders nothing when null or fresh. */
+  info: { through: Date; yearsOld: number; stale: boolean } | null;
+  /** What the stale history undermines: "los Elo", "los Elo y los goles esperados". */
+  what: string;
+  /** The command that refreshes this sport, e.g. "npm run update-data:bb". */
+  fix: string;
+}) {
+  if (!info?.stale) return null;
+  const when = info.through.toLocaleDateString('es', { month: 'long', year: 'numeric' });
+  // Under a year, months read more honestly than "0.6 años".
+  const gap =
+    info.yearsOld >= 1
+      ? `${info.yearsOld} ${info.yearsOld === 1 ? 'año' : 'años'}`
+      : `${Math.max(1, Math.round((info.yearsOld * 365.25) / 30.4))} meses`;
+  return (
+    <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] p-4 text-[15px] leading-relaxed text-amber-100/90">
+      <p className="font-semibold text-amber-100">
+        ⚠️ El historial termina en {when} — hace {gap}
+      </p>
+      <p className="mt-1">
+        {what} no reflejan a los equipos actuales, así que estas predicciones son poco fiables.
+        Ejecuta <code className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[14px]">{fix}</code>{' '}
+        desde una red que no bloquee las fuentes de datos.
+      </p>
+    </div>
+  );
+}

@@ -12,8 +12,9 @@ Cinco deportes en **pestañas separadas** (nunca mezclados), más una pestaña p
   Ver [docs/FOOTBALL.md](docs/FOOTBALL.md).
 - **⚾ Béisbol** — MLB (y NPB, KBO y universitario con probabilidades de mercado). El deporte donde
   **un solo jugador anunciado el día antes**, el lanzador abridor, mueve más el pronóstico que nada
-  salvo los propios equipos — y puedes cambiarlo tú. Ganador, total, línea de carreras (±1.5) y
-  rejilla de marcadores, todo de la misma distribución.
+  salvo los propios equipos — y puedes cambiarlo tú. Ahora también **el estadio**: Coors Field sube
+  el total un 22 %, Seattle lo baja un 8 %. Ganador, total, línea de carreras (±1.5) y rejilla de
+  marcadores, todo de la misma distribución.
   Ver [docs/BASEBALL.md](docs/BASEBALL.md).
 - **🏈 Fútbol americano** — NFL: hándicap, total y ganador con una distribución de margen que
   **conoce los números clave del deporte** (el margen acaba en 3 el 15 % de las veces y en 9 el
@@ -80,6 +81,13 @@ posible *value* cuando el modelo discrepa de las cuotas.
 - **Las carreras no son Poisson y aquí no se finge que lo sean.** Una entrada acaba con tres outs,
   no con el reloj, así que las entradas grandes se agrupan: media 4,47 carreras, varianza 9,49. Una
   binomial negativa lo recoge; usar Poisson cuesta 1,3 puntos de acierto en el over/under.
+- **El estadio, medido.** Coors Field y Petco Park no son el mismo deporte, y hasta ahora el modelo
+  los trataba igual —con el dato ya descargado: la columna que nombra el estadio de los 37.262
+  partidos del archivo. Coors sale **×1.220** (+22 % al total) y Seattle **×0.917**; 2,89 carreras
+  entre los extremos, sobre un total de ~8,9. Validado hacia adelante en **seis cortes de 2014 a
+  2024, los seis mejoran**, y el over/under acertado pasa de **53,4 % a 54,9 %**. La mejora se
+  concentra **siete veces** en los parques extremos y es cero en los neutros: el modelo no se volvió
+  más listo, dejó de equivocarse en Denver.
 - **La diagonal de la rejilla está vacía a propósito**: un marcador final nunca queda empatado. Esa
   probabilidad es la de irse a entradas extra y se reparte en las casillas de una carrera.
 - **Ganador, total, línea de carreras (±1.5), marcador exacto y diferencia**, todo sumado de la

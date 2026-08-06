@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading } from '../ui';
+import {
+  pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning,
+} from '../ui';
+import { staleness } from '../../lib/staleness';
 import { countryFlag, dayChipLabel, groupByDay } from '../../lib/format';
 import {
   nflApi,
@@ -127,7 +130,11 @@ export default function NflDashboard() {
           </button>
         </div>
         {meta && <DataLine meta={meta} />}
-        {leagueMeta && <StaleWarning name={leagueMeta.name} through={leagueMeta.historyThrough} />}
+        <StaleHistoryWarning
+          info={staleness('nfl', leagueMeta?.historyThrough)}
+          what="Los Elo, el hándicap y el total"
+          fix="npm run update-data:naf"
+        />
         {league && <NflTrackRecordPanel league={league} />}
       </header>
 
@@ -292,21 +299,6 @@ function DataLine({ meta }: { meta: NflMeta }) {
  * September, so "the history ends five months ago" in July means nothing is
  * missing at all.
  */
-function StaleWarning({ name, through }: { name: string; through: string | null }) {
-  if (!through || through.length < 8) return null;
-  const lastSeason = Number(through.slice(0, 4)) - (Number(through.slice(4, 6)) <= 2 ? 1 : 0);
-  const now = new Date();
-  const currentSeason = now.getUTCMonth() >= 2 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
-  const missed = currentSeason - 1 - lastSeason;
-  if (missed < 1) return null;
-  return (
-    <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[15px] leading-relaxed text-amber-200/90">
-      ⚠️ El historial de {name} termina en la temporada {lastSeason}: falta
-      {missed > 1 ? 'n' : ''} {missed} temporada{missed > 1 ? 's' : ''}. Vuelve a ejecutar{' '}
-      <code className="rounded bg-amber-900/40 px-1">npm run update-data:naf</code>.
-    </div>
-  );
-}
 
 /**
  * The track record.

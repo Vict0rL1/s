@@ -45,6 +45,7 @@ import {
   RUN_SENSITIVITY,
   SEASON_CARRYOVER,
 } from './model.ts';
+import { factorsFrom, type ParkAccumulator } from './parkFactors.ts';
 import { firstSeasonRunAverage, loadGames, replayGames } from './ratings.ts';
 
 function parseArgs(argv: string[]) {
@@ -52,6 +53,14 @@ function parseArgs(argv: string[]) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) continue;
+    // Both forms. `--flag=value` used to be swallowed whole: the key became
+    // "flag=value", nothing ever looked it up, and the flag silently did nothing —
+    // which reads exactly like the feature being broken.
+    const eq = a.indexOf('=');
+    if (eq > 2) {
+      args[a.slice(2, eq)] = a.slice(eq + 1);
+      continue;
+    }
     const next = argv[i + 1];
     if (next && !next.startsWith('--')) {
       args[a.slice(2)] = next;
@@ -95,6 +104,16 @@ export function runBacktest(opts: {
   pitcherCarryover?: number;
   dispersion?: number;
   extraHome?: number;
+  /**
+   * Apply park factors, fitted on the games seen SO FAR in this replay.
+   *
+   * An expanding window and not the stored table, so the flag measures a genuinely
+   * out-of-sample park factor: each game is scored with a factor that could only
+   * have been computed from games before it. That is also how the app works — the
+   * factors come from the whole archive, and the next game is the one being
+   * predicted.
+   */
+  park?: boolean;
   /** Collect calibration bands as well. */
   bands?: Map<string, { n: number; pred: number; obs: number }>;
 }): BacktestTotals {
@@ -122,6 +141,22 @@ export function runBacktest(opts: {
     if (games.length === 0) continue;
     const anchor = firstSeasonRunAverage(games);
 
+    // Expanding-window park factors. Recomputed lazily: refitting on every game
+    // would be 37k passes over the park table for no gain, and the factors barely
+    // move game to game.
+    const parkAcc = new Map<string, ParkAccumulator>();
+    let parkCache = new Map<string, number>();
+    let parkDirty = false;
+    let sinceRefit = 0;
+    const parkFactors = () => {
+      if (parkDirty && ++sinceRefit >= 200) {
+        parkCache = factorsFrom(parkAcc);
+        parkDirty = false;
+        sinceRefit = 0;
+      }
+      return parkCache;
+    };
+
     replayGames(games, {
       homeAdvantage: opts.homeAdvantage,
       k: opts.k,
@@ -134,8 +169,26 @@ export function runBacktest(opts: {
       pitcherCarryover: opts.pitcherCarryover,
       runsAnchor: anchor,
       onGame: ({ game, home, away, lambda }) => {
+        // The park accumulator has to be fed for EVERY game, including the ones
+        // skipped by the warm-up: those games happened, and the stadium's record
+        // of them is real information.
+        const factor = opts.park && game.site ? (parkFactors().get(game.site) ?? 1) : 1;
+        if (opts.park && game.site) {
+          const a = parkAcc.get(game.site) ?? { observed: 0, expected: 0, games: 0 };
+          a.observed += game.home_runs + game.away_runs;
+          a.expected += lambda.home + lambda.away;
+          a.games += 1;
+          parkAcc.set(game.site, a);
+          parkDirty = true;
+        }
         if (home.games < warmup || away.games < warmup) return;
-        const dist = runDistribution(lambda.home, lambda.away, dispersion, undefined, extraHome);
+        const dist = runDistribution(
+          lambda.home * factor,
+          lambda.away * factor,
+          dispersion,
+          undefined,
+          extraHome,
+        );
         const win = winProbability(dist);
         const homeWon = game.home_runs > game.away_runs ? 1 : 0;
 
@@ -145,7 +198,7 @@ export function runBacktest(opts: {
         if ((win.home > 0.5 ? 1 : 0) === homeWon) correct++;
 
         const total = game.home_runs + game.away_runs;
-        const expected = lambda.home + lambda.away;
+        const expected = (lambda.home + lambda.away) * factor;
         runMae += Math.abs(expected - total);
         predTotal += expected;
         actualTotal += total;
@@ -202,6 +255,7 @@ function main() {
     runSensitivity: num('sensitivity', RUN_SENSITIVITY),
     homeRunShare: num('share', HOME_RUN_SHARE),
     pitcherWeight: num('pitcher', PITCHER_WEIGHT),
+    park: args.park !== 'false' && args.park !== '0',
     pitcherRegressionStarts: num('regression', PITCHER_REGRESSION_STARTS),
     dispersion: num('dispersion', RUN_DISPERSION),
     extraHome: num('extra', EXTRA_INNINGS_HOME),
@@ -212,7 +266,8 @@ function main() {
       `Peso del abridor: ${cfg.pitcherWeight} (regresión ${cfg.pitcherRegressionStarts} aperturas) · ` +
       `dispersión: ${cfg.dispersion}\n` +
       `Sensibilidad Elo→carreras: ${cfg.runSensitivity} · cuota local: ${cfg.homeRunShare} · ` +
-      `extra innings local: ${cfg.extraHome}`,
+      `extra innings local: ${cfg.extraHome}\n` +
+      `Factor de estadio: ${cfg.park ? 'sí (ventana expansiva)' : 'no'}`,
   );
 
   const bands = new Map<string, { n: number; pred: number; obs: number }>();

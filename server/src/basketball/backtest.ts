@@ -40,6 +40,14 @@ function parseArgs(argv: string[]) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) continue;
+    // Both forms. `--flag=value` used to be swallowed whole: the key became
+    // "flag=value", nothing ever looked it up, and the flag silently did nothing —
+    // which reads exactly like the feature being broken.
+    const eq = a.indexOf('=');
+    if (eq > 2) {
+      args[a.slice(2, eq)] = a.slice(eq + 1);
+      continue;
+    }
     const next = argv[i + 1];
     if (next && !next.startsWith('--')) {
       args[a.slice(2)] = next;

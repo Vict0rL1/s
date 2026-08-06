@@ -30,6 +30,8 @@ import { listTeams as nafTeams, listUpcoming as nafUpcoming } from '../nfl/repo.
 import { coverProbability, buildDistribution, MAX_MARGIN } from '../nfl/model.ts';
 
 import { buildPrediction } from '../model/predict.ts';
+import { listUpcoming as tennisUpcoming } from '../repo.ts';
+import { listParkFactors } from '../baseball/parkFactors.ts';
 
 // ---------------------------------------------------------------------------
 let checks = 0;
@@ -277,6 +279,59 @@ function auditBaseball(): void {
   }
   console.log(`  ${sampled} predicciones comprobadas`);
   auditUpcoming('béisbol', bsbUpcoming());
+  auditParks();
+}
+
+/**
+ * Park factors: the properties that make them a park factor rather than a fudge.
+ *
+ * The one that matters is the LAST one. A park factor scales both sides equally,
+ * so it must move the total and leave the winner alone. If a future edit applied it
+ * to one side, the moneyline would quietly shift and nothing else here would
+ * notice.
+ */
+function auditParks(): void {
+  const parks = listParkFactors('mlb');
+  if (parks.length === 0) {
+    console.log('  sin factores de estadio, saltado');
+    return;
+  }
+  let n = 0;
+  for (const p of parks) {
+    n++;
+    check(`estadio ${p.site}: factor en un rango físicamente posible`,
+      p.factor >= 0.75 && p.factor <= 1.35, `${p.factor}`);
+    check(`estadio ${p.site}: partidos > 0`, p.games > 0, `${p.games}`);
+  }
+  // Relative to an average park, so they have to average out near 1. A drift here
+  // means the factors are absorbing an overall bias in the run level instead.
+  const mean = parks.reduce((a, p) => a + p.factor, 0) / parks.length;
+  check('estadios: el factor medio es ~1', Math.abs(mean - 1) < 0.05, `${mean.toFixed(4)}`);
+
+  // The load-bearing check: same teams, two stadiums.
+  const teams = bsbTeams('mlb');
+  const away = teams.find((t) => t.id !== 'COL' && t.id !== 'SEA');
+  if (away) {
+    const hi = buildBaseballPrediction('mlb', 'COL', away.id, { oddsHome: null, oddsAway: null }, { guessStarters: false });
+    const lo = buildBaseballPrediction('mlb', 'SEA', away.id, { oddsHome: null, oddsAway: null }, { guessStarters: false });
+    if (hi.park && lo.park) {
+      n += 3;
+      check('estadios: Coors da más carreras que Seattle',
+        hi.runs.expectedTotal > lo.runs.expectedTotal,
+        `${hi.runs.expectedTotal} vs ${lo.runs.expectedTotal}`);
+      // Both sides scale together, so the split between them barely moves — the
+      // ratio home/away is a property of the two teams, not of the altitude.
+      const rHi = hi.runs.expectedHome / hi.runs.expectedAway;
+      const rLo = lo.runs.expectedHome / lo.runs.expectedAway;
+      check('estadios: el reparto entre los dos equipos no lo decide el parque',
+        Math.abs(rHi / rLo - 1) < 0.5, `${rHi.toFixed(3)} vs ${rLo.toFixed(3)}`);
+      // And the runs it claims to add must be the runs it actually added.
+      const implied = hi.runs.expectedTotal - hi.runs.expectedTotal / hi.park.factor;
+      near('estadios: las carreras declaradas son las aplicadas',
+        hi.park.runsVsNeutral, implied, 0.05);
+    }
+  }
+  console.log(`  ${n} comprobaciones de estadio (${parks.length} parques)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +435,10 @@ function auditTennis(): void {
     }
   }
   console.log(`  ${sampled} predicciones comprobadas`);
+  // Tennis was the first sport built and kept missing the checks added later —
+  // this shape audit was running for the other four and not for it, which is
+  // exactly how a tennis-only regression would have got through unnoticed.
+  auditUpcoming('tenis', tennisUpcoming({}));
 }
 
 
@@ -532,6 +591,19 @@ function auditUpcoming(sport: string, rows: { id: string; commence_time: string 
     // A "próximo" that already happened is the failure mode that makes the date
     // grouping lie: it files under "Ayer" and sits above tomorrow's games.
     if (!Number.isNaN(t) && t < cutoff) past++;
+    // A kick-off is ANNOUNCED, to the minute. Stray seconds mean the time was
+    // computed from a clock rather than read from a schedule — which is how every
+    // demo fixture came to start at 09:10:30.210, the instant `npm run seed` ran.
+    // Cheap check, and it fails at the source instead of two days later when the
+    // generated times have quietly drifted into the past.
+    if (!Number.isNaN(t)) {
+      const d = new Date(t);
+      check(
+        `${sport}: hora de inicio en punto de minuto`,
+        d.getSeconds() === 0 && d.getMilliseconds() === 0,
+        `${r.id} → ${r.commence_time}`,
+      );
+    }
     // Nothing should be scheduled decades out either — that is the shape a
     // timezone or parsing bug takes, and it puts one card at the far end of a
     // day filter where nobody will look for it.

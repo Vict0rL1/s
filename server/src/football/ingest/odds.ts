@@ -10,6 +10,7 @@
 import { getDb, setMeta } from '../../db.ts';
 import { env, footballConfig } from '../../config.ts';
 import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
+import { demoKickoffs } from '../../demoSchedule.ts';
 import { eloExpectation, HOME_ADVANTAGE } from '../model.ts';
 import { buildTeamIndex as buildNameIndex, resolveTeam as resolve } from './teamNames.ts';
 import type { LeagueId } from '../types.ts';
@@ -94,7 +95,9 @@ function generateFixtures(league: LeagueId, count = 6): Aggregated[] {
     .all(league, count * 2) as unknown as { id: string; name: string; elo: number }[];
   if (teams.length < 2) return [];
   const out: Aggregated[] = [];
-  const now = Date.now();
+  // Plausible kick-off times on the clock, always still ahead — see demoSchedule.ts
+  // for why this is not `Date.now() + n days`.
+  const kickoffs = demoKickoffs('football', count);
   for (let i = 0; i + 1 < teams.length && out.length < count; i += 2) {
     const home = teams[i];
     const away = teams[i + 1];
@@ -107,7 +110,7 @@ function generateFixtures(league: LeagueId, count = 6): Aggregated[] {
     const vig = 1.06;
     out.push({
       id: `fixture-${league}-${i / 2}`,
-      commence_time: new Date(now + (i / 2 + 1) * 86_400_000).toISOString(),
+      commence_time: kickoffs[out.length],
       home: home.name,
       away: away.name,
       price: {

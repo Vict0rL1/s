@@ -119,7 +119,83 @@ han cambiado, lo eliges y se recalcula la distribución entera.
 
 ---
 
-## 3. Resultados medidos
+## 3. El estadio
+
+Coors Field y Petco Park no son el mismo deporte. Durante mucho tiempo esta era
+la mayor omisión declarada del modelo — y el dato **ya estaba descargado**: la
+columna `site` de `bsb_games` nombra el estadio de los 37.262 partidos del archivo
+y nadie la leía. La misma forma que el hallazgo del quarterback en la NFL.
+
+### Cómo se mide
+
+Un factor de estadio **no es** «carreras que se anotan aquí»: eso mezcla el parque
+con los equipos que juegan en él. Es carreras anotadas aquí **divididas por las que
+el modelo esperaba** en esos mismos partidos, y luego relativas a un parque medio.
+
+El resultado recupera por sí solo la jerarquía que cualquier aficionado conoce, lo
+cual es la mejor señal de que mide el estadio y no ruido:
+
+| Estadio | Factor | |
+|---|---|---|
+| Coors Field (Denver, 1.580 m) | **×1.220** | +22 % |
+| Globe Life Field | ×1.115 | |
+| Fenway Park | ×1.094 | |
+| … | | |
+| Oracle Park | ×0.923 | |
+| Petco Park | ×0.919 | |
+| T-Mobile Park | **×0.917** | −8 % |
+
+**2,89 carreras entre los extremos**, sobre un total de ~8,9 — y la línea de
+over/under se mueve de media en media carrera.
+
+Cada factor se **encoge hacia 1 según los partidos** que tenga (`n / (n + 300)`),
+así que un parque con tres series raras no llega al modelo diciendo +40 %. Y se lee
+del calendario, no de una configuración: un club que cambia de estadio se sigue
+solo.
+
+### Que transfiera es otra pregunta
+
+Los parques cambian (Coros puso un humidor en 2002, Arlington un techo en 2020), así
+que grande *dentro* de la muestra no basta. Ajustado con las temporadas anteriores a
+un corte y puntuado en las siguientes, **seis cortes de 2014 a 2024, los seis
+mejoran**:
+
+| Corte | Entreno | Test | MAE total base | con parque | Δlog-lik/partido |
+|---|---|---|---|---|---|
+| 2014 | 9.720 | 27.542 | 3.5240 | 3.5033 | +0.00831 |
+| 2016 | 14.579 | 22.683 | 3.5601 | 3.5399 | +0.00800 |
+| 2018 | 19.437 | 17.825 | 3.5698 | 3.5495 | +0.00756 |
+| 2020 | 24.297 | 12.965 | 3.5415 | 3.5196 | +0.00680 |
+| 2022 | 27.624 | 9.638 | 3.5370 | 3.5195 | +0.00619 |
+| 2024 | 32.484 | 4.778 | 3.5192 | 3.5089 | +0.00465 |
+
+En el backtest completo, sobre los 36.235 partidos: **el over/under acertado pasa
+de 53,4 % a 54,9 %** y el MAE del total de 3,50 a 3,47. El Brier del ganador **no se
+mueve** (0.2431), que es exactamente lo que debe pasar: el parque escala los dos
+lados por igual, así que cambia el total y no quién gana.
+
+### Dónde vive la mejora
+
+No está repartida, y decirlo así es más honesto que un promedio:
+
+| Tramo | n | Δlog-lik/partido |
+|---|---|---|
+| Parques extremos altos (>1.06) | 1.950 | **+0.05228** |
+| Algo altos (1.02–1.06) | 3.505 | −0.00309 |
+| Neutros (0.98–1.02) | 4.793 | +0.00019 |
+| Algo bajos (0.94–0.98) | 4.681 | +0.00168 |
+| Extremos bajos (<0.94) | 2.896 | +0.01205 |
+
+Siete veces la media en los parques extremos y **nada** en los neutros. El modelo no
+se volvió más listo en general: **dejó de equivocarse en Denver**. Un factor de
+estadio correcto tiene que parecerse justo a esto.
+
+Reproducible: `npm run backtest:bsb` lo incluye, `npm run backtest:bsb -- --park
+false` lo apaga.
+
+---
+
+## 4. Resultados medidos
 
 Backtest *walk-forward* sobre **36.235 partidos reales de MLB** (2010–2025). El
 backtest conduce el mismo `replayGames` que usa la app y **lee de él la λ** en vez
@@ -170,7 +246,7 @@ copiara la constante del baloncesto se equivocaría por un factor de cuatro.
 
 ---
 
-## 4. De dónde salen los datos
+## 5. De dónde salen los datos
 
 | Para qué | Fuente | Notas |
 |---|---|---|
@@ -221,7 +297,7 @@ demás, sí es real y está validado partido a partido.
 
 ---
 
-## 5. Ligas
+## 6. Ligas
 
 Solo la **MLB** tiene un archivo abierto partido a partido, y menos aún uno que
 incluya el abridor de cada encuentro. NPB, KBO y el universitario aparecen con sus
@@ -230,15 +306,13 @@ vez de inventar una predicción. «No hay datos» y «no hay ventaja» no son lo
 
 ---
 
-## 6. Limitaciones
+## 7. Limitaciones
 
 - **No conoce el bullpen.** Es la mayor. Un abridor controla ~60% de las carreras
   que encaja su equipo; el otro 40% lo deciden relevistas que este modelo no
   valora por separado, y esa es la principal razón de que el peso del abridor sea
   0,55 y no 1.
 - **No conoce la alineación**, ni si el mejor bateador descansa hoy.
-- **No conoce el estadio.** Coors Field y Petco Park no son el mismo deporte, y el
-  modelo los trata igual. Es la ampliación más obvia que le falta.
 - No conoce el clima, que en béisbol mueve los totales de verdad.
 - **Retrosheet va una temporada por detrás**, así que sin la MLB Stats API los Elo
   describen el año pasado. La app avisa en la cabecera cuando eso pasa.

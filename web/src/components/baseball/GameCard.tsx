@@ -207,6 +207,25 @@ export default function GameCard({
                 />
               </StatRow>
 
+              {/* The stadium.
+                  Only when it actually moves something — below 2 % it is noise
+                  dressed as a finding, and a tile that says "+0 carreras" trains the
+                  reader to skip the row. Coors reads +1.9; most parks say nothing. */}
+              {prediction.park && Math.abs(prediction.park.factor - 1) >= 0.02 && (
+                <p className="mt-2 text-[14px] leading-snug text-[#9aa1ac]">
+                  <span aria-hidden className="mr-1">🏟️</span>
+                  <strong className="font-semibold text-[#c3c9d1]">{prediction.park.name}</strong>{' '}
+                  {prediction.park.runsVsNeutral > 0 ? 'sube' : 'baja'} el total{' '}
+                  <strong className="font-semibold tabular-nums text-[#c3c9d1]">
+                    {prediction.park.runsVsNeutral > 0 ? '+' : ''}
+                    {prediction.park.runsVsNeutral}
+                  </strong>{' '}
+                  carreras ({Math.round((prediction.park.factor - 1) * 100) > 0 ? '+' : ''}
+                  {Math.round((prediction.park.factor - 1) * 100)} %, medido en{' '}
+                  {prediction.park.games} partidos allí). Ya está dentro de las carreras esperadas.
+                </p>
+              )}
+
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="min-w-0 text-[15px] leading-snug text-[#c3c9d1]">
                   {prediction.verdict.close ? (

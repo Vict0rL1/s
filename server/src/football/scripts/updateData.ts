@@ -31,6 +31,10 @@ function parseArgs(argv: string[]) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) continue;
+    // `--flag=value` too: written as one token it used to become the key
+    // "flag=value", which nothing looks up, so the flag silently did nothing.
+    const eq = a.indexOf('=');
+    if (eq > 2) { args[a.slice(2, eq)] = a.slice(eq + 1); continue; }
     const next = argv[i + 1];
     if (next && !next.startsWith('--')) { args[a.slice(2)] = next; i++; } else args[a.slice(2)] = true;
   }
