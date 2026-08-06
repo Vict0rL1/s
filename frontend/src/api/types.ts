@@ -575,16 +575,11 @@ export interface TodayResponse {
   market_key: string
   market_name: string
   market_description: string
-  favorables: DailySignal[]
-  desfavorables: DailySignal[]
-  neutrales: number
-  all_ranked: {
-    symbol: string
-    score: number
-    label: string
-    rank: number
-    sector_name: string | null
-  }[]
+  /** TODAS las puntuadas, de mejor a peor — incluida la franja neutral. */
+  signals: DailySignal[]
+  counts: { favorables: number; neutrales: number; desfavorables: number }
+  /** Fronteras de los cubos; vienen del backend para no duplicarlas aquí. */
+  thresholds: { favorable: number; desfavorable: number }
   sectors: DailySectorMeta[]
   scored: number
   requested: number

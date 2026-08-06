@@ -21,6 +21,12 @@ LABEL_THRESHOLDS = [
     (-1.0, "desfavorable"),
 ]
 
+# Fronteras de los tres cubos que usa la lista diaria. Viven aquí y viajan en
+# la respuesta para que el frontend no las duplique: si algún día se mueven,
+# se mueven en un solo sitio.
+FAVORABLE_MIN = 0.35
+UNFAVORABLE_MAX = -0.35
+
 # Mínimo de observaciones en un bucket para publicar su tasa de acierto.
 # Por debajo de esto el intervalo de confianza es tan ancho que el número
 # no informa de nada.

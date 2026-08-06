@@ -205,6 +205,19 @@ para ver de dónde sale la puntuación.
 | **NASDAQ — grandes cotizadas** | 310 | Las mayores del NASDAQ por bolsa y tamaño. **No se presenta como el índice Nasdaq-100**: no hay fuente pública de su composición que se pueda automatizar, y afirmar que lo es sería atribuirle una precisión que el dato no tiene. |
 | **Canadá — cotizadas en EE. UU.** | 44 | Grandes canadienses con cotización en NYSE/NASDAQ. **Se usan sus tickers estadounidenses a propósito**: esas empresas presentan formulario 40-F ante la SEC, así que tienen los mismos datos que una estadounidense. Con los tickers de Toronto habría que bajar a yfinance, que el proyecto solo admite como respaldo. |
 
+**Qué queda fuera, y por qué.** Los universos cubren empresas con cotización en
+NYSE o NASDAQ. Una canadiense que solo cotice en Toronto — Aritzia (ATZ.TO), por
+ejemplo — no aparece: sus fundamentales no están en EDGAR ni en el tier gratuito
+de Finnhub, y la única fuente sería yfinance, que el proyecto admite como
+respaldo pero no como fuente única de un mercado entero. La vista **Acciones**
+sí analiza cualquier ticker que la fuente reconozca, esté o no en los universos.
+
+**Las tres franjas se pueden ver.** Favorables, neutrales y a evitar: la lista
+lleva las tres, con buscador por ticker o nombre. Casi la mitad del S&P 500 cae
+en la franja neutral, y si no se pudiera consultar, buscar una empresa concreta
+y no encontrarla parecería que el modelo no la cubre cuando en realidad la ha
+puntuado y ha salido del montón.
+
 **Los mercados son vistas, no particiones.** El NASDAQ se solapa con el S&P 500
 (unas 150 empresas) y eso es correcto: se mira un mercado cada vez, y una
 empresa puntúa distinto en cada lista porque cambia con quién se la compara —

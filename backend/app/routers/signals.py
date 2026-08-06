@@ -24,7 +24,13 @@ from app.analysis.factors import (
     family_scores,
     zscores,
 )
-from app.analysis.signal import build_signal, calibrate, rank_universe
+from app.analysis.signal import (
+    FAVORABLE_MIN,
+    UNFAVORABLE_MAX,
+    build_signal,
+    calibrate,
+    rank_universe,
+)
 from app.analysis.markets import (
     DEFAULT_MARKET,
     MIN_SECTOR_SIZE,
@@ -575,8 +581,8 @@ def today(
     for i, signal in enumerate(ranked, start=1):
         signal["rank"] = i
 
-    favorables = [s for s in ranked if s["score"] >= 0.35]
-    desfavorables = [s for s in ranked if s["score"] <= -0.35]
+    n_favorables = sum(1 for s in ranked if s["score"] >= FAVORABLE_MIN)
+    n_desfavorables = sum(1 for s in ranked if s["score"] <= UNFAVORABLE_MAX)
     complete = not pending
 
     payload = {
@@ -584,19 +590,17 @@ def today(
         "market_key": market,
         "market_name": market_data["name"],
         "market_description": market_data["description"],
-        "favorables": favorables,
-        "desfavorables": list(reversed(desfavorables)),  # peor primero
-        "neutrales": len(ranked) - len(favorables) - len(desfavorables),
-        "all_ranked": [
-            {
-                "symbol": s["symbol"],
-                "score": s["score"],
-                "label": s["label"],
-                "rank": s["rank"],
-                "sector_name": s["context"].get("sector_name"),
-            }
-            for s in ranked
-        ],
+        # TODAS las puntuadas, de mejor a peor. Antes solo viajaban los dos
+        # extremos y la franja neutral —casi la mitad del índice— era
+        # imposible de ver en la UI: si buscabas una empresa concreta y salía
+        # neutral, parecía que el modelo no la cubría.
+        "signals": ranked,
+        "counts": {
+            "favorables": n_favorables,
+            "neutrales": len(ranked) - n_favorables - n_desfavorables,
+            "desfavorables": n_desfavorables,
+        },
+        "thresholds": {"favorable": FAVORABLE_MIN, "desfavorable": UNFAVORABLE_MAX},
         "sectors": sectors_meta,
         "scored": len(ranked),
         "requested": requested,

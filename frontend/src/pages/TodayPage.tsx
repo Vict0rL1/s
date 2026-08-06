@@ -22,7 +22,7 @@ const FAMILY_LABELS: Record<string, string> = {
   sentiment: 'Sentimiento',
 }
 
-type View = 'favorables' | 'todas' | 'desfavorables'
+type View = 'favorables' | 'neutrales' | 'desfavorables' | 'todas'
 
 /** El compuesto vive de facto en [-2, 2]; se mapea a 0-100 % para la barra. */
 function scoreToPct(score: number): number {
@@ -207,6 +207,7 @@ export function TodayPage() {
   const [view, setView] = useState<View>('favorables')
   const [sector, setSector] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   const load = (which: string, refresh = false) => {
     setBusy(true)
@@ -238,20 +239,36 @@ export function TodayPage() {
 
   const rows = useMemo(() => {
     if (!data) return []
-    const base =
-      view === 'favorables'
-        ? data.favorables
-        : view === 'desfavorables'
-          ? data.desfavorables
-          : [...data.favorables, ...data.desfavorables].sort((a, b) => b.score - a.score)
-    return sector === null
-      ? base
-      : base.filter((s) => s.context.sector_key === sector)
-  }, [data, view, sector])
+    const { favorable, desfavorable } = data.thresholds
+    let base = data.signals
+    if (view === 'favorables') base = base.filter((s) => s.score >= favorable)
+    else if (view === 'desfavorables') {
+      // De la peor hacia arriba: lo primero que se ve es lo más flojo.
+      base = base.filter((s) => s.score <= desfavorable).slice().reverse()
+    } else if (view === 'neutrales') {
+      base = base.filter((s) => s.score > desfavorable && s.score < favorable)
+    }
+    if (sector !== null) base = base.filter((s) => s.context.sector_key === sector)
+    const q = query.trim().toUpperCase()
+    if (q) {
+      base = base.filter(
+        (s) =>
+          s.symbol.includes(q) || (s.context.name ?? '').toUpperCase().includes(q),
+      )
+    }
+    return base
+  }, [data, view, sector, query])
 
-  const counts = data
-    ? { favorables: data.favorables.length, desfavorables: data.desfavorables.length }
-    : { favorables: 0, desfavorables: 0 }
+  // Buscar es para encontrar una empresa concreta, esté en el cubo que esté:
+  // filtrar además por vista haría que "no aparece" volviera a ser posible.
+  const encontradoFuera = useMemo(() => {
+    if (!data || !query.trim()) return null
+    const q = query.trim().toUpperCase()
+    const enTodas = data.signals.filter(
+      (s) => s.symbol.includes(q) || (s.context.name ?? '').toUpperCase().includes(q),
+    )
+    return enTodas.length > rows.length ? enTodas.length - rows.length : null
+  }, [data, query, rows.length])
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -320,26 +337,37 @@ export function TodayPage() {
       {data && (
         <>
           <div className="space-y-2">
-            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-              {(
-                [
-                  ['favorables', `Favorables (${counts.favorables})`],
-                  ['desfavorables', `A evitar (${counts.desfavorables})`],
-                  ['todas', 'Ambas'],
-                ] as [View, string][]
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setView(key)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    view === key
-                      ? 'bg-slate-900 text-white'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+                {(
+                  [
+                    ['favorables', `Favorables (${data.counts.favorables})`],
+                    ['neutrales', `Neutrales (${data.counts.neutrales})`],
+                    ['desfavorables', `A evitar (${data.counts.desfavorables})`],
+                    ['todas', `Todas (${data.scored})`],
+                  ] as [View, string][]
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setView(key)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      view === key
+                        ? 'bg-slate-900 text-white'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar ticker o empresa…"
+                aria-label="Buscar ticker o empresa"
+                className="w-56 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+              />
             </div>
 
             <div className="flex flex-wrap gap-1">
@@ -401,11 +429,28 @@ export function TodayPage() {
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             {rows.length === 0 ? (
-              <p className="px-4 py-10 text-center text-sm text-slate-400">
-                {view === 'favorables'
-                  ? 'Hoy ninguna empresa supera el umbral de favorable en este filtro.'
-                  : 'Nada que mostrar con este filtro.'}
-              </p>
+              <div className="px-4 py-10 text-center text-sm text-slate-400">
+                {query.trim() ? (
+                  <>
+                    <p>
+                      «{query.trim()}» no está en {data.market_name}.
+                    </p>
+                    <p className="mt-1 text-xs">
+                      Puede estar en otro mercado, o fuera del universo. Búscala
+                      directamente en{' '}
+                      <Link
+                        to={`/ticker/${query.trim().toUpperCase()}`}
+                        className="font-medium text-sky-700 hover:underline"
+                      >
+                        Acciones
+                      </Link>
+                      : ahí se analiza cualquier ticker, esté o no en la lista.
+                    </p>
+                  </>
+                ) : (
+                  <p>Nada que mostrar con este filtro.</p>
+                )}
+              </div>
             ) : (
               <>
                 <ListHeader />
@@ -428,8 +473,16 @@ export function TodayPage() {
 
           <div className="flex flex-wrap justify-between gap-3 text-xs text-slate-400">
             <span>
-              {data.scored} empresas puntuadas de {data.requested} · {data.neutrales}{' '}
-              en zona neutral (ni favorable ni a evitar)
+              {encontradoFuera !== null && (
+                <button
+                  onClick={() => setView('todas')}
+                  className="mr-2 font-medium text-sky-700 hover:underline"
+                >
+                  {encontradoFuera} coincidencia
+                  {encontradoFuera === 1 ? '' : 's'} más en otras vistas — ver todas
+                </button>
+              )}
+              {data.scored} empresas puntuadas de {data.requested}
               {data.data_meta && 'retrieved_at' in data.data_meta
                 ? ` · universo actualizado el ${data.data_meta.retrieved_at}`
                 : ''}

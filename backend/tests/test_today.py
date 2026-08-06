@@ -187,11 +187,12 @@ def test_lista_del_sp500_ordenada_y_numerada(client):
 
     assert data["market_key"] == "us_sp500"
     assert data["scored"] > 400
-    scores = [s["score"] for s in data["all_ranked"]]
+    scores = [s["score"] for s in data["signals"]]
     assert scores == sorted(scores, reverse=True)
-    assert [s["rank"] for s in data["all_ranked"]] == list(range(1, len(scores) + 1))
+    assert [s["rank"] for s in data["signals"]] == list(range(1, len(scores) + 1))
     # Los 11 sectores GICS entran en juego, no uno solo.
-    assert len({s["sector_name"] for s in data["all_ranked"]}) == 11
+    sectores = {s["context"]["sector_name"] for s in data["signals"]}
+    assert len(sectores) == 11
 
 
 def test_canada_se_puntua_por_separado(client):
@@ -203,7 +204,7 @@ def test_canada_se_puntua_por_separado(client):
     descartados = [s for s in data["sectors"] if not s["usable"]]
     assert all(s["scored"] < 3 for s in descartados)
     nombres_usables = {s["name"] for s in data["sectors"] if s["usable"]}
-    assert {s["sector_name"] for s in data["all_ranked"]} == nombres_usables
+    assert {s["context"]["sector_name"] for s in data["signals"]} == nombres_usables
 
 
 def test_los_nombres_salen_del_universo_sin_gastar_llamadas(client):
@@ -211,7 +212,7 @@ def test_los_nombres_salen_del_universo_sin_gastar_llamadas(client):
     c, service = client
     data = _completar(c)
     assert service.profile_calls == 0
-    assert all(s["context"]["name"] for s in data["favorables"])
+    assert all(s["context"]["name"] for s in data["signals"])
 
 
 def test_el_presupuesto_limita_las_descargas_nuevas(client):
@@ -243,17 +244,55 @@ def test_al_completar_no_quedan_pendientes(client):
     assert data["scored"] + len(data["unavailable"]) == data["requested"]
 
 
-def test_favorables_y_desfavorables_por_umbral(client):
+def test_los_recuentos_cuadran_con_los_umbrales(client):
     c, _ = client
     data = _completar(c)
-    assert all(s["score"] >= 0.35 for s in data["favorables"])
-    assert all(s["score"] <= -0.35 for s in data["desfavorables"])
-    peores = [s["score"] for s in data["desfavorables"]]
-    assert peores == sorted(peores)  # el peor primero
-    assert (
-        len(data["favorables"]) + len(data["desfavorables"]) + data["neutrales"]
-        == data["scored"]
+    fav = data["thresholds"]["favorable"]
+    des = data["thresholds"]["desfavorable"]
+
+    assert data["counts"]["favorables"] == sum(
+        1 for s in data["signals"] if s["score"] >= fav
     )
+    assert data["counts"]["desfavorables"] == sum(
+        1 for s in data["signals"] if s["score"] <= des
+    )
+    assert sum(data["counts"].values()) == data["scored"]
+
+
+def test_la_franja_neutral_viaja_en_la_respuesta(client):
+    """Regresión: antes solo viajaban los dos extremos.
+
+    Casi la mitad del índice cae en la franja neutral. Si no viaja, buscar una
+    empresa concreta y no encontrarla parece que el modelo no la cubre, cuando
+    en realidad la ha puntuado y ha salido del montón.
+    """
+    c, _ = client
+    data = _completar(c)
+    fav = data["thresholds"]["favorable"]
+    des = data["thresholds"]["desfavorable"]
+
+    neutrales = [s for s in data["signals"] if des < s["score"] < fav]
+    assert len(neutrales) == data["counts"]["neutrales"]
+    assert neutrales, "se esperaba franja neutral en un universo de 500"
+    # Toda empresa puntuada es alcanzable desde la respuesta.
+    assert len(data["signals"]) == data["scored"]
+
+
+def test_toda_empresa_del_universo_esta_puntuada_o_justificada(client):
+    """Nada desaparece en silencio: o se puntúa, o consta por qué no."""
+    c, _ = client
+    data = _completar(c)
+    en_lista = {s["symbol"] for s in data["signals"]}
+    sin_datos = {u["symbol"] for u in data["unavailable"]}
+
+    del_universo = {c_["symbol"] for c_ in load_market("us_sp500")["companies"]}
+    descartados = {
+        c_["symbol"]
+        for s in data["sectors"]
+        if not s["usable"]
+        for c_ in load_market("us_sp500")["sectors"][s["name"]]
+    }
+    assert del_universo == en_lista | sin_datos | descartados
 
 
 def test_se_sirve_de_cache_en_la_segunda_llamada(client):
@@ -279,5 +318,5 @@ def test_no_se_presenta_como_lista_de_compra(client):
     data = _completar(c)
     assert "NO es una lista de compra" in data["disclaimer"]
     assert data["calibrated"] is False
-    for signal in data["favorables"]:
+    for signal in data["signals"]:
         assert signal["probability"] is None
