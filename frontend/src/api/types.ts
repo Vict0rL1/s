@@ -466,6 +466,75 @@ export interface TrackRecord {
   }
 }
 
+// ---- Motor de señales cuantitativas ----
+
+export interface NewsEvent {
+  headline: string | null
+  category: string
+  confidence: string
+  rationale: string | null
+  weight: number
+  model: string
+}
+
+export interface QuantSignal {
+  symbol: string
+  rank?: number
+  score: number | null
+  label: string
+  coverage: number
+  contributions: Record<string, number>
+  families: Record<string, number | null>
+  horizon: string
+  probability: number | null
+  probability_ci: [number, number] | null
+  probability_note: string | null
+  sample_size: number
+  computed_by: string
+  context: { name?: string | null; sector?: string | null; source?: string }
+  events: NewsEvent[]
+}
+
+export interface SignalResponse {
+  signals: QuantSignal[]
+  unavailable: { symbol: string; reason: string }[]
+  calibrated: boolean
+  weights: Record<string, number>
+  universe_size: number
+  note: string
+  disclaimer: string
+}
+
+export interface CalibrationBucket {
+  n: number
+  hits: number
+  rate: number | null
+  ci_low: number
+  ci_high: number
+  reliable: boolean
+}
+
+export interface BacktestResponse {
+  calibration: Record<string, CalibrationBucket>
+  n_observations: number
+  n_rebalances: number
+  overall_hit_rate: number | null
+  horizon_months: number
+  universe: string[]
+  missing: string[]
+  excluded_factors: string[]
+  methodology: string
+  reliable_buckets: number
+  verdict: string
+}
+
+export interface SignalExplanation {
+  generated_by: 'llm'
+  content_md: string
+  model: string
+  disclaimer: string
+}
+
 export interface EarningsEvent {
   symbol: string
   date: string

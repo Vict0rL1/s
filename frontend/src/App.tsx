@@ -5,6 +5,7 @@ import { EtfsPage } from './pages/EtfsPage'
 import { NewsPage } from './pages/NewsPage'
 import { PortfolioPage } from './pages/PortfolioPage'
 import { ScreenerPage } from './pages/ScreenerPage'
+import { SignalsPage } from './pages/SignalsPage'
 import { ThesesPage } from './pages/ThesesPage'
 import { TickerPage } from './pages/TickerPage'
 
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/noticias" element={<NewsPage />} />
           <Route path="/etfs" element={<EtfsPage />} />
           <Route path="/screener" element={<ScreenerPage />} />
+          <Route path="/senales" element={<SignalsPage />} />
           <Route path="/portafolio" element={<PortfolioPage />} />
           <Route path="/tesis" element={<ThesesPage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

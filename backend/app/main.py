@@ -14,6 +14,7 @@ from app.routers import (
     news,
     portfolio,
     screener,
+    signals,
     stocks,
     theses,
 )
@@ -49,4 +50,5 @@ app.include_router(screener.router)
 app.include_router(portfolio.router)
 app.include_router(portfolio.watchlist_router)
 app.include_router(theses.router)
+app.include_router(signals.router)
 app.include_router(meta.router)

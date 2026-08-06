@@ -6,9 +6,13 @@ import type {
   FilterSpec,
   Interpretation,
   NewsFeed,
+  BacktestResponse,
   Portfolio,
   PriceAlert,
+  QuantSignal,
   ScreenerPreset,
+  SignalExplanation,
+  SignalResponse,
   ScreenResult,
   ThesisRecord,
   TrackRecord,
@@ -173,6 +177,20 @@ export const api = {
       body,
     ),
   trackRecord: () => fetchJson<TrackRecord>('/api/theses/track-record'),
+  // Motor de señales cuantitativas
+  scoreSignals: (symbols: string[], useNews: boolean) =>
+    postJson<SignalResponse>('/api/signals/score', { symbols, use_news: useNews }),
+  runBacktest: (symbols: string[], horizonMonths: number, years: number) =>
+    postJson<BacktestResponse>('/api/signals/backtest', {
+      symbols,
+      horizon_months: horizonMonths,
+      years,
+    }),
+  explainSignal: (symbol: string, signal: QuantSignal) =>
+    postJson<SignalExplanation>(`/api/signals/${symbol}/explain`, {
+      signal,
+      context: signal.context,
+    }),
   marketOverview: () => fetchJson<{ indices: IndexEntry[] }>('/api/market/overview'),
   marketSectors: () => fetchJson<{ sectors: SectorEntry[]; note: string }>('/api/market/sectors'),
   yieldCurve: () => fetchJson<YieldCurve>('/api/market/yield-curve'),

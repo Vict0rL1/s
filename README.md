@@ -132,7 +132,55 @@ endpoint HTTP → MarketDataService → CacheStore (SQLite, TTL por tipo de dato
 | **ETFs** | Composición, expense ratio, AUM, desglose sectorial, comparador y **solapamiento entre ETFs**. |
 | **Screener** | Filtros combinables con presets que documentan su lógica de inversión. |
 | **Portafolio** | Posiciones con P&L realizado y no realizado, pesos, exposición sectorial, avisos de concentración, watchlist y alertas de precio. |
+| **Señales** | Modelo cuantitativo de factores con validación walk-forward. Ver abajo. |
 | **Tesis** | Tesis fechadas con criterios de invalidación, escenarios anclados al precio del día y **registro de aciertos** con tasa de acierto y error mediano. |
+
+## Motor de señales cuantitativas
+
+Puntúa un universo de empresas **unas contra otras** (z-score transversal, no
+umbrales absolutos) combinando cuatro familias de factores: valor (30 %),
+calidad (30 %), momentum (30 %) y sentimiento de noticias (10 %). Horizonte
+6-12 meses.
+
+**La regla que gobierna el módulo: una probabilidad solo se publica si sale de
+un backtest con muestra suficiente** (≥ 30 observaciones en su rango). Sin
+calibrar, la app enseña la puntuación relativa y dice explícitamente que no
+hay probabilidad estimada. Inventar un "72 % de subida" a partir de un z-score
+sería la falsa precisión que esta app existe para evitar.
+
+**Backtest walk-forward con disciplina point-in-time.** El error que arruina
+los backtests caseros es el sesgo de anticipación: puntuar enero de 2023 con
+el balance del ejercicio 2023, publicado en 2024. Aquí cada fecha de
+rebalanceo usa solo estados financieros cuya **fecha de filing** es anterior
+(con retardo conservador de 90 días si no se conoce), y el resultado se mide
+hacia delante contra la mediana del universo. El factor de sentimiento queda
+**excluido del backtest** porque las APIs gratuitas no dan histórico de
+noticias — fingir que sí lo dan sería peor que omitirlo.
+
+Los intervalos de confianza usan el **método de Wilson**, no la aproximación
+normal: con muestras pequeñas o tasas extremas la normal produce intervalos
+fuera de [0, 1] y subestima la incertidumbre, justo el régimen en el que
+opera este modelo.
+
+**Etiquetas deliberadamente no accionables** — *muy favorable / favorable /
+neutral / desfavorable / muy desfavorable*, nunca "comprar" o "vender". La
+señal describe cómo puntúa la empresa en el modelo; qué hacer con tu dinero
+depende de tu cartera, tu horizonte y tu tolerancia al riesgo, que el modelo
+no conoce.
+
+### Papel del LLM
+
+Claude tiene exactamente dos funciones aquí, y **emitir la señal no es
+ninguna de ellas** — un modelo de lenguaje predice tokens, no retornos:
+
+1. **Clasificar noticias** en eventos estructurados (guidance al alza, riesgo
+   regulatorio, dilución…) con un nivel de confianza. Los pesos numéricos los
+   fija una tabla en el código, no el modelo, para que el factor sea auditable.
+2. **Explicar** una señal ya calculada: qué factor tira hacia arriba, cuál
+   hacia abajo, cuál es la debilidad del análisis y qué la invalidaría.
+
+Todo lo generado por IA aparece con etiqueta morada, modelo usado y
+disclaimer, y se registra en `llm_outputs`.
 
 ## Estado
 

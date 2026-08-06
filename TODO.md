@@ -45,6 +45,28 @@ número:
       Con pocas observaciones el azar domina — el propio resumen lo dice, pero
       no calcula significancia estadística.
 
+### Motor de señales
+- [ ] **El backtest tendrá pocas observaciones.** Con fundamentales anuales de
+      EDGAR, 8 empresas y 6 años salen ~150 observaciones repartidas en 5
+      rangos. Es probable que ningún rango llegue a las 30 necesarias y el
+      modelo siga sin calibrar. **Esto es correcto, no un fallo**: significa
+      que no hay evidencia suficiente para publicar probabilidades. Para
+      calibrarlo de verdad hacen falta 30-50 empresas y 10+ años.
+- [ ] **Universo pequeño = z-scores inestables.** Con 8 empresas, añadir o
+      quitar una cambia todas las puntuaciones. Es una comparación relativa,
+      no una medida absoluta.
+- [ ] **Sin ajuste por sector.** Comparar el P/E de un banco con el de una
+      tecnológica penaliza injustamente a la segunda. Lo correcto es puntuar
+      dentro de cada sector; requiere universos más grandes.
+- [ ] **El factor de sentimiento no está validado.** Entra en la señal en vivo
+      (10 % del peso) pero se excluye del backtest por falta de histórico, así
+      que su tasa de acierto es desconocida.
+- [ ] **Sin costes de transacción ni deslizamiento** en el backtest. Una
+      estrategia con rebalanceo trimestral pagaría comisiones que aquí no se
+      descuentan.
+- [ ] **Sesgo de supervivencia**: el universo lo eliges tú hoy, con empresas
+      que existen hoy. Un backtest riguroso incluiría las que quebraron.
+
 ### Producto
 - [ ] **Las alertas no notifican**: se evalúan cuando abres la pestaña. Es una
       app local sin proceso en marcha. Un cron + notificación de escritorio

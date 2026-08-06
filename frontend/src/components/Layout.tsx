@@ -7,6 +7,7 @@ const NAV = [
   { to: '/noticias', label: 'Noticias' },
   { to: '/etfs', label: 'ETFs' },
   { to: '/screener', label: 'Screener' },
+  { to: '/senales', label: 'Señales' },
   { to: '/portafolio', label: 'Portafolio' },
   { to: '/tesis', label: 'Tesis' },
 ]
