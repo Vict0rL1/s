@@ -6,8 +6,13 @@ import type {
   FilterSpec,
   Interpretation,
   NewsFeed,
+  Portfolio,
+  PriceAlert,
   ScreenerPreset,
   ScreenResult,
+  ThesisRecord,
+  TrackRecord,
+  WatchlistItem,
   FilingsResponse,
   Financials,
   Fundamentals,
@@ -70,6 +75,21 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return resp.json() as Promise<T>
 }
 
+async function deleteJson<T>(path: string): Promise<T> {
+  const resp = await fetch(path, { method: 'DELETE' })
+  if (!resp.ok) {
+    let detail = `Error HTTP ${resp.status}`
+    try {
+      const data = await resp.json()
+      if (typeof data.detail === 'string') detail = data.detail
+    } catch {
+      // sin cuerpo JSON
+    }
+    throw new ApiError(resp.status, detail)
+  }
+  return resp.json() as Promise<T>
+}
+
 export const api = {
   quote: (symbol: string) => fetchJson<Quote>(`/api/stocks/${symbol}/quote`),
   profile: (symbol: string) => fetchJson<Profile>(`/api/stocks/${symbol}/profile`),
@@ -114,6 +134,45 @@ export const api = {
     postJson<{ id: number; name: string }>('/api/screener/presets', body),
   runScreen: (body: { symbols: string[]; filters: Record<string, FilterSpec> }) =>
     postJson<ScreenResult>('/api/screener/run', body),
+  // Fase 5
+  watchlist: () => fetchJson<{ name: string; items: WatchlistItem[] }>('/api/watchlist'),
+  addToWatchlist: (body: { symbol: string; notes: string | null }) =>
+    postJson<{ id: number; symbol: string }>('/api/watchlist', body),
+  removeFromWatchlist: (id: number) => deleteJson<{ deleted: number }>(`/api/watchlist/${id}`),
+  portfolio: () => fetchJson<Portfolio>('/api/portfolio'),
+  addPosition: (body: { symbol: string; quantity: number; cost_basis: number }) =>
+    postJson<{ id: number; symbol: string }>('/api/portfolio/positions', body),
+  closePosition: (id: number, exitPrice: number) =>
+    postJson<{ id: number; realized_pnl: number }>(`/api/portfolio/positions/${id}/close`, {
+      exit_price: exitPrice,
+    }),
+  deletePosition: (id: number) =>
+    deleteJson<{ deleted: number }>(`/api/portfolio/positions/${id}`),
+  alerts: () => fetchJson<{ alerts: PriceAlert[] }>('/api/portfolio/alerts'),
+  addAlert: (body: { symbol: string; op: 'lt' | 'gt'; price: number }) =>
+    postJson<{ id: number }>('/api/portfolio/alerts', body),
+  deleteAlert: (id: number) => deleteJson<{ deleted: number }>(`/api/portfolio/alerts/${id}`),
+  theses: () => fetchJson<{ theses: ThesisRecord[] }>('/api/theses'),
+  createThesis: (body: {
+    symbol: string
+    title: string
+    body_md: string
+    invalidation_criteria: string | null
+  }) => postJson<{ id: number }>('/api/theses', body),
+  deleteThesis: (id: number) => deleteJson<{ deleted: number }>(`/api/theses/${id}`),
+  addScenario: (
+    thesisId: number,
+    body: {
+      kind: 'bear' | 'base' | 'bull'
+      assumptions: Record<string, number>
+      value_mid: number | null
+    },
+  ) =>
+    postJson<{ id: number; price_at_creation: number | null; warning: string | null }>(
+      `/api/theses/${thesisId}/scenarios`,
+      body,
+    ),
+  trackRecord: () => fetchJson<TrackRecord>('/api/theses/track-record'),
   marketOverview: () => fetchJson<{ indices: IndexEntry[] }>('/api/market/overview'),
   marketSectors: () => fetchJson<{ sectors: SectorEntry[]; note: string }>('/api/market/sectors'),
   yieldCurve: () => fetchJson<YieldCurve>('/api/market/yield-curve'),

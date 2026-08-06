@@ -344,6 +344,128 @@ export interface ScreenResult {
   note: string
 }
 
+// ---- Fase 5 ----
+
+export interface WatchlistItem {
+  id: number
+  symbol: string
+  name: string | null
+  sector: string | null
+  notes: string | null
+  added_at: string
+  quote: Quote | null
+}
+
+export interface PortfolioPosition {
+  id: number
+  symbol: string
+  name: string | null
+  sector: string
+  opened_at: string
+  quantity: number
+  cost_basis: number
+  invested: number
+  price: number | null
+  market_value: number | null
+  unrealized_pnl: number | null
+  unrealized_pct: number | null
+}
+
+export interface ClosedPosition {
+  id: number
+  symbol: string
+  quantity: number
+  cost_basis: number
+  realized_pnl: number | null
+  closed_at: string
+}
+
+export interface Allocation {
+  label: string
+  market_value: number
+  weight: number
+}
+
+export interface Portfolio {
+  positions: PortfolioPosition[]
+  closed_positions: ClosedPosition[]
+  summary: {
+    total_invested: number
+    total_market_value: number | null
+    unrealized_pnl: number | null
+    unrealized_pct: number | null
+    realized_pnl: number
+    priced_positions: number
+    total_positions: number
+  }
+  allocation_by_position: Allocation[]
+  allocation_by_sector: Allocation[]
+  concentration_warnings: string[]
+  note: string
+}
+
+export interface PriceAlert {
+  id: number
+  symbol: string
+  kind: string
+  condition: { op?: string; price?: number }
+  active: boolean
+  current_price: number | null
+  triggered: boolean | null
+  triggered_at: string | null
+}
+
+export interface ScenarioRecord {
+  id: number
+  kind: 'bear' | 'base' | 'bull'
+  assumptions: Record<string, number | string>
+  value_low: number | null
+  value_mid: number | null
+  value_high: number | null
+  price_at_creation: number | null
+  created_at: string
+  days_elapsed: number
+  direction: string | null
+  outcome: 'acertado' | 'fallido' | null
+  price_change_pct: number | null
+  implied_upside_pct: number | null
+  estimate_error_pct?: number | null
+  reason: string | null
+}
+
+export interface ThesisRecord {
+  id: number
+  symbol: string
+  title: string
+  body_md: string
+  assumptions: Record<string, unknown> | null
+  invalidation_criteria: string | null
+  created_at: string
+  days_elapsed: number
+  current_price: number | null
+  scenarios: ScenarioRecord[]
+}
+
+export interface TrackRecordEntry extends ScenarioRecord {
+  scenario_id: number
+  thesis_id: number | null
+  symbol: string
+  current_price: number | null
+}
+
+export interface TrackRecord {
+  scenarios: TrackRecordEntry[]
+  summary: {
+    total: number
+    evaluable: number
+    hits: number
+    misses: number
+    hit_rate: number | null
+    median_estimate_error_pct: number | null
+    note: string
+  }
+}
+
 export interface EarningsEvent {
   symbol: string
   date: string

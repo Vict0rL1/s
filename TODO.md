@@ -1,45 +1,72 @@
-# TODO — cierre de Fase 1
+# TODO — estado tras completar las cinco fases
 
-## Limitaciones conocidas de la Fase 1 (revisar antes de seguir)
+## ⚠️ Lo primero: verificar con datos reales
 
-- [ ] **Rangos intradía (1D/5D) pendientes.** El gráfico cubre 1M–10A con
-      barras diarias/semanales. Intradía requiere decidir intervalo (5min/15min)
-      y su coste en créditos de Twelve Data.
-- [ ] **yfinance no distingue "símbolo inexistente" de "red caída"**: devuelve
-      DataFrames vacíos en ambos casos, así que un fallo de red con yfinance
-      como única fuente viva puede mostrarse como 404. Con Finnhub/Twelve Data
-      configurados el caso es marginal, pero conviene afinarlo.
-- [ ] **Twelve Data tiene también límite de 8 llamadas/min** además del diario;
-      el limiter solo modela una ventana por proveedor. Añadir soporte de
-      ventanas múltiples.
-- [ ] **La moneda de la cotización de Finnhub llega vacía** (su /quote no la
-      incluye); la UI la toma del perfil. Unificar en el backend.
-- [ ] **SMA/RSI sobre barras semanales** (rangos 5A/10A) se calculan sobre el
-      intervalo mostrado, como hacen las plataformas de charting — documentado,
-      pero revisar si prefieres SMA diarias siempre.
-- [ ] Limpieza periódica de `api_cache` expirado y de `api_call_log` viejo
-      (hoy solo crecen; para uso personal tardará en importar).
+Nada de esto se ha podido probar contra las APIs reales (el entorno donde se
+programó bloquea la salida a internet financiero). Antes de confiar en un
+número:
 
-## Fase 2 — análisis fundamental completo
+- [ ] Correr con tus keys y **contrastar 2-3 tickers contra tu broker**:
+      precio, P/E, márgenes, deuda neta.
+- [ ] Verificar que los estados financieros de EDGAR cuadran con el último
+      10-K de una empresa que conozcas bien. El parser XBRL elige la primera
+      etiqueta con datos anuales; empresas con contabilidad atípica pueden
+      mapear mal alguna partida.
+- [ ] Comprobar el DCF a mano una vez (los tests lo verifican, pero conviene
+      que veas el número salir en pantalla y te cuadre).
 
-- [ ] Provider SEC EDGAR (companyfacts + submissions JSON; sin key, con
-      User-Agent identificado) para estados financieros históricos.
-- [ ] Provider FRED para macro (tasas, curva, inflación, desempleo).
-- [ ] Provider Alpha Vantage (con su límite de 25/día bien protegido).
-- [ ] Ratios completos: EV/EBITDA, ROIC, FCF, crecimiento 5A desde estados
-      financieros (no solo el TTM que da Finnhub).
-- [ ] DCF por escenarios con supuestos editables + análisis de sensibilidad.
-- [ ] Altman Z-score, Piotroski F-score, cobertura de intereses (con tests
-      contra casos calculados a mano).
-- [ ] Comparativa contra pares del sector con percentiles.
-- [ ] Insider trading (Forms 3/4/5) desde EDGAR.
-- [ ] Dashboard de mercado: índices, sectores, VIX, curva de rendimientos.
-- [ ] Paneles RSI/MACD como subgráficos bajo el precio (los datos ya se
-      calculan y viajan en el API).
+## Limitaciones conocidas
 
-## Infraestructura pendiente
+### Datos
+- [ ] **Sin intradía (1D/5D).** Los rangos van de 1M a 10A con barras diarias
+      o semanales. Añadirlo cuesta créditos de Twelve Data.
+- [ ] **EDGAR solo cubre empresas registradas en la SEC.** Una acción europea
+      o canadiense sin ADR no tendrá estados financieros ni filings.
+- [ ] **Composición de ETFs limitada a ~10 holdings** (única fuente gratuita).
+      El solapamiento calculado es una cota inferior; la UI lo advierte pero
+      conviene tenerlo presente al decidir.
+- [ ] **yfinance no distingue "símbolo inexistente" de "red caída"**: puede
+      mostrarse un 404 cuando en realidad falló la red.
+- [ ] **Sin datos de propiedad institucional (13F).** EDGAR los publica pero
+      requiere parsear otro formato; hoy solo se listan los Forms 3/4/5 con
+      enlace, sin desglose de importes por transacción.
 
+### Análisis
+- [ ] **Altman Z no aplica a bancos ni financieras.** Se avisa en la UI, pero
+      la app no lo bloquea: no interpretes el número en esos casos.
+- [ ] **ROIC usa una tasa impositiva fija del 21 %** (visible en la UI). Para
+      empresas con tasa efectiva muy distinta, el ROIC quedará sesgado.
+- [ ] **La beta se calcula siempre contra SPY.** Para una acción canadiense o
+      europea, ese benchmark no es el adecuado.
+- [ ] **SMA/RSI en rangos 5A/10A se calculan sobre barras semanales**, como
+      en las plataformas de charting. Documentado, pero revisa si prefieres
+      SMA diarias siempre.
+- [ ] **El registro de aciertos solo evalúa dirección y magnitud del error.**
+      Con pocas observaciones el azar domina — el propio resumen lo dice, pero
+      no calcula significancia estadística.
+
+### Producto
+- [ ] **Las alertas no notifican**: se evalúan cuando abres la pestaña. Es una
+      app local sin proceso en marcha. Un cron + notificación de escritorio
+      sería el siguiente paso.
+- [ ] **Una sola watchlist** ("Principal"). El esquema soporta varias.
+- [ ] **Sin divisas.** Una posición en CAD y otra en USD se suman como si
+      fueran la misma moneda. Si mezclas mercados, esto es lo primero que hay
+      que arreglar.
+- [ ] **Sin historial de precios de la cartera**: el P&L es puntual, no hay
+      curva de valor en el tiempo.
+
+## Mejoras pendientes
+
+- [ ] Limpieza periódica de `api_cache` expirado y `api_call_log` viejo (hoy
+      solo crecen; para uso personal tardará en importar).
 - [ ] Alembic cuando el esquema empiece a migrar con datos valiosos dentro.
-- [ ] Considerar WebSocket de Finnhub para cotizaciones en vivo sin gastar
-      llamadas REST (lo incluye el tier gratuito).
-- [ ] Script `make dev` / docker-compose opcional para levantar todo junto.
+- [ ] WebSocket de Finnhub para cotizaciones en vivo sin gastar llamadas REST
+      (lo incluye el tier gratuito).
+- [ ] Paneles RSI/MACD como subgráficos bajo el precio (los datos ya viajan en
+      el API, solo falta dibujarlos).
+- [ ] Editar tesis existentes (hoy se crean y se borran).
+- [ ] Exportar el portafolio y las tesis a CSV/Markdown.
+- [ ] Detección de eventos en noticias (resultados, guidance, ratings) —
+      quedó fuera de la Fase 3 por coste de API.
+- [ ] `make dev` o docker-compose para levantar backend y frontend juntos.
