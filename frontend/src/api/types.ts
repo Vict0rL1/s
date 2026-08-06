@@ -83,6 +83,11 @@ export interface ProviderUsage {
   remaining: number
 }
 
+export interface LlmStatus {
+  configured: boolean
+  model: string | null
+}
+
 // ---- Fase 2 ----
 
 export interface FinancialPeriod {

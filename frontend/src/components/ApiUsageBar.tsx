@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { ProviderUsage } from '../api/types'
+import type { LlmStatus, ProviderUsage } from '../api/types'
 
 function windowLabel(seconds: number): string {
   if (seconds <= 60) return 'min'
@@ -12,6 +12,7 @@ function windowLabel(seconds: number): string {
 // saber cuánto queda es parte del flujo de trabajo, no un adorno.
 export function ApiUsageBar() {
   const [usage, setUsage] = useState<ProviderUsage[]>([])
+  const [llm, setLlm] = useState<LlmStatus | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -23,6 +24,11 @@ export function ApiUsageBar() {
     }
     load()
     const timer = setInterval(load, 30_000)
+    // El estado de la IA no cambia sin reiniciar el backend: se pide una vez.
+    api.llmStatus().then(
+      (s) => alive && setLlm(s),
+      () => undefined,
+    )
     return () => {
       alive = false
       clearInterval(timer)
@@ -52,6 +58,22 @@ export function ApiUsageBar() {
           {u.provider} {u.remaining}/{u.limit}
         </span>
       ))}
+      {llm && (
+        <span
+          title={
+            llm.configured
+              ? `Capa de IA activa (${llm.model}). Se factura por tokens: solo corre cuando pulsas un botón de interpretación.`
+              : 'Sin ANTHROPIC_API_KEY en .env. La app funciona igual; solo faltan las interpretaciones escritas.'
+          }
+          className={`rounded-full px-2 py-0.5 ${
+            llm.configured
+              ? 'bg-violet-950 text-violet-300'
+              : 'bg-slate-800 text-slate-500 line-through'
+          }`}
+        >
+          IA {llm.configured ? 'activa' : 'off'}
+        </span>
+      )}
     </div>
   )
 }

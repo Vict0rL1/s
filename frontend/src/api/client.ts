@@ -31,6 +31,7 @@ import type {
   MacroIndicator,
   PeersResponse,
   Profile,
+  LlmStatus,
   ProviderUsage,
   Quote,
   RiskResponse,
@@ -106,6 +107,7 @@ export const api = {
   history: (symbol: string, range: HistoryRange) =>
     fetchJson<History>(`/api/stocks/${symbol}/history?range=${range}`),
   usage: () => fetchJson<ProviderUsage[]>('/api/meta/usage'),
+  llmStatus: () => fetchJson<LlmStatus>('/api/meta/llm'),
   // Fase 2
   financials: (symbol: string) => fetchJson<Financials>(`/api/stocks/${symbol}/financials`),
   health: (symbol: string) => fetchJson<Health>(`/api/stocks/${symbol}/health`),

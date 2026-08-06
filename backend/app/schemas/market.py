@@ -92,6 +92,13 @@ class ProviderUsage(BaseModel):
     remaining: int
 
 
+class LlmStatus(BaseModel):
+    """Estado de la capa de IA. `model` es None si no hay key configurada."""
+
+    configured: bool
+    model: str | None = None
+
+
 class ScenarioAssumptions(BaseModel):
     """Supuestos de UN escenario del DCF — siempre explícitos y editables."""
 

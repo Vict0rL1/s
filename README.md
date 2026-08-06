@@ -248,6 +248,20 @@ ninguna de ellas** — un modelo de lenguaje predice tokens, no retornos:
 Todo lo generado por IA aparece con etiqueta morada, modelo usado y
 disclaimer, y se registra en `llm_outputs`.
 
+#### Activarlo
+
+Pon `ANTHROPIC_API_KEY` en `.env` (se saca en
+https://console.anthropic.com/settings/keys) y reinicia con `./start.sh`. La
+barra superior muestra **IA activa** con el modelo en uso, o **IA off**
+tachado si la key falta.
+
+**Sin key la app funciona entera**: precios, fundamentales, valoración, salud,
+señales, backtest e informe cuantitativo no tocan el LLM — solo desaparecen
+los tres botones de interpretación escrita. Es la única API de pago del
+proyecto (las demás tienen tier gratuito), así que solo corre cuando pulsas
+uno de esos botones, con `max_tokens` acotado, y el resultado se guarda por
+hash del prompt: repetir la misma consulta no vuelve a cobrar.
+
 ## Estado
 
 Las cinco fases están completas. Ver `TODO.md` para limitaciones conocidas y

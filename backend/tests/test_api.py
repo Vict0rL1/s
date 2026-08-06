@@ -10,7 +10,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.deps import get_service
+from app.config import settings
+from app.deps import get_llm, get_service
 from app.main import app
 from app.providers.base import DataNotFoundError, iso_utc
 
@@ -107,3 +108,29 @@ def test_history_calcula_indicadores_alineados(client):
 
 def test_history_valida_rango(client):
     assert client.get("/api/stocks/AAPL/history?range=3D").status_code == 422
+
+
+def test_estado_de_ia_sin_key_no_expone_modelo(client):
+    """Sin ANTHROPIC_API_KEY el endpoint responde, no falla: la app funciona
+    igual sin capa de IA. Y no anuncia un modelo que no puede usar."""
+    app.dependency_overrides[get_llm] = lambda: None
+    try:
+        resp = client.get("/api/meta/llm")
+        assert resp.status_code == 200
+        assert resp.json() == {"configured": False, "model": None}
+    finally:
+        app.dependency_overrides.pop(get_llm, None)
+
+
+def test_estado_de_ia_con_key_declara_el_modelo(client):
+    """Con key configurada el usuario ve QUÉ modelo escribe las narrativas:
+    un texto generado por IA debe poder atribuirse a su modelo."""
+    app.dependency_overrides[get_llm] = lambda: object()
+    try:
+        resp = client.get("/api/meta/llm")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["configured"] is True
+        assert body["model"] == settings.anthropic_model
+    finally:
+        app.dependency_overrides.pop(get_llm, None)

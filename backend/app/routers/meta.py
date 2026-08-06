@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.config import PROVIDER_RATE_LIMITS, settings
-from app.deps import get_service
-from app.schemas.market import ProviderUsage
+from app.deps import get_llm, get_service
+from app.schemas.market import LlmStatus, ProviderUsage
 
 router = APIRouter(prefix="/api/meta", tags=["meta"])
 
@@ -30,6 +30,20 @@ def api_usage(service=Depends(get_service)):
         usage["configured"] = _KEY_BY_PROVIDER[name]()
         out.append(usage)
     return out
+
+
+@router.get("/llm", response_model=LlmStatus)
+def llm_status(llm=Depends(get_llm)):
+    """Si la capa de IA está activa y con qué modelo.
+
+    No lleva contador de llamadas como el resto: Anthropic se factura por
+    tokens consumidos, no contra una cuota gratuita, así que el dato útil
+    aquí es si la key está puesta, no cuánto queda.
+    """
+    return LlmStatus(
+        configured=llm is not None,
+        model=settings.anthropic_model if llm is not None else None,
+    )
 
 
 @router.get("/health")
