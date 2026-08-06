@@ -11,7 +11,11 @@
 
 import { networkInterfaces } from 'node:os';
 
-const PORT = Number(process.env.PORT_WEB) || 5173;
+// The same names scripts/dev.mjs sets, so `npm run phone` reports the ports the
+// app is actually on rather than the ones it would have preferred. (This used to
+// read PORT_WEB, which nothing else set — so it always printed 5173 even when the
+// dev server had moved.)
+const PORT = Number(process.env.WEB_PORT) || 5173;
 const API_PORT = Number(process.env.PORT) || 4000;
 
 /**

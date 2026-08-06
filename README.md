@@ -254,6 +254,42 @@ próximos partidos con la predicción del modelo y las odds lado a lado.
 
 ---
 
+### Correrla junto a otra app (los puertos se eligen solos)
+
+La API usaba el puerto 4000 y el frontend el 5173, los dos fijos. Con otro proyecto
+ocupando el 4000 —otra API, un contenedor, otra copia de esto— el backend moría con
+`EADDRINUSE: address already in use 0.0.0.0:4000`, **y el frontend cargaba igual**: una app
+perfectamente pintada sin un solo dato, que es un fallo bastante más confuso que un error claro.
+
+Ahora `npm run dev` **elige los puertos antes de que nada se ate** y se los pasa a los dos
+procesos. Ese orden es todo el asunto: si cada proceso eligiera el suyo, el proxy `/api` del
+frontend apuntaría a un puerto donde el backend no acabó.
+
+```
+ℹ️  Puertos por defecto ocupados (¿otra app corriendo?), uso otros:
+   API  4000 → 4001
+   web  5173 → 5174
+
+====================================================
+  App        http://localhost:5174
+  API        http://localhost:4001/api
+  En el móvil  http://192.168.1.34:5174
+====================================================
+```
+
+Verificado con tres copias a la vez (5173, 5174 y 5321): cada una carga con sus datos y
+**cada proxy llega a su propia API**, que es la propiedad que importa.
+
+Si quieres números concretos, `PORT` y `WEB_PORT` en el `.env` los fijan. Un puerto fijado que
+esté ocupado **no se mueve**: se para y lo dice, porque si pediste el 4000 mereces una respuesta
+sobre el 4000.
+
+```bash
+npm run dev                      # elige puertos libres solo
+PORT=4100 WEB_PORT=5200 npm run dev   # o los que tú digas
+npm run dev:fixed                # el par de siempre, 4000 y 5173, sin red de seguridad
+```
+
 ## Abrirla en el teléfono
 
 Con la app corriendo (`npm run dev`):
