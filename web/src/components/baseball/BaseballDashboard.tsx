@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel,
+  pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
 } from '../ui';
-import { staleness } from '../../lib/staleness';
+import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, baseballPicks } from '../../lib/picks';
 import { useStake } from '../../lib/useStake';
 import {
@@ -116,32 +116,39 @@ export default function BaseballDashboard() {
 
   const activeLeague = leagues.find((l) => l.id === league) ?? null;
   const leagueMeta = meta?.leagues.find((l) => l.id === league) ?? null;
+  // Computed here rather than inline: the collapsed header needs the short
+  // version of this and the expanded one needs the full paragraph, and they must
+  // be the same judgement.
+  const stale = staleness('baseball', leagueMeta?.historyThrough, meta?.dataSource === 'seed');
 
   return (
     <div>
-      <header className="mb-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-prose text-[15px] leading-relaxed text-[#9aa1ac]">
-            Predicción con Elo por equipo, ventaja de campo, el <strong>lanzador abridor</strong> y
-            una distribución de carreras que produce ganador, total y línea de una sola vez.
-          </p>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            title="Vuelve a consultar los partidos próximos, sus cuotas y los abridores anunciados"
-            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[14px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
-          >
-            {refreshing ? 'Actualizando…' : '↻ Actualizar'}
-          </button>
-        </div>
+      <DashboardHeader
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        refreshTitle="Vuelve a consultar los partidos próximos, sus cuotas y los abridores anunciados"
+        chips={
+          meta && (
+            <>
+              {meta.counts.games.toLocaleString('es')} partidos · {meta.counts.teams} equipos
+            </>
+          )
+        }
+        alert={staleLabel(stale)}
+      >
+        <p className="max-w-prose text-[15px] leading-relaxed text-[#9aa1ac]">
+          Predicción con Elo por equipo, ventaja de campo, el <strong>lanzador abridor</strong>, el
+          factor del estadio y una distribución de carreras que produce ganador, total y línea de una
+          sola vez.
+        </p>
         {meta && <DataLine meta={meta} />}
         <StaleHistoryWarning
-          info={staleness('baseball', leagueMeta?.historyThrough, meta?.dataSource === 'seed')}
+          info={stale}
           what="Los Elo y la distribución de carreras"
           fix="npm run update-data:bsb"
         />
         {league && <TrackRecordPanel league={league} />}
-      </header>
+      </DashboardHeader>
 
       {/* The ranked-markets panel. Built from the SAME rows the cards below
           render, so the two can never disagree about a number. */}

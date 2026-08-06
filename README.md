@@ -268,6 +268,46 @@ próximos partidos con la predicción del modelo y las odds lado a lado.
 
 ---
 
+## La navegación y la cabecera
+
+**Los deportes están a la izquierda** desde 1024 px, en un rail de 15 rem, y arriba por debajo de esa
+anchura. Es la mejor forma para seis elementos en pantalla ancha: las etiquetas se leen enteras en vez
+de pelearse por una tira horizontal, y todo el ancho de la página queda para el contenido. En un móvil
+de 390 px un rail se comería un tercio de la pantalla, así que ahí vuelve a ser una fila.
+
+Es **una sola lista en dos orientaciones**, no dos listas (`SportNav`): los mismos seis deportes, el
+mismo orden, el mismo color de acento marcando el activo, la misma semántica `role="tab"`. Dos copias
+se desincronizarían la primera vez que se añada un deporte.
+
+Un efecto secundario que salió gratis: el offset `--header-h` que usan las cabeceras de día pegajosas
+está **medido**, no fijado. Por encima de 1024 px la barra de arriba es `display: none`, así que su
+altura medida es 0 — y 0 es exactamente el offset correcto ahí, porque ya no hay nada encima del
+contenido. Un valor fijo habría dejado un hueco del tamaño de una cabecera que no está en pantalla.
+
+### La cabecera, plegada
+
+Cada pestaña abría con un muro de texto antes de una sola predicción: un párrafo explicando el
+modelo, una línea de origen de datos, otra de cuotas, un aviso de datos viejos de dos frases y el
+panel de aciertos. Todo cierto, todo leído una vez, y todo entre el lector y aquello para lo que
+abrió la app. En un portátil era casi la primera pantalla entera.
+
+Ahora se pliega —y arranca plegada— dejando arriba **los controles y los datos**:
+
+```
+[↻ Actualizar]  37.262 partidos · 32 equipos  [⚠️ datos de sept 2025]        Detalles ▼
+```
+
+**El aviso sobrevive al plegado a propósito.** El párrafo largo de datos viejos es la única parte de
+ese bloque que cambia lo que hay que *hacer*: dice que esos números describen a los equipos de la
+temporada pasada. Esconderlo en silencio dejaría la app engañando sin decirlo, que es justo el fallo
+que ese aviso existe para evitar. Así que el párrafo se pliega y una versión de cuatro palabras no.
+Nada importante desaparece; solo deja de ser un párrafo.
+
+La elección de abierto/cerrado se recuerda, y se recuerda **una vez para todos los deportes**: es una
+preferencia sobre cuánto adorno quieres, no un hecho sobre el béisbol.
+
+---
+
 ## El ancho de la página
 
 La app usaba `max-w-3xl` — **768 px** —, que en un portátil es menos de la mitad de la ventana: se
@@ -280,14 +320,15 @@ anchura. Ensanchar sin más habría sido peor que el bug: una tarjeta de 1280 px
 «76,3 %» en extremos opuestos del monitor con un palmo de nada en medio. El espacio extra tiene que
 comprar una segunda columna, no una más larga.
 
-| Ventana | Ancho usado | |
-|---|---|---|
-| 1920 px | 1280 px | 67 %, dos columnas |
-| 1440 px | 1280 px | 89 %, dos columnas |
-| 768 px | 768 px | 100 %, una columna |
-| 390 px | 390 px | 100 %, una columna |
+| Ventana | Navegación | Contenido | |
+|---|---|---|---|
+| 1920 px | rail izquierdo | 1280 px | dos columnas de tarjetas |
+| 1280 px | rail izquierdo | 1040 px | dos columnas |
+| 1023 px | fila arriba | 1023 px | una columna |
+| 768 px | fila arriba | 768 px | una columna |
+| 390 px | fila arriba | 390 px | una columna |
 
-Verificado en las cuatro: **cero desbordamiento horizontal**. El paso a rejilla trajo un bug propio
+Verificado en las cinco, pestaña por pestaña: **cero desbordamiento horizontal**. El paso a rejilla trajo un bug propio
 que hubo que arreglar —una pista de CSS grid es `minmax(auto, 1fr)` por defecto, y ese `auto`
 significa «al menos lo más ancho que no pueda encogerse», así que una sola etiqueta con
 `whitespace-nowrap` dentro de una tarjeta empujaba la pista fuera de la pantalla: 5 px de scroll

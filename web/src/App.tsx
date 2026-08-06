@@ -69,7 +69,7 @@ export default function App() {
   const activeTabRef = useRef<HTMLButtonElement>(null);
 
   /**
-   * Publish the header's height so sticky day headings can sit exactly under it.
+   * Publish the top bar's height so sticky day headings can sit exactly under it.
    *
    * Measured rather than hardcoded. The offset was a literal 86px until the type
    * scale grew and the headings started sliding beneath the tab bar — a constant
@@ -77,6 +77,12 @@ export default function App() {
    * element changes. A ResizeObserver also covers what a constant never could:
    * a phone rotating, a notch's safe-area inset, and the browser's own font-size
    * setting.
+   *
+   * It now covers one more case for free. Above 1024px the top bar is
+   * `display: none` (the nav moved to the left rail), so its measured height is 0 —
+   * and 0 is exactly the right offset there, because nothing is above the content
+   * any more. A hardcoded value would have left a gap the width of a header that
+   * is not on screen.
    */
   /**
    * Scroll the selected tab fully into view.
@@ -110,19 +116,22 @@ export default function App() {
   }, [sport]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen lg:flex">
       {/*
-        A sticky header, because the tab bar is the app's primary navigation and
-        scrolling a long card should not strand you at the bottom of one sport
-        with no way back. The accent line under the active tab is the ONLY place a
-        sport's identity colour appears — data marks use the shared, validated
-        palette, so a blue bar means "home" on every tab.
+        NAVIGATION LIVES ON THE LEFT from 1024px, and across the top below it.
+        Two arrangements of one list, not two lists — see SportNav.
+
+        A vertical rail is the better shape for six items on a wide screen: the
+        labels read left-to-right at full length instead of competing for a strip of
+        horizontal space, and the whole of the page's own width is left for content.
+        Below 1024px it goes back to a top row, because a rail on a 390px phone
+        spends a third of the screen on navigation.
       */}
-      <header ref={headerRef} className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#0b0d11]/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-        {/* Safe-area padding so a notch or a rounded corner never clips the tab
-            bar when the app is opened from a phone's home screen. */}
-        <div className={`mx-auto ${SHELL_WIDTH} px-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]`}>
-          <div className="flex items-center gap-3 pb-1 pt-4">
+      <aside className="hidden shrink-0 border-r border-white/[0.07] bg-[#0d0f14] lg:block lg:w-[15rem]">
+        {/* Sticky and full-height: the nav must stay reachable after scrolling a
+            long list of cards, which is the same reason the top bar was sticky. */}
+        <div className="sticky top-0 flex h-screen flex-col pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]">
+          <div className="flex items-center gap-2.5 px-4 pb-5 pt-5">
             <span
               aria-hidden
               className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-[17px]"
@@ -131,74 +140,172 @@ export default function App() {
               {theme.emoji}
             </span>
             <div className="min-w-0">
-              <h1 className="truncate text-[17px] font-semibold leading-tight text-[#e8eaed]">
+              <h1 className="truncate text-[16px] font-semibold leading-tight text-[#e8eaed]">
                 Sports Predictor
               </h1>
-              {/* Hidden on the narrowest screens: at 390px it truncated to
-                  "…medidos contra resultados r…", which is header height spent on
-                  half a sentence. */}
-              <p className="hidden truncate text-[13px] leading-tight text-[#7b828d] md:block">
-                Modelos explicables, medidos contra resultados reales
+              {/* Wraps rather than truncates: a 15rem rail has room for two short
+                  lines and none for "medidos contra resultad…", which is a subtitle
+                  spending its width on an ellipsis. */}
+              <p className="text-[12px] leading-snug text-[#7b828d]">
+                medidos contra resultados reales
               </p>
             </div>
           </div>
-
-          <nav className="-mb-px flex gap-0.5 overflow-x-auto md:gap-1" role="tablist" aria-label="Deportes">
-            {SPORTS.map((id) => {
-              const s = SPORT_THEMES[id];
-              const active = sport === id;
-              return (
-                <button
-                  key={id}
-                  role="tab"
-                  aria-selected={active}
-                  ref={active ? activeTabRef : undefined}
-                  onClick={() => setSport(id)}
-                  className={`relative shrink-0 rounded-t-lg px-1.5 py-2.5 text-[14px] font-medium transition md:px-3 md:text-[15px] ${
-                    active ? 'text-[#e8eaed]' : 'text-[#7b828d] hover:text-[#c3c9d1]'
-                  }`}
-                >
-                  {/* Decorative, and the first thing to go when five tabs have
-                      to share a phone's width — the word is what identifies the
-                      sport, the accent line under it carries the colour. */}
-                  <span className="mr-1.5 hidden md:inline" aria-hidden>
-                    {s.emoji}
-                  </span>
-                  {/* Two spans rather than JS width detection: CSS decides, so
-                      there is no resize listener and no flash of the wrong one. */}
-                  <span className={s.shortLabel ? 'md:hidden' : ''}>{s.shortLabel ?? s.label}</span>
-                  {s.shortLabel && <span className="hidden md:inline">{s.label}</span>}
-                  <span
-                    aria-hidden
-                    className="absolute inset-x-1 -bottom-px h-0.5 rounded-full transition"
-                    style={{ backgroundColor: active ? s.accent : 'transparent' }}
-                  />
-                </button>
-              );
-            })}
-          </nav>
+          <SportNav sport={sport} onSelect={setSport} vertical />
         </div>
-      </header>
+      </aside>
 
-      <main className={`mx-auto ${SHELL_WIDTH} px-4 pb-16 pt-6`}>
-        {/* Mounted one at a time on purpose: the inactive sports do no fetching. */}
-        {sport === 'bets' && <BetsDashboard />}
-        {sport === 'football' && <FootballDashboard />}
-        {sport === 'basketball' && <BasketballDashboard />}
-        {sport === 'baseball' && <BaseballDashboard />}
-        {sport === 'nfl' && <NflDashboard />}
-        {sport === 'tennis' && <TennisDashboard />}
-      </main>
+      <div className="min-w-0 flex-1">
+        {/*
+          The top bar, phones and tablets only. Sticky, because the nav is the app's
+          primary control and scrolling a long card should not strand you at the
+          bottom of one sport with no way back.
+        */}
+        <header
+          ref={headerRef}
+          className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#0b0d11]/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl lg:hidden"
+        >
+          <div className={`mx-auto ${SHELL_WIDTH} px-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]`}>
+            <div className="flex items-center gap-3 pb-1 pt-4">
+              <span
+                aria-hidden
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-[17px]"
+                style={{ backgroundColor: theme.accentSoft }}
+              >
+                {theme.emoji}
+              </span>
+              <div className="min-w-0">
+                <h1 className="truncate text-[17px] font-semibold leading-tight text-[#e8eaed]">
+                  Sports Predictor
+                </h1>
+                {/* Hidden on the narrowest screens: at 390px it truncated to
+                    "…medidos contra resultados r…", which is header height spent on
+                    half a sentence. */}
+                <p className="hidden truncate text-[13px] leading-tight text-[#7b828d] md:block">
+                  Modelos explicables, medidos contra resultados reales
+                </p>
+              </div>
+            </div>
+            <SportNav sport={sport} onSelect={setSport} activeRef={activeTabRef} />
+          </div>
+        </header>
 
-      <footer className={`mx-auto ${SHELL_WIDTH} px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))]`}>
-        <p className="border-t border-white/[0.07] pt-4 text-[13px] leading-relaxed text-[#7b828d]">
-          Estimación estadística. Cada modelo se mide contra resultados reales y la app registra sus
-          propios aciertos, pero ninguno conoce las lesiones de última hora, el clima ni la
-          motivación. No es una recomendación para apostar.
-        </p>
-        <OddsQuotaLine />
-      </footer>
+        <main className={`mx-auto ${SHELL_WIDTH} px-4 pb-16 pt-6`}>
+          {/* Mounted one at a time on purpose: the inactive sports do no fetching. */}
+          {sport === 'bets' && <BetsDashboard />}
+          {sport === 'football' && <FootballDashboard />}
+          {sport === 'basketball' && <BasketballDashboard />}
+          {sport === 'baseball' && <BaseballDashboard />}
+          {sport === 'nfl' && <NflDashboard />}
+          {sport === 'tennis' && <TennisDashboard />}
+        </main>
+
+        <footer className={`mx-auto ${SHELL_WIDTH} px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))]`}>
+          <p className="border-t border-white/[0.07] pt-4 text-[13px] leading-relaxed text-[#7b828d]">
+            Estimación estadística. Cada modelo se mide contra resultados reales y la app registra sus
+            propios aciertos, pero ninguno conoce las lesiones de última hora, el clima ni la
+            motivación. No es una recomendación para apostar.
+          </p>
+          <OddsQuotaLine />
+        </footer>
+      </div>
     </div>
+  );
+
+}
+
+/**
+ * The sport list, in whichever direction it is asked for.
+ *
+ * ONE component and not two, because the two arrangements have to stay the same
+ * list: the same six sports, the same order, the same accent colour marking the
+ * active one, the same `role="tab"` semantics. Two copies would drift the first
+ * time a sport is added.
+ *
+ * The accent line is the only place a sport's identity colour appears anywhere in
+ * the app — data marks use the shared validated palette, so a blue bar means "home"
+ * on every tab. Vertically it becomes a bar down the left edge, which is the
+ * conventional shape for a rail and reads at a glance from the margin.
+ */
+function SportNav({
+  sport,
+  onSelect,
+  vertical = false,
+  activeRef,
+}: {
+  sport: SportId;
+  onSelect: (id: SportId) => void;
+  vertical?: boolean;
+  /** Only the horizontal row needs this — see the scrollIntoView effect. */
+  activeRef?: React.RefObject<HTMLButtonElement | null>;
+}) {
+  return (
+    <nav
+      role="tablist"
+      aria-label="Deportes"
+      aria-orientation={vertical ? 'vertical' : 'horizontal'}
+      className={
+        vertical
+          ? 'flex flex-col gap-0.5 px-2'
+          : '-mb-px flex gap-0.5 overflow-x-auto md:gap-1'
+      }
+    >
+      {SPORTS.map((id) => {
+        const s = SPORT_THEMES[id];
+        const active = sport === id;
+        if (vertical) {
+          return (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={active}
+              onClick={() => onSelect(id)}
+              className={`relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[15px] font-medium transition ${
+                active
+                  ? 'bg-white/[0.06] text-[#e8eaed]'
+                  : 'text-[#9aa1ac] hover:bg-white/[0.03] hover:text-[#c3c9d1]'
+              }`}
+            >
+              <span
+                aria-hidden
+                className="absolute inset-y-1.5 left-0 w-[3px] rounded-full transition"
+                style={{ backgroundColor: active ? s.accent : 'transparent' }}
+              />
+              <span aria-hidden className="text-[16px]">{s.emoji}</span>
+              <span className="min-w-0 truncate">{s.label}</span>
+            </button>
+          );
+        }
+        return (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={active}
+            ref={active ? activeRef : undefined}
+            onClick={() => onSelect(id)}
+            className={`relative shrink-0 rounded-t-lg px-1.5 py-2.5 text-[14px] font-medium transition md:px-3 md:text-[15px] ${
+              active ? 'text-[#e8eaed]' : 'text-[#7b828d] hover:text-[#c3c9d1]'
+            }`}
+          >
+            {/* Decorative, and the first thing to go when six tabs have to share a
+                phone's width — the word identifies the sport, the accent line
+                underneath carries the colour. */}
+            <span className="mr-1.5 hidden md:inline" aria-hidden>
+              {s.emoji}
+            </span>
+            {/* Two spans rather than JS width detection: CSS decides, so there is no
+                resize listener and no flash of the wrong one. */}
+            <span className={s.shortLabel ? 'md:hidden' : ''}>{s.shortLabel ?? s.label}</span>
+            {s.shortLabel && <span className="hidden md:inline">{s.label}</span>}
+            <span
+              aria-hidden
+              className="absolute inset-x-1 -bottom-px h-0.5 rounded-full transition"
+              style={{ backgroundColor: active ? s.accent : 'transparent' }}
+            />
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 

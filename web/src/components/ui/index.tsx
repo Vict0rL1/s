@@ -1022,3 +1022,98 @@ export function PicksPanel({
     </section>
   );
 }
+
+/**
+ * The per-sport header, collapsed by default.
+ *
+ * WHAT IT REPLACES. Every tab opened with a wall of prose before a single
+ * prediction: a paragraph explaining the model, a data-origin line, an odds-refresh
+ * line, a stale-history warning of two sentences, and a track-record panel. All of
+ * it true, all of it read once, and all of it standing between the reader and the
+ * thing they opened the app for. On a laptop it was most of the first screen.
+ *
+ * So it collapses, and it opens with the CONTROLS and the FACTS instead: the refresh
+ * button, a few counts as chips, and — this is the part that must not be lost — a
+ * short warning chip when the data is stale.
+ *
+ * WHY THE WARNING SURVIVES THE COLLAPSE. The full stale-history paragraph is the one
+ * piece of that block that changes what a reader should DO: it says these numbers
+ * describe last season's teams. Hiding that silently would make the app quietly
+ * misleading, which is exactly the failure the warning exists to prevent. So the
+ * paragraph collapses and a four-word version of it does not. Nothing important
+ * disappears; it just stops being a paragraph.
+ *
+ * The open/closed choice is remembered, and remembered ONCE for all sports: it is a
+ * preference about how much chrome the reader wants, not a fact about baseball.
+ */
+const HEADER_OPEN_KEY = 'predictor.header.open';
+
+export function DashboardHeader({
+  chips,
+  alert,
+  onRefresh,
+  refreshing = false,
+  refreshTitle,
+  children,
+}: {
+  /** Short facts, always visible: "37.262 partidos", "32 equipos". */
+  chips?: ReactNode;
+  /** Compact stale-data note. Stays visible when collapsed — see above. */
+  alert?: string | null;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  refreshTitle?: string;
+  /** The full block. Hidden until asked for. */
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(HEADER_OPEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try {
+      localStorage.setItem(HEADER_OPEN_KEY, next ? '1' : '0');
+    } catch {
+      // Only affects whether it opens collapsed next time.
+    }
+  };
+
+  return (
+    <header className="mb-5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            title={refreshTitle}
+            className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[14px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
+          >
+            {refreshing ? 'Actualizando…' : '↻ Actualizar'}
+          </button>
+        )}
+        {chips && <span className="min-w-0 text-[13px] text-[#7b828d]">{chips}</span>}
+        {alert && (
+          <span
+            className="shrink-0 rounded-full bg-amber-500/[0.12] px-2.5 py-1 text-[13px] font-medium text-amber-200/90"
+            title="Los ratings no describen a los equipos actuales. Abre los detalles para ver cómo arreglarlo."
+          >
+            ⚠️ {alert}
+          </span>
+        )}
+        <button
+          onClick={toggle}
+          aria-expanded={open}
+          className="ml-auto shrink-0 rounded-lg px-2 py-1 text-[13px] font-medium text-[#7b828d] transition hover:bg-white/[0.04] hover:text-[#c3c9d1]"
+        >
+          {open ? 'Ocultar detalles ▲' : 'Detalles ▼'}
+        </button>
+      </div>
+      {open && <div className="mt-3">{children}</div>}
+    </header>
+  );
+}

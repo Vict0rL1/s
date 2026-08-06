@@ -93,3 +93,18 @@ export function staleness(
     stale: daysOld > OFF_SEASON_DAYS[sport] + SLACK_DAYS,
   };
 }
+
+/**
+ * The four-word version of the warning, for a collapsed header.
+ *
+ * The full paragraph explains what to run and why; this is what survives when the
+ * reader has folded the header away. It has to survive: the paragraph is the one
+ * piece of that block that changes what someone should DO with the numbers, and
+ * hiding it silently would make the app quietly misleading.
+ *
+ * Null when the data is current, so the chip simply is not there.
+ */
+export function staleLabel(info: Staleness | null): string | null {
+  if (!info?.stale) return null;
+  return `datos de ${info.through.toLocaleDateString('es', { month: 'short', year: 'numeric' })}`;
+}

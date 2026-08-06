@@ -9,8 +9,10 @@ import {
 import MatchCard from './MatchCard';
 import PlayerProfile from './PlayerProfile';
 import TrackRecordPanel from './TrackRecordPanel';
-import { DayFilter, DayHeading, pillClass, StaleHistoryWarning, PicksPanel } from './ui';
-import { staleness } from '../lib/staleness';
+import {
+  DayFilter, DayHeading, pillClass, StaleHistoryWarning, PicksPanel, DashboardHeader,
+} from './ui';
+import { staleLabel, staleness } from '../lib/staleness';
 import { CAVEATS, rankPicks, tennisPicks } from '../lib/picks';
 import { useStake } from '../lib/useStake';
 import { dayChipLabel, groupByDay } from '../lib/format';
@@ -116,34 +118,32 @@ export default function TennisDashboard() {
       .finally(() => setLoading(false));
   }, [tour, tournamentId]);
 
+  // Computed once: the collapsed header needs the short version and the expanded
+  // one the full paragraph, and they must be the same judgement.
+  const stale = staleness('tennis', meta?.historyThrough, meta?.dataSource === 'seed');
+
   return (
     <div>
-      <header className="mb-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <DashboardHeader
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        refreshTitle="Vuelve a consultar las odds de los partidos próximos"
+        chips={meta && <>{meta.counts.matches.toLocaleString('es')} partidos · {meta.counts.players} jugadores</>}
+        alert={staleLabel(stale)}
+      >
           <p className="max-w-prose text-[15px] leading-relaxed text-[#9aa1ac]">
             Predicción de partidos con Elo por superficie, forma reciente, head-to-head y odds del
             mercado.
           </p>
-          <div className="flex shrink-0 items-center gap-2">
-            {meta && <DataBadge meta={meta} />}
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              title="Vuelve a consultar las odds de los partidos próximos"
-              className="shrink-0 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[14px] font-medium text-[#d5d9df] ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.1] disabled:opacity-50"
-            >
-              {refreshing ? 'Actualizando…' : '↻ Actualizar'}
-            </button>
-          </div>
-        </div>
+        {meta && <div className="mt-2"><DataBadge meta={meta} /></div>}
         {meta && <RefreshInfo meta={meta} />}
         <StaleHistoryWarning
-          info={staleness('tennis', meta?.historyThrough, meta?.dataSource === 'seed')}
+          info={stale}
           what="Los Elo por superficie"
           fix="npm run update-data"
         />
         <TrackRecordPanel tour={tour} />
-      </header>
+      </DashboardHeader>
 
       {/* The ranked-markets panel. Built from the SAME rows the cards below
           render, so the two can never disagree about a number. */}
