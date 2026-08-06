@@ -264,6 +264,86 @@ export interface Interpretation {
   disclaimer: string
 }
 
+// ---- Fase 4 ----
+
+export interface EtfHolding {
+  symbol: string
+  name: string | null
+  weight: number | null
+}
+
+export interface EtfData extends Sourced {
+  symbol: string
+  name: string | null
+  category: string | null
+  expense_ratio: number | null
+  aum: number | null
+  dividend_yield: number | null
+  currency: string | null
+  top_holdings: EtfHolding[]
+  sector_weights: Record<string, number>
+  coverage_note?: string
+}
+
+export interface EtfOverlap {
+  a: string
+  b: string
+  overlap_weight: number
+  shared_count: number
+  common_holdings: {
+    symbol: string
+    weight_a: number
+    weight_b: number
+    min_weight: number
+  }[]
+  note: string
+}
+
+export interface EtfComparison {
+  etfs: EtfData[]
+  overlaps: EtfOverlap[]
+  errors: Record<string, string>
+  note: string
+}
+
+export interface FilterSpec {
+  op: 'gte' | 'lte'
+  value: number
+}
+
+export interface ScreenerPreset {
+  id?: number
+  name: string
+  logic_md: string | null
+  filters: Record<string, FilterSpec>
+  created_at?: string
+}
+
+export interface ScreenCheck {
+  metric: string
+  op: 'gte' | 'lte'
+  value: number
+  actual: number | null
+  passed: boolean
+}
+
+export interface ScreenRow {
+  symbol: string
+  passes: boolean
+  checks: ScreenCheck[]
+  metrics: Record<string, number | null>
+  source: string
+  cached: boolean
+}
+
+export interface ScreenResult {
+  results: ScreenRow[]
+  unavailable: { symbol: string; reason: string }[]
+  passed: number
+  evaluated: number
+  note: string
+}
+
 export interface EarningsEvent {
   symbol: string
   date: string

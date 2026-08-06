@@ -1,8 +1,13 @@
 import type {
   DcfResponse,
   EarningsEvent,
+  EtfComparison,
+  EtfData,
+  FilterSpec,
   Interpretation,
   NewsFeed,
+  ScreenerPreset,
+  ScreenResult,
   FilingsResponse,
   Financials,
   Fundamentals,
@@ -97,6 +102,18 @@ export const api = {
     ),
   interpretNews: (body: { headline: string; summary: string | null; symbol: string | null }) =>
     postJson<Interpretation>('/api/news/interpret', body),
+  // Fase 4
+  etf: (symbol: string) => fetchJson<EtfData>(`/api/etfs/${symbol}`),
+  compareEtfs: (symbols: string[]) =>
+    fetchJson<EtfComparison>(
+      `/api/etfs/compare/side-by-side?symbols=${encodeURIComponent(symbols.join(','))}`,
+    ),
+  screenerPresets: () =>
+    fetchJson<{ builtin: ScreenerPreset[]; saved: ScreenerPreset[] }>('/api/screener/presets'),
+  savePreset: (body: { name: string; logic_md: string | null; filters: Record<string, FilterSpec> }) =>
+    postJson<{ id: number; name: string }>('/api/screener/presets', body),
+  runScreen: (body: { symbols: string[]; filters: Record<string, FilterSpec> }) =>
+    postJson<ScreenResult>('/api/screener/run', body),
   marketOverview: () => fetchJson<{ indices: IndexEntry[] }>('/api/market/overview'),
   marketSectors: () => fetchJson<{ sectors: SectorEntry[]; note: string }>('/api/market/sectors'),
   yieldCurve: () => fetchJson<YieldCurve>('/api/market/yield-curve'),
