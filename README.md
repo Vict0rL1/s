@@ -32,6 +32,34 @@ compra, no predice precios y no ejecuta órdenes**.
 
 ## Setup
 
+Una sola terminal, un solo comando:
+
+```bash
+./start.sh
+```
+
+La primera vez crea el entorno virtual de Python, instala las dependencias de
+backend y frontend y genera `.env` a partir de la plantilla (tarda un par de
+minutos). Después arranca directo en unos segundos. `Ctrl+C` para los dos
+procesos a la vez.
+
+Antes de la primera ejecución real, rellena tus API keys:
+
+```bash
+open -e .env      # macOS; en Linux, el editor que uses
+```
+
+Abre http://localhost:5173. La documentación interactiva del API está en
+http://localhost:8000/docs. Los logs quedan en `/tmp/bolsa-backend.log` y
+`/tmp/bolsa-frontend.log`.
+
+`start.sh` reinstala las dependencias de Python solo si `requirements.txt`
+cambió (compara un hash), y libera los puertos 8000 y 5173 si quedaron
+ocupados por una ejecución anterior que no cerró bien.
+
+<details>
+<summary>Arranque manual (dos terminales)</summary>
+
 ```bash
 # 1. Variables de entorno
 cp .env.example .env      # y rellena tus API keys
@@ -48,14 +76,13 @@ npm install
 npm run dev
 ```
 
-Abre http://localhost:5173. La documentación interactiva del API está en
-http://localhost:8000/docs.
+</details>
 
 ### Tests
 
 ```bash
-cd backend && python -m pytest        # 101 tests: lógica financiera, caché, router, API
-cd frontend && npm run build          # type-check estricto + build
+cd backend && .venv/bin/python -m pytest   # lógica financiera, caché, router, API
+cd frontend && npm run build               # type-check estricto + build
 ```
 
 ## Fuentes de datos y sus límites (verificado 2026)

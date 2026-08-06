@@ -109,4 +109,4 @@ número:
 - [ ] Exportar el portafolio y las tesis a CSV/Markdown.
 - [ ] Detección de eventos en noticias (resultados, guidance, ratings) —
       quedó fuera de la Fase 3 por coste de API.
-- [ ] `make dev` o docker-compose para levantar backend y frontend juntos.
+- [x] Arranque en una sola terminal (`./start.sh`).
