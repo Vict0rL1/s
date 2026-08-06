@@ -91,11 +91,14 @@ class MarketDataService:
         self.cache = cache
 
     def get(self, data_type: str, **kwargs) -> dict:
-        cached = self.cache.get(data_type, kwargs)
+        # Los kwargs con "_" son directivas para el router (p. ej. _order),
+        # no parámetros del dato: quedan fuera de la clave de caché.
+        cache_params = {k: v for k, v in kwargs.items() if not k.startswith("_")}
+        cached = self.cache.get(data_type, cache_params)
         if cached is not None:
             return cached
         payload = self.router.fetch(data_type, **kwargs)
-        self.cache.set(data_type, kwargs, payload)
+        self.cache.set(data_type, cache_params, payload)
         result = dict(payload)
         result["cached"] = False
         result["fetched_at"] = self.cache._now().isoformat()

@@ -47,7 +47,9 @@ _METRIC_MAP = {
 
 class FinnhubProvider(DataProvider):
     name = "finnhub"
-    capabilities = frozenset({"quote", "profile", "fundamentals"})
+    capabilities = frozenset(
+        {"quote", "profile", "fundamentals", "news", "earnings_calendar", "peers"}
+    )
 
     def __init__(self, api_key: str, timeout: float = 10.0):
         self.api_key = api_key
@@ -147,3 +149,60 @@ class FinnhubProvider(DataProvider):
             "metrics": metrics,
             "as_of": iso_utc(),
         }
+
+    def get_news(self, symbol: str | None, days: int) -> dict:
+        from datetime import timedelta
+
+        today = datetime.now(timezone.utc).date()
+        start = today - timedelta(days=days)
+        if symbol:
+            raw = self._get(
+                "/company-news",
+                {"symbol": symbol, "from": start.isoformat(), "to": today.isoformat()},
+            )
+        else:
+            raw = self._get("/news", {"category": "general"})
+        if not isinstance(raw, list):
+            raise DataNotFoundError("finnhub: respuesta de noticias inesperada")
+        items = [
+            {
+                "headline": item.get("headline"),
+                "summary": item.get("summary") or None,
+                "url": item.get("url"),
+                "published_at": iso_utc(
+                    datetime.fromtimestamp(item["datetime"], tz=timezone.utc)
+                )
+                if item.get("datetime")
+                else None,
+                "source": item.get("source"),
+                "related": item.get("related") or symbol,
+            }
+            for item in raw[:60]
+            if item.get("headline") and item.get("url")
+        ]
+        return {"symbol": symbol.upper() if symbol else None, "items": items, "as_of": iso_utc()}
+
+    def get_earnings_calendar(self, start: str, end: str) -> dict:
+        raw = self._get("/calendar/earnings", {"from": start, "to": end})
+        events = [
+            {
+                "symbol": ev.get("symbol"),
+                "date": ev.get("date"),
+                "hour": ev.get("hour") or None,
+                "quarter": ev.get("quarter"),
+                "year": ev.get("year"),
+                "eps_estimate": ev.get("epsEstimate"),
+                "eps_actual": ev.get("epsActual"),
+                "revenue_estimate": ev.get("revenueEstimate"),
+                "revenue_actual": ev.get("revenueActual"),
+            }
+            for ev in (raw.get("earningsCalendar") or [])
+        ]
+        return {"events": events, "as_of": iso_utc()}
+
+    def get_peers(self, symbol: str) -> dict:
+        raw = self._get("/stock/peers", {"symbol": symbol})
+        if not isinstance(raw, list) or not raw:
+            raise DataNotFoundError(f"finnhub: sin pares para {symbol}")
+        peers = [p for p in raw if p and p.upper() != symbol.upper()]
+        return {"symbol": symbol.upper(), "peers": peers[:8], "as_of": iso_utc()}

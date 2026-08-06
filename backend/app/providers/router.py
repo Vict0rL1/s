@@ -24,12 +24,21 @@ from app.providers.base import (
 )
 
 # Orden de fuentes por tipo de dato. Finnhub no aparece en price_history
-# porque su endpoint de velas dejó de ser gratuito en 2024.
+# porque su endpoint de velas dejó de ser gratuito en 2024. EDGAR y FRED son
+# gratuitos e ilimitados en la práctica: por eso los datos que pueden salir
+# de ellos NO tienen alternativa de pago en la lista (minimizar créditos).
 DEFAULT_SOURCE_ORDER: dict[str, list[str]] = {
     "quote": ["finnhub", "twelvedata", "yfinance"],
     "price_history": ["twelvedata", "yfinance"],
     "profile": ["finnhub", "yfinance"],
     "fundamentals": ["finnhub", "yfinance"],
+    "financials": ["edgar"],
+    "filings": ["edgar"],
+    "macro": ["fred"],
+    "news": ["finnhub"],
+    "earnings_calendar": ["finnhub"],
+    "peers": ["finnhub"],
+    "etf_data": ["yfinance"],
 }
 
 RETRY_ATTEMPTS = 2       # reintentos ante error transitorio, por proveedor
@@ -44,29 +53,49 @@ class AllProvidersFailedError(Exception):
         super().__init__(f"Todas las fuentes fallaron para '{data_type}' ({detail})")
 
 
+def _normalize_windows(value) -> tuple[tuple[int, int], ...]:
+    """Acepta (max, ventana) o ((max, v1), (max, v2), ...) — un proveedor
+    puede tener límite por minuto Y por día a la vez (p. ej. Twelve Data)."""
+    if isinstance(value[0], int):
+        return (value,)
+    return tuple(value)
+
+
 class RateLimiter:
     """Controla cuántas llamadas quedan por proveedor según api_call_log."""
 
-    def __init__(self, session_factory, limits: dict[str, tuple[int, int]] | None = None):
+    def __init__(self, session_factory, limits: dict | None = None):
         self.session_factory = session_factory
-        self.limits = limits or PROVIDER_RATE_LIMITS
+        self.limits = {
+            name: _normalize_windows(windows)
+            for name, windows in (limits or PROVIDER_RATE_LIMITS).items()
+        }
 
     def usage(self, provider: str) -> dict:
-        limit, window = self.limits.get(provider, (10_000, 60))
-        cutoff = datetime.now(timezone.utc) - timedelta(seconds=window)
+        """Uso en la ventana MÁS restrictiva ahora mismo (mínimo restante)."""
+        windows = self.limits.get(provider, ((10_000, 60),))
+        binding: dict | None = None
         with self.session_factory() as session:
-            used = session.execute(
-                select(func.count())
-                .select_from(ApiCallLog)
-                .where(ApiCallLog.provider == provider, ApiCallLog.called_at >= cutoff)
-            ).scalar_one()
-        return {
-            "provider": provider,
-            "limit": limit,
-            "window_seconds": window,
-            "used": used,
-            "remaining": max(limit - used, 0),
-        }
+            for limit, window in windows:
+                cutoff = datetime.now(timezone.utc) - timedelta(seconds=window)
+                used = session.execute(
+                    select(func.count())
+                    .select_from(ApiCallLog)
+                    .where(
+                        ApiCallLog.provider == provider,
+                        ApiCallLog.called_at >= cutoff,
+                    )
+                ).scalar_one()
+                candidate = {
+                    "provider": provider,
+                    "limit": limit,
+                    "window_seconds": window,
+                    "used": used,
+                    "remaining": max(limit - used, 0),
+                }
+                if binding is None or candidate["remaining"] < binding["remaining"]:
+                    binding = candidate
+        return binding  # type: ignore[return-value]
 
     def allow(self, provider: str) -> bool:
         return self.usage(provider)["remaining"] > 0
@@ -100,10 +129,13 @@ class DataRouter:
         - DataNotFoundError → se propaga: el dato no existe, no es un fallo.
         """
         reasons: dict[str, str] = {}
-        for name in self.source_order.get(data_type, []):
+        # _order permite forzar fuentes para casos especiales (p. ej. índices
+        # tipo ^VIX que solo cubre yfinance) sin tocar el orden global.
+        order = kwargs.pop("_order", None) or self.source_order.get(data_type, [])
+        for name in order:
             provider = self.providers.get(name)
             if provider is None:
-                reasons[name] = "no configurado (falta API key)"
+                reasons[name] = "no configurado (falta API key o credencial en .env)"
                 continue
             if data_type not in provider.capabilities:
                 reasons[name] = "no soporta este tipo de dato"

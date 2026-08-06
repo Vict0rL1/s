@@ -8,13 +8,15 @@ from app.schemas.market import ProviderUsage
 
 router = APIRouter(prefix="/api/meta", tags=["meta"])
 
-# Proveedores con implementación activa en esta fase; el resto (alphavantage,
-# fred, edgar) aparecen en el contador cuando lleguen sus fases.
-_ACTIVE = ["finnhub", "twelvedata", "yfinance"]
+# Alpha Vantage no aparece: con 25 llamadas/día no se usa por defecto
+# (decisión de ahorro de créditos; ver README).
+_ACTIVE = ["finnhub", "twelvedata", "edgar", "fred", "yfinance"]
 
 _KEY_BY_PROVIDER = {
     "finnhub": lambda: bool(settings.finnhub_api_key),
     "twelvedata": lambda: bool(settings.twelvedata_api_key),
+    "edgar": lambda: bool(settings.edgar_user_agent),
+    "fred": lambda: bool(settings.fred_api_key),
     "yfinance": lambda: True,  # respaldo sin key
 }
 

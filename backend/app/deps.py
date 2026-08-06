@@ -12,7 +12,9 @@ from app.cache.cache import CacheStore, MarketDataService
 from app.config import settings
 from app.db.engine import SessionLocal
 from app.providers.base import DataProvider
+from app.providers.edgar import EdgarProvider
 from app.providers.finnhub import FinnhubProvider
+from app.providers.fred import FredProvider
 from app.providers.router import DataRouter, RateLimiter
 from app.providers.twelvedata import TwelveDataProvider
 from app.providers.yfinance_provider import YFinanceProvider
@@ -24,6 +26,10 @@ def build_providers() -> dict[str, DataProvider]:
         providers["finnhub"] = FinnhubProvider(settings.finnhub_api_key)
     if settings.twelvedata_api_key:
         providers["twelvedata"] = TwelveDataProvider(settings.twelvedata_api_key)
+    if settings.edgar_user_agent:
+        providers["edgar"] = EdgarProvider(settings.edgar_user_agent)
+    if settings.fred_api_key:
+        providers["fred"] = FredProvider(settings.fred_api_key)
     # yfinance no necesita key; siempre disponible como respaldo.
     providers["yfinance"] = YFinanceProvider()
     return providers

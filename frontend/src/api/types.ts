@@ -82,3 +82,173 @@ export interface ProviderUsage {
   used: number
   remaining: number
 }
+
+// ---- Fase 2 ----
+
+export interface FinancialPeriod {
+  fiscal_year: string
+  end_date?: string
+  revenue?: number | null
+  gross_profit?: number | null
+  operating_income?: number | null
+  net_income?: number | null
+  eps_diluted?: number | null
+  cfo?: number | null
+  capex?: number | null
+  total_assets?: number | null
+  total_liabilities?: number | null
+  equity?: number | null
+  shares_outstanding?: number | null
+  [key: string]: string | number | null | undefined
+}
+
+export interface RatioPeriod {
+  fiscal_year: string
+  [key: string]: string | number | null | undefined
+}
+
+export interface Financials extends Sourced {
+  symbol: string
+  entity?: string | null
+  periods: FinancialPeriod[]
+  ratios: RatioPeriod[]
+  growth: {
+    years: number
+    revenue_cagr: number | null
+    eps_cagr: number | null
+    fcf_cagr: number | null
+  }
+}
+
+export interface AltmanZ {
+  score: number | null
+  zone: string | null
+  components: Record<string, number | null>
+  note: string
+}
+
+export interface PiotroskiSignal {
+  name: string
+  passed: boolean | null
+  detail: string
+}
+
+export interface Health extends Sourced {
+  symbol: string
+  altman_z: AltmanZ
+  piotroski_f: {
+    score: number | null
+    max_possible: number
+    signals: PiotroskiSignal[]
+    fiscal_years?: string[]
+  }
+  interest_coverage: number | null
+  net_debt: number | null
+  fcf: number | null
+  fiscal_year?: string
+  market_cap_used: number | null
+}
+
+export interface ValuationDefaults extends Sourced {
+  symbol: string
+  base_fcf: number | null
+  net_debt: number | null
+  shares_outstanding: number | null
+  historical_growth: Financials['growth']
+  suggested_growth_capped: number | null
+  current_price: number | null
+  fiscal_year?: string
+  note: string
+}
+
+export interface ScenarioAssumptions {
+  growth_rate: number
+  discount_rate: number
+  terminal_growth: number
+}
+
+export interface DcfScenarioResult {
+  assumptions: Record<string, number | null>
+  value_per_share: number | null
+  equity_value: number
+  terminal_weight: number | null
+}
+
+export interface DcfResponse {
+  symbol: string
+  scenarios: Record<string, DcfScenarioResult>
+  sensitivity: {
+    growth_rates: number[]
+    rows: { discount_rate: number; values: (number | null)[] }[]
+  } | null
+  current_price: number | null
+  computed_by: string
+}
+
+export interface PeersResponse extends Sourced {
+  symbol: string
+  peers: { symbol: string; metrics: Record<string, number | null>; source: string }[]
+  percentiles: Record<string, number | null>
+  comparison_keys: string[]
+  note: string
+}
+
+export interface RiskResponse extends Sourced {
+  symbol: string
+  window: string
+  beta_vs_spy: number | null
+  annualized_volatility: number | null
+  max_drawdown: { max_drawdown: number; peak: string; trough: string } | null
+}
+
+export interface FilingEntry {
+  type: string
+  filed_at: string
+  accession_no: string
+  url: string
+}
+
+export interface FilingsResponse extends Sourced {
+  symbol: string
+  filings: FilingEntry[]
+  insider_filings: FilingEntry[]
+}
+
+export interface IndexEntry {
+  symbol: string
+  label: string
+  quote: Quote | null
+}
+
+export interface SectorEntry {
+  symbol: string
+  label: string
+  change_pct: number | null
+  quote: Quote | null
+}
+
+export interface YieldCurve {
+  curve: { tenor: string; series_id: string; value: number | null; ts: string | null }[]
+  spread_10y_2y: number | null
+  spread_series: { ts: string; value: number | null }[]
+  note: string
+}
+
+export interface MacroIndicator {
+  series_id: string
+  label: string
+  value: number | null
+  ts: string | null
+}
+
+export interface EarningsEvent {
+  symbol: string
+  date: string
+  hour: string | null
+  quarter: number | null
+  year: number | null
+  eps_estimate: number | null
+  eps_actual: number | null
+  revenue_estimate: number | null
+  revenue_actual: number | null
+}

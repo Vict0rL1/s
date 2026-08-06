@@ -90,3 +90,20 @@ class ProviderUsage(BaseModel):
     window_seconds: int
     used: int
     remaining: int
+
+
+class ScenarioAssumptions(BaseModel):
+    """Supuestos de UN escenario del DCF — siempre explícitos y editables."""
+
+    growth_rate: float
+    discount_rate: float
+    terminal_growth: float
+
+
+class DcfRequest(BaseModel):
+    base_fcf: float
+    years: int = 5
+    net_debt: float = 0.0
+    shares_outstanding: float | None = None
+    # bajista / base / alcista; la UI manda los tres, pero se acepta cualquiera.
+    scenarios: dict[str, ScenarioAssumptions]

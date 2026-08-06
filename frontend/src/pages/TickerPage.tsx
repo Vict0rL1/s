@@ -5,9 +5,25 @@ import type { Fundamentals, History, HistoryRange, Profile, Quote } from '../api
 import { FundamentalsGrid } from '../components/FundamentalsGrid'
 import { PriceChart } from '../components/PriceChart'
 import { SourceBadge } from '../components/SourceBadge'
+import { FilingsSection } from '../components/ticker/FilingsSection'
+import { FinancialsSection } from '../components/ticker/FinancialsSection'
+import { HealthSection } from '../components/ticker/HealthSection'
+import { ValuationSection } from '../components/ticker/ValuationSection'
 import { fmtBig, fmtChangePct, fmtNumber } from '../lib/format'
 
 const RANGES: HistoryRange[] = ['1M', '3M', '6M', 'YTD', '1Y', '5Y', '10Y']
+
+type TabName = 'resumen' | 'fundamentales' | 'valoracion' | 'salud' | 'filings'
+
+// Las pestañas cargan sus datos solo al abrirse: no se gastan llamadas de API
+// en análisis que no estás mirando.
+const TABS: { id: TabName; label: string }[] = [
+  { id: 'resumen', label: 'Resumen' },
+  { id: 'fundamentales', label: 'Fundamentales' },
+  { id: 'valoracion', label: 'Valoración' },
+  { id: 'salud', label: 'Salud y riesgo' },
+  { id: 'filings', label: 'Filings' },
+]
 
 interface TickerData {
   quote: Quote
@@ -28,6 +44,7 @@ export function TickerPage() {
   const symbol = (routeSymbol ?? '').toUpperCase()
 
   const [input, setInput] = useState(symbol)
+  const [tab, setTab] = useState<TabName>('resumen')
   const [range, setRange] = useState<HistoryRange>('1Y')
   const [data, setData] = useState<TickerData | null>(null)
   const [history, setHistory] = useState<History | null>(null)
@@ -62,6 +79,7 @@ export function TickerPage() {
 
   useEffect(() => {
     if (symbol) void load(symbol)
+    setTab('resumen')
   }, [symbol, load])
 
   useEffect(() => {
@@ -153,7 +171,30 @@ export function TickerPage() {
             </div>
           </header>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <nav className="flex gap-1 border-b border-slate-200">
+            {TABS.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={`-mb-px border-b-2 px-3 py-2 text-sm ${
+                  tab === id
+                    ? 'border-slate-900 font-medium text-slate-900'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+
+          {tab === 'fundamentales' && <FinancialsSection symbol={symbol} />}
+          {tab === 'valoracion' && <ValuationSection symbol={symbol} />}
+          {tab === 'salud' && <HealthSection symbol={symbol} />}
+          {tab === 'filings' && <FilingsSection symbol={symbol} />}
+
+          <section
+            className={`rounded-xl border border-slate-200 bg-white p-4 ${tab === 'resumen' ? '' : 'hidden'}`}
+          >
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex gap-1">
                 {RANGES.map((r) => (
@@ -191,7 +232,9 @@ export function TickerPage() {
             )}
           </section>
 
-          {data?.fundamentals && <FundamentalsGrid data={data.fundamentals} />}
+          {tab === 'resumen' && data?.fundamentals && (
+            <FundamentalsGrid data={data.fundamentals} />
+          )}
         </>
       )}
 

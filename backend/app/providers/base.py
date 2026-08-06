@@ -82,12 +82,48 @@ class DataProvider(ABC):
         """-> {symbol, period, metrics: {clave normalizada: valor|None}}"""
         raise NotSupportedError(f"{self.name} no ofrece fundamentales")
 
+    def get_financials(self, symbol: str) -> dict:
+        """Estados financieros anuales -> {symbol, periods: [{fiscal_year,
+        end_date, revenue, net_income, ...}]} en orden cronológico."""
+        raise NotSupportedError(f"{self.name} no ofrece estados financieros")
+
+    def get_filings(self, symbol: str) -> dict:
+        """-> {symbol, filings: [{type, filed_at, accession_no, url}]}"""
+        raise NotSupportedError(f"{self.name} no ofrece filings")
+
+    def get_macro(self, series_id: str, start: str) -> dict:
+        """-> {series_id, points: [{ts, value|None}]}"""
+        raise NotSupportedError(f"{self.name} no ofrece series macro")
+
+    def get_news(self, symbol: str | None, days: int) -> dict:
+        """-> {items: [{headline, summary, url, published_at, source, related}]}"""
+        raise NotSupportedError(f"{self.name} no ofrece noticias")
+
+    def get_earnings_calendar(self, start: str, end: str) -> dict:
+        """-> {events: [{symbol, date, hour, eps_estimate, ...}]}"""
+        raise NotSupportedError(f"{self.name} no ofrece calendario de resultados")
+
+    def get_peers(self, symbol: str) -> dict:
+        """-> {symbol, peers: [str]}"""
+        raise NotSupportedError(f"{self.name} no ofrece pares del sector")
+
+    def get_etf_data(self, symbol: str) -> dict:
+        """-> {symbol, holdings, sector_weights, expense_ratio, aum, ...}"""
+        raise NotSupportedError(f"{self.name} no ofrece datos de ETFs")
+
     def fetch(self, data_type: str, **kwargs) -> dict:
         dispatch = {
             "quote": self.get_quote,
             "price_history": self.get_price_history,
             "profile": self.get_profile,
             "fundamentals": self.get_fundamentals,
+            "financials": self.get_financials,
+            "filings": self.get_filings,
+            "macro": self.get_macro,
+            "news": self.get_news,
+            "earnings_calendar": self.get_earnings_calendar,
+            "peers": self.get_peers,
+            "etf_data": self.get_etf_data,
         }
         if data_type not in dispatch:
             raise NotSupportedError(f"Tipo de dato desconocido: {data_type}")

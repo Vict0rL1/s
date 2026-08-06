@@ -133,3 +133,15 @@ def test_el_limiter_cuenta_uso_por_ventana(session_factory):
     usage = limiter.usage("a")
     assert usage["used"] == 2
     assert usage["remaining"] == 3
+
+
+def test_limiter_con_varias_ventanas_usa_la_mas_restrictiva(session_factory):
+    # Como Twelve Data: 3/min y 100/día. Tras 3 llamadas, la ventana de
+    # minuto (restante 0) manda aunque queden 97 en la diaria.
+    limiter = RateLimiter(session_factory, {"a": ((3, 60), (100, 86400))})
+    for _ in range(3):
+        limiter.record("a", "quote")
+    usage = limiter.usage("a")
+    assert usage["remaining"] == 0
+    assert usage["window_seconds"] == 60
+    assert not limiter.allow("a")

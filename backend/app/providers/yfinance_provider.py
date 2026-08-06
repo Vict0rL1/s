@@ -47,7 +47,9 @@ def _clean(value):
 
 class YFinanceProvider(DataProvider):
     name = "yfinance"
-    capabilities = frozenset({"quote", "price_history", "profile", "fundamentals"})
+    capabilities = frozenset(
+        {"quote", "price_history", "profile", "fundamentals", "etf_data"}
+    )
 
     def _ticker(self, symbol: str):
         import yfinance as yf  # import perezoso: la librería es pesada
@@ -149,5 +151,54 @@ class YFinanceProvider(DataProvider):
             "symbol": symbol.upper(),
             "period": "ttm",
             "metrics": metrics,
+            "as_of": iso_utc(),
+        }
+
+    def get_etf_data(self, symbol: str) -> dict:
+        """Composición de ETF vía Yahoo. Es la única fuente gratuita razonable
+        (los endpoints de ETF de Finnhub son de pago), con dos límites que la
+        UI debe dejar claros: solo llegan los ~10 mayores holdings y los datos
+        pueden traer retraso. Todo es best-effort: lo que falte queda en None.
+        """
+        try:
+            ticker = self._ticker(symbol)
+            info = ticker.info or {}
+        except Exception as exc:
+            raise ProviderError(f"yfinance: {exc}") from exc
+        if info.get("quoteType") != "ETF":
+            raise DataNotFoundError(f"yfinance: {symbol} no es un ETF según Yahoo")
+
+        top_holdings: list[dict] = []
+        sector_weights: dict[str, float] = {}
+        try:
+            funds = ticker.funds_data
+            holdings_df = funds.top_holdings
+            if holdings_df is not None:
+                for sym, row in holdings_df.iterrows():
+                    top_holdings.append(
+                        {
+                            "symbol": str(sym),
+                            "name": row.get("Name"),
+                            "weight": _clean(row.get("Holding Percent")),
+                        }
+                    )
+            sector_weights = {
+                k: v for k, v in (funds.sector_weightings or {}).items() if v
+            }
+        except Exception:
+            pass  # sin composición: se reporta vacío, no se inventa
+
+        expense = _clean(info.get("netExpenseRatio"))
+        return {
+            "symbol": symbol.upper(),
+            "name": info.get("longName") or info.get("shortName"),
+            "category": info.get("category"),
+            # Yahoo reporta el expense ratio en puntos porcentuales (0.09 = 0.09 %).
+            "expense_ratio": expense / 100.0 if expense is not None else None,
+            "aum": _clean(info.get("totalAssets")),
+            "dividend_yield": _clean(info.get("yield")),
+            "currency": info.get("currency"),
+            "top_holdings": top_holdings,
+            "sector_weights": sector_weights,
             "as_of": iso_utc(),
         }
