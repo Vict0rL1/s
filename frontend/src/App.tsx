@@ -8,13 +8,15 @@ import { ScreenerPage } from './pages/ScreenerPage'
 import { SignalsPage } from './pages/SignalsPage'
 import { ThesesPage } from './pages/ThesesPage'
 import { TickerPage } from './pages/TickerPage'
+import { TodayPage } from './pages/TodayPage'
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to="/hoy" replace />} />
+          <Route path="/hoy" element={<TodayPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/ticker" element={<TickerPage />} />
           <Route path="/ticker/:symbol" element={<TickerPage />} />
@@ -24,7 +26,7 @@ export default function App() {
           <Route path="/senales" element={<SignalsPage />} />
           <Route path="/portafolio" element={<PortfolioPage />} />
           <Route path="/tesis" element={<ThesesPage />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/hoy" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

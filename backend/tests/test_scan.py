@@ -42,6 +42,26 @@ def test_listado_incluye_tamano():
 # ---------------------------------------------------------------------------
 
 
+class FakeCache:
+    """Caché en memoria con la misma interfaz que CacheStore."""
+
+    def __init__(self):
+        self.store: dict[str, dict] = {}
+
+    @staticmethod
+    def _key(params: dict) -> str:
+        return repr(sorted(params.items()))
+
+    def get(self, data_type, params):
+        payload = self.store.get(f"{data_type}|{self._key(params)}")
+        if payload is None:
+            return None
+        return {**payload, "cached": True}
+
+    def set(self, data_type, params, payload):
+        self.store[f"{data_type}|{self._key(params)}"] = payload
+
+
 class ScanService:
     """Simula el universo con datos deterministas y momentum masivo."""
 
@@ -49,6 +69,7 @@ class ScanService:
         self.failing = failing or set()
         self.bulk_calls = 0
         self.profile_calls = 0
+        self.cache = FakeCache()
 
     def get(self, data_type, **kwargs):
         common = {"source": "fake", "as_of": iso_utc(), "cached": False}
@@ -188,3 +209,120 @@ def test_watchlist_vacia_explica_por_que_no_puede(client):
     resp = c.post("/api/signals/scan", json={"universe": "watchlist"})
     assert resp.status_code == 422
     assert "menos de 3" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Lista del día (/today): sin elegir universo
+# ---------------------------------------------------------------------------
+
+
+def test_today_mezcla_sectores_en_una_sola_lista_ordenada(client):
+    c, _ = client
+    data = c.get("/api/signals/today").json()
+
+    # Cubre varios sectores, no uno solo.
+    usables = [s for s in data["sectors"] if s["usable"]]
+    assert len(usables) >= 4
+    assert {s["name"] for s in usables} > {"Tecnología"}
+
+    # Una sola lista, ordenada de mejor a peor y numerada globalmente.
+    scores = [s["score"] for s in data["all_ranked"]]
+    assert scores == sorted(scores, reverse=True)
+    assert [s["rank"] for s in data["all_ranked"]] == list(range(1, len(scores) + 1))
+    assert data["scored"] == len(data["all_ranked"])
+
+
+def test_today_separa_favorables_de_desfavorables_por_umbral(client):
+    c, _ = client
+    data = c.get("/api/signals/today").json()
+
+    assert all(s["score"] >= 0.35 for s in data["favorables"])
+    assert all(s["score"] <= -0.35 for s in data["desfavorables"])
+    # Los desfavorables llegan del peor al menos malo.
+    peores = [s["score"] for s in data["desfavorables"]]
+    assert peores == sorted(peores)
+    # Los tres cubos suman el total puntuado: nada se pierde por el camino.
+    assert (
+        len(data["favorables"]) + len(data["desfavorables"]) + data["neutrales"]
+        == data["scored"]
+    )
+
+
+def test_today_etiqueta_el_sector_de_cada_empresa(client):
+    c, _ = client
+    data = c.get("/api/signals/today").json()
+    assert all(s["sector_name"] for s in data["all_ranked"])
+    for signal in data["favorables"]:
+        assert signal["context"]["sector_key"]
+        # Conserva su posición dentro del sector, no solo la global.
+        assert signal["sector_rank"] >= 1
+
+
+def test_today_no_se_presenta_como_lista_de_compra(client):
+    c, _ = client
+    data = c.get("/api/signals/today").json()
+    assert "NO es una lista de compra" in data["disclaimer"]
+    assert data["calibrated"] is False
+    for signal in data["favorables"]:
+        assert signal["probability"] is None
+
+
+def test_today_se_sirve_de_cache_en_la_segunda_llamada(client):
+    """La palanca de coste: la primera pasada puntúa, las demás leen caché."""
+    c, service = client
+    c.get("/api/signals/today")
+    llamadas = service.bulk_calls
+    assert llamadas >= 4  # una por sector
+
+    data = c.get("/api/signals/today").json()
+    assert data["cached"] is True
+    assert service.bulk_calls == llamadas  # no volvió a puntuar
+
+
+def test_today_refresh_ignora_la_cache(client):
+    c, service = client
+    c.get("/api/signals/today")
+    llamadas = service.bulk_calls
+
+    data = c.get("/api/signals/today?refresh=true").json()
+    assert data.get("cached") is False
+    assert service.bulk_calls > llamadas
+
+
+def test_today_solo_pide_nombre_de_lo_que_destaca(client):
+    """Nombrar las ~90 costaría 90 llamadas por pura cosmética."""
+    c, service = client
+    data = c.get("/api/signals/today").json()
+    destacadas = len(data["favorables"][:15]) + len(data["desfavorables"][:10])
+    assert service.profile_calls == destacadas
+    assert data["scored"] > destacadas
+
+
+def test_today_descarta_sectores_sin_datos_suficientes(session_factory):
+    """Un sector con menos de 3 puntuadas no da z-scores: se descarta entero."""
+    salud = set(get_universe("salud")["symbols"])
+    service = ScanService(failing=salud)
+
+    def override_session():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_service] = lambda: service
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_llm] = lambda: None
+    try:
+        with TestClient(app) as c:
+            data = c.get("/api/signals/today").json()
+            sectores = {s["key"]: s for s in data["sectors"]}
+            assert sectores["salud"]["usable"] is False
+            assert sectores["salud"]["scored"] == 0
+            assert sectores["tecnologia"]["usable"] is True
+            # Ninguna empresa de salud se coló en la lista.
+            assert not any(
+                s["sector_name"] == "Salud y farmacéuticas" for s in data["all_ranked"]
+            )
+    finally:
+        app.dependency_overrides.clear()

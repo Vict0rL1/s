@@ -37,7 +37,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-800">Dashboard de mercado</h1>
+      <h1 className="text-xl font-semibold tracking-tight text-slate-900">Mercado</h1>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {(indices ?? []).map((ix) => (

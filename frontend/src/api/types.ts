@@ -535,6 +535,51 @@ export interface ScanResponse {
   disclaimer: string
 }
 
+/** Señal de la lista diaria: como QuantSignal, más su sector. */
+export interface DailySignal extends Omit<QuantSignal, 'score' | 'context'> {
+  score: number // en /today las no puntuables se descartan: nunca es null
+  sector_rank: number | null
+  context: {
+    name?: string | null
+    sector?: string | null
+    sector_key?: string
+    sector_name?: string
+    source?: string
+  }
+}
+
+export interface DailySectorMeta {
+  key: string
+  name: string
+  requested: number
+  scored: number
+  usable: boolean
+}
+
+export interface TodayResponse {
+  as_of: string
+  favorables: DailySignal[]
+  desfavorables: DailySignal[]
+  neutrales: number
+  all_ranked: {
+    symbol: string
+    score: number
+    label: string
+    rank: number
+    sector_name: string | null
+  }[]
+  sectors: DailySectorMeta[]
+  scored: number
+  requested: number
+  unavailable: { symbol: string; reason: string }[]
+  calibrated: boolean
+  momentum_source: string | null
+  note: string
+  disclaimer: string
+  cached?: boolean
+  fetched_at?: string
+}
+
 export interface CalibrationBucket {
   n: number
   hits: number

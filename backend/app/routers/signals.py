@@ -25,7 +25,7 @@ from app.analysis.factors import (
     zscores,
 )
 from app.analysis.signal import build_signal, calibrate, rank_universe
-from app.analysis.universes import get_universe, list_universes
+from app.analysis.universes import DAILY_SECTOR_KEYS, get_universe, list_universes
 from app.cache.cache import MarketDataService
 from app.db.engine import get_session
 from app.db.models import Instrument, LlmOutput, WatchlistItem
@@ -85,6 +85,82 @@ def _safe_get(service: MarketDataService, data_type: str, **kwargs):
         return service.get(data_type, **kwargs)
     except (DataNotFoundError, AllProvidersFailedError):
         return None
+
+
+def _score_symbols(
+    service: MarketDataService, session: Session, symbols: list[str]
+) -> dict:
+    """Puntúa un conjunto de símbolos unos contra otros.
+
+    Los z-scores son **relativos al conjunto que se le pasa**: puntuar los
+    mismos símbolos dentro de su sector o dentro de una mezcla de sectores da
+    resultados distintos, y el sectorial es el limpio (comparar el P/E de un
+    banco con el de una tecnológica castiga a la segunda sin motivo).
+
+    Nunca lanza por falta de datos: devuelve lo que pudo puntuar y la lista de
+    los que quedaron fuera, para que quien llama decida si es suficiente.
+    """
+    # 1) Momentum de todo el conjunto en una sola descarga (gratis).
+    momentum_map: dict[str, float | None] = {}
+    momentum_source = None
+    bulk = _safe_get(service, "bulk_momentum", symbols=symbols)
+    if bulk:
+        momentum_map = bulk.get("momentum", {})
+        momentum_source = bulk.get("source")
+
+    # 2) Fundamentales por empresa (caché 24 h).
+    raw_by_symbol: dict[str, dict] = {}
+    context: dict[str, dict] = {}
+    unavailable = []
+    for symbol in symbols:
+        fundamentals = _safe_get(service, "fundamentals", symbol=symbol)
+        if fundamentals is None:
+            unavailable.append({"symbol": symbol, "reason": "sin fundamentales o cuota agotada"})
+            continue
+        raw_by_symbol[symbol] = build_raw_factors(
+            dict(fundamentals["metrics"]), momentum_map.get(symbol), None
+        )
+        context[symbol] = {"source": fundamentals["source"]}
+
+    calibration = _stored_calibration(session)
+    if not raw_by_symbol:
+        return {
+            "ranked": [],
+            "raw": {},
+            "unavailable": unavailable,
+            "momentum": momentum_map,
+            "momentum_source": momentum_source,
+            "calibration": calibration,
+            "scored": 0,
+        }
+
+    # 3) z-scores sobre el conjunto puntuado, y ranking.
+    factor_names = {f for raw in raw_by_symbol.values() for f in raw}
+    factor_z = {
+        factor: zscores({s: raw.get(factor) for s, raw in raw_by_symbol.items()})
+        for factor in factor_names
+    }
+    families = family_scores(factor_z)
+
+    signals = []
+    for symbol in raw_by_symbol:
+        composite = composite_score(
+            {f: families[f].get(symbol) for f in families}, DEFAULT_WEIGHTS
+        )
+        signal = build_signal(symbol, composite, calibration, horizon="6-12 meses")
+        signal["context"] = context.get(symbol, {})
+        signal["events"] = []
+        signals.append(signal)
+
+    return {
+        "ranked": rank_universe(signals),
+        "raw": raw_by_symbol,
+        "unavailable": unavailable,
+        "momentum": momentum_map,
+        "momentum_source": momentum_source,
+        "calibration": calibration,
+        "scored": len(raw_by_symbol),
+    }
 
 
 def _momentum_from_history(bars: list[dict]) -> float | None:
@@ -288,58 +364,23 @@ def scan_universe(
         universe_name = universe["name"]
         description = universe["description"]
 
-    # 1) Momentum de todo el universo en una sola descarga (gratis).
-    momentum_map: dict[str, float | None] = {}
-    momentum_source = None
-    bulk = _safe_get(service, "bulk_momentum", symbols=symbols)
-    if bulk:
-        momentum_map = bulk.get("momentum", {})
-        momentum_source = bulk.get("source")
-
-    # 2) Fundamentales por empresa (caché 24 h).
-    raw_by_symbol: dict[str, dict] = {}
-    context: dict[str, dict] = {}
-    unavailable = []
-    for symbol in symbols:
-        fundamentals = _safe_get(service, "fundamentals", symbol=symbol)
-        if fundamentals is None:
-            unavailable.append({"symbol": symbol, "reason": "sin fundamentales o cuota agotada"})
-            continue
-        raw_by_symbol[symbol] = build_raw_factors(
-            dict(fundamentals["metrics"]), momentum_map.get(symbol), None
-        )
-        context[symbol] = {"source": fundamentals["source"]}
-
-    if len(raw_by_symbol) < 3:
+    scoring = _score_symbols(service, session, symbols)
+    if scoring["scored"] < 3:
         raise HTTPException(
             status_code=502,
             detail=(
-                f"Solo se pudieron puntuar {len(raw_by_symbol)} empresas de "
+                f"Solo se pudieron puntuar {scoring['scored']} empresas de "
                 f"{len(symbols)}. Revisa que FINNHUB_API_KEY esté en .env y que "
                 "quede cuota disponible."
             ),
         )
 
-    # 3) z-scores sobre el universo COMPLETO puntuado, y ranking.
-    factor_names = {f for raw in raw_by_symbol.values() for f in raw}
-    factor_z = {
-        factor: zscores({s: raw.get(factor) for s, raw in raw_by_symbol.items()})
-        for factor in factor_names
-    }
-    families = family_scores(factor_z)
-    calibration = _stored_calibration(session)
-
-    signals = []
-    for symbol in raw_by_symbol:
-        composite = composite_score(
-            {f: families[f].get(symbol) for f in families}, DEFAULT_WEIGHTS
-        )
-        signal = build_signal(symbol, composite, calibration, horizon="6-12 meses")
-        signal["context"] = context.get(symbol, {})
-        signal["events"] = []
-        signals.append(signal)
-
-    ranked = rank_universe(signals)
+    ranked = scoring["ranked"]
+    unavailable = scoring["unavailable"]
+    momentum_source = scoring["momentum_source"]
+    momentum_map = scoring["momentum"]
+    calibration = scoring["calibration"]
+    raw_by_symbol = scoring["raw"]
     top = ranked[: request.top_n]
 
     # Nombres solo para las finalistas: pedir el perfil de las 30 costaría
@@ -378,6 +419,134 @@ def scan_universe(
             "no que vaya a subir."
         ),
     }
+
+
+@router.get("/today")
+def today(
+    refresh: bool = Query(False, description="Ignora la caché y vuelve a puntuar"),
+    service: MarketDataService = Depends(get_service),
+    session: Session = Depends(get_session),
+):
+    """Lista del día: todo lo puntuable, ordenado, sin elegir universo.
+
+    Puntúa **dentro de cada sector** y luego mezcla los resultados en una sola
+    lista. Es más caro que un escaneo suelto (un z-score por sector en vez de
+    uno global) pero es la única forma de que la lista no premie a sectores
+    enteros por tener múltiplos estructuralmente bajos.
+
+    El resultado se cachea 6 h: la primera pasada del día tarda (un
+    fundamental por empresa, caché de 24 h), las siguientes son instantáneas.
+    """
+    cache_params = {"v": 1, "sectors": DAILY_SECTOR_KEYS}
+    if not refresh:
+        cached = service.cache.get("daily_picks", cache_params)
+        if cached is not None:
+            return cached
+
+    ranked: list[dict] = []
+    unavailable: list[dict] = []
+    sectors_meta: list[dict] = []
+    momentum_source = None
+    calibrated = False
+    requested = 0
+
+    for key in DAILY_SECTOR_KEYS:
+        universe = get_universe(key)
+        symbols = universe["symbols"]
+        requested += len(symbols)
+        scoring = _score_symbols(service, session, symbols)
+
+        # Un sector con menos de 3 puntuadas no produce z-scores con sentido:
+        # se descarta entero en vez de contaminar la lista con ruido.
+        usable = scoring["scored"] >= 3
+        if usable:
+            for signal in scoring["ranked"]:
+                # Las no puntuables (score None) quedan fuera de la lista: no se
+                # pueden ordenar ni etiquetar, y colarlas sería fingir cobertura.
+                if signal.get("score") is None:
+                    unavailable.append(
+                        {"symbol": signal["symbol"], "reason": "sin factores suficientes"}
+                    )
+                    continue
+                signal["context"]["sector_key"] = key
+                signal["context"]["sector_name"] = universe["name"]
+                signal["sector_rank"] = signal.pop("rank", None)
+                ranked.append(signal)
+
+        unavailable.extend(scoring["unavailable"])
+        momentum_source = momentum_source or scoring["momentum_source"]
+        calibrated = calibrated or scoring["calibration"] is not None
+        sectors_meta.append(
+            {
+                "key": key,
+                "name": universe["name"],
+                "requested": len(symbols),
+                "scored": scoring["scored"],
+                "usable": usable,
+            }
+        )
+
+    if not ranked:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "No se pudo puntuar ningún sector. Revisa que FINNHUB_API_KEY "
+                "esté en .env y que quede cuota disponible."
+            ),
+        )
+
+    ranked.sort(key=lambda s: s["score"], reverse=True)
+    for i, signal in enumerate(ranked, start=1):
+        signal["rank"] = i
+
+    favorables = [s for s in ranked if s["score"] >= 0.35]
+    desfavorables = [s for s in ranked if s["score"] <= -0.35]
+
+    # Nombres solo para lo que se muestra destacado: pedir el perfil de las ~90
+    # costaría 90 llamadas para información puramente cosmética.
+    for signal in favorables[:15] + desfavorables[-10:]:
+        profile = _safe_get(service, "profile", symbol=signal["symbol"])
+        if profile:
+            signal["context"]["name"] = profile.get("name")
+
+    payload = {
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "favorables": favorables,
+        "desfavorables": list(reversed(desfavorables)),  # peor primero
+        "neutrales": len(ranked) - len(favorables) - len(desfavorables),
+        "all_ranked": [
+            {
+                "symbol": s["symbol"],
+                "score": s["score"],
+                "label": s["label"],
+                "rank": s["rank"],
+                "sector_name": s["context"].get("sector_name"),
+            }
+            for s in ranked
+        ],
+        "sectors": sectors_meta,
+        "scored": len(ranked),
+        "requested": requested,
+        "unavailable": unavailable,
+        "calibrated": calibrated,
+        "momentum_source": momentum_source,
+        "note": (
+            f"Puntuadas {len(ranked)} empresas de {requested} en "
+            f"{sum(1 for s in sectors_meta if s['usable'])} sectores. Cada empresa "
+            "se compara con las de su propio sector, no con el mercado entero."
+        ),
+        "disclaimer": (
+            "Esto NO es una lista de compra. 'Favorable' significa que la "
+            "empresa puntúa mejor que sus comparables del sector en valor, "
+            "calidad y momentum — no que vaya a subir, ni que te convenga a ti: "
+            "eso depende de tu cartera, tu horizonte y tu tolerancia al riesgo. "
+            "Úsala para decidir qué mirar primero, no qué comprar."
+        ),
+    }
+
+    service.cache.set("daily_picks", cache_params, payload)
+    payload["cached"] = False
+    return payload
 
 
 @router.post("/backtest")

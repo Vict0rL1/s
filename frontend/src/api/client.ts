@@ -19,6 +19,7 @@ import type {
   SignalResponse,
   ScreenResult,
   ThesisRecord,
+  TodayResponse,
   TrackRecord,
   WatchlistItem,
   FilingsResponse,
@@ -189,6 +190,8 @@ export const api = {
   deepDiveNarrative: (symbol: string, report: DeepDiveReport) =>
     postJson<DeepDiveNarrative>(`/api/deep-dive/${symbol}/narrative`, report),
   // Motor de señales cuantitativas
+  today: (refresh = false) =>
+    fetchJson<TodayResponse>(`/api/signals/today${refresh ? '?refresh=true' : ''}`),
   universes: () =>
     fetchJson<{ universes: UniverseInfo[]; note: string }>('/api/signals/universes'),
   scanUniverse: (universe: string, topN: number) =>

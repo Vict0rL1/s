@@ -153,6 +153,7 @@ endpoint HTTP → MarketDataService → CacheStore (SQLite, TTL por tipo de dato
 
 | Vista | Qué hace |
 |---|---|
+| **Hoy** | Pantalla de entrada. Todo el universo puntuado y ordenado en una sola lista, sin elegir nada. Ver abajo. |
 | **Mercado** | Índices vía ETFs proxy, sectores SPDR, curva de rendimientos y spread 10A-2A, macro FRED, próximos resultados. |
 | **Acciones** | Gráfico de velas con SMA/RSI/MACD, fundamentales, estados financieros de EDGAR, DCF por escenarios con sensibilidad, Altman Z / Piotroski F, riesgo (beta, volatilidad, drawdown), filings e insiders. |
 | **Noticias** | Feed por ticker o general, con interpretación de IA bajo demanda claramente etiquetada. |
@@ -187,6 +188,32 @@ La sección **Lectura conjunta** sintetiza qué dicen los datos con su postura
 siempre — **qué observaciones futuras romperían esa lectura**. No dice
 "comprar": qué hacer depende de tu cartera, horizonte y tolerancia al riesgo,
 que el modelo no conoce.
+
+## La vista «Hoy»
+
+La app abre con una lista única: todas las empresas de los universos
+sectoriales, puntuadas y ordenadas de mejor a peor, separadas en **favorables**
+(puntuación ≥ 0,35) y **a evitar** (≤ −0,35). No hay que elegir universo ni
+configurar nada — se filtra por sector si se quiere, y cada fila se despliega
+para ver de dónde sale la puntuación.
+
+**Se puntúa dentro de cada sector y luego se mezclan los resultados.** Es más
+caro que un z-score global (uno por sector en vez de uno solo) pero es la única
+forma honesta de producir una lista única: comparar el P/E de un banco con el
+de una tecnológica premiaría a sectores enteros por tener múltiplos
+estructuralmente bajos. Un sector con menos de 3 empresas puntuables se
+descarta entero en vez de contaminar la lista con z-scores sin sentido.
+
+**Qué significa «favorable», y qué no.** Que una empresa encabece la lista
+significa que puntúa mejor que sus comparables *de su propio sector* en valor,
+calidad y momentum. No significa que vaya a subir, ni que convenga comprarla:
+eso depende de la cartera, el horizonte y la tolerancia al riesgo de cada uno.
+La lista sirve para decidir **qué mirar primero**, no qué comprar — y la app lo
+dice en pantalla, no en la letra pequeña.
+
+Coste: la primera pasada del día descarga un fundamental por empresa (~90
+llamadas, caché 24 h) y el momentum de cada sector en una sola descarga
+gratuita. El resultado se cachea 6 h, así que solo la primera carga tarda.
 
 ## Motor de señales cuantitativas
 

@@ -33,8 +33,8 @@ export function ApiUsageBar() {
 
   if (usage.length === 0) return null
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-      <span className="uppercase tracking-wide">APIs</span>
+    <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
+      <span className="w-full uppercase tracking-wider text-slate-300">APIs</span>
       {usage.map((u) => (
         <span
           key={u.provider}
@@ -45,10 +45,10 @@ export function ApiUsageBar() {
           }
           className={`rounded-full px-2 py-0.5 ${
             !u.configured
-              ? 'bg-slate-800 text-slate-500 line-through'
+              ? 'bg-slate-100 text-slate-400 line-through'
               : u.remaining < u.limit * 0.2
-                ? 'bg-red-950 text-red-300'
-                : 'bg-slate-800 text-slate-300'
+                ? 'bg-red-50 text-red-700'
+                : 'bg-slate-100 text-slate-600'
           }`}
         >
           {u.provider} {u.remaining}/{u.limit}
@@ -63,8 +63,8 @@ export function ApiUsageBar() {
           }
           className={`rounded-full px-2 py-0.5 ${
             llm.configured
-              ? 'bg-violet-950 text-violet-300'
-              : 'bg-slate-800 text-slate-500 line-through'
+              ? 'bg-violet-50 text-violet-700'
+              : 'bg-slate-100 text-slate-400 line-through'
           }`}
         >
           IA {llm.configured ? 'activa' : 'off'}

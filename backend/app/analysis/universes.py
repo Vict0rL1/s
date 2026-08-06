@@ -98,6 +98,20 @@ UNIVERSES: dict[str, dict] = {
 }
 
 
+# Universos que alimentan la lista diaria. Son los sectoriales y solo ellos:
+# se puntúa dentro de cada sector y luego se mezclan los resultados, que es la
+# única forma honesta de producir una lista única sin comparar bancos con
+# tecnológicas. "megacaps" y "dividendos" quedan fuera a propósito porque se
+# solapan con los demás y duplicarían empresas en la lista.
+DAILY_SECTOR_KEYS = [
+    "tecnologia",
+    "salud",
+    "financiero",
+    "consumo",
+    "energia_industriales",
+]
+
+
 def get_universe(key: str) -> dict:
     if key not in UNIVERSES:
         raise KeyError(key)
