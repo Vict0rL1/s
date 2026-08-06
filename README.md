@@ -35,6 +35,12 @@ El modelo es **explicable, no una caja negra**: cada señal se expresa en puntos
 muestra lado a lado con la probabilidad implícita del mercado, incluyendo la detección de
 posible *value* cuando el modelo discrepa de las cuotas.
 
+Cada pestaña abre con **«donde el modelo no está de acuerdo con el mercado»**: los mercados
+concretos —1X2, doble oportunidad, over/under, ambos marcan, hándicap, línea de carreras— en los
+que el modelo se separa más de la cuota, con la probabilidad de cada uno y **la cuota mínima que
+necesitarías** para que la apuesta valga la pena según el modelo. Ver
+[«Sugerencias por deporte»](#sugerencias-por-deporte-lo-que-el-modelo-destacaría).
+
 > ⚠️ **Aviso**: es una estimación estadística, **no** una certeza ni una recomendación para
 > apostar. No considera lesiones de último momento, clima ni motivación (p. ej. exhibiciones).
 
@@ -259,6 +265,78 @@ próximos partidos con la predicción del modelo y las odds lado a lado.
 > El seed usa **datos sintéticos** (nombres reales, partidos simulados) para que la app
 > funcione end-to-end sin conexión. El badge "datos demo" lo indica. Reemplázalo con datos
 > reales usando `npm run update-data`.
+
+---
+
+## El ancho de la página
+
+La app usaba `max-w-3xl` — **768 px** —, que en un portátil es menos de la mitad de la ventana: se
+veía como una captura de móvil pegada en el centro del navegador. 768 px es la medida correcta para
+una **columna de texto**; es la medida equivocada para una página cuyo contenido son tarjetas,
+rejillas de marcadores y tablas de clasificación.
+
+Ahora son **1280 px**, y —esto es lo importante— **las tarjetas van a dos columnas** desde esa
+anchura. Ensanchar sin más habría sido peor que el bug: una tarjeta de 1280 px pone el «23,7 %» y el
+«76,3 %» en extremos opuestos del monitor con un palmo de nada en medio. El espacio extra tiene que
+comprar una segunda columna, no una más larga.
+
+| Ventana | Ancho usado | |
+|---|---|---|
+| 1920 px | 1280 px | 67 %, dos columnas |
+| 1440 px | 1280 px | 89 %, dos columnas |
+| 768 px | 768 px | 100 %, una columna |
+| 390 px | 390 px | 100 %, una columna |
+
+Verificado en las cuatro: **cero desbordamiento horizontal**. El paso a rejilla trajo un bug propio
+que hubo que arreglar —una pista de CSS grid es `minmax(auto, 1fr)` por defecto, y ese `auto`
+significa «al menos lo más ancho que no pueda encogerse», así que una sola etiqueta con
+`whitespace-nowrap` dentro de una tarjeta empujaba la pista fuera de la pantalla: 5 px de scroll
+horizontal en un móvil de 390 px.
+
+---
+
+## Sugerencias por deporte («lo que el modelo destacaría»)
+
+Cada pestaña muestra una tarjeta por partido, que responde «¿qué pasa con este?». No respondía la
+pregunta con la que uno llega de verdad: **de todos estos, ¿en cuáles dice el modelo algo raro?**
+Averiguarlo obligaba a leerse veinte tarjetas.
+
+Arriba de cada deporte hay ahora una tabla de hasta seis filas. Cada fila es un mercado concreto de
+un partido concreto:
+
+| Partido | Apuesta | Modelo | Mercado | Dif. | Cuota mínima | Devolvería |
+|---|---|---|---|---|---|---|
+| Chicago Cubs @ San Diego Padres | **Chicago Cubs +1.5** · línea de carreras | 63.4 % | — | — | 1.58 | busca ≥ 1.58 |
+| Cleveland Guardians @ Boston Red Sox | **Over 8.5** · total de carreras | 56.5 % | — | — | 1.77 | busca ≥ 1.77 |
+
+**La «cuota mínima» es el número que ninguna casa te muestra**: 1 ÷ probabilidad del modelo. Por
+encima de esa cuota el modelo cree que el precio es generoso; por debajo, que es caro.
+
+Los mercados son los que **cada modelo produce de verdad**: 1X2, doble oportunidad, over/under 2.5 y
+ambos marcan en fútbol; ganador, total y línea ±1.5 en béisbol; ganador, hándicap y total en
+baloncesto y NFL; ganador en tenis. Los córneres y los «gana cualquier mitad» **no están**, porque
+esta app no tiene datos de córneres ni marcadores al descanso, y un número verosímil sin nada detrás
+es lo peor que podría enseñar esta tabla.
+
+Cuatro decisiones que hacen que la lista sirva:
+
+1. **Se ordena por la diferencia con el mercado, no por la confianza del modelo.** «El favorito gana
+   al 92 %» no es un hallazgo, es un precio. El único orden defendible es dónde el modelo y la casa
+   **discrepan**, porque es el único sitio donde el modelo puede estar aportando algo.
+2. **Una fila por partido y un tope por mercado.** Sin el tope la lista degeneraba: la doble
+   oportunidad es P(1)+P(X), estructuralmente ~75 % en casi cualquier partido, así que llenaba las
+   seis filas con seis números casi idénticos. El tope se calcula según cuántos mercados haya, para
+   no castigar al tenis —que solo produce uno— dejándolo con dos filas y cuatro huecos.
+3. **Las cuotas demo no cuentan como mercado.** Sin API key la app se inventa las cuotas *a partir
+   de la probabilidad del propio modelo* más un margen. Quitarles el margen devuelve el número del
+   modelo, así que la diferencia es cero por construcción: compararlas sería informar sobre su
+   propia aritmética. Se tratan como «sin cuota» y el panel lo dice.
+4. **Nunca sugiere un partido que ya empezó.** El calendario mantiene los partidos de hoy en
+   pantalla a propósito, que está bien para ver un resultado y mal para proponer una apuesta.
+
+Y el aviso va **encima** de la tabla, no en una nota al pie. En la pestaña de NFL ese aviso dice que
+el modelo **no le gana a la línea de cierre** (50,6 % contra el hándicap, con el equilibrio en
+52,4 %), que está medido y dice que no.
 
 ---
 

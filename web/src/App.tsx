@@ -32,6 +32,26 @@ const SPORTS: SportId[] = ['football', 'basketball', 'baseball', 'nfl', 'tennis'
 
 const STORAGE_KEY = 'predictor.sport';
 
+/**
+ * How wide the app is allowed to get.
+ *
+ * This was `max-w-3xl` — 768px. On a laptop that is under half the window, and the
+ * app looked like a phone screenshot pasted into the middle of a desktop browser.
+ * 768px is the right measure for a column of PROSE; it is the wrong measure for a
+ * page whose content is cards, score grids and league tables.
+ *
+ * 80rem (1280px) with the card lists going two-up on wide screens (see the `xl:`
+ * grid in each dashboard). Widening alone would have been worse than the bug: one
+ * 1280px-wide card puts "23.7 %" and "76.3 %" at opposite ends of the monitor with
+ * a hand's width of nothing between them. The extra room has to buy a second
+ * column, not a longer one.
+ *
+ * Declared once and used by the header, the main column and the footer, because
+ * three literals are three chances for the sticky header to stop lining up with
+ * the content underneath it.
+ */
+const SHELL_WIDTH = 'max-w-[80rem]';
+
 function initialSport(): SportId {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -101,7 +121,7 @@ export default function App() {
       <header ref={headerRef} className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#0b0d11]/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         {/* Safe-area padding so a notch or a rounded corner never clips the tab
             bar when the app is opened from a phone's home screen. */}
-        <div className="mx-auto max-w-3xl px-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+        <div className={`mx-auto ${SHELL_WIDTH} px-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]`}>
           <div className="flex items-center gap-3 pb-1 pt-4">
             <span
               aria-hidden
@@ -160,7 +180,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 pb-16 pt-6">
+      <main className={`mx-auto ${SHELL_WIDTH} px-4 pb-16 pt-6`}>
         {/* Mounted one at a time on purpose: the inactive sports do no fetching. */}
         {sport === 'bets' && <BetsDashboard />}
         {sport === 'football' && <FootballDashboard />}
@@ -170,7 +190,7 @@ export default function App() {
         {sport === 'tennis' && <TennisDashboard />}
       </main>
 
-      <footer className="mx-auto max-w-3xl px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
+      <footer className={`mx-auto ${SHELL_WIDTH} px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))]`}>
         <p className="border-t border-white/[0.07] pt-4 text-[13px] leading-relaxed text-[#7b828d]">
           Estimación estadística. Cada modelo se mide contra resultados reales y la app registra sus
           propios aciertos, pero ninguno conoce las lesiones de última hora, el clima ni la

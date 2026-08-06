@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning,
+  pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel,
 } from '../ui';
 import { staleness } from '../../lib/staleness';
+import { CAVEATS, rankPicks, footballPicks } from '../../lib/picks';
+import { useStake } from '../../lib/useStake';
 import {
   fbApi,
   type FbFixtureWithPrediction,
@@ -118,6 +120,13 @@ export default function FootballDashboard() {
     [dayGroups],
   );
   const shownGroups = day ? dayGroups.filter((d) => d.key === day) : dayGroups;
+
+  // Ranked markets, from the rows already fetched. Recomputed only when those
+  // change: it is pure arithmetic over what is on screen, no extra request.
+  const picks = useMemo(() => rankPicks(footballPicks(fixtures)), [fixtures]);
+  const [stake, setStake] = useStake();
+  // Every price on screen invented by this app rather than fetched — see picks.ts.
+  const demoOdds = fixtures.length > 0 && fixtures.every((r) => r.fixture.source === 'fixture');
   // A day that no longer exists after switching league would filter everything
   // away and look like "no fixtures", so the choice is dropped rather than kept.
   useEffect(() => {
@@ -211,6 +220,10 @@ export default function FootballDashboard() {
       />
       {league && <TrackRecordPanel league={league} />}
 
+      {/* The ranked-markets panel. Built from the SAME rows the cards below render,
+          so the two can never disagree about a number. */}
+      <PicksPanel {...picks} caveat={CAVEATS.football} demoOdds={demoOdds} stake={stake} onStakeChange={setStake} />
+
       {loading ? (
         <SkeletonList />
       ) : fixtures.length === 0 ? (
@@ -223,7 +236,19 @@ export default function FootballDashboard() {
           {shownGroups.map((group) => (
             <section key={group.key} className="mb-6">
               <DayHeading label={group.label} count={group.items.length} />
-              <div className="space-y-4">
+              {/* Two-up from 1280px. The shell got wider (see SHELL_WIDTH in
+                  App.tsx) and a card does not want to BE wider — it wants a
+                  neighbour. `items-start` so a card with its breakdown open does
+                  not stretch the one beside it.
+
+                  minmax(0,1fr) and NOT grid-cols-1/2: a grid track is `minmax(auto,
+                  1fr)` by default, and `auto` means "at least the widest thing that
+                  cannot shrink". One nowrap badge inside a card was enough to push
+                  the track past the viewport — 5px of horizontal page scroll on a
+                  390px phone. Block flow (the `space-y-4` this replaced) clamped the
+                  card and let the content overflow internally instead, so the bug
+                  arrived with the grid. */}
+              <div className="grid gap-4 grid-cols-[minmax(0,1fr)] xl:grid-cols-[repeat(2,minmax(0,1fr))] xl:items-start">
                 {group.items.map((f) => (
                   <MatchCard
                     key={f.fixture.id}

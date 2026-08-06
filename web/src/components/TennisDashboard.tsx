@@ -9,8 +9,10 @@ import {
 import MatchCard from './MatchCard';
 import PlayerProfile from './PlayerProfile';
 import TrackRecordPanel from './TrackRecordPanel';
-import { DayFilter, DayHeading, pillClass, StaleHistoryWarning } from './ui';
+import { DayFilter, DayHeading, pillClass, StaleHistoryWarning, PicksPanel } from './ui';
 import { staleness } from '../lib/staleness';
+import { CAVEATS, rankPicks, tennisPicks } from '../lib/picks';
+import { useStake } from '../lib/useStake';
 import { dayChipLabel, groupByDay } from '../lib/format';
 
 export default function TennisDashboard() {
@@ -75,6 +77,13 @@ export default function TennisDashboard() {
     [dayGroups],
   );
   const shownGroups = day ? dayGroups.filter((d) => d.key === day) : dayGroups;
+
+  // Ranked markets, from the rows already fetched. Recomputed only when those
+  // change: it is pure arithmetic over what is on screen, no extra request.
+  const picks = useMemo(() => rankPicks(tennisPicks(matches)), [matches]);
+  const [stake, setStake] = useStake();
+  // Every price on screen invented by this app rather than fetched — see picks.ts.
+  const demoOdds = matches.length > 0 && matches.every((r) => r.match.source === 'fixture');
   useEffect(() => {
     if (day && !dayGroups.some((d) => d.key === day)) setDay(null);
   }, [dayGroups, day]);
@@ -136,6 +145,10 @@ export default function TennisDashboard() {
         <TrackRecordPanel tour={tour} />
       </header>
 
+      {/* The ranked-markets panel. Built from the SAME rows the cards below
+          render, so the two can never disagree about a number. */}
+      <PicksPanel {...picks} caveat={CAVEATS.tennis} demoOdds={demoOdds} stake={stake} onStakeChange={setStake} />
+
       {error && (
         <div className="mb-4 rounded-lg border border-rose-800 bg-rose-950/50 p-3 text-[16px] text-rose-300">
           {error}
@@ -194,7 +207,19 @@ export default function TennisDashboard() {
           {shownGroups.map((group) => (
             <section key={group.key} className="mb-6">
               <DayHeading label={group.label} count={group.items.length} />
-              <div className="space-y-4">
+              {/* Two-up from 1280px. The shell got wider (see SHELL_WIDTH in
+                  App.tsx) and a card does not want to BE wider — it wants a
+                  neighbour. `items-start` so a card with its breakdown open does
+                  not stretch the one beside it.
+
+                  minmax(0,1fr) and NOT grid-cols-1/2: a grid track is `minmax(auto,
+                  1fr)` by default, and `auto` means "at least the widest thing that
+                  cannot shrink". One nowrap badge inside a card was enough to push
+                  the track past the viewport — 5px of horizontal page scroll on a
+                  390px phone. Block flow (the `space-y-4` this replaced) clamped the
+                  card and let the content overflow internally instead, so the bug
+                  arrived with the grid. */}
+              <div className="grid gap-4 grid-cols-[minmax(0,1fr)] xl:grid-cols-[repeat(2,minmax(0,1fr))] xl:items-start">
                 {group.items.map((m) => (
                   <MatchCard
                     key={m.match.id}
