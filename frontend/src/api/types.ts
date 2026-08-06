@@ -505,6 +505,31 @@ export interface SignalResponse {
   disclaimer: string
 }
 
+export interface UniverseInfo {
+  key: string
+  name: string
+  description: string
+  size: number
+  symbols: string[]
+}
+
+export interface ScanResponse {
+  universe_key: string
+  universe_name: string
+  universe_description: string
+  top: QuantSignal[]
+  all_ranked: { symbol: string; score: number | null; label: string; rank?: number }[]
+  scored: number
+  requested: number
+  unavailable: { symbol: string; reason: string }[]
+  calibrated: boolean
+  momentum_source: string | null
+  momentum_coverage: number
+  weights: Record<string, number>
+  note: string
+  disclaimer: string
+}
+
 export interface CalibrationBucket {
   n: number
   hits: number

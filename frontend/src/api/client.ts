@@ -10,7 +10,9 @@ import type {
   Portfolio,
   PriceAlert,
   QuantSignal,
+  ScanResponse,
   ScreenerPreset,
+  UniverseInfo,
   SignalExplanation,
   SignalResponse,
   ScreenResult,
@@ -178,6 +180,10 @@ export const api = {
     ),
   trackRecord: () => fetchJson<TrackRecord>('/api/theses/track-record'),
   // Motor de señales cuantitativas
+  universes: () =>
+    fetchJson<{ universes: UniverseInfo[]; note: string }>('/api/signals/universes'),
+  scanUniverse: (universe: string, topN: number) =>
+    postJson<ScanResponse>('/api/signals/scan', { universe, top_n: topN }),
   scoreSignals: (symbols: string[], useNews: boolean) =>
     postJson<SignalResponse>('/api/signals/score', { symbols, use_news: useNews }),
   runBacktest: (symbols: string[], horizonMonths: number, years: number) =>

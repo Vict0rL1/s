@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type {
   BacktestResponse,
   QuantSignal,
+  ScanResponse,
   SignalExplanation,
   SignalResponse,
+  UniverseInfo,
 } from '../api/types'
 import { fmtNumber, fmtPct } from '../lib/format'
 
@@ -291,7 +293,186 @@ function BacktestPanel({ result }: { result: BacktestResponse }) {
   )
 }
 
-export function SignalsPage() {
+function UncalibratedBanner() {
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+      <b>Modelo sin calibrar.</b> El ranking muestra solo puntuación relativa. Pulsa{' '}
+      <i>Validar modelo</i> en la pestaña <i>Universo propio</i> para ejecutar el backtest
+      walk-forward; hasta entonces la app no publica ninguna probabilidad.
+    </div>
+  )
+}
+
+/** Modo automático: la app trae las candidatas y las ordena. */
+function ScanMode() {
+  const [universes, setUniverses] = useState<UniverseInfo[]>([])
+  const [selected, setSelected] = useState('megacaps')
+  const [topN, setTopN] = useState(10)
+  const [result, setResult] = useState<ScanResponse | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.universes().then((d) => setUniverses(d.universes), () => setUniverses([]))
+  }, [])
+
+  const scan = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      setResult(await api.scanUniverse(selected, topN))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error')
+      setResult(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const active = universes.find((u) => u.key === selected)
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="mb-2 text-sm font-semibold text-slate-700">Elige un universo</h2>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {universes.map((u) => (
+            <button
+              key={u.key}
+              onClick={() => setSelected(u.key)}
+              className={`rounded-lg border p-3 text-left ${
+                selected === u.key
+                  ? 'border-slate-900 bg-slate-50'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="text-sm font-medium text-slate-800">{u.name}</div>
+              <div className="text-xs text-slate-400">{u.size} empresas</div>
+            </button>
+          ))}
+          <button
+            onClick={() => setSelected('watchlist')}
+            className={`rounded-lg border p-3 text-left ${
+              selected === 'watchlist'
+                ? 'border-slate-900 bg-slate-50'
+                : 'border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <div className="text-sm font-medium text-slate-800">Mi watchlist</div>
+            <div className="text-xs text-slate-400">las que ya sigues</div>
+          </button>
+        </div>
+
+        {active && (
+          <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+            {active.description}
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            onClick={scan}
+            disabled={busy}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          >
+            {busy ? 'Analizando universo…' : 'Buscar las mejor puntuadas'}
+          </button>
+          <label className="flex items-center gap-2 text-xs text-slate-600">
+            Mostrar top
+            <select
+              value={topN}
+              onChange={(e) => setTopN(Number(e.target.value))}
+              className="rounded border border-slate-300 px-2 py-1"
+            >
+              {[5, 10, 15, 20].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {busy && (
+          <p className="mt-2 text-xs text-slate-500">
+            La primera pasada tarda ~1 minuto porque descarga los fundamentales de todo el
+            universo. Quedan cacheados 24 h, así que las siguientes son inmediatas.
+          </p>
+        )}
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      </section>
+
+      {result && (
+        <>
+          {!result.calibrated && <UncalibratedBanner />}
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <h2 className="text-sm font-semibold text-slate-700">
+              {result.universe_name} — top {result.top.length}
+            </h2>
+            <p className="mt-1 text-xs text-slate-400">
+              {result.scored} de {result.requested} empresas puntuadas · momentum de{' '}
+              {result.momentum_coverage} vía {result.momentum_source ?? 'n/d'} · pesos:{' '}
+              {Object.entries(result.weights)
+                .map(([f, w]) => `${FAMILY_LABELS[f] ?? f} ${(w * 100).toFixed(0)} %`)
+                .join(' · ')}
+            </p>
+            {result.unavailable.length > 0 && (
+              <p className="mt-1 text-xs text-amber-700">
+                Sin datos: {result.unavailable.map((u) => u.symbol).join(', ')}
+              </p>
+            )}
+          </section>
+
+          <ul className="space-y-3">
+            {result.top.map((signal) => (
+              <SignalCard key={signal.symbol} signal={signal} />
+            ))}
+          </ul>
+
+          <details className="rounded-xl border border-slate-200 bg-white p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+              Ranking completo del universo ({result.all_ranked.length})
+            </summary>
+            <ul className="mt-3 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+              {result.all_ranked.map((row) => (
+                <li
+                  key={row.symbol}
+                  className="flex items-center justify-between rounded px-2 py-1 text-sm hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-6 text-xs text-slate-400">{row.rank ?? '—'}</span>
+                    <Link to={`/ticker/${row.symbol}`} className="hover:underline">
+                      {row.symbol}
+                    </Link>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${LABEL_STYLES[row.label] ?? ''}`}
+                    >
+                      {row.label}
+                    </span>
+                    <span className="w-12 text-right tabular-nums text-slate-600">
+                      {row.score !== null ? (row.score > 0 ? '+' : '') + fmtNumber(row.score) : '—'}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+
+          <p className="text-xs text-slate-400">{result.note}</p>
+          <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
+            {result.disclaimer}
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** Modo manual: tú das los tickers. Incluye el backtest. */
+function ManualMode() {
   const [universe, setUniverse] = useState('AAPL, MSFT, GOOGL, JNJ, KO, XOM, JPM, PG')
   const [useNews, setUseNews] = useState(false)
   const [result, setResult] = useState<SignalResponse | null>(null)
@@ -321,22 +502,6 @@ export function SignalsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-800">Señales cuantitativas</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Modelo de factores (valor, calidad, momentum, sentimiento) con horizonte de 6-12
-          meses. Puntúa empresas <b>unas contra otras</b>, no contra umbrales absolutos.
-        </p>
-      </div>
-
-      <div className="rounded-lg border-l-4 border-slate-400 bg-slate-50 p-3 text-sm text-slate-700">
-        <b>Cómo leer esto.</b> Una puntuación favorable significa que la empresa sale mejor
-        parada que sus comparables en los factores del modelo — no que vaya a subir. La
-        probabilidad solo aparece después de validar el modelo con el backtest, y aun
-        entonces es una frecuencia histórica con su intervalo de confianza, no una
-        predicción sobre esta empresa.
-      </div>
-
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <label className="mb-1 block text-xs font-medium text-slate-500">
           Universo a puntuar (3–15 tickers, separados por coma)
@@ -379,38 +544,70 @@ export function SignalsPage() {
 
       {result && (
         <>
-          {!result.calibrated && (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              <b>Modelo sin calibrar.</b> Las señales de abajo muestran solo puntuación
-              relativa. Pulsa <i>Validar modelo</i> para ejecutar el backtest walk-forward;
-              hasta entonces la app no publica ninguna probabilidad.
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-            <span>
-              {result.universe_size} empresas puntuadas · pesos:{' '}
-              {Object.entries(result.weights)
-                .map(([f, w]) => `${FAMILY_LABELS[f] ?? f} ${(w * 100).toFixed(0)} %`)
-                .join(' · ')}
-            </span>
-            {result.unavailable.length > 0 && (
-              <span>Sin datos: {result.unavailable.map((u) => u.symbol).join(', ')}</span>
-            )}
+          {!result.calibrated && <UncalibratedBanner />}
+          <div className="text-xs text-slate-400">
+            {result.universe_size} empresas puntuadas
+            {result.unavailable.length > 0 &&
+              ` · sin datos: ${result.unavailable.map((u) => u.symbol).join(', ')}`}
           </div>
-
           <ul className="space-y-3">
             {result.signals.map((signal) => (
               <SignalCard key={signal.symbol} signal={signal} />
             ))}
           </ul>
-
           <p className="text-xs text-slate-400">{result.note}</p>
           <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
             {result.disclaimer}
           </p>
         </>
       )}
+    </div>
+  )
+}
+
+export function SignalsPage() {
+  const [mode, setMode] = useState<'scan' | 'manual'>('scan')
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-lg font-semibold text-slate-800">Señales cuantitativas</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Modelo de factores (valor, calidad, momentum, sentimiento) con horizonte de 6-12
+          meses. Puntúa empresas <b>unas contra otras</b>, no contra umbrales absolutos.
+        </p>
+      </div>
+
+      <div className="rounded-lg border-l-4 border-slate-400 bg-slate-50 p-3 text-sm text-slate-700">
+        <b>Cómo leer esto.</b> Encabezar el ranking significa que la empresa sale mejor
+        parada que sus comparables en los factores del modelo — no que vaya a subir. La
+        probabilidad solo aparece tras validar el modelo con el backtest, y aun entonces es
+        una frecuencia histórica con intervalo de confianza, no una predicción sobre esa
+        empresa en concreto.
+      </div>
+
+      <nav className="flex gap-1 border-b border-slate-200">
+        {(
+          [
+            ['scan', 'Descubrir automáticamente'],
+            ['manual', 'Universo propio'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setMode(id)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm ${
+              mode === id
+                ? 'border-slate-900 font-medium text-slate-900'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {mode === 'scan' ? <ScanMode /> : <ManualMode />}
     </div>
   )
 }

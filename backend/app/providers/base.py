@@ -111,6 +111,10 @@ class DataProvider(ABC):
         """-> {symbol, holdings, sector_weights, expense_ratio, aum, ...}"""
         raise NotSupportedError(f"{self.name} no ofrece datos de ETFs")
 
+    def get_bulk_momentum(self, symbols: list[str]) -> dict:
+        """Momentum 12-1 de varios símbolos de una vez -> {momentum: {sym: v}}"""
+        raise NotSupportedError(f"{self.name} no ofrece momentum masivo")
+
     def fetch(self, data_type: str, **kwargs) -> dict:
         dispatch = {
             "quote": self.get_quote,
@@ -124,6 +128,7 @@ class DataProvider(ABC):
             "earnings_calendar": self.get_earnings_calendar,
             "peers": self.get_peers,
             "etf_data": self.get_etf_data,
+            "bulk_momentum": self.get_bulk_momentum,
         }
         if data_type not in dispatch:
             raise NotSupportedError(f"Tipo de dato desconocido: {data_type}")

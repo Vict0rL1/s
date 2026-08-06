@@ -51,6 +51,7 @@ CACHE_TTL_SECONDS: dict[str, int] = {
     "earnings_calendar": 12 * 3600,  # calendario de resultados: 12 h
     "peers": 7 * 24 * 3600,      # pares del sector: cambian rarísimo — 7 días
     "etf_data": 7 * 24 * 3600,   # composición de ETFs: 7 días
+    "bulk_momentum": 6 * 3600,   # momentum de un universo entero: 6 h
 }
 
 # Límites del tier gratuito por proveedor: lista de ventanas

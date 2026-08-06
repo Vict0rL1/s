@@ -162,6 +162,19 @@ normal: con muestras pequeñas o tasas extremas la normal produce intervalos
 fuera de [0, 1] y subestima la incertidumbre, justo el régimen en el que
 opera este modelo.
 
+**Descubrimiento automático.** La pestaña *Descubrir* escanea universos
+curados completos (mega caps, tecnología, salud, financiero, consumo, energía,
+dividendos, o tu propia watchlist) y devuelve las mejor puntuadas sin que
+escribas ningún ticker. El coste se controla así: el momentum de todo el
+universo se descarga en **una sola operación** vía yfinance (gratis — pedirlo
+a Twelve Data serían 30 créditos y 4 minutos por su límite de 8/min), los
+fundamentales quedan cacheados 24 h, y el perfil (nombre y sector) solo se
+pide para las finalistas, no para las 30. Si la cuota se agota a mitad, se
+devuelve lo puntuado y se reporta lo que quedó fuera.
+
+Los universos **sectoriales** dan comparaciones más limpias: contrastar el P/E
+de un banco con el de una tecnológica distorsiona el factor valor.
+
 **Etiquetas deliberadamente no accionables** — *muy favorable / favorable /
 neutral / desfavorable / muy desfavorable*, nunca "comprar" o "vender". La
 señal describe cómo puntúa la empresa en el modelo; qué hacer con tu dinero

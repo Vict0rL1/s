@@ -25,9 +25,10 @@ from app.analysis.factors import (
     zscores,
 )
 from app.analysis.signal import build_signal, calibrate, rank_universe
+from app.analysis.universes import get_universe, list_universes
 from app.cache.cache import MarketDataService
 from app.db.engine import get_session
-from app.db.models import LlmOutput
+from app.db.models import Instrument, LlmOutput, WatchlistItem
 from app.deps import get_llm, get_service
 from app.llm.base import LLMProvider, LLMUnavailableError
 from app.llm.signal_llm import explain_signal, extract_events, sentiment_from_events
@@ -45,6 +46,13 @@ class SignalRequest(BaseModel):
     use_news: bool = Field(
         False, description="Incluir el factor de sentimiento (gasta API de Claude)"
     )
+
+
+class ScanRequest(BaseModel):
+    universe: str = Field(
+        "megacaps", description="Clave de universo curado, o 'watchlist'"
+    )
+    top_n: int = Field(10, ge=3, le=25, description="Cuántas finalistas devolver")
 
 
 class BacktestRequest(BaseModel):
@@ -222,6 +230,152 @@ def score_universe(
             "Modelo de investigación, no asesoría. Una puntuación favorable "
             "describe cómo ordena el modelo a esta empresa frente a las demás, "
             "no una recomendación de compra."
+        ),
+    }
+
+
+@router.get("/universes")
+def get_universes():
+    """Universos curados disponibles para el escaneo automático."""
+    return {
+        "universes": list_universes(),
+        "note": (
+            "Los universos sectoriales dan comparaciones más limpias: el modelo "
+            "puntúa unas empresas contra otras, y comparar un banco con una "
+            "tecnológica distorsiona los factores de valor."
+        ),
+    }
+
+
+@router.post("/scan")
+def scan_universe(
+    request: ScanRequest = Body(...),
+    service: MarketDataService = Depends(get_service),
+    session: Session = Depends(get_session),
+):
+    """Escanea un universo entero y devuelve las mejor puntuadas.
+
+    Estrategia de coste: el momentum de TODO el universo se descarga de una
+    sola vez con yfinance (gratis). Los fundamentales van por Finnhub, con
+    caché de 24 h — la primera pasada tarda, las siguientes son instantáneas.
+    Si la cuota se agota a mitad, se devuelve lo puntuado hasta ahí y se dice
+    cuántas quedaron fuera, en vez de fallar entero.
+    """
+    if request.universe == "watchlist":
+        rows = session.execute(
+            select(Instrument)
+            .join(WatchlistItem, WatchlistItem.instrument_id == Instrument.id)
+        ).scalars().all()
+        symbols = [r.symbol for r in rows]
+        universe_name = "Mi watchlist"
+        description = "Las empresas que sigues, puntuadas unas contra otras."
+        if len(symbols) < 3:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Tu watchlist tiene menos de 3 empresas. El modelo puntúa "
+                    "por comparación, así que necesita al menos 3."
+                ),
+            )
+    else:
+        try:
+            universe = get_universe(request.universe)
+        except KeyError:
+            raise HTTPException(
+                status_code=404, detail=f"Universo desconocido: {request.universe}"
+            ) from None
+        symbols = universe["symbols"]
+        universe_name = universe["name"]
+        description = universe["description"]
+
+    # 1) Momentum de todo el universo en una sola descarga (gratis).
+    momentum_map: dict[str, float | None] = {}
+    momentum_source = None
+    bulk = _safe_get(service, "bulk_momentum", symbols=symbols)
+    if bulk:
+        momentum_map = bulk.get("momentum", {})
+        momentum_source = bulk.get("source")
+
+    # 2) Fundamentales por empresa (caché 24 h).
+    raw_by_symbol: dict[str, dict] = {}
+    context: dict[str, dict] = {}
+    unavailable = []
+    for symbol in symbols:
+        fundamentals = _safe_get(service, "fundamentals", symbol=symbol)
+        if fundamentals is None:
+            unavailable.append({"symbol": symbol, "reason": "sin fundamentales o cuota agotada"})
+            continue
+        raw_by_symbol[symbol] = build_raw_factors(
+            dict(fundamentals["metrics"]), momentum_map.get(symbol), None
+        )
+        context[symbol] = {"source": fundamentals["source"]}
+
+    if len(raw_by_symbol) < 3:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"Solo se pudieron puntuar {len(raw_by_symbol)} empresas de "
+                f"{len(symbols)}. Revisa que FINNHUB_API_KEY esté en .env y que "
+                "quede cuota disponible."
+            ),
+        )
+
+    # 3) z-scores sobre el universo COMPLETO puntuado, y ranking.
+    factor_names = {f for raw in raw_by_symbol.values() for f in raw}
+    factor_z = {
+        factor: zscores({s: raw.get(factor) for s, raw in raw_by_symbol.items()})
+        for factor in factor_names
+    }
+    families = family_scores(factor_z)
+    calibration = _stored_calibration(session)
+
+    signals = []
+    for symbol in raw_by_symbol:
+        composite = composite_score(
+            {f: families[f].get(symbol) for f in families}, DEFAULT_WEIGHTS
+        )
+        signal = build_signal(symbol, composite, calibration, horizon="6-12 meses")
+        signal["context"] = context.get(symbol, {})
+        signal["events"] = []
+        signals.append(signal)
+
+    ranked = rank_universe(signals)
+    top = ranked[: request.top_n]
+
+    # Nombres solo para las finalistas: pedir el perfil de las 30 costaría
+    # 30 llamadas para información puramente cosmética.
+    for signal in top:
+        profile = _safe_get(service, "profile", symbol=signal["symbol"])
+        if profile:
+            signal["context"]["name"] = profile.get("name")
+            signal["context"]["sector"] = profile.get("sector")
+
+    return {
+        "universe_key": request.universe,
+        "universe_name": universe_name,
+        "universe_description": description,
+        "top": top,
+        "all_ranked": [
+            {"symbol": s["symbol"], "score": s["score"], "label": s["label"], "rank": s.get("rank")}
+            for s in ranked
+        ],
+        "scored": len(raw_by_symbol),
+        "requested": len(symbols),
+        "unavailable": unavailable,
+        "calibrated": calibration is not None,
+        "momentum_source": momentum_source,
+        "momentum_coverage": sum(1 for v in momentum_map.values() if v is not None),
+        "weights": DEFAULT_WEIGHTS,
+        "note": (
+            f"Puntuadas {len(raw_by_symbol)} de {len(symbols)} empresas. Las "
+            "puntuaciones son relativas a este universo: la misma empresa puede "
+            "salir favorable aquí y neutral en otro conjunto."
+        ),
+        "disclaimer": (
+            "Este ranking ordena empresas según los factores del modelo. NO es "
+            "una lista de compra: que una empresa encabece el ranking significa "
+            "que puntúa mejor que sus comparables en valor, calidad y momentum, "
+            "no que vaya a subir."
         ),
     }
 

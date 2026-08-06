@@ -39,6 +39,7 @@ DEFAULT_SOURCE_ORDER: dict[str, list[str]] = {
     "earnings_calendar": ["finnhub"],
     "peers": ["finnhub"],
     "etf_data": ["yfinance"],
+    "bulk_momentum": ["yfinance"],
 }
 
 RETRY_ATTEMPTS = 2       # reintentos ante error transitorio, por proveedor

@@ -48,7 +48,7 @@ def _clean(value):
 class YFinanceProvider(DataProvider):
     name = "yfinance"
     capabilities = frozenset(
-        {"quote", "price_history", "profile", "fundamentals", "etf_data"}
+        {"quote", "price_history", "profile", "fundamentals", "etf_data", "bulk_momentum"}
     )
 
     def _ticker(self, symbol: str):
@@ -153,6 +153,52 @@ class YFinanceProvider(DataProvider):
             "metrics": metrics,
             "as_of": iso_utc(),
         }
+
+    def get_bulk_momentum(self, symbols: list[str]) -> dict:
+        """Momentum 12-1 de muchos símbolos en UNA sola descarga.
+
+        Clave para el escaneo automático: pedir el histórico de 30 empresas a
+        Twelve Data costaría 30 créditos y ~4 minutos por su límite de 8/min.
+        yfinance descarga todo el bloque de golpe y gratis. Para momentum (un
+        cociente entre dos precios pasados) su precisión sobra.
+        """
+        import yfinance as yf
+
+        if not symbols:
+            return {"momentum": {}, "as_of": iso_utc()}
+        try:
+            data = yf.download(
+                " ".join(symbols),
+                period="1y",
+                interval="1d",
+                auto_adjust=True,
+                progress=False,
+                group_by="ticker",
+                threads=True,
+            )
+        except Exception as exc:
+            raise ProviderError(f"yfinance: descarga masiva falló: {exc}") from exc
+        if data is None or data.empty:
+            raise DataNotFoundError("yfinance: sin datos para el universo")
+
+        out: dict[str, float | None] = {}
+        for symbol in symbols:
+            try:
+                # Con un solo símbolo yfinance no agrupa por ticker.
+                closes = (
+                    data["Close"] if len(symbols) == 1 else data[symbol]["Close"]
+                ).dropna()
+            except (KeyError, TypeError):
+                out[symbol] = None
+                continue
+            # ~252 sesiones/año, ~21/mes: de t−12m a t−1m (se excluye el último
+            # mes para evitar la reversión de corto plazo).
+            if len(closes) < 200:
+                out[symbol] = None
+                continue
+            start, end = closes.iloc[0], closes.iloc[-21]
+            out[symbol] = (end / start - 1) if start else None
+        return {"momentum": out, "as_of": iso_utc()}
 
     def get_etf_data(self, symbol: str) -> dict:
         """Composición de ETF vía Yahoo. Es la única fuente gratuita razonable
