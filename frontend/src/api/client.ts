@@ -21,6 +21,7 @@ import type {
   ThesisRecord,
   TodayResponse,
   TrackRecord,
+  UniversesMeta,
   WatchlistItem,
   FilingsResponse,
   Financials,
@@ -30,6 +31,7 @@ import type {
   HistoryRange,
   IndexEntry,
   MacroIndicator,
+  MarketInfo,
   PeersResponse,
   Profile,
   LlmStatus,
@@ -190,8 +192,14 @@ export const api = {
   deepDiveNarrative: (symbol: string, report: DeepDiveReport) =>
     postJson<DeepDiveNarrative>(`/api/deep-dive/${symbol}/narrative`, report),
   // Motor de señales cuantitativas
-  today: (refresh = false) =>
-    fetchJson<TodayResponse>(`/api/signals/today${refresh ? '?refresh=true' : ''}`),
+  markets: () =>
+    fetchJson<{ markets: MarketInfo[]; meta: UniversesMeta }>('/api/signals/markets'),
+  today: (market: string, refresh = false) =>
+    fetchJson<TodayResponse>(
+      `/api/signals/today?market=${encodeURIComponent(market)}${
+        refresh ? '&refresh=true' : ''
+      }`,
+    ),
   universes: () =>
     fetchJson<{ universes: UniverseInfo[]; note: string }>('/api/signals/universes'),
   scanUniverse: (universe: string, topN: number) =>

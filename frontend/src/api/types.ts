@@ -553,11 +553,28 @@ export interface DailySectorMeta {
   name: string
   requested: number
   scored: number
+  pending: number
   usable: boolean
+}
+
+export interface MarketInfo {
+  key: string
+  name: string
+  description: string
+  companies: number
+  sectors: number
+}
+
+export interface UniversesMeta {
+  retrieved_at: string
+  markets: Record<string, { source: string; companies: number }>
 }
 
 export interface TodayResponse {
   as_of: string
+  market_key: string
+  market_name: string
+  market_description: string
   favorables: DailySignal[]
   desfavorables: DailySignal[]
   neutrales: number
@@ -571,6 +588,11 @@ export interface TodayResponse {
   sectors: DailySectorMeta[]
   scored: number
   requested: number
+  /** Cuántas quedan por descargar: los tiers gratuitos limitan cada pasada. */
+  pending: number
+  complete: boolean
+  fetched_now: number
+  data_meta: UniversesMeta | Record<string, never>
   unavailable: { symbol: string; reason: string }[]
   calibrated: boolean
   momentum_source: string | null

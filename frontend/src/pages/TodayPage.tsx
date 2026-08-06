@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { DailySignal, TodayResponse } from '../api/types'
+import type { DailySignal, MarketInfo, TodayResponse } from '../api/types'
 import { fmtNumber, relativeTime } from '../lib/format'
 
 // Una empresa "favorable" puntúa mejor que sus comparables de sector. No es
@@ -199,6 +199,8 @@ function SignalRow({
 }
 
 export function TodayPage() {
+  const [markets, setMarkets] = useState<MarketInfo[]>([])
+  const [market, setMarket] = useState('us_sp500')
   const [data, setData] = useState<TodayResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -206,10 +208,10 @@ export function TodayPage() {
   const [sector, setSector] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  const load = (refresh = false) => {
+  const load = (which: string, refresh = false) => {
     setBusy(true)
     setError(null)
-    api.today(refresh).then(
+    api.today(which, refresh).then(
       (d) => {
         setData(d)
         setBusy(false)
@@ -222,9 +224,17 @@ export function TodayPage() {
   }
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    api.markets().then((d) => setMarkets(d.markets), () => undefined)
   }, [])
+
+  useEffect(() => {
+    // Al cambiar de mercado los filtros previos ya no aplican.
+    setData(null)
+    setSector(null)
+    setExpanded(null)
+    load(market)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [market])
 
   const rows = useMemo(() => {
     if (!data) return []
@@ -249,8 +259,8 @@ export function TodayPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">Hoy</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Todas las empresas del universo, puntuadas contra sus comparables de
-            sector. Sin elegir nada.
+            {data?.market_description ??
+              'Empresas puntuadas contra sus comparables de sector. Sin elegir nada.'}
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-400">
@@ -261,7 +271,7 @@ export function TodayPage() {
             </span>
           )}
           <button
-            onClick={() => load(true)}
+            onClick={() => load(market, true)}
             disabled={busy}
             className="rounded-lg border border-slate-200 px-2.5 py-1 font-medium text-slate-600 transition-colors hover:bg-white disabled:opacity-50"
           >
@@ -269,6 +279,25 @@ export function TodayPage() {
           </button>
         </div>
       </header>
+
+      {markets.length > 1 && (
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+          {markets.map((m) => (
+            <button
+              key={m.key}
+              onClick={() => setMarket(m.key)}
+              title={`${m.companies} empresas · ${m.sectors} sectores`}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                market === m.key
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {busy && !data && (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
@@ -340,6 +369,34 @@ export function TodayPage() {
             </div>
           </div>
 
+          {!data.complete && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-medium text-sky-900">
+                  Cobertura parcial: {data.scored} de {data.requested} empresas
+                </div>
+                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-sky-200">
+                  <div
+                    className="h-full bg-sky-500 transition-all"
+                    style={{ width: `${(data.scored / data.requested) * 100}%` }}
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] leading-snug text-sky-800">
+                  Las APIs gratuitas limitan cuántos fundamentales se descargan de
+                  una vez. Lo descargado queda en caché 24 h, así que cada pasada
+                  avanza y ninguna repite trabajo.
+                </p>
+              </div>
+              <button
+                onClick={() => load(market, true)}
+                disabled={busy}
+                className="shrink-0 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
+              >
+                {busy ? 'Descargando…' : 'Seguir completando'}
+              </button>
+            </div>
+          )}
+
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             {rows.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-slate-400">
@@ -366,10 +423,14 @@ export function TodayPage() {
             )}
           </div>
 
+
           <div className="flex flex-wrap justify-between gap-3 text-xs text-slate-400">
             <span>
               {data.scored} empresas puntuadas de {data.requested} · {data.neutrales}{' '}
               en zona neutral (ni favorable ni a evitar)
+              {data.data_meta && 'retrieved_at' in data.data_meta
+                ? ` · universo actualizado el ${data.data_meta.retrieved_at}`
+                : ''}
             </span>
             {data.unavailable.length > 0 && (
               <span>{data.unavailable.length} sin datos suficientes</span>

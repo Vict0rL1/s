@@ -25,7 +25,14 @@ from app.analysis.factors import (
     zscores,
 )
 from app.analysis.signal import build_signal, calibrate, rank_universe
-from app.analysis.universes import DAILY_SECTOR_KEYS, get_universe, list_universes
+from app.analysis.markets import (
+    DEFAULT_MARKET,
+    MIN_SECTOR_SIZE,
+    list_markets,
+    load_market,
+    universes_meta,
+)
+from app.analysis.universes import get_universe, list_universes
 from app.cache.cache import MarketDataService
 from app.db.engine import get_session
 from app.db.models import Instrument, LlmOutput, WatchlistItem
@@ -39,6 +46,11 @@ router = APIRouter(prefix="/api/signals", tags=["signals"])
 
 _SYMBOL_RE = re.compile(r"^[A-Za-z0-9.\-]{1,12}$")
 MAX_UNIVERSE = 15  # tope de coste: cada símbolo cuesta llamadas de fundamentales
+
+# Fundamentales nuevos por petición de /today. Con Finnhub a 60/min, 120 deja
+# margen para que el resto de la app siga funcionando mientras se completa el
+# S&P 500 a lo largo de varias pasadas.
+DEFAULT_FETCH_BUDGET = 120
 
 
 class SignalRequest(BaseModel):
@@ -87,8 +99,33 @@ def _safe_get(service: MarketDataService, data_type: str, **kwargs):
         return None
 
 
+class FetchBudget:
+    """Tope de descargas NUEVAS de fundamentales en una sola petición.
+
+    Existe porque el limitador de cuota descarta, no espera: lanzar 500
+    llamadas contra un tier de 60/min puntuaría las primeras 60 y perdería el
+    resto. Con presupuesto, cada petición avanza un trozo, lo cachea 24 h y la
+    siguiente sigue por donde iba — la cobertura se acumula en vez de fallar.
+    Lo ya cacheado no consume presupuesto: es gratis.
+    """
+
+    def __init__(self, limit: int):
+        self.remaining = limit
+        self.spent = 0
+
+    def spend(self) -> bool:
+        if self.remaining <= 0:
+            return False
+        self.remaining -= 1
+        self.spent += 1
+        return True
+
+
 def _score_symbols(
-    service: MarketDataService, session: Session, symbols: list[str]
+    service: MarketDataService,
+    session: Session,
+    symbols: list[str],
+    budget: FetchBudget | None = None,
 ) -> dict:
     """Puntúa un conjunto de símbolos unos contra otros.
 
@@ -112,8 +149,17 @@ def _score_symbols(
     raw_by_symbol: dict[str, dict] = {}
     context: dict[str, dict] = {}
     unavailable = []
+    pending: list[str] = []
     for symbol in symbols:
-        fundamentals = _safe_get(service, "fundamentals", symbol=symbol)
+        fundamentals = None
+        if budget is not None:
+            # Lo cacheado es gratis; solo lo nuevo consume presupuesto.
+            fundamentals = service.cache.get("fundamentals", {"symbol": symbol})
+            if fundamentals is None and not budget.spend():
+                pending.append(symbol)
+                continue
+        if fundamentals is None:
+            fundamentals = _safe_get(service, "fundamentals", symbol=symbol)
         if fundamentals is None:
             unavailable.append({"symbol": symbol, "reason": "sin fundamentales o cuota agotada"})
             continue
@@ -132,6 +178,7 @@ def _score_symbols(
             "momentum_source": momentum_source,
             "calibration": calibration,
             "scored": 0,
+            "pending": pending,
         }
 
     # 3) z-scores sobre el conjunto puntuado, y ranking.
@@ -160,6 +207,7 @@ def _score_symbols(
         "momentum_source": momentum_source,
         "calibration": calibration,
         "scored": len(raw_by_symbol),
+        "pending": pending,
     }
 
 
@@ -421,67 +469,95 @@ def scan_universe(
     }
 
 
+@router.get("/markets")
+def markets():
+    """Mercados disponibles para la lista diaria, con su procedencia."""
+    return {"markets": list_markets(), "meta": universes_meta()}
+
+
 @router.get("/today")
 def today(
-    refresh: bool = Query(False, description="Ignora la caché y vuelve a puntuar"),
+    market: str = Query(DEFAULT_MARKET, description="Clave de mercado"),
+    refresh: bool = Query(False, description="Ignora la caché y sigue puntuando"),
+    budget: int = Query(
+        DEFAULT_FETCH_BUDGET,
+        ge=10,
+        le=600,
+        description="Máximo de fundamentales NUEVOS a descargar en esta petición",
+    ),
     service: MarketDataService = Depends(get_service),
     session: Session = Depends(get_session),
 ):
-    """Lista del día: todo lo puntuable, ordenado, sin elegir universo.
+    """Lista del día de un mercado: todo lo puntuable, ordenado, sin elegir nada.
 
     Puntúa **dentro de cada sector** y luego mezcla los resultados en una sola
-    lista. Es más caro que un escaneo suelto (un z-score por sector en vez de
-    uno global) pero es la única forma de que la lista no premie a sectores
+    lista, porque comparar un banco con una tecnológica premiaría a sectores
     enteros por tener múltiplos estructuralmente bajos.
 
-    El resultado se cachea 6 h: la primera pasada del día tarda (un
-    fundamental por empresa, caché de 24 h), las siguientes son instantáneas.
+    Cobertura incremental: el S&P 500 son ~500 empresas y los tiers gratuitos
+    dan 60 llamadas/min, así que cada petición descarga como mucho `budget`
+    fundamentales nuevos (los ya cacheados salen gratis) y deja el resto en
+    `pending`. Repetir con `refresh=true` sigue por donde iba hasta completar.
     """
-    cache_params = {"v": 1, "sectors": DAILY_SECTOR_KEYS}
+    try:
+        market_data = load_market(market)
+    except KeyError:
+        raise HTTPException(
+            status_code=404, detail=f"Mercado desconocido: {market}"
+        ) from None
+
+    cache_params = {"v": 2, "market": market}
     if not refresh:
         cached = service.cache.get("daily_picks", cache_params)
         if cached is not None:
             return cached
 
+    fetch_budget = FetchBudget(budget)
     ranked: list[dict] = []
     unavailable: list[dict] = []
+    pending: list[str] = []
     sectors_meta: list[dict] = []
     momentum_source = None
     calibrated = False
     requested = 0
 
-    for key in DAILY_SECTOR_KEYS:
-        universe = get_universe(key)
-        symbols = universe["symbols"]
+    for sector_name, companies in market_data["sectors"].items():
+        symbols = [c["symbol"] for c in companies]
+        names = {c["symbol"]: c["name"] for c in companies}
         requested += len(symbols)
-        scoring = _score_symbols(service, session, symbols)
+        scoring = _score_symbols(service, session, symbols, budget=fetch_budget)
 
-        # Un sector con menos de 3 puntuadas no produce z-scores con sentido:
-        # se descarta entero en vez de contaminar la lista con ruido.
-        usable = scoring["scored"] >= 3
+        # Un sector con menos de MIN_SECTOR_SIZE puntuadas no produce z-scores
+        # con sentido: se descarta entero en vez de contaminar la lista.
+        usable = scoring["scored"] >= MIN_SECTOR_SIZE
         if usable:
             for signal in scoring["ranked"]:
-                # Las no puntuables (score None) quedan fuera de la lista: no se
-                # pueden ordenar ni etiquetar, y colarlas sería fingir cobertura.
+                # Las no puntuables (score None) quedan fuera: no se pueden
+                # ordenar ni etiquetar, y colarlas sería fingir cobertura.
                 if signal.get("score") is None:
                     unavailable.append(
                         {"symbol": signal["symbol"], "reason": "sin factores suficientes"}
                     )
                     continue
-                signal["context"]["sector_key"] = key
-                signal["context"]["sector_name"] = universe["name"]
+                signal["context"]["sector_key"] = sector_name
+                signal["context"]["sector_name"] = sector_name
+                # El nombre sale del archivo del universo: pedirlo al API
+                # costaría ~500 llamadas por información puramente cosmética.
+                signal["context"]["name"] = names.get(signal["symbol"])
                 signal["sector_rank"] = signal.pop("rank", None)
                 ranked.append(signal)
 
         unavailable.extend(scoring["unavailable"])
+        pending.extend(scoring["pending"])
         momentum_source = momentum_source or scoring["momentum_source"]
         calibrated = calibrated or scoring["calibration"] is not None
         sectors_meta.append(
             {
-                "key": key,
-                "name": universe["name"],
+                "key": sector_name,
+                "name": sector_name,
                 "requested": len(symbols),
                 "scored": scoring["scored"],
+                "pending": len(scoring["pending"]),
                 "usable": usable,
             }
         )
@@ -501,16 +577,13 @@ def today(
 
     favorables = [s for s in ranked if s["score"] >= 0.35]
     desfavorables = [s for s in ranked if s["score"] <= -0.35]
-
-    # Nombres solo para lo que se muestra destacado: pedir el perfil de las ~90
-    # costaría 90 llamadas para información puramente cosmética.
-    for signal in favorables[:15] + desfavorables[-10:]:
-        profile = _safe_get(service, "profile", symbol=signal["symbol"])
-        if profile:
-            signal["context"]["name"] = profile.get("name")
+    complete = not pending
 
     payload = {
         "as_of": datetime.now(timezone.utc).isoformat(),
+        "market_key": market,
+        "market_name": market_data["name"],
+        "market_description": market_data["description"],
         "favorables": favorables,
         "desfavorables": list(reversed(desfavorables)),  # peor primero
         "neutrales": len(ranked) - len(favorables) - len(desfavorables),
@@ -527,13 +600,26 @@ def today(
         "sectors": sectors_meta,
         "scored": len(ranked),
         "requested": requested,
+        "pending": len(pending),
+        "complete": complete,
+        "fetched_now": fetch_budget.spent,
         "unavailable": unavailable,
         "calibrated": calibrated,
         "momentum_source": momentum_source,
+        "data_meta": universes_meta(),
         "note": (
             f"Puntuadas {len(ranked)} empresas de {requested} en "
             f"{sum(1 for s in sectors_meta if s['usable'])} sectores. Cada empresa "
             "se compara con las de su propio sector, no con el mercado entero."
+        )
+        + (
+            ""
+            if complete
+            else (
+                f" Faltan {len(pending)} por puntuar: los tiers gratuitos limitan "
+                "cuántos fundamentales se pueden descargar de una vez. Pulsa "
+                "«Seguir completando» para continuar."
+            )
         ),
         "disclaimer": (
             "Esto NO es una lista de compra. 'Favorable' significa que la "

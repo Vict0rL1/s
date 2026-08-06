@@ -153,7 +153,7 @@ endpoint HTTP → MarketDataService → CacheStore (SQLite, TTL por tipo de dato
 
 | Vista | Qué hace |
 |---|---|
-| **Hoy** | Pantalla de entrada. Todo el universo puntuado y ordenado en una sola lista, sin elegir nada. Ver abajo. |
+| **Hoy** | Pantalla de entrada. S&P 500 y grandes canadienses puntuadas y ordenadas en una sola lista, sin elegir nada. Ver abajo. |
 | **Mercado** | Índices vía ETFs proxy, sectores SPDR, curva de rendimientos y spread 10A-2A, macro FRED, próximos resultados. |
 | **Acciones** | Gráfico de velas con SMA/RSI/MACD, fundamentales, estados financieros de EDGAR, DCF por escenarios con sensibilidad, Altman Z / Piotroski F, riesgo (beta, volatilidad, drawdown), filings e insiders. |
 | **Noticias** | Feed por ticker o general, con interpretación de IA bajo demanda claramente etiquetada. |
@@ -191,11 +191,18 @@ que el modelo no conoce.
 
 ## La vista «Hoy»
 
-La app abre con una lista única: todas las empresas de los universos
-sectoriales, puntuadas y ordenadas de mejor a peor, separadas en **favorables**
+La app abre con una lista única: todas las empresas del mercado elegido,
+puntuadas y ordenadas de mejor a peor, separadas en **favorables**
 (puntuación ≥ 0,35) y **a evitar** (≤ −0,35). No hay que elegir universo ni
 configurar nada — se filtra por sector si se quiere, y cada fila se despliega
 para ver de dónde sale la puntuación.
+
+### Mercados
+
+| Mercado | Empresas | Por qué así |
+|---|---|---|
+| **EE. UU. — S&P 500** | 502 | Los componentes del índice, por sector GICS. Todas reportan a la SEC, así que EDGAR cubre sus fundamentales gratis. |
+| **Canadá — cotizadas en EE. UU.** | 44 | Grandes canadienses con cotización en NYSE/NASDAQ. **Se usan sus tickers estadounidenses a propósito**: esas empresas presentan formulario 40-F ante la SEC, así que tienen los mismos datos que una estadounidense. Con los tickers de Toronto habría que bajar a yfinance, que el proyecto solo admite como respaldo. |
 
 **Se puntúa dentro de cada sector y luego se mezclan los resultados.** Es más
 caro que un z-score global (uno por sector en vez de uno solo) pero es la única
@@ -204,16 +211,44 @@ de una tecnológica premiaría a sectores enteros por tener múltiplos
 estructuralmente bajos. Un sector con menos de 3 empresas puntuables se
 descarta entero en vez de contaminar la lista con z-scores sin sentido.
 
+### Cobertura incremental
+
+El S&P 500 son ~500 empresas y los tiers gratuitos dan 60 llamadas/minuto. El
+limitador de cuota **descarta, no espera**, así que lanzar 500 llamadas de
+golpe puntuaría las primeras 60 y perdería el resto. En su lugar cada petición
+descarga como mucho 120 fundamentales nuevos, los cachea 24 h y deja el resto
+pendiente; la siguiente pasada sigue por donde iba, porque lo ya cacheado sale
+gratis. La UI muestra la barra de cobertura y un botón para continuar. Los
+nombres de las empresas salen del propio archivo del universo: pedirlos al API
+costaría otras 500 llamadas por información puramente cosmética.
+
+### De dónde salen las listas
+
+`backend/app/data/universe_*.csv` los genera `scripts/refresh_universes.py`
+desde fuentes públicas citables — nunca escritas a mano, porque son ~550
+empresas con su sector y un sector equivocado no es cosmético: distorsiona el
+z-score de todos sus comparables.
+
+```bash
+cd backend && python scripts/refresh_universes.py
+```
+
+- **S&P 500:** [datasets/s-and-p-500-companies](https://github.com/datasets/s-and-p-500-companies) (Open Data Commons PDDL).
+- **Canadá:** [JerBouma/FinanceDatabase](https://github.com/JerBouma/FinanceDatabase) (MIT), filtrado a canadienses en NYSE/NASDAQ.
+
+El script descarta lo que no es acción ordinaria (warrants tipo `CVE-WT`,
+preferentes, notas), deduplica contra el S&P 500 y lleva una lista corta de
+defectos conocidos de la fuente, cada uno con su motivo: `AQNB` son notas
+subordinadas de Algonquin y no su acción, e `IOT` (Samsara) es estadounidense
+pese a figurar como canadiense. `universes_meta.json` guarda la procedencia y
+la fecha, y la UI muestra cuándo se actualizó el universo.
+
 **Qué significa «favorable», y qué no.** Que una empresa encabece la lista
 significa que puntúa mejor que sus comparables *de su propio sector* en valor,
 calidad y momentum. No significa que vaya a subir, ni que convenga comprarla:
 eso depende de la cartera, el horizonte y la tolerancia al riesgo de cada uno.
 La lista sirve para decidir **qué mirar primero**, no qué comprar — y la app lo
 dice en pantalla, no en la letra pequeña.
-
-Coste: la primera pasada del día descarga un fundamental por empresa (~90
-llamadas, caché 24 h) y el momentum de cada sector en una sola descarga
-gratuita. El resultado se cachea 6 h, así que solo la primera carga tarda.
 
 ## Motor de señales cuantitativas
 

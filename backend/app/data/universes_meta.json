@@ -1,0 +1,13 @@
+{
+  "retrieved_at": "2026-08-06",
+  "markets": {
+    "us_sp500": {
+      "source": "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv",
+      "companies": 502
+    },
+    "canada": {
+      "source": "https://raw.githubusercontent.com/JerBouma/FinanceDatabase/main/compression/equities.bz2",
+      "companies": 44
+    }
+  }
+}
