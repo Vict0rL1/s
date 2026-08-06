@@ -4,6 +4,8 @@
 // with the tennis client, so a game can never be rendered by a match component or
 // vice versa.
 
+import type { MatchOutcome } from './outcome';
+
 export interface BbLeague {
   id: string;
   name: string;
@@ -176,6 +178,7 @@ export interface BbTeamInfo {
 }
 
 export interface BbGameWithPrediction {
+  outcome: MatchOutcome;
   game: BbUpcomingGame;
   prediction: BbPrediction | null;
   marketOnly: BbMarketProbabilities | null;

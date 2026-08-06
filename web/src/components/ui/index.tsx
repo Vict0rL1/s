@@ -6,7 +6,7 @@
 // share; anything sport-specific composes them rather than restyling from scratch.
 
 import { useState, type ReactNode } from 'react';
-import { INK, RELIABILITY_STYLE } from '../../lib/theme';
+import { INK, LOSS_COLOR, PROFIT_COLOR, RELIABILITY_STYLE } from '../../lib/theme';
 import { crestColors, crestPaint, monogram } from '../../lib/teamColors';
 import { relativeTime, shortTime } from '../../lib/format';
 
@@ -446,7 +446,10 @@ export function Badge({
   return (
     <span
       title={title}
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[13px] font-medium ring-1 ring-inset ${tones[tone]}`}
+      // `max-w-full` + truncate rather than bare `whitespace-nowrap`: a badge that
+      // says "Value: Arizona Cardinals" is as long as the team name, and without a
+      // cap it widened the page instead of itself.
+      className={`inline-flex min-w-0 max-w-full shrink-0 items-center gap-1 truncate whitespace-nowrap rounded-full px-2 py-0.5 text-[13px] font-medium ring-1 ring-inset ${tones[tone]}`}
     >
       {children}
     </span>
@@ -561,6 +564,72 @@ export function MatchTime({ iso, extra }: { iso: string; extra?: ReactNode }) {
       <span className="ml-1.5 text-[#5c636c]">{relativeTime(iso)}</span>
       {extra}
     </time>
+  );
+}
+
+/**
+ * The final score of a match that has already been played.
+ *
+ * WHY A CARD SHOWS THIS AT ALL. The schedule now keeps today's matches until
+ * midnight instead of dropping them six hours after kick-off, so a game played
+ * this morning is still on screen this afternoon — and the one thing you want from
+ * it then is how it ended, not a forecast for something that already happened.
+ *
+ * THREE STATES, and conflating any two of them is a lie:
+ *   · finished with a score  → show it, and whether the model called it
+ *   · started, no score yet  → "en juego o sin resultado todavía". Scores arrive
+ *     with `update-data`, so this is normal for a while and is NOT the model
+ *     being wrong or the match not existing.
+ *   · not started            → render nothing; the forecast below is the content.
+ *
+ * The verdict wears a word ("acertó" / "falló"), never colour alone.
+ */
+export function ResultBanner({
+  started,
+  score,
+  detail,
+  modelCalledIt,
+}: {
+  started: boolean;
+  /** "24-17", or "Sinner" for a sport without two scores. Null when unknown. */
+  score: string | null;
+  detail?: string | null;
+  /** Did the model favour the winner? null when there was no forecast to check. */
+  modelCalledIt?: boolean | null;
+}) {
+  if (!started) return null;
+
+  if (score == null) {
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded-lg bg-white/[0.04] px-3 py-2 text-[14px] text-[#9aa1ac] ring-1 ring-inset ring-white/[0.08]">
+        <span aria-hidden>⏳</span>
+        <span>En juego, o el resultado aún no está descargado.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 rounded-lg bg-white/[0.06] px-3 py-2 ring-1 ring-inset ring-white/[0.12]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="flex items-baseline gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
+            Final
+          </span>
+          <strong className="text-[20px] font-bold leading-none tabular-nums text-[#e8eaed]">
+            {score}
+          </strong>
+        </span>
+        {modelCalledIt != null && (
+          <span
+            className="text-[13px] font-medium"
+            style={{ color: modelCalledIt ? PROFIT_COLOR : LOSS_COLOR }}
+          >
+            {modelCalledIt ? '✓ el modelo acertó' : '✕ el modelo falló'}
+          </span>
+        )}
+      </div>
+      {detail && <div className="mt-0.5 text-[13px] text-[#9aa1ac]">{detail}</div>}
+    </div>
   );
 }
 

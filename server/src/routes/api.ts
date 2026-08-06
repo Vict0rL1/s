@@ -63,8 +63,28 @@ function describeRow(row: UpcomingRow, withPrediction = true) {
   // synthetic matches that will never be played, and scoring the app against
   // invented results would make the track record meaningless.
   if (prediction && row.source === 'live') logPrediction(row, prediction);
+  const played = findTennisResult(row.tour, row.p1_id, row.p2_id, row.commence_time);
   return {
     match: row,
+    /**
+     * WHO WON, once it has been played and the archive has it.
+     *
+     * Tennis has no home side, so the archive records a winner rather than two
+     * scores — hence a `winnerId` and the set score, not a pair of numbers.
+     * `started` without a `result` means it is being played or the score has not
+     * been ingested yet, which are different from "never happened".
+     */
+    outcome: {
+      started: hasStarted(row.commence_time),
+      result: played
+        ? {
+            winnerId: played.winnerId,
+            winnerName: played.winnerId === row.p1_id ? row.p1_name : row.p2_name,
+            score: played.score,
+            playedOn: played.playedOn,
+          }
+        : null,
+    },
     prediction,
     // Only when the model has nothing to say, so clients never have two sources.
     marketOnly: prediction ? null : marketOnly(row),
@@ -262,6 +282,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
 // Small local helper (kept here to avoid widening the repo surface).
 import { getDb } from '../db.ts';
+import { findTennisResult, hasStarted } from '../results.ts';
 function countRowsWhere(table: string, col: string, value: string): number {
   const row = getDb()
     .prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE ${col} = ?`)

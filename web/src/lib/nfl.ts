@@ -1,5 +1,7 @@
 // Typed client for the American football half of the API (/api/nfl/*).
 
+import type { MatchOutcome } from './outcome';
+
 export interface NflLeague {
   id: string; name: string; label: string; country: string;
   games: number; teams: number; hasUpcoming: boolean; upcomingCount: number;
@@ -126,6 +128,7 @@ export interface NflTeamInfo {
 
 export interface NflGameWithPrediction {
   game: NflGameRow;
+  outcome: MatchOutcome;
   prediction: NflPrediction | null;
   marketOnly: { home: number; away: number; overround: number; odds: { home: number; away: number } } | null;
   teams: { home: NflTeamInfo | null; away: NflTeamInfo | null };

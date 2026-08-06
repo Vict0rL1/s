@@ -1,6 +1,8 @@
 // Typed client for the Tennis Predictor REST API. Types mirror the server's
 // response shapes (server/src/types.ts + model/predict.ts).
 
+import type { TennisOutcome } from './outcome';
+
 export interface Tour {
   id: string;
   name: string;
@@ -254,6 +256,7 @@ export interface PlayerInfo {
 }
 
 export interface UpcomingWithPrediction {
+  outcome: TennisOutcome;
   match: UpcomingMatch;
   prediction: Prediction | null;
   /** Market-implied probabilities, present only when the model can't predict. */

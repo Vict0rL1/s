@@ -16,10 +16,11 @@ import {
   Panel,
   ProbabilityBar,
   ReliabilityChip,
+  ResultBanner,
   SectionTitle,
-  TeamCrest,
   StatRow,
   StatTile,
+  TeamCrest,
 } from '../ui';
 import ScoreMatrix from './ScoreMatrix';
 import SquadPanel from './SquadPanel';
@@ -88,6 +89,30 @@ export default function MatchCard({
           {fixture.source === 'fixture' && <Badge tone="warning">partido demo</Badge>}
         </div>
       </div>
+
+      {/* The result, when there is one. Above the forecast because once a match
+          has been played the score is the headline and the prediction is history.
+          Football is the one sport where a DRAW is a real third outcome, so
+          "did the model call it" compares the winning side against whichever of
+          the three the model rated highest — not just home against away. */}
+      <ResultBanner
+        started={item.outcome.started}
+        score={
+          item.outcome.result
+            ? `${item.outcome.result.homeScore}-${item.outcome.result.awayScore}`
+            : null
+        }
+        detail={
+          item.outcome.result
+            ? `${homeName} ${item.outcome.result.homeScore} · ${awayName} ${item.outcome.result.awayScore}`
+            : null
+        }
+        modelCalledIt={
+          prediction && item.outcome.result
+            ? topOutcome(prediction.model) === actualOutcome(item.outcome.result)
+            : null
+        }
+      />
 
       <div className="mb-3 flex items-start justify-between gap-3">
         <TeamName
@@ -200,7 +225,10 @@ export default function MatchCard({
                     </>
                   )}
                 </p>
-                <div className="flex shrink-0 items-center gap-1.5">
+                {/* WRAPS, and must: this group holds a "Value: <team name>" badge, and
+                      with `shrink-0` it could neither shrink nor wrap, so a long name
+                      pushed the whole page 10px wide. */}
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
                   {prediction.market.verdict.startsWith('value_') && (
                     <Badge tone="good" title="El modelo da más probabilidad que el mercado">
                       Value:{' '}
@@ -509,4 +537,16 @@ function Detail({
       <p className="text-[13px] leading-relaxed text-[#7b828d]">{prediction.disclaimer}</p>
     </div>
   );
+}
+
+/** Which of the three the model rated highest. */
+function topOutcome(m: { home: number; draw: number; away: number }): 'home' | 'draw' | 'away' {
+  if (m.draw >= m.home && m.draw >= m.away) return 'draw';
+  return m.home >= m.away ? 'home' : 'away';
+}
+
+/** Which of the three actually happened. */
+function actualOutcome(r: { homeScore: number; awayScore: number }): 'home' | 'draw' | 'away' {
+  if (r.homeScore === r.awayScore) return 'draw';
+  return r.homeScore > r.awayScore ? 'home' : 'away';
 }

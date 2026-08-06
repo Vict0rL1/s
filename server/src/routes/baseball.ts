@@ -25,6 +25,7 @@ import {
 } from '../baseball/repo.ts';
 import { getBaseballTrackRecord, logBaseballPrediction } from '../baseball/trackRecord.ts';
 import type { BsbUpcomingRow } from '../baseball/types.ts';
+import { findGameResult, hasStarted } from '../results.ts';
 
 function predictRow(
   row: BsbUpcomingRow,
@@ -63,6 +64,23 @@ function describeRow(
   if (prediction && row.source === 'live' && !userChose) logBaseballPrediction(row, prediction);
   return {
     game: row,
+    /**
+     * The FINAL SCORE, once the game has been played and the archive has it.
+     *
+     * Three states, and the card needs all three: not started, started but no
+     * score yet, and finished. Scores arrive with `update-data`, so the middle
+     * state is normal for a while after a game ends and must not be dressed up as
+     * either of the others.
+     */
+    outcome: {
+      started: hasStarted(row.commence_time),
+      result: findGameResult('baseball', {
+        league: row.league,
+        homeId: row.home_id,
+        awayId: row.away_id,
+        commenceTime: row.commence_time,
+      }),
+    },
     prediction,
     marketOnly: prediction ? null : marketOnly(row),
     teams: {

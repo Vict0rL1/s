@@ -22,11 +22,12 @@ import {
   Panel,
   ProbabilityBar,
   ReliabilityChip,
+  ResultBanner,
   SectionTitle,
   SeriesDot,
-  TeamCrest,
   StatRow,
   StatTile,
+  TeamCrest,
 } from '../ui';
 import RunMatrix from './RunMatrix';
 
@@ -86,6 +87,31 @@ export default function GameCard({
           {game.source === 'fixture' && <Badge tone="warning">partido demo</Badge>}
         </div>
       </div>
+
+      {/* The result, when there is one. Above the forecast because once a game
+          has been played the score is the headline and the prediction is
+          history — see ResultBanner for the three states it distinguishes. */}
+      <ResultBanner
+        started={item.outcome.started}
+        score={
+          item.outcome.result
+            ? `${item.outcome.result.awayScore}-${item.outcome.result.homeScore}`
+            : null
+        }
+        detail={
+          item.outcome.result
+            ? `${game.away_name} ${item.outcome.result.awayScore} · ${game.home_name} ${item.outcome.result.homeScore}`
+            : null
+        }
+        modelCalledIt={
+          item.prediction && item.outcome.result
+            ? item.outcome.result.homeScore === item.outcome.result.awayScore
+              ? null
+              : (item.outcome.result.homeScore > item.outcome.result.awayScore) ===
+                (item.prediction.model.home >= 0.5)
+            : null
+        }
+      />
 
       {/* Away @ Home — baseball is written away-first, unlike the other three */}
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -200,7 +226,10 @@ export default function GameCard({
                     </>
                   )}
                 </p>
-                <div className="flex shrink-0 items-center gap-1.5">
+                {/* WRAPS, and must: this group holds a "Value: <team name>" badge, and
+                      with `shrink-0` it could neither shrink nor wrap, so a long name
+                      pushed the whole page 10px wide. */}
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
                   {prediction.market.verdict.startsWith('value_') && (
                     <Badge tone="good" title="El modelo da más probabilidad que el mercado">
                       Value:{' '}

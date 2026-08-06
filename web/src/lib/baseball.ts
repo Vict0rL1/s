@@ -1,5 +1,7 @@
 // Typed client for the baseball half of the API (/api/baseball/*).
 
+import type { MatchOutcome } from './outcome';
+
 export interface BsbLeague {
   id: string; name: string; label: string; country: string;
   games: number; teams: number; hasUpcoming: boolean; upcomingCount: number;
@@ -99,6 +101,7 @@ export interface BsbTeamInfo {
 }
 
 export interface BsbGameWithPrediction {
+  outcome: MatchOutcome;
   game: BsbGame;
   prediction: BsbPrediction | null;
   marketOnly: (BsbMoneyline & { overround: number; odds: BsbMoneyline }) | null;

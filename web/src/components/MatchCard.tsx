@@ -3,7 +3,7 @@ import type { PlayerInfo, Reliability, UpcomingMatch, UpcomingWithPrediction } f
 import { confidenceLabelEs, flag, surfaceLabelEs } from '../lib/format';
 import ProbabilityBars, { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import MatchDetail from './MatchDetail';
-import { Badge, MatchTime, SeriesDot } from './ui';
+import { Badge, MatchTime, ResultBanner, SeriesDot } from './ui';
 
 export default function MatchCard({
   item,
@@ -33,6 +33,26 @@ export default function MatchCard({
           )}
         </span>
       </div>
+
+      {/* WHO WON, when it has been played. Tennis has no score pair — the archive
+          records a winner and a set score — so the headline is a name and the sets
+          go underneath. Above the forecast for the same reason as the other four:
+          once it is over, the result is the news. */}
+      <ResultBanner
+        started={item.outcome.started}
+        score={item.outcome.result?.winnerName ?? null}
+        detail={
+          item.outcome.result
+            ? [item.outcome.result.score, 'ganó el partido'].filter(Boolean).join(' · ')
+            : null
+        }
+        modelCalledIt={
+          prediction && item.outcome.result
+            ? item.outcome.result.winnerId ===
+              (prediction.model.prob1 >= prediction.model.prob2 ? match.p1_id : match.p2_id)
+            : null
+        }
+      />
 
       {/* Players + headline win probabilities */}
       <div className="mb-4 flex items-start justify-between">

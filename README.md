@@ -747,16 +747,44 @@ dependencias), en dos pasadas: el desplazamiento depende del instante y el insta
 desplazamiento, así que se estima con la lectura ingenua y se vuelve a comprobar en el instante
 corregido. Verificado en cuatro fechas, incluido el domingo del cambio de hora.
 
-### Nada caducado en la lista
+### Los partidos de hoy duran todo el día, y traen su resultado
 
-Los cinco deportes descartan ahora los partidos que ya empezaron hace más de **6 horas**
-(`STALE_AFTER_HOURS`). Antes, un partido que la API de odds hubiera dejado atrás seguía en «próximos»
-indefinidamente. Las 6 horas de margen existen para no tirar un partido que se está jugando ahora
-mismo.
+Antes un partido desaparecía **6 horas después de empezar**, así que uno de las 11:00 ya no estaba a
+las 17:00 — justo la tarde en la que querías ver cómo acabó. Lo que uno entiende por «los partidos de
+hoy» es el **día del calendario**, no una ventana rodante.
 
-`npm run audit` comprueba esto además de la coherencia de los números: que ningún partido de la lista
-de próximos esté ya jugado (con esas 6 h de holgura) y que ninguna fecha caiga más allá de 400 días.
-Son **1325 comprobaciones**, todas verdes.
+El corte es ahora **el más antiguo de dos límites**, así que conserva lo que cualquiera de los dos
+conservaría:
+
+- **las 00:00 de hoy, en hora local** — todo lo de hoy aguanta hasta medianoche y desaparece ahí;
+- **hace 6 horas** — para que un partido que empezó a las 23:30 siga ahí a la 01:00 mientras se
+  juega, en vez de cortarse a medianoche en mitad del partido.
+
+| Son las… | Corte | Un partido de hoy a las 11:00 |
+|---|---|---|
+| 15:00 | hoy 00:00 | **sigue** |
+| 23:00 | hoy 00:00 | **sigue** |
+| mañana 01:00 | ayer 19:00 | ya no |
+| mañana 09:00 | mañana 00:00 | ya no |
+
+Y en cuanto acaba, **la tarjeta muestra el resultado**: el marcador final arriba, en grande, con
+«✓ el modelo acertó» o «✕ el modelo falló». Tres estados, y confundir dos cualesquiera sería mentir:
+
+- **terminado con marcador** → se muestra, y si el modelo lo clavó;
+- **empezado y sin marcador** → «En juego, o el resultado aún no está descargado». Los resultados
+  llegan con `update-data`, así que esto es normal un rato y **no** es el modelo fallando;
+- **sin empezar** → no se muestra nada; el pronóstico es el contenido.
+
+En fútbol la comparación es a tres bandas (el empate es un resultado de verdad, no la ausencia de
+uno) y en tenis el resultado es un nombre y el marcador por sets, porque el archivo guarda un ganador
+y no dos marcadores.
+
+El emparejamiento «este partido programado ↔ aquel partido del archivo» es **el mismo que ya usaban
+los cinco puntuadores** de predicciones, no una segunda implementación: si fueran dos, la tarjeta y el
+panel de aciertos podrían discrepar sobre si el mismo partido ya terminó.
+
+`npm run audit` comprueba la coherencia de todos los números —**1325 comprobaciones**, todas verdes—
+y que ninguna fecha caiga más allá de 400 días.
 
 ### La escala tipográfica
 

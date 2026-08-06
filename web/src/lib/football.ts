@@ -1,5 +1,7 @@
 // Typed client for the football half of the API (/api/football/*).
 
+import type { MatchOutcome } from './outcome';
+
 export interface FbLeague {
   id: string; name: string; label: string; country: string; tier: number;
   matches: number; teams: number; hasUpcoming: boolean; upcomingCount: number;
@@ -103,6 +105,7 @@ export interface FbTeamInfo {
 }
 
 export interface FbFixtureWithPrediction {
+  outcome: MatchOutcome;
   fixture: FbFixture;
   prediction: FbPrediction | null;
   marketOnly: (Fb1X2 & { overround: number; odds: Fb1X2 }) | null;

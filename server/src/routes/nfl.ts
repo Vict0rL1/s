@@ -23,6 +23,7 @@ import {
 import { getNflTrackRecord, logNflPrediction, resolveNflPredictions } from '../nfl/trackRecord.ts';
 import { ELO_PER_POINT } from '../nfl/model.ts';
 import type { NafUpcomingRow } from '../nfl/types.ts';
+import { findGameResult, hasStarted } from '../results.ts';
 
 function predictRow(row: NafUpcomingRow): NafPrediction | null {
   if (!row.home_id || !row.away_id) return null;
@@ -63,6 +64,23 @@ function describeRow(row: NafUpcomingRow, withPrediction = true) {
   if (prediction && row.source !== 'fixture') logNflPrediction(row, prediction);
   return {
     game: row,
+    /**
+     * The FINAL SCORE, once the game has been played and the archive has it.
+     *
+     * Three states, and the card needs all three: not started (null), started but
+     * no score yet (`started` with no `result`), and finished. Scores arrive with
+     * `update-data`, so the middle state is normal for a while after a game ends
+     * and must not be dressed up as either of the others.
+     */
+    outcome: {
+      started: hasStarted(row.commence_time),
+      result: findGameResult('nfl', {
+        league: row.league,
+        homeId: row.home_id,
+        awayId: row.away_id,
+        commenceTime: row.commence_time,
+      }),
+    },
     prediction,
     marketOnly: prediction ? null : marketOnly(row),
     teams: {
