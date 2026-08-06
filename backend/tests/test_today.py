@@ -320,3 +320,27 @@ def test_no_se_presenta_como_lista_de_compra(client):
     assert data["calibrated"] is False
     for signal in data["signals"]:
         assert signal["probability"] is None
+
+
+def test_una_respuesta_cacheada_con_forma_antigua_se_descarta(client):
+    """Regresión: servirla dejaba la pantalla en blanco.
+
+    Al cambiar la forma de la respuesta, lo guardado por la versión anterior
+    seguía en caché y la UI lo leía mal. No basta con subir la versión de la
+    clave — hay que olvidarse de subirla y que aun así no rompa.
+    """
+    c, service = client
+    data = _completar(c)
+    assert data["complete"] is True
+
+    # Simula lo guardado por una versión anterior: sin los campos nuevos.
+    clave = {"v": 3, "market": "us_sp500"}
+    viejo = {k: v for k, v in data.items() if k not in {"signals", "counts", "thresholds"}}
+    viejo["favorables"] = []
+    service.cache.set("daily_picks", clave, viejo)
+
+    # La siguiente petición ignora ese cacheado y devuelve la forma buena.
+    de_nuevo = c.get("/api/signals/today").json()
+    assert "signals" in de_nuevo
+    assert "thresholds" in de_nuevo
+    assert de_nuevo["counts"]["favorables"] >= 0

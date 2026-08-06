@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Layout } from './components/Layout'
 import { DashboardPage } from './pages/DashboardPage'
 import { EtfsPage } from './pages/EtfsPage'
@@ -13,7 +14,8 @@ import { TodayPage } from './pages/TodayPage'
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <ErrorBoundary>
+        <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Navigate to="/hoy" replace />} />
           <Route path="/hoy" element={<TodayPage />} />
@@ -28,7 +30,8 @@ export default function App() {
           <Route path="/tesis" element={<ThesesPage />} />
           <Route path="*" element={<Navigate to="/hoy" replace />} />
         </Route>
-      </Routes>
+        </Routes>
+      </ErrorBoundary>
     </BrowserRouter>
   )
 }

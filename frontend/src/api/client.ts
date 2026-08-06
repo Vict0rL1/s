@@ -53,8 +53,32 @@ export class ApiError extends Error {
   }
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const resp = await fetch(path)
+// Sin límite, una petición que se queda colgada deja la vista cargando para
+// siempre y parece que la app no arranca. Con límite, al menos se puede decir
+// qué pasó. La lista diaria pide un margen mucho mayor: su primera pasada
+// descarga fundamentales de verdad y tarda.
+const DEFAULT_TIMEOUT_MS = 30_000
+export const SCAN_TIMEOUT_MS = 300_000
+
+async function fetchJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let resp: Response
+  try {
+    resp = await fetch(path, { signal: controller.signal })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new ApiError(
+        408,
+        `La petición superó ${Math.round(timeoutMs / 1000)} s sin responder. ` +
+          'Si es la primera carga del día puede seguir trabajando en segundo ' +
+          'plano: espera un poco y vuelve a intentarlo.',
+      )
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
   if (!resp.ok) {
     let detail = `Error HTTP ${resp.status}`
     try {
@@ -199,6 +223,7 @@ export const api = {
       `/api/signals/today?market=${encodeURIComponent(market)}${
         refresh ? '&refresh=true' : ''
       }`,
+      SCAN_TIMEOUT_MS,
     ),
   universes: () =>
     fetchJson<{ universes: UniverseInfo[]; note: string }>('/api/signals/universes'),

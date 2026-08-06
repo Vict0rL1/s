@@ -58,6 +58,12 @@ MAX_UNIVERSE = 15  # tope de coste: cada símbolo cuesta llamadas de fundamental
 # S&P 500 a lo largo de varias pasadas.
 DEFAULT_FETCH_BUDGET = 120
 
+# Campos que la UI necesita sí o sí en la respuesta de /today. Sirven para
+# descartar respuestas cacheadas por versiones anteriores con otra forma.
+_PAYLOAD_KEYS = frozenset(
+    {"signals", "counts", "thresholds", "sectors", "scored", "requested", "complete"}
+)
+
 
 class SignalRequest(BaseModel):
     symbols: list[str] = Field(min_length=3, max_length=MAX_UNIVERSE)
@@ -512,10 +518,14 @@ def today(
             status_code=404, detail=f"Mercado desconocido: {market}"
         ) from None
 
-    cache_params = {"v": 2, "market": market}
+    cache_params = {"v": 3, "market": market}
     if not refresh:
         cached = service.cache.get("daily_picks", cache_params)
-        if cached is not None:
+        # Una respuesta guardada por una versión anterior de la app puede no
+        # tener los campos que la UI espera, y servirla dejaba la pantalla en
+        # blanco. Se valida la forma en vez de confiar solo en subir "v": así
+        # olvidarse de subirla no vuelve a romper nada.
+        if cached is not None and _PAYLOAD_KEYS <= cached.keys():
             return cached
 
     fetch_budget = FetchBudget(budget)

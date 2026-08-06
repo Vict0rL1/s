@@ -238,7 +238,7 @@ export function TodayPage() {
   }, [market])
 
   const rows = useMemo(() => {
-    if (!data) return []
+    if (!data?.signals || !data.thresholds) return []
     const { favorable, desfavorable } = data.thresholds
     let base = data.signals
     if (view === 'favorables') base = base.filter((s) => s.score >= favorable)
@@ -262,7 +262,7 @@ export function TodayPage() {
   // Buscar es para encontrar una empresa concreta, esté en el cubo que esté:
   // filtrar además por vista haría que "no aparece" volviera a ser posible.
   const encontradoFuera = useMemo(() => {
-    if (!data || !query.trim()) return null
+    if (!data?.signals || !query.trim()) return null
     const q = query.trim().toUpperCase()
     const enTodas = data.signals.filter(
       (s) => s.symbol.includes(q) || (s.context.name ?? '').toUpperCase().includes(q),
@@ -334,7 +334,14 @@ export function TodayPage() {
         </div>
       )}
 
-      {data && (
+      {data && !data.signals && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          El servidor devolvió una respuesta con un formato que esta versión no
+          entiende. Pulsa «Actualizar» para recalcular la lista desde cero.
+        </div>
+      )}
+
+      {data?.signals && data.thresholds && data.counts && (
         <>
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
