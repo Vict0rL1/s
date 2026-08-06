@@ -6,6 +6,7 @@ import type {
   MultipleStats,
 } from '../../api/types'
 import { fmtBig, fmtNumber, fmtPct } from '../../lib/format'
+import { useLlmStatus } from '../../lib/llm'
 
 const STANCE_STYLES: Record<string, string> = {
   constructiva: 'bg-emerald-50 border-emerald-300 text-emerald-900',
@@ -122,6 +123,7 @@ export function DeepDiveSection({ symbol }: { symbol: string }) {
   const [narrative, setNarrative] = useState<DeepDiveNarrative | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const llm = useLlmStatus()
 
   useEffect(() => {
     setReport(null)
@@ -380,7 +382,10 @@ export function DeepDiveSection({ symbol }: { symbol: string }) {
         </Section>
       </div>
 
-      {/* Narrativa por IA, siempre al final y siempre etiquetada */}
+      {/* Narrativa por IA, siempre al final y siempre etiquetada.
+          Sin ANTHROPIC_API_KEY la sección entera desaparece: el informe
+          calculado se sostiene solo. */}
+      {(narrative || llm?.configured) && (
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         {!narrative ? (
           <>
@@ -412,6 +417,7 @@ export function DeepDiveSection({ symbol }: { symbol: string }) {
           </>
         )}
       </section>
+      )}
 
       <p className="text-[11px] text-slate-400">
         Informe calculado a partir de SEC EDGAR ({report.data_sources.financials}) y precios

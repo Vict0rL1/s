@@ -10,6 +10,7 @@ import type {
   UniverseInfo,
 } from '../api/types'
 import { fmtNumber, fmtPct } from '../lib/format'
+import { useLlmStatus } from '../lib/llm'
 
 const LABEL_STYLES: Record<string, string> = {
   'muy favorable': 'bg-emerald-100 text-emerald-800',
@@ -57,6 +58,7 @@ function SignalCard({ signal }: { signal: QuantSignal }) {
   const [explanation, setExplanation] = useState<SignalExplanation | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const llm = useLlmStatus()
 
   const explain = async () => {
     setBusy(true)
@@ -177,7 +179,7 @@ function SignalCard({ signal }: { signal: QuantSignal }) {
       )}
 
       <div className="mt-3 flex items-center gap-3">
-        {!explanation && signal.score !== null && (
+        {!explanation && signal.score !== null && llm?.configured && (
           <button
             onClick={explain}
             disabled={busy}

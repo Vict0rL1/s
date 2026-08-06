@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { LlmStatus, ProviderUsage } from '../api/types'
+import type { ProviderUsage } from '../api/types'
+import { useLlmStatus } from '../lib/llm'
 
 function windowLabel(seconds: number): string {
   if (seconds <= 60) return 'min'
@@ -12,7 +13,7 @@ function windowLabel(seconds: number): string {
 // saber cuánto queda es parte del flujo de trabajo, no un adorno.
 export function ApiUsageBar() {
   const [usage, setUsage] = useState<ProviderUsage[]>([])
-  const [llm, setLlm] = useState<LlmStatus | null>(null)
+  const llm = useLlmStatus()
 
   useEffect(() => {
     let alive = true
@@ -24,11 +25,6 @@ export function ApiUsageBar() {
     }
     load()
     const timer = setInterval(load, 30_000)
-    // El estado de la IA no cambia sin reiniciar el backend: se pide una vez.
-    api.llmStatus().then(
-      (s) => alive && setLlm(s),
-      () => undefined,
-    )
     return () => {
       alive = false
       clearInterval(timer)

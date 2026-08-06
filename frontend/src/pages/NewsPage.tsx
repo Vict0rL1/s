@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import type { Interpretation, NewsFeed, NewsItem } from '../api/types'
 import { SourceBadge } from '../components/SourceBadge'
 import { fmtDateTime } from '../lib/format'
+import { useLlmStatus } from '../lib/llm'
 
 function AiInterpretation({ data }: { data: Interpretation }) {
   return (
@@ -26,6 +27,7 @@ function NewsCard({ item, symbol }: { item: NewsItem; symbol: string | null }) {
   const [interp, setInterp] = useState<Interpretation | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const llm = useLlmStatus()
 
   const interpret = async () => {
     setBusy(true)
@@ -65,7 +67,7 @@ function NewsCard({ item, symbol }: { item: NewsItem; symbol: string | null }) {
             <p className="mt-1 line-clamp-3 text-sm text-slate-500">{item.summary}</p>
           )}
         </div>
-        {!interp && (
+        {!interp && llm?.configured && (
           <button
             onClick={interpret}
             disabled={busy}
@@ -87,6 +89,7 @@ export function NewsPage() {
   const [symbol, setSymbol] = useState<string | null>(null)
   const [feed, setFeed] = useState<NewsFeed | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const llm = useLlmStatus()
 
   useEffect(() => {
     setFeed(null)
@@ -120,9 +123,10 @@ export function NewsPage() {
       </div>
 
       <p className="text-xs text-slate-400">
-        El feed viene de la API de noticias (cacheado 15 min). La interpretación por IA
-        solo se genera cuando la pides, queda etiquetada en morado y se guarda para no
-        repetir el gasto.
+        El feed viene de la API de noticias (cacheado 15 min).{' '}
+        {llm?.configured
+          ? 'La interpretación por IA solo se genera cuando la pides, queda etiquetada en morado y se guarda para no repetir el gasto.'
+          : 'La capa de IA está desactivada: sin ANTHROPIC_API_KEY no hay interpretación de noticias, el resto de la app funciona igual.'}
       </p>
 
       {error && (
