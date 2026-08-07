@@ -327,13 +327,25 @@ def test_cada_mercado_tiene_su_propia_cache(client):
     assert data["scored"] < 100
 
 
-def test_no_se_presenta_como_lista_de_compra(client):
+def test_la_lista_dice_que_sus_reglas_no_estan_validadas(client):
+    """La app ya sí dice qué comprar; lo que no puede es fingir que acierta.
+
+    Antes este test exigía «NO es una lista de compra». Esa promesa se retiró a
+    propósito al añadir el motor de decisión, pero la garantía honesta que la
+    sustituye es más exigente: mientras no haya backtest con muestra, hay que
+    decirlo en pantalla y no publicar ninguna probabilidad.
+    """
     c, _ = client
     data = _completar(c)
-    assert "NO es una lista de compra" in data["disclaimer"]
+    assert "no están validadas" in data["disclaimer"]
+    assert "backtest" in data["disclaimer"]
+    # Y no vende la señal como predicción.
+    assert "no que vaya a subir" in data["disclaimer"]
+
     assert data["calibrated"] is False
     for signal in data["signals"]:
         assert signal["probability"] is None
+        assert signal["decision"]["confidence"] != "calibrada"
 
 
 def test_una_respuesta_cacheada_con_forma_antigua_se_descarta(client):
@@ -387,3 +399,80 @@ def test_el_precio_no_cuesta_ninguna_llamada_adicional(client):
     sectores_usables = len(load_market("canada")["sectors"])
     assert service.bulk_calls == sectores_usables
     assert service.profile_calls == 0
+
+
+# ---------------------------------------------------------------------------
+# Fallos: legibles y acotados
+# ---------------------------------------------------------------------------
+
+
+def test_un_fallo_inesperado_explica_la_causa_en_vez_de_un_500_vacio(client, monkeypatch):
+    """Un 500 sin cuerpo dejaba la pantalla diciendo solo «Error HTTP 500».
+
+    El frontend ya sabe leer `detail`; lo que faltaba era que el backend lo
+    escribiera. Sin esto, un fallo real es indistinguible de cualquier otro y
+    no hay por dónde empezar a arreglarlo.
+    """
+    c, _ = client
+    from app.routers import signals as S
+
+    def explota(*args, **kwargs):
+        raise ValueError("algo muy concreto se rompió")
+
+    monkeypatch.setattr(S, "_today", explota)
+    resp = c.get("/api/signals/today?market=us_sp500")
+    assert resp.status_code == 500
+    detail = resp.json()["detail"]
+    assert "ValueError" in detail
+    assert "algo muy concreto se rompió" in detail
+
+
+def test_una_empresa_con_datos_raros_no_tumba_la_lista_entera(client, monkeypatch):
+    """500 empresas no pueden depender de que las 500 sean decidibles."""
+    c, _ = client
+    from app.routers import signals as S
+
+    original = S.decide
+    llamadas = {"n": 0}
+
+    def falla_la_primera(signal, price, position=None, **kwargs):
+        llamadas["n"] += 1
+        if llamadas["n"] == 1:
+            raise ZeroDivisionError("coste cero")
+        return original(signal, price, position, **kwargs)
+
+    monkeypatch.setattr(S, "decide", falla_la_primera)
+    data = _completar(c)
+    assert data["scored"] > 100, "las demás empresas deben seguir puntuadas"
+
+    rotas = [s for s in data["signals"] if s["decision"]["action"] == "sin_datos"]
+    assert len(rotas) == 1
+    assert "ZeroDivisionError" in rotas[0]["decision"]["reasons"][0]
+    # Y sigue teniendo la forma que la UI espera, no un hueco.
+    assert rotas[0]["decision"]["levels"] is None
+    assert rotas[0]["decision"]["owned"] is False
+
+
+def test_una_descarga_cacheada_sin_precios_se_tira_y_se_repide(client):
+    """La caché de momentum dura 6 h y no lleva versión.
+
+    Tras actualizar la app, una entrada guardada por la versión anterior —sin
+    `prices`— seguiría vigente y daría una lista sin precio ni minigráfico
+    durante horas, sin decir por qué. Se detecta la forma vieja y se repide.
+    """
+    c, service = client
+    market = load_market("us_sp500")
+    symbols = [s["symbol"] for s in next(iter(market["sectors"].values()))]
+
+    # Forma antigua: momentum sí, precios no.
+    service.cache.set(
+        "bulk_momentum",
+        {"symbols": symbols},
+        {"momentum": {s: 0.1 for s in symbols}, "as_of": iso_utc(), "source": "fake"},
+    )
+    antes = service.bulk_calls
+    data = _completar(c)
+
+    assert service.bulk_calls > antes, "debía volver a pedir la descarga"
+    con_precio = [s for s in data["signals"] if s.get("price")]
+    assert con_precio, "la lista no puede quedarse sin precios por caché vieja"

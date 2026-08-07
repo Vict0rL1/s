@@ -61,6 +61,9 @@ class FakeCache:
     def set(self, data_type, params, payload):
         self.store[f"{data_type}|{self._key(params)}"] = payload
 
+    def invalidate(self, data_type, params):
+        return self.store.pop(f"{data_type}|{self._key(params)}", None) is not None
+
 
 class ScanService:
     """Simula el universo con datos deterministas y momentum masivo."""

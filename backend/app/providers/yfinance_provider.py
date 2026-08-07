@@ -7,6 +7,7 @@ marcan como freshness="delayed" porque no hay garantía de tiempo real.
 
 from __future__ import annotations
 
+import logging
 import math
 
 from app.providers.base import (
@@ -36,6 +37,8 @@ _INFO_MAP = {
 
 _INTERVAL_MAP = {"1day": "1d", "1week": "1wk", "1month": "1mo"}
 
+logger = logging.getLogger(__name__)
+
 
 # Puntos del minigráfico. Suficientes para que se lea la forma de un año sin
 # inflar la respuesta: con 500 empresas, cada punto extra son 500 números más.
@@ -53,7 +56,10 @@ def _price_summary(closes) -> dict | None:
         return None
     try:
         valores = [float(v) for v in closes.tolist()]
-    except (TypeError, ValueError):
+    except (AttributeError, TypeError, ValueError):
+        # Yahoo a veces devuelve un DataFrame (columnas duplicadas) donde se
+        # espera una serie. Es un dato raro de una empresa, no un fallo del
+        # sistema: esa fila se queda sin precio y las demás siguen.
         return None
     valores = [v for v in valores if v == v and v not in (float("inf"), float("-inf"))]
     if not valores:
@@ -261,25 +267,29 @@ class YFinanceProvider(DataProvider):
         out: dict[str, float | None] = {}
         prices: dict[str, dict | None] = {}
         for symbol in symbols:
+            # Una descarga de 500 empresas contra un scraper no oficial trae
+            # rarezas: tickers ausentes, columnas duplicadas, series vacías.
+            # Cada símbolo se aísla — que una empresa venga rara no puede
+            # dejar sin lista a las otras 499.
             try:
                 # Con un solo símbolo yfinance no agrupa por ticker.
                 closes = (
                     data["Close"] if len(symbols) == 1 else data[symbol]["Close"]
                 ).dropna()
-            except (KeyError, TypeError):
+
+                prices[symbol] = _price_summary(closes)
+
+                # ~252 sesiones/año, ~21/mes: de t−12m a t−1m (se excluye el
+                # último mes para evitar la reversión de corto plazo).
+                if len(closes) < 200:
+                    out[symbol] = None
+                    continue
+                start, end = closes.iloc[0], closes.iloc[-21]
+                out[symbol] = float(end / start - 1) if start else None
+            except Exception:  # noqa: BLE001 — se aísla la fila, no se traga
+                logger.warning("yfinance: datos inesperados para %s", symbol)
                 out[symbol] = None
                 prices[symbol] = None
-                continue
-
-            prices[symbol] = _price_summary(closes)
-
-            # ~252 sesiones/año, ~21/mes: de t−12m a t−1m (se excluye el último
-            # mes para evitar la reversión de corto plazo).
-            if len(closes) < 200:
-                out[symbol] = None
-                continue
-            start, end = closes.iloc[0], closes.iloc[-21]
-            out[symbol] = (end / start - 1) if start else None
         return {"momentum": out, "prices": prices, "as_of": iso_utc()}
 
     def get_etf_data(self, symbol: str) -> dict:

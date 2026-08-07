@@ -348,6 +348,14 @@ Cada fila desplegada muestra además **cuándo actuar**: la lista de
 disparadores que ejecutan o cancelan la idea (comprar en este rango, salir
 bajo este precio, tomar beneficios en este otro, revisar si pierde la media).
 
+**Sobre una posición que ya tienes, los niveles cuelgan de tu coste, no del
+precio de hoy.** El stop es un % bajo tu precio de compra —el que fijaste al
+entrar, no uno recalculado cada día— y el objetivo se ancla igual; lo que se
+muestra en pantalla es la distancia que queda **desde el precio actual**, que
+puede ser positiva si el stop ya está perforado. No hay zona de compra ni peso
+sugerido: no se propone entrar en algo que ya tienes, y menos si la acción es
+vender.
+
 ### La advertencia que no se quita
 
 Cada decisión lleva un campo `confidence` con dos valores posibles:

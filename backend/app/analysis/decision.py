@@ -138,6 +138,24 @@ def decide(
 
         if pnl_pct is not None:
             razones.append(f"Llevas un {pnl_pct:+.2f} % sobre tu precio de compra.")
+
+        # Sobre algo que ya tienes, una "zona de compra" y un objetivo medidos
+        # desde el precio de hoy no significan nada: los niveles que importan
+        # se anclan a TU coste. Y el porcentaje del stop se expresa desde el
+        # precio actual, que es la distancia que de verdad te queda.
+        niveles_posicion = None
+        if stop_posicion is not None:
+            objetivo = round(coste * (1 + niveles["objetivo_pct"] / 100), 2)
+            niveles_posicion = {
+                "entrada_desde": None,
+                "entrada_hasta": None,
+                "stop": stop_posicion,
+                "stop_pct": round((stop_posicion / ultimo - 1) * 100, 1),
+                "objetivo": objetivo,
+                "objetivo_pct": round((objetivo / ultimo - 1) * 100, 1),
+                "ratio": niveles["ratio"],
+                "peso_sugerido_pct": None,
+            }
         disparadores = [
             f"Vender si cierra por debajo de {stop_posicion}" if stop_posicion else
             "Vender si el precio perfora tu stop",
@@ -148,7 +166,7 @@ def decide(
             "action": accion,
             "label": ACCIONES[accion],
             "reasons": razones,
-            "levels": {**niveles, "stop": stop_posicion or niveles["stop"]},
+            "levels": niveles_posicion,
             "triggers": disparadores,
             "confidence": _confianza(signal),
             "owned": True,

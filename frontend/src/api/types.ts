@@ -561,15 +561,17 @@ export type DecisionAction =
   | 'sin_datos'
 
 export interface DecisionLevels {
-  entrada_desde: number
-  entrada_hasta: number
+  /** Nulos sobre una posición abierta: ya la tienes, no hay nada que entrar. */
+  entrada_desde: number | null
+  entrada_hasta: number | null
   stop: number
+  /** Distancia del stop **desde el precio de hoy**. Positiva = ya perforado. */
   stop_pct: number
   objetivo: number
   objetivo_pct: number
   ratio: number
-  /** Peso de cartera para arriesgar un 1 % si salta el stop. */
-  peso_sugerido_pct: number
+  /** Peso de cartera para arriesgar un 1 % si salta el stop. Nulo si ya la tienes. */
+  peso_sugerido_pct: number | null
 }
 
 /** Qué hacer, a qué precio y con qué salida. Reglas mecánicas, no opinión. */

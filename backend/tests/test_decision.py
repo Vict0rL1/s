@@ -148,3 +148,45 @@ def test_la_confianza_distingue_reglas_validadas_de_solo_razonables():
 def test_avisa_de_una_caida_fuerte_desde_maximos():
     d = decide(señal(0.8), precio(drawdown_pct=-40.0))
     assert any("por debajo de su máximo" in r for r in d["reasons"])
+
+
+# --- Los niveles de una posición se anclan a TU coste, no al precio de hoy ---
+
+
+def test_sobre_lo_que_ya_tienes_no_se_propone_zona_de_compra():
+    """Enseñar «zona de compra» a algo que te dicen que vendas es contradecirse."""
+    d = decide(señal(-0.5), precio(last=100, sma200=90), {"cost_basis": 80})
+    assert d["action"] == "vender"
+    assert d["levels"]["entrada_desde"] is None
+    assert d["levels"]["entrada_hasta"] is None
+    # Y no sugiere cuánto comprar de algo que ya tienes.
+    assert d["levels"]["peso_sugerido_pct"] is None
+
+
+def test_el_stop_de_una_posicion_cuelga_del_coste_y_se_mide_desde_hoy():
+    """Dos cosas distintas que antes se mezclaban en un solo porcentaje."""
+    d = decide(señal(0.7), precio(last=200, sma200=100, vol=1.0), {"cost_basis": 100})
+    niveles = d["levels"]
+    # El stop está bajo el COSTE (100), no bajo el precio de hoy (200).
+    assert niveles["stop"] < 100
+    # Y su porcentaje es la distancia real que queda desde hoy: muy negativa.
+    assert niveles["stop_pct"] < -50
+    esperado = round((niveles["stop"] / 200 - 1) * 100, 1)
+    assert niveles["stop_pct"] == esperado
+
+
+def test_un_stop_ya_perforado_se_declara_positivo_no_negativo():
+    """Si el stop queda por encima del precio, decir «−8 %» sería mentir."""
+    d = decide(señal(0.6), precio(last=70, sma200=60), {"cost_basis": 100})
+    assert d["action"] == "vender"
+    assert d["levels"]["stop"] > 70
+    assert d["levels"]["stop_pct"] > 0
+
+
+def test_el_objetivo_de_una_posicion_tambien_cuelga_del_coste():
+    d = decide(señal(0.7), precio(last=120, sma200=100), {"cost_basis": 100})
+    niveles = d["levels"]
+    assert niveles["objetivo"] > 100
+    # Coherente con el precio de hoy: el % es la subida que aún falta.
+    esperado = round((niveles["objetivo"] / 120 - 1) * 100, 1)
+    assert niveles["objetivo_pct"] == esperado

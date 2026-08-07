@@ -75,3 +75,29 @@ def test_los_valores_no_finitos_se_descartan():
     resumen = _price_summary(pd.Series([10.0, math.inf, 20.0], dtype="float64"))
     assert resumen["last"] == 20.0
     assert resumen["high_52w"] == 20.0
+
+
+def test_una_empresa_con_forma_rara_no_tumba_la_descarga_entera():
+    """yfinance es un scraper: devuelve rarezas en lotes de 500 empresas.
+
+    Antes, una columna duplicada (DataFrame donde se espera una serie) subía
+    como AttributeError, atravesaba el router —que solo captura ProviderError—
+    y salía como HTTP 500 sin cuerpo: la lista entera muerta por una empresa.
+    """
+    import pandas as pd
+
+    from app.providers.yfinance_provider import _price_summary
+
+    # Columnas duplicadas: data[symbol]["Close"] devuelve un DataFrame.
+    marco = pd.DataFrame({"Close": [1.0, 2.0], "Close2": [1.0, 2.0]})
+    marco.columns = ["Close", "Close"]
+    assert _price_summary(marco["Close"]) is None
+
+
+def test_la_serie_vacia_no_inventa_precio():
+    import pandas as pd
+
+    from app.providers.yfinance_provider import _price_summary
+
+    assert _price_summary(pd.Series([], dtype=float)) is None
+    assert _price_summary(pd.Series([float("nan")]).dropna()) is None

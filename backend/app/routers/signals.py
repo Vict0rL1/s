@@ -8,6 +8,7 @@ explícita.
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date, datetime, timedelta, timezone
 
@@ -50,6 +51,7 @@ from app.providers.base import DataNotFoundError
 from app.providers.router import AllProvidersFailedError
 
 router = APIRouter(prefix="/api/signals", tags=["signals"])
+logger = logging.getLogger(__name__)
 
 _SYMBOL_RE = re.compile(r"^[A-Za-z0-9.\-]{1,12}$")
 MAX_UNIVERSE = 15  # tope de coste: cada símbolo cuesta llamadas de fundamentales
@@ -112,6 +114,37 @@ def _safe_get(service: MarketDataService, data_type: str, **kwargs):
         return None
 
 
+def _decision_segura(signal: dict, position: dict | None) -> dict:
+    """`decide()` acotado a su propia fila.
+
+    Una empresa con datos raros —un precio imposible, una posición con coste
+    cero— no puede tumbar la lista entera de 500. Si su decisión falla, esa
+    fila queda como "sin datos" diciendo por qué, y las demás siguen.
+    """
+    try:
+        return decide(
+            signal,
+            signal.get("price"),
+            position,
+            favorable_min=FAVORABLE_MIN,
+            desfavorable_max=UNFAVORABLE_MAX,
+        )
+    except Exception as exc:  # noqa: BLE001 — se reporta, no se traga
+        logger.exception("decide() falló para %s", signal.get("symbol"))
+        return {
+            "action": "sin_datos",
+            "label": "Sin datos",
+            "reasons": [
+                "No se pudo decidir con los datos de esta empresa: "
+                f"{type(exc).__name__}."
+            ],
+            "levels": None,
+            "triggers": [],
+            "confidence": "ninguna",
+            "owned": position is not None,
+        }
+
+
 class FetchBudget:
     """Tope de descargas NUEVAS de fundamentales en una sola petición.
 
@@ -158,6 +191,14 @@ def _score_symbols(
     price_map: dict[str, dict | None] = {}
     price_as_of = None
     bulk = _safe_get(service, "bulk_momentum", symbols=symbols)
+    # Una entrada guardada antes de que la descarga trajera precios sigue
+    # vigente hasta 6 h. Servirla daría una lista sin precio ni minigráfico y
+    # sin decir por qué, así que se tira y se vuelve a pedir una sola vez.
+    # Solo aplica a lo CACHEADO: si una respuesta recién descargada no trae
+    # precios, volver a pedirla duplicaría la descarga sin arreglar nada.
+    if bulk is not None and bulk.get("cached") and "prices" not in bulk:
+        service.cache.invalidate("bulk_momentum", {"symbols": symbols})
+        bulk = _safe_get(service, "bulk_momentum", symbols=symbols)
     if bulk:
         momentum_map = bulk.get("momentum", {})
         momentum_source = bulk.get("source")
@@ -515,6 +556,36 @@ def today(
     service: MarketDataService = Depends(get_service),
     session: Session = Depends(get_session),
 ):
+    """Lista del día, con el motivo real de cualquier fallo.
+
+    Un fallo inesperado aquí salía como 500 sin cuerpo, y la pantalla solo
+    podía decir «Error HTTP 500» — inservible para saber qué arreglar. Este
+    envoltorio traduce cualquier excepción a un `detail` legible y deja la
+    traza completa en el log del backend.
+    """
+    try:
+        return _today(market, refresh, budget, service, session)
+    except HTTPException:
+        raise  # 404/502 ya llevan su explicación
+    except Exception as exc:  # noqa: BLE001 — se reporta, no se traga
+        logger.exception("Fallo inesperado en /today (market=%s)", market)
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Fallo inesperado al construir la lista: {type(exc).__name__}: "
+                f"{exc}. La traza completa está en el log del backend "
+                "(/tmp/bolsa-backend.log)."
+            ),
+        ) from exc
+
+
+def _today(
+    market: str,
+    refresh: bool,
+    budget: int,
+    service: MarketDataService,
+    session: Session,
+):
     """Lista del día de un mercado: todo lo puntuable, ordenado, sin elegir nada.
 
     Puntúa **dentro de cada sector** y luego mezcla los resultados en una sola
@@ -587,12 +658,8 @@ def today(
                 # costaría ~500 llamadas por información puramente cosmética.
                 signal["context"]["name"] = names.get(signal["symbol"])
                 signal["sector_rank"] = signal.pop("rank", None)
-                signal["decision"] = decide(
-                    signal,
-                    signal.get("price"),
-                    posiciones.get(signal["symbol"]),
-                    favorable_min=FAVORABLE_MIN,
-                    desfavorable_max=UNFAVORABLE_MAX,
+                signal["decision"] = _decision_segura(
+                    signal, posiciones.get(signal["symbol"])
                 )
                 ranked.append(signal)
 
@@ -669,11 +736,13 @@ def today(
             )
         ),
         "disclaimer": (
-            "Esto NO es una lista de compra. 'Favorable' significa que la "
-            "empresa puntúa mejor que sus comparables del sector en valor, "
-            "calidad y momentum — no que vaya a subir, ni que te convenga a ti: "
-            "eso depende de tu cartera, tu horizonte y tu tolerancia al riesgo. "
-            "Úsala para decidir qué mirar primero, no qué comprar."
+            "Cada acción sale de reglas mecánicas escritas, no de una "
+            "predicción: 'Comprar' significa que la empresa puntúa mejor que "
+            "sus comparables de sector y que el precio acompaña, no que vaya a "
+            "subir. Las reglas son razonables pero aún no están validadas "
+            "contra histórico — ejecuta el backtest en Señales para saber si "
+            "han funcionado. El tamaño sugerido asume arriesgar un 1 % de tu "
+            "cartera por operación; ajústalo a tu situación."
         ),
     }
 

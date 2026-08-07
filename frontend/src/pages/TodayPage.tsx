@@ -101,22 +101,30 @@ function DecisionPlan({ decision }: { decision: Decision }) {
       </ul>
 
       {levels && (
+        // Sobre una posición abierta no hay zona de compra ni peso que sugerir:
+        // esos campos llegan nulos y no se pintan. Enseñar «zona de compra» a
+        // algo que la app te está diciendo que vendas sería contradecirse.
         <div className="grid max-w-xl grid-cols-2 gap-x-6 gap-y-2 rounded-lg bg-white p-3 sm:grid-cols-4">
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-slate-400">
-              Zona de compra
+          {levels.entrada_desde !== null && levels.entrada_hasta !== null && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                Zona de compra
+              </div>
+              <div className="text-sm tabular-nums text-slate-800">
+                {fmtNumber(levels.entrada_desde, 2)}–{fmtNumber(levels.entrada_hasta, 2)}
+              </div>
             </div>
-            <div className="text-sm tabular-nums text-slate-800">
-              {fmtNumber(levels.entrada_desde, 2)}–{fmtNumber(levels.entrada_hasta, 2)}
-            </div>
-          </div>
+          )}
           <div>
             <div className="text-[10px] uppercase tracking-wide text-slate-400">
               Stop
             </div>
             <div className="text-sm tabular-nums text-red-600">
               {fmtNumber(levels.stop, 2)}{' '}
-              <span className="text-xs text-slate-400">−{levels.stop_pct} %</span>
+              <span className="text-xs text-slate-400">
+                {levels.stop_pct >= 0 ? '+' : ''}
+                {levels.stop_pct} %
+              </span>
             </div>
           </div>
           <div>
@@ -125,20 +133,25 @@ function DecisionPlan({ decision }: { decision: Decision }) {
             </div>
             <div className="text-sm tabular-nums text-emerald-700">
               {fmtNumber(levels.objetivo, 2)}{' '}
-              <span className="text-xs text-slate-400">+{levels.objetivo_pct} %</span>
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-slate-400">
-              Peso sugerido
-            </div>
-            <div className="text-sm tabular-nums text-slate-800">
-              {levels.peso_sugerido_pct} %
-              <span className="block text-[10px] text-slate-400">
-                para arriesgar 1 %
+              <span className="text-xs text-slate-400">
+                {levels.objetivo_pct >= 0 ? '+' : ''}
+                {levels.objetivo_pct} %
               </span>
             </div>
           </div>
+          {levels.peso_sugerido_pct !== null && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                Peso sugerido
+              </div>
+              <div className="text-sm tabular-nums text-slate-800">
+                {levels.peso_sugerido_pct} %
+                <span className="block text-[10px] text-slate-400">
+                  para arriesgar 1 %
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -654,6 +667,30 @@ export function TodayPage() {
                       </Link>
                       : ahí se analiza cualquier ticker, esté o no en la lista.
                     </p>
+                  </>
+                ) : view === 'comprar' && sector === null ? (
+                  // Es la vista de entrada y «cero» es un resultado con
+                  // significado, no un hueco: hoy ninguna empresa cumple las
+                  // dos condiciones a la vez. Decirlo evita que parezca que la
+                  // app no cargó, y evita forzar una compra que no toca.
+                  <>
+                    <p className="text-slate-600">
+                      Hoy no hay ninguna compra en {data.market_name}.
+                    </p>
+                    <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed">
+                      Ninguna empresa cumple a la vez las dos condiciones:
+                      puntuar por encima de {data.thresholds.favorable.toFixed(2)}{' '}
+                      frente a sus comparables <em>y</em> cotizar sobre su media
+                      de 200 sesiones. No actuar también es una decisión.
+                    </p>
+                    {acciones.vigilar > 0 && (
+                      <button
+                        onClick={() => setView('vigilar')}
+                        className="mt-3 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        Ver las {acciones.vigilar} en vigilancia →
+                      </button>
+                    )}
                   </>
                 ) : (
                   <p>Nada que mostrar con este filtro.</p>

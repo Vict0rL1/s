@@ -54,6 +54,29 @@ class CacheStore:
             payload["fetched_at"] = _as_utc(row.fetched_at).isoformat()
             return payload
 
+    def invalidate(self, data_type: str, params: dict) -> bool:
+        """Borra una entrada concreta. Devuelve si había algo que borrar.
+
+        Existe para un caso muy concreto: una actualización de la app cambia la
+        forma de un payload y lo ya cacheado con la forma vieja sigue vigente
+        durante horas. Servirlo deja la pantalla a medias sin explicación, así
+        que quien detecta la forma vieja puede tirarla y volver a pedirla.
+        """
+        key = params_hash(params)
+        with self.session_factory() as session:
+            row = session.execute(
+                select(ApiCache).where(
+                    ApiCache.provider == "router",
+                    ApiCache.endpoint == data_type,
+                    ApiCache.params_hash == key,
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                return False
+            session.delete(row)
+            session.commit()
+            return True
+
     def set(self, data_type: str, params: dict, payload: dict) -> None:
         ttl = self.ttls.get(data_type, 300)
         now = self._now()
