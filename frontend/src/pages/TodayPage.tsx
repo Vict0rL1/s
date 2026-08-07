@@ -1,19 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { DailySignal, MarketInfo, TodayResponse } from '../api/types'
+import type {
+  DailySignal,
+  Decision,
+  DecisionAction,
+  MarketInfo,
+  TodayResponse,
+} from '../api/types'
 import { fmtChangePct, fmtNumber, relativeTime } from '../lib/format'
-
-// Una empresa "favorable" puntúa mejor que sus comparables de sector. No es
-// una recomendación de compra y la UI no debe insinuar que lo sea: por eso el
-// verde marca "mira esto primero", no "compra".
-const LABEL_STYLES: Record<string, string> = {
-  'muy favorable': 'bg-emerald-100 text-emerald-800',
-  favorable: 'bg-emerald-50 text-emerald-700',
-  neutral: 'bg-slate-100 text-slate-600',
-  desfavorable: 'bg-amber-50 text-amber-700',
-  'muy desfavorable': 'bg-red-100 text-red-700',
-}
 
 const FAMILY_LABELS: Record<string, string> = {
   value: 'Valor',
@@ -22,23 +17,11 @@ const FAMILY_LABELS: Record<string, string> = {
   sentiment: 'Sentimiento',
 }
 
-type View = 'favorables' | 'neutrales' | 'desfavorables' | 'todas'
+type View = 'comprar' | 'vigilar' | 'cartera' | 'todas'
 
 /** El compuesto vive de facto en [-2, 2]; se mapea a 0-100 % para la barra. */
 function scoreToPct(score: number): number {
   return Math.min(Math.max((score + 2) / 4, 0), 1) * 100
-}
-
-function Chip({ label }: { label: string }) {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-        LABEL_STYLES[label] ?? 'bg-slate-100 text-slate-600'
-      }`}
-    >
-      {label}
-    </span>
-  )
 }
 
 /** Minigráfico de un año en SVG. Sin librería: son 32 puntos y una polilínea. */
@@ -76,6 +59,109 @@ function RangeBar({ position }: { position: number }) {
         className="absolute top-1/2 h-2 w-0.5 -translate-y-1/2 rounded-full bg-slate-500"
         style={{ left: `${Math.min(Math.max(position, 0), 1) * 100}%` }}
       />
+    </div>
+  )
+}
+
+// La acción es lo primero que se lee, así que el color hace el trabajo: verde
+// actúa, ámbar espera, rojo sal. Nada de verde para "mantener": mantener no es
+// una oportunidad, es no hacer nada.
+const ACTION_STYLES: Record<DecisionAction, string> = {
+  comprar: 'bg-emerald-600 text-white',
+  vigilar: 'bg-amber-100 text-amber-800',
+  mantener: 'bg-slate-100 text-slate-600',
+  reducir: 'bg-orange-100 text-orange-800',
+  vender: 'bg-red-600 text-white',
+  evitar: 'bg-slate-100 text-slate-400',
+  ninguna: 'bg-slate-50 text-slate-400',
+  sin_datos: 'bg-slate-50 text-slate-400',
+}
+
+function ActionChip({ decision }: { decision: Decision }) {
+  return (
+    <span
+      className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+        ACTION_STYLES[decision.action]
+      }`}
+    >
+      {decision.label}
+    </span>
+  )
+}
+
+/** El plan completo: por qué, a qué precio, y cuándo salir. */
+function DecisionPlan({ decision }: { decision: Decision }) {
+  const { levels } = decision
+  return (
+    <div className="space-y-3">
+      <ul className="space-y-1 text-xs leading-snug text-slate-600">
+        {decision.reasons.map((r, i) => (
+          <li key={i}>· {r}</li>
+        ))}
+      </ul>
+
+      {levels && (
+        <div className="grid max-w-xl grid-cols-2 gap-x-6 gap-y-2 rounded-lg bg-white p-3 sm:grid-cols-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              Zona de compra
+            </div>
+            <div className="text-sm tabular-nums text-slate-800">
+              {fmtNumber(levels.entrada_desde, 2)}–{fmtNumber(levels.entrada_hasta, 2)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              Stop
+            </div>
+            <div className="text-sm tabular-nums text-red-600">
+              {fmtNumber(levels.stop, 2)}{' '}
+              <span className="text-xs text-slate-400">−{levels.stop_pct} %</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              Objetivo
+            </div>
+            <div className="text-sm tabular-nums text-emerald-700">
+              {fmtNumber(levels.objetivo, 2)}{' '}
+              <span className="text-xs text-slate-400">+{levels.objetivo_pct} %</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              Peso sugerido
+            </div>
+            <div className="text-sm tabular-nums text-slate-800">
+              {levels.peso_sugerido_pct} %
+              <span className="block text-[10px] text-slate-400">
+                para arriesgar 1 %
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {decision.triggers.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-400">
+            Cuándo actuar
+          </div>
+          <ul className="mt-1 space-y-0.5 text-xs text-slate-700">
+            {decision.triggers.map((t, i) => (
+              <li key={i}>→ {t}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-[11px] leading-snug text-slate-400">
+        {decision.confidence === 'calibrada'
+          ? 'Reglas validadas contra el histórico del backtest.'
+          : 'Reglas mecánicas todavía sin validar contra histórico: ejecuta el ' +
+            'backtest en Señales para saber si han funcionado. Que sean ' +
+            'razonables no significa que acierten.'}
+      </p>
     </div>
   )
 }
@@ -139,7 +225,8 @@ function ListHeader() {
           ))}
         </span>
       </span>
-      <span className="ml-auto pr-[6.5rem] text-right">Puntuación</span>
+      <span className="ml-auto pr-[7.5rem] text-right">Puntuación</span>
+      <span className="w-20 pr-6 text-right">Acción</span>
     </div>
   )
 }
@@ -220,7 +307,9 @@ function SignalRow({
             {signal.score > 0 ? '+' : ''}
             {fmtNumber(signal.score, 2)}
           </span>
-          <Chip label={signal.label} />
+          <span className="w-20 text-right">
+            <ActionChip decision={signal.decision} />
+          </span>
           <span
             className={`text-slate-300 transition-transform ${expanded ? 'rotate-90' : ''}`}
             aria-hidden
@@ -235,6 +324,8 @@ function SignalRow({
           <div className="md:hidden">
             <FactorBars families={signal.families} withLabels />
           </div>
+          <DecisionPlan decision={signal.decision} />
+
           {signal.price && (
             <div className="max-w-md">
               <div className="flex items-baseline justify-between text-xs text-slate-500">
@@ -305,7 +396,7 @@ export function TodayPage() {
   const [data, setData] = useState<TodayResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [view, setView] = useState<View>('favorables')
+  const [view, setView] = useState<View>('comprar')
   const [sector, setSector] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -340,14 +431,13 @@ export function TodayPage() {
 
   const rows = useMemo(() => {
     if (!data?.signals || !data.thresholds) return []
-    const { favorable, desfavorable } = data.thresholds
     let base = data.signals
-    if (view === 'favorables') base = base.filter((s) => s.score >= favorable)
-    else if (view === 'desfavorables') {
-      // De la peor hacia arriba: lo primero que se ve es lo más flojo.
-      base = base.filter((s) => s.score <= desfavorable).slice().reverse()
-    } else if (view === 'neutrales') {
-      base = base.filter((s) => s.score > desfavorable && s.score < favorable)
+    // Las vistas son acciones, no etiquetas: la pregunta que traes es qué
+    // comprar y qué vender, no quién puntúa alto.
+    if (view === 'comprar') base = base.filter((s) => s.decision.action === 'comprar')
+    else if (view === 'vigilar') base = base.filter((s) => s.decision.action === 'vigilar')
+    else if (view === 'cartera') {
+      base = base.filter((s) => s.decision.owned)
     }
     if (sector !== null) base = base.filter((s) => s.context.sector_key === sector)
     const q = query.trim().toUpperCase()
@@ -359,6 +449,16 @@ export function TodayPage() {
     }
     return base
   }, [data, view, sector, query])
+
+  const acciones = useMemo(() => {
+    const s = data?.signals ?? []
+    return {
+      comprar: s.filter((x) => x.decision.action === 'comprar').length,
+      vigilar: s.filter((x) => x.decision.action === 'vigilar').length,
+      cartera: s.filter((x) => x.decision.owned).length,
+      vender: s.filter((x) => x.decision.action === 'vender').length,
+    }
+  }, [data])
 
   // Buscar es para encontrar una empresa concreta, esté en el cubo que esté:
   // filtrar además por vista haría que "no aparece" volviera a ser posible.
@@ -449,9 +549,9 @@ export function TodayPage() {
               <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
                 {(
                   [
-                    ['favorables', `Favorables (${data.counts.favorables})`],
-                    ['neutrales', `Neutrales (${data.counts.neutrales})`],
-                    ['desfavorables', `A evitar (${data.counts.desfavorables})`],
+                    ['comprar', `Comprar (${acciones.comprar})`],
+                    ['vigilar', `Vigilar (${acciones.vigilar})`],
+                    ['cartera', `Mi cartera (${acciones.cartera})`],
                     ['todas', `Todas (${data.scored})`],
                   ] as [View, string][]
                 ).map(([key, label]) => (

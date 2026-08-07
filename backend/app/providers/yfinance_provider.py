@@ -70,6 +70,25 @@ def _price_summary(closes) -> dict | None:
         paso = (len(valores) - 1) / (SPARK_POINTS - 1)
         spark = [valores[round(i * paso)] for i in range(SPARK_POINTS)]
 
+    def media(n: int) -> float | None:
+        return round(sum(valores[-n:]) / n, 2) if len(valores) >= n else None
+
+    sma50, sma200 = media(50), media(200)
+
+    # Volatilidad diaria de los últimos ~3 meses: es lo que dimensiona el stop.
+    # Un stop igual para una utility y para una biotech no protege de nada.
+    ventana = valores[-63:]
+    retornos = [
+        ventana[i] / ventana[i - 1] - 1
+        for i in range(1, len(ventana))
+        if ventana[i - 1]
+    ]
+    vol_diaria = None
+    if len(retornos) >= 20:
+        medio = sum(retornos) / len(retornos)
+        varianza = sum((r - medio) ** 2 for r in retornos) / (len(retornos) - 1)
+        vol_diaria = round(math.sqrt(varianza) * 100, 3)
+
     return {
         "last": round(last, 2),
         "change_pct": round((last / prev - 1) * 100, 2) if prev else None,
@@ -77,6 +96,13 @@ def _price_summary(closes) -> dict | None:
         "high_52w": round(high, 2),
         # Dónde está el precio dentro de su rango anual: 0 = mínimo, 1 = máximo.
         "range_position": round((last - low) / (high - low), 3) if high > low else None,
+        "sma50": sma50,
+        "sma200": sma200,
+        # La media de 200 sesiones separa tendencia alcista de bajista. Es el
+        # filtro que evita comprar una empresa barata que sigue cayendo.
+        "above_sma200": (last > sma200) if sma200 else None,
+        "daily_vol_pct": vol_diaria,
+        "drawdown_pct": round((last / high - 1) * 100, 2) if high else None,
         "spark": [round(v, 2) for v in spark],
         "points": len(valores),
     }

@@ -550,11 +550,47 @@ export interface DailyPrice {
   as_of: string | null
 }
 
+export type DecisionAction =
+  | 'comprar'
+  | 'vigilar'
+  | 'mantener'
+  | 'reducir'
+  | 'vender'
+  | 'evitar'
+  | 'ninguna'
+  | 'sin_datos'
+
+export interface DecisionLevels {
+  entrada_desde: number
+  entrada_hasta: number
+  stop: number
+  stop_pct: number
+  objetivo: number
+  objetivo_pct: number
+  ratio: number
+  /** Peso de cartera para arriesgar un 1 % si salta el stop. */
+  peso_sugerido_pct: number
+}
+
+/** Qué hacer, a qué precio y con qué salida. Reglas mecánicas, no opinión. */
+export interface Decision {
+  action: DecisionAction
+  label: string
+  reasons: string[]
+  levels: DecisionLevels | null
+  triggers: string[]
+  confidence: 'calibrada' | 'sin_calibrar' | 'ninguna'
+  /** Si ya tienes la empresa en cartera: cambia la pregunta a sostener o soltar. */
+  owned: boolean
+  pnl_pct?: number | null
+}
+
 /** Señal de la lista diaria: como QuantSignal, más su sector y su precio. */
 export interface DailySignal extends Omit<QuantSignal, 'score' | 'context'> {
   score: number // en /today las no puntuables se descartan: nunca es null
   sector_rank: number | null
   price: DailyPrice | null
+  decision: Decision
   context: {
     name?: string | null
     sector?: string | null

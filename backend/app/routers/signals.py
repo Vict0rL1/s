@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.analysis.decision import decide
 from app.analysis.backtest import monthly_rebalance_dates, run_walk_forward
 from app.analysis.factors import (
     DEFAULT_WEIGHTS,
@@ -41,7 +42,7 @@ from app.analysis.markets import (
 from app.analysis.universes import get_universe, list_universes
 from app.cache.cache import MarketDataService
 from app.db.engine import get_session
-from app.db.models import Instrument, LlmOutput, WatchlistItem
+from app.db.models import Instrument, LlmOutput, Position, WatchlistItem
 from app.deps import get_llm, get_service
 from app.llm.base import LLMProvider, LLMUnavailableError
 from app.llm.signal_llm import explain_signal, extract_events, sentiment_from_events
@@ -542,6 +543,17 @@ def today(
         if cached is not None and _PAYLOAD_KEYS <= cached.keys():
             return cached
 
+    # Lo que ya tienes cambia la pregunta: sobre una posición abierta no se
+    # decide si comprar, sino si sostenerla o soltarla.
+    posiciones = {
+        symbol: {"cost_basis": coste, "quantity": cantidad}
+        for symbol, coste, cantidad in session.execute(
+            select(Instrument.symbol, Position.cost_basis, Position.quantity)
+            .join(Position, Position.instrument_id == Instrument.id)
+            .where(Position.closed_at.is_(None))
+        ).all()
+    }
+
     fetch_budget = FetchBudget(budget)
     ranked: list[dict] = []
     unavailable: list[dict] = []
@@ -575,6 +587,13 @@ def today(
                 # costaría ~500 llamadas por información puramente cosmética.
                 signal["context"]["name"] = names.get(signal["symbol"])
                 signal["sector_rank"] = signal.pop("rank", None)
+                signal["decision"] = decide(
+                    signal,
+                    signal.get("price"),
+                    posiciones.get(signal["symbol"]),
+                    favorable_min=FAVORABLE_MIN,
+                    desfavorable_max=UNFAVORABLE_MAX,
+                )
                 ranked.append(signal)
 
         unavailable.extend(scoring["unavailable"])

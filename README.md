@@ -1,12 +1,18 @@
 # Análisis Bursátil
 
-Aplicación web **local** de investigación de acciones y ETFs: precios,
-fundamentales, valoración por escenarios, noticias, screener, portafolio y
-registro de tesis. Herramienta de estudio personal — **no da señales de
-compra, no predice precios y no ejecuta órdenes**.
+Aplicación web **local** de investigación y decisión sobre acciones y ETFs:
+precios, fundamentales, valoración por escenarios, noticias, screener,
+portafolio, registro de tesis y un **motor de decisión que dice qué comprar, a
+qué precio, con qué stop y cuándo vender**. Herramienta personal — **no predice
+precios y no ejecuta órdenes**.
 
 ## Principios de diseño (no negociables)
 
+- **Una señal es una regla, no una opinión.** El motor de decisión emite
+  comprar/vigilar/mantener/reducir/vender a partir de condiciones escritas en
+  `analysis/decision.py`, con sus umbrales visibles y sus tests. Se puede leer
+  por qué dijo lo que dijo, discutirlo y cambiarlo. Lo que nunca hace es
+  presentar una corazonada con aire de cálculo.
 - **Toda cifra lleva fuente y fecha.** El backend nunca entrega un número sin
   `source` y `as_of`; la UI lo muestra siempre (badge junto a cada bloque),
   incluyendo si el dato viene de caché y desde cuándo.
@@ -153,7 +159,7 @@ endpoint HTTP → MarketDataService → CacheStore (SQLite, TTL por tipo de dato
 
 | Vista | Qué hace |
 |---|---|
-| **Hoy** | Pantalla de entrada. S&P 500, NASDAQ y grandes canadienses puntuadas y ordenadas en una sola lista, sin elegir nada. Ver abajo. |
+| **Hoy** | Pantalla de entrada. S&P 500, NASDAQ y grandes canadienses puntuadas, cruzadas con tu cartera y resueltas en una acción concreta —comprar, vigilar, mantener, reducir, vender— con precio de entrada, stop, objetivo y tamaño. Ver abajo. |
 | **Mercado** | Índices vía ETFs proxy, sectores SPDR, curva de rendimientos y spread 10A-2A, macro FRED, próximos resultados. |
 | **Acciones** | Gráfico de velas con SMA/RSI/MACD, fundamentales, estados financieros de EDGAR, DCF por escenarios con sensibilidad, Altman Z / Piotroski F, riesgo (beta, volatilidad, drawdown), filings e insiders. |
 | **Noticias** | Feed por ticker o general, con interpretación de IA bajo demanda claramente etiquetada. |
@@ -185,17 +191,17 @@ permanente. Esa es la trampa de valor clásica, y la app la nombra.
 
 La sección **Lectura conjunta** sintetiza qué dicen los datos con su postura
 (constructiva / mixta / cautelosa), lo que juega a favor y en contra, y —
-siempre — **qué observaciones futuras romperían esa lectura**. No dice
-"comprar": qué hacer depende de tu cartera, horizonte y tolerancia al riesgo,
-que el modelo no conoce.
+siempre — **qué observaciones futuras romperían esa lectura**. Es contexto para
+entender la empresa, no la decisión: quien dice comprar o vender es el motor de
+decisión de la vista **Hoy**, con sus reglas y sus niveles.
 
 ## La vista «Hoy»
 
-La app abre con una lista única: todas las empresas del mercado elegido,
-puntuadas y ordenadas de mejor a peor, separadas en **favorables**
-(puntuación ≥ 0,35) y **a evitar** (≤ −0,35). No hay que elegir universo ni
-configurar nada — se filtra por sector si se quiere, y cada fila se despliega
-para ver de dónde sale la puntuación.
+La app abre con una lista única de acciones a tomar hoy, no con un tablero que
+haya que interpretar. Las vistas son **Comprar**, **Vigilar**, **Mi cartera** y
+**Todas**, y abre en Comprar. No hay que elegir universo ni configurar nada — se
+filtra por sector o se busca por ticker, y cada fila se despliega para ver los
+niveles concretos y de dónde sale la puntuación.
 
 ### Mercados
 
@@ -212,11 +218,12 @@ de Finnhub, y la única fuente sería yfinance, que el proyecto admite como
 respaldo pero no como fuente única de un mercado entero. La vista **Acciones**
 sí analiza cualquier ticker que la fuente reconozca, esté o no en los universos.
 
-**Las tres franjas se pueden ver.** Favorables, neutrales y a evitar: la lista
-lleva las tres, con buscador por ticker o nombre. Casi la mitad del S&P 500 cae
-en la franja neutral, y si no se pudiera consultar, buscar una empresa concreta
-y no encontrarla parecería que el modelo no la cubre cuando en realidad la ha
-puntuado y ha salido del montón.
+**Nada queda inalcanzable.** Las vistas por acción son un filtro, no un recorte:
+**Todas** lleva el universo entero —favorables, neutrales y a evitar— con
+buscador por ticker o nombre. Casi la mitad del S&P 500 cae en la franja neutral,
+y si no se pudiera consultar, buscar una empresa concreta y no encontrarla
+parecería que el modelo no la cubre cuando en realidad la ha puntuado y ha salido
+del montón.
 
 **Los mercados son vistas, no particiones.** El NASDAQ se solapa con el S&P 500
 (unas 150 empresas) y eso es correcto: se mira un mercado cada vez, y una
@@ -277,12 +284,87 @@ subordinadas de Algonquin y no su acción, e `IOT` (Samsara) es estadounidense
 pese a figurar como canadiense. `universes_meta.json` guarda la procedencia y
 la fecha, y la UI muestra cuándo se actualizó el universo.
 
-**Qué significa «favorable», y qué no.** Que una empresa encabece la lista
-significa que puntúa mejor que sus comparables *de su propio sector* en valor,
-calidad y momentum. No significa que vaya a subir, ni que convenga comprarla:
-eso depende de la cartera, el horizonte y la tolerancia al riesgo de cada uno.
-La lista sirve para decidir **qué mirar primero**, no qué comprar — y la app lo
-dice en pantalla, no en la letra pequeña.
+## Motor de decisión: qué comprar, a qué precio y cuándo vender
+
+La puntuación dice *cuál* mira primero. El motor de decisión
+(`backend/app/analysis/decision.py`) dice **qué hacer con ella**: una acción
+concreta, sus niveles y los disparadores que la cancelan. Es la diferencia
+entre un ranking y una herramienta que se puede ejecutar.
+
+### Las reglas, completas
+
+Solo son ocho condiciones y están todas aquí. Si una es mala, se ve y se
+cambia — no hay criterio discrecional escondido.
+
+**Si no tienes la empresa:**
+
+| Condición | Acción |
+|---|---|
+| Puntuación ≤ −0,35 | **Evitar** — queda por detrás de sus comparables de sector |
+| Puntuación ≥ +0,35 **y** cotiza sobre su media de 200 sesiones | **Comprar** |
+| Puntuación ≥ +0,35 pero por debajo de la media de 200 | **Vigilar** — buena empresa en tendencia bajista |
+| Entre ambos umbrales | **Sin acción** |
+
+El filtro de la media de 200 sesiones es el que evita el error caro de este
+tipo de modelo: comprar algo *barato porque sigue cayendo*. Una empresa puede
+puntuar excelente en valor precisamente porque el mercado la está descontando
+por algo que los estados financieros aún no reflejan. La regla no la descarta,
+la manda a **Vigilar** y espera a que el precio recupere la media.
+
+«Sin acción» es un estado propio y no un sinónimo de «Vigilar»: casi la mitad
+del S&P 500 cae en la franja neutral, y meterla en la lista de espera la
+volvería inútil. Vigilar es para empresas buenas esperando que gire la
+tendencia, no para el montón.
+
+**Si ya la tienes** (el motor cruza la lista con tus posiciones abiertas del
+Portafolio):
+
+| Condición | Acción |
+|---|---|
+| Puntuación ≤ −0,35 | **Vender** — la razón por la que la compraste ya no se sostiene |
+| Precio ≤ stop calculado sobre **tu precio de coste** | **Vender** |
+| Cotiza bajo su media de 200 sesiones | **Reducir** |
+| Resto | **Mantener**, con tu P&L sobre el precio de compra |
+
+### Los niveles: stop, objetivo y tamaño
+
+Toda propuesta de compra viene con su salida ya definida. Se calculan así:
+
+- **Zona de entrada:** ±2 % sobre el último cierre. Perseguir un precio que ya
+  se escapó cambia la relación riesgo/beneficio de la operación.
+- **Stop:** 2 desviaciones mensuales (volatilidad diaria de 63 sesiones ×
+  √21), acotado entre **8 % y 25 %**. Un stop fijo del 10 % para una utility y
+  para una biotech no protege de nada: en una es imposible de tocar y en la
+  otra salta con el ruido de un martes cualquiera.
+- **Objetivo:** el doble del stop (ratio 1:2). Con esa relación no hace falta
+  acertar más de la mitad de las veces para no perder dinero.
+- **Peso sugerido:** el que hace que **saltar el stop cueste el 1 % de la
+  cartera**. Stop lejano → posición pequeña. Así una idea equivocada cuesta lo
+  mismo que cualquier otra, y el tamaño lo fija el riesgo en vez de la
+  convicción. Es un **porcentaje de la cartera, no un número de acciones**: la
+  app no sabe cuánto dinero tienes y no va a fingir que sí.
+
+Cada fila desplegada muestra además **cuándo actuar**: la lista de
+disparadores que ejecutan o cancelan la idea (comprar en este rango, salir
+bajo este precio, tomar beneficios en este otro, revisar si pierde la media).
+
+### La advertencia que no se quita
+
+Cada decisión lleva un campo `confidence` con dos valores posibles:
+**calibrada** si el backtest tiene muestra suficiente para publicar una
+probabilidad en ese rango de puntuación, y **sin calibrar** si no. Hoy, sin
+haber ejecutado el backtest, casi todas salen sin calibrar, y la UI lo dice
+encima de los niveles:
+
+> Reglas mecánicas todavía sin validar contra histórico: ejecuta el backtest en
+> Señales para saber si han funcionado. Que sean razonables no significa que
+> acierten.
+
+Son reglas defendibles —dimensionar el stop por volatilidad, no comprar contra
+la tendencia, arriesgar lo mismo en cada idea—, pero *razonable* y *validado*
+no son lo mismo, y la app no usa una palabra por la otra. Que el sistema te
+diga «Comprar» significa que se cumplen unas condiciones escritas, no que la
+empresa vaya a subir.
 
 ## Motor de señales cuantitativas
 
@@ -324,11 +406,13 @@ devuelve lo puntuado y se reporta lo que quedó fuera.
 Los universos **sectoriales** dan comparaciones más limpias: contrastar el P/E
 de un banco con el de una tecnológica distorsiona el factor valor.
 
-**Etiquetas deliberadamente no accionables** — *muy favorable / favorable /
-neutral / desfavorable / muy desfavorable*, nunca "comprar" o "vender". La
-señal describe cómo puntúa la empresa en el modelo; qué hacer con tu dinero
-depende de tu cartera, tu horizonte y tu tolerancia al riesgo, que el modelo
-no conoce.
+**Este módulo puntúa; no decide.** Sus etiquetas siguen siendo *muy favorable /
+favorable / neutral / desfavorable / muy desfavorable*: describen cómo queda la
+empresa frente a sus comparables, y nada más. Convertir eso en «comprar» o
+«vender» es trabajo del [motor de decisión](#motor-de-decisión-qué-comprar-a-qué-precio-y-cuándo-vender),
+que añade el filtro de tendencia, los niveles y el tamaño. La separación
+importa: así se puede cambiar un umbral de decisión sin tocar el modelo de
+factores, y saber cuál de los dos falló cuando algo sale mal.
 
 ### Papel del LLM
 
