@@ -176,13 +176,46 @@ export function expectedPoints(
 // 2000s, 11.93 from 2010. A distribution this stable is worth trusting.
 
 /**
- * Spread of the margin around its prediction, in points.
+ * Spread of the margin around its prediction, in points — the FALLBACK.
  *
  * This is NOT the spread of margins in general (12.9): it is the spread of what
  * the model gets WRONG, which is smaller because the rating explains some of it.
  * Using the raw figure would make every forecast less confident than it earned.
+ *
+ * ===========================================================================
+ * WHY IT IS NOW MEASURED PER LEAGUE INSTEAD OF FROZEN HERE
+ * ===========================================================================
+ * 11.7 was measured on an archive that ended in June 2015. Once the current seasons
+ * arrived the residual turned out not to be a constant at all — it is a trend:
+ *
+ *     todo el archivo   12.00
+ *     desde 2006        12.47
+ *     desde 2015        13.35
+ *     desde 2020        14.00
+ *
+ * The modern NBA plays faster and shoots more threes, so margins really are wider.
+ * At 11.7 only 61.3 % of margins land inside ±1σ where a normal says 68.3 %, and
+ * 90.3 % inside ±2σ against 95.4 %. That is not a rounding error, it is the wrong
+ * curve — and the card prints that curve as its margin bands.
+ *
+ * THE ONE ARGUMENT AGAINST, stated because it is real: on the Brier of covering a
+ * half-point handicap set at the MODEL'S OWN line, 11.7 wins at five of six
+ * walk-forward cut points, by about 0.0003. That metric only probes the centre of the
+ * distribution, where the CDF is nearly straight and a narrower σ happens to push the
+ * quote further from 50 %. Fixing a seven-point coverage error is worth 0.0003 of
+ * Brier on one particular line.
+ *
+ * So the shipped value is measured from recent seasons at recompute time and stored
+ * per league — see `measureMarginSigma` in ratings.ts. Any constant would be stale
+ * again in three years, because the thing it describes is moving. This remains the
+ * fallback for a league with too few games to measure.
  */
 export const MARGIN_SIGMA = 11.7;
+
+/** Seasons of history the measured σ is fitted on. */
+export const SIGMA_SEASONS = 6;
+/** Below this, a measured σ is noise and the fallback is better. */
+export const SIGMA_MIN_GAMES = 1500;
 
 /**
  * Spread of the total around its prediction, in points.

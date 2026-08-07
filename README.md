@@ -223,19 +223,57 @@ Detalles y todas las mediciones en **[docs/NFL.md](docs/NFL.md)**.
 
 | Tipo | Fuente | Por qué |
 |------|--------|---------|
-| Histórico ATP | [Tennismylife `TML-Database`](https://github.com/Tennismylife/TML-Database) | Gratis, sin API key, partido a partido desde 1968 hasta la temporada actual, con superficie, ronda, sets, estadísticas de saque/quiebre **y el ranking oficial de cada jugador en cada partido**. Mismo formato de columnas que el dataset clásico de Jeff Sackmann. |
+| Histórico ATP | [Tennismylife `TML-Database`](https://github.com/Tennismylife/TML-Database) | Gratis, sin API key, partido a partido desde 1968, con superficie, ronda, sets, estadísticas de saque/quiebre **y el ranking oficial de cada jugador en cada partido**. Mismo formato de columnas que el dataset clásico de Jeff Sackmann. **Ojo: el repo de GitHub se congeló en enero de 2026** — su propio README dice que la base viva se movió a `stats.tennismylife.org`, que no es GitHub. Así que llega a 2026-01-17 y ahí se queda. |
 | Histórico WTA | [tennis-data.co.uk](http://www.tennis-data.co.uk/alldata.php) | Los repos `JeffSackmann/tennis_atp` y `tennis_wta` dejaron de estar accesibles (404) y TML solo cubre ATP, así que la WTA viene de aquí: un `.xlsx` por temporada, gratis y sin API key, con superficie, ronda, marcador set a set, ranking y puntos. **Además trae las cuotas de cierre de cada partido.** No tiene estadísticas de saque. |
 | Cuotas históricas | [tennis-data.co.uk](http://www.tennis-data.co.uk/alldata.php) | Cuotas de cierre partido a partido (promedio entre casas). Es lo que permite medir de verdad si el modelo le gana al mercado — ver `npm run backtest -- --market`. |
 | Datos de jugador | Incluidos en el histórico | Ranking oficial + puntos, país y mano. (El ATP Tour no ofrece API pública, y hacer scraping de su web sería frágil y de legalidad dudosa.) |
 | Odds | [The Odds API](https://the-odds-api.com) | Cuotas head-to-head de partidos próximos, **de tenis y de baloncesto**, con la misma key. Plan gratuito (500 req/mes). |
 | Resultados de baloncesto | [ESPN API pública](https://site.api.espn.com) | Gratis y sin key. Cubre NBA, WNBA y NCAA (M y F). |
 | Histórico NBA profundo | [FiveThirtyEight `nba-elo`](https://github.com/fivethirtyeight/data/tree/master/nba-elo) | 59.008 partidos reales 1946–2015. Con esto se **ajusta y valida** el modelo de baloncesto; termina en 2015, así que nunca es la fuente de los ratings de hoy. Detalles en [docs/BASKETBALL.md](docs/BASKETBALL.md). |
+| Baloncesto: **temporada actual sin depender de ESPN** | [sportsdataverse `hoopR-nba-data`](https://github.com/sportsdataverse/hoopR-NBA-data) | Espejo del calendario de ESPN en un CSV público, 2002 → hoy. Cierra el hueco de once años que dejaba 538 **sin necesitar más que GitHub**: con esto el archivo llega a junio de 2026 en vez de junio de 2015. Cuesta una descarga de 37 MB la primera vez (un solo CSV con todas las temporadas), luego caché de 24 h. |
 | Fútbol: resultados + cuotas 1X2 | [football-data.co.uk](https://www.football-data.co.uk) | Fuente principal de fútbol: temporadas actuales de las grandes ligas **con cuotas de cierre 1X2**. |
-| Fútbol: histórico para ajustar | [footballcsv](https://github.com/footballcsv) | ~20 temporadas de Inglaterra, España y Alemania en GitHub. Es con lo que se ajustó y validó el modelo. |
+| Fútbol: **resultados hasta la temporada actual** | [openfootball/football.json](https://github.com/openfootball/football.json) | La fuente principal de resultados de fútbol. Gratis, sin key, solo GitHub, y llega a mayo de 2026. Añadió Serie A, Ligue 1, Eredivisie, Primeira, Liga MX y Argentina, que antes no tenían modelo: de 4 a 10 ligas con Elo y de 19.483 a 21.591 partidos. Trae también el marcador al descanso. |
+| Fútbol: histórico para ajustar | [footballcsv](https://github.com/footballcsv) | El espejo con el que se ajustó y validó el modelo. **Ya solo se usa como último recurso: se quedó en la temporada 2020-21.** |
 | Fútbol: plantillas y lesionados | [vaastav/Fantasy-Premier-League](https://github.com/vaastav/Fantasy-Premier-League) | Solo Premier League: minutos, goles y asistencias esperados por 90, y el parte de bajas del día. Dominio público, sin key. |
 | Béisbol: histórico **con abridores** | [Retrosheet](https://www.retrosheet.org) vía [chadwickbureau/retrosheet](https://github.com/chadwickbureau/retrosheet) | 37.262 partidos de MLB (2010–2025) con el abridor de cada uno. El marcador se cuenta de las jugadas y se verifica con `npm run verify:bsb`. |
 | Béisbol: temporada en curso + abridores anunciados | [MLB Stats API](https://statsapi.mlb.com) | Gratis y sin clave. Retrosheet publica al acabar la temporada, así que sin esto los Elo irían un año atrasados. |
 | Fútbol americano: resultados, **líneas de cierre** y calendario | [nflverse/nfldata](https://github.com/nflverse/nfldata) | 7.276 partidos (1999–2025) con el spread y el total de cierre en el 100 % y el moneyline desde 2006 — lo que convierte «¿es bueno el modelo?» en una comparación contra el precio real. Trae también el calendario de la temporada siguiente, así que la pestaña funciona sin API key. |
+
+
+### ¿Hasta cuándo llega cada deporte?
+
+Medido en agosto de 2026, con todo actualizado desde este repositorio:
+
+| Deporte | Último partido en la base | ¿Está al día? |
+|---|---|---|
+| ⚽ Fútbol | 2026-05-24 | **Sí.** Las grandes ligas europeas acabaron en mayo; la siguiente temporada arranca en agosto. |
+| 🏀 Baloncesto | 2026-06-14 | **Sí.** Final de la NBA. La siguiente arranca en octubre. |
+| 🏈 NFL | 2026-02-08 | **Sí.** Super Bowl LX. La temporada 2026 arranca en septiembre. |
+| 🎾 Tenis (ATP) | 2026-01-17 | **No: le faltan ~7 meses.** Ver abajo. |
+| 🎾 Tenis (WTA) | sin datos | **No.** Ver abajo. |
+| ⚾ Béisbol | 2025-09-28 | **No: la temporada 2026 se está jugando ahora.** Retrosheet publica al terminar la temporada; el hueco lo cubre la MLB Stats API, que no es GitHub. |
+
+Los tres primeros están al día de verdad: no es que la descarga fallara, es que
+esos deportes están en su parón entre temporadas.
+
+**Por qué el tenis y el béisbol no.** No es un problema de red ni de este código:
+
+* `JeffSackmann/tennis_atp` y `tennis_wta` — el dataset estándar del tenis, sobre el
+  que se diseñó esta app — **ya no existen**. Devuelven 404, y no es un bloqueo: otro
+  repo de la misma cuenta (`tennis_MatchChartingProject`) sí responde.
+* `Tennismylife/TML-Database`, que lo reemplazó para ATP, **se congeló en enero de
+  2026**: su README dice que la base viva se movió a su web, que no es GitHub. Y nunca
+  cubrió WTA.
+* Retrosheet publica los partidos de béisbol **al acabar** la temporada, por diseño.
+
+Lo que sí llega a la temporada en curso, desde tu máquina, son fuentes que **no**
+están en GitHub y que este sandbox no alcanza: `tennis-data.co.uk` (ATP **y** WTA, con
+cuotas de cierre) y `statsapi.mlb.com` (béisbol). Las dos están ya implementadas y
+`npm run update-data` / `update-data:bsb` las intentan solas. Desde una red normal
+deberían completar los dos huecos sin que toques nada.
+
+Mientras estén incompletos, la app **lo dice en la propia pestaña** con un aviso
+ámbar que indica cuántos meses de retraso lleva el historial; no finge estar al día.
 
 ---
 

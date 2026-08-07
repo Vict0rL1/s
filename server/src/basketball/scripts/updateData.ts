@@ -21,6 +21,7 @@ import { getDb, setMeta } from '../../db.ts';
 import { basketballConfig } from '../../config.ts';
 import { ingestEspnLeague } from '../ingest/espn.ts';
 import { ingestFiveThirtyEight } from '../ingest/fivethirtyeight.ts';
+import { ingestHoopr } from '../ingest/hoopr.ts';
 import { refreshBasketballOdds } from '../ingest/odds.ts';
 import { recomputeBasketballRatings } from '../ratings.ts';
 import { countGames, countTeams, getLeagueLatestDate } from '../repo.ts';
@@ -128,18 +129,44 @@ async function main() {
       }
     }
 
-    // Fallback (or explicit --source 538): real NBA history, but only to 2015.
+    // Fallbacks, in the order that leaves the ratings least stale.
     if (league.id === 'nba') {
+      let got = 0;
+      // FiveThirtyEight FIRST, and the order is load-bearing. It carries the deep
+      // history the model was fitted on (1946-2015) AND it establishes the canonical
+      // team ids — hoopR then resolves its own spellings into them rather than
+      // creating a second copy of every franchise. Reversing these two split the NBA
+      // into 98 teams; see basketball/ingest/teamNames.ts.
       try {
         const res = await ingestFiveThirtyEight();
         console.log(
           `  FiveThirtyEight: ${res.games} partidos reales (${res.from}–${res.to}), ${res.teams} franquicias`,
         );
-        total += res.games;
+        got += res.games;
       } catch (e) {
         console.warn(`  ⚠️  ${(e as Error).message}`);
-        failed.push(league.id);
       }
+      // Then hoopR, which is ESPN's own schedule mirrored into GitHub — so it reaches
+      // the CURRENT season on a network that blocks ESPN itself. Before this existed,
+      // a blocked ESPN dropped the tab all the way back to 2015.
+      if (source !== '538') {
+        try {
+          const res = await ingestHoopr({ fromSeason: 2003 });
+          if (res.games > 0) {
+            console.log(
+              `  hoopR (GitHub, fuente ESPN): ${res.games} partidos, ` +
+                `temporadas ${res.seasons[0]}–${res.seasons[res.seasons.length - 1]}` +
+                ` — hasta ${res.through}` +
+                (res.unmatched > 0 ? `  ⚠️  ${res.unmatched} sin emparejar` : ''),
+            );
+            got += res.games;
+          }
+        } catch (e) {
+          console.warn(`  ⚠️  hoopR falló: ${(e as Error).message}`);
+        }
+      }
+      if (got === 0) failed.push(league.id);
+      total += got;
     } else {
       failed.push(league.id);
     }

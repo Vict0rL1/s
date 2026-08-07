@@ -14,7 +14,7 @@
 // bug, never a tuning question.
 
 import { baseballConfig, basketballConfig, footballConfig, nflConfig } from '../config.ts';
-import { getDb } from '../db.ts';
+import { getDb, getMeta } from '../db.ts';
 
 import { buildFootballPrediction } from '../football/predict.ts';
 import { listTeams as fbTeams, listUpcoming as fbUpcoming } from '../football/repo.ts';
@@ -23,6 +23,7 @@ import { buildBaseballPrediction } from '../baseball/predict.ts';
 import { listTeams as bsbTeams, listUpcoming as bsbUpcoming } from '../baseball/repo.ts';
 
 import { buildGamePrediction } from '../basketball/predict.ts';
+import { SIGMA_MIN_GAMES } from '../basketball/elo.ts';
 import { listTeams as bbTeams, listUpcoming as bbUpcoming } from '../basketball/repo.ts';
 
 import { buildPrediction as buildNflPrediction } from '../nfl/predict.ts';
@@ -32,7 +33,7 @@ import { coverProbability, buildDistribution, MAX_MARGIN } from '../nfl/model.ts
 import { buildPrediction } from '../model/predict.ts';
 import { listUpcoming as tennisUpcoming } from '../repo.ts';
 import { listParkFactors } from '../baseball/parkFactors.ts';
-import { freshSince } from '../freshness.ts';
+import { DEMO_SOURCE, freshSince } from '../freshness.ts';
 
 // ---------------------------------------------------------------------------
 let checks = 0;
@@ -573,12 +574,17 @@ function auditNfl(): void {
 // ---------------------------------------------------------------------------
 // Upcoming rows: shared shape checks
 // ---------------------------------------------------------------------------
-function auditUpcoming(sport: string, rows: { id: string; commence_time: string }[]): void {
+function auditUpcoming(
+  sport: string,
+  rows: { id: string; commence_time: string }[],
+): void {
   const ids = new Set<string>();
-  // A few hours of slack: a game that kicked off an hour ago is still the one the
-  // reader is looking at, and dropping it mid-match would be worse than keeping
-  // it. A day-old fixture is stale data.
-  const cutoff = Date.now() - 6 * 3600_000;
+  // The SAME cutoff the reader's list uses, taken from freshness.ts rather than
+  // rewritten here. This check used to keep its own `now - 6h`, which is stricter
+  // than the display rule (min(today 00:00, now - 6h)) — so it failed on ten
+  // perfectly valid rows and hid the one row that was genuinely wrong. An audit
+  // that reimplements the rule it audits is testing itself.
+  const cutoff = Date.parse(freshSince());
   let past = 0;
   for (const r of rows) {
     check(`${sport}: id de partido único`, !ids.has(r.id), r.id);
@@ -638,6 +644,7 @@ function auditWindow(): void {
   section('Ventana de partidos');
   const db = getDb();
   const since = freshSince();
+  const nowIso = new Date().toISOString();
   const tables: [string, string][] = [
     ['fútbol', 'fb_upcoming'],
     ['baloncesto', 'bb_upcoming'],
@@ -660,11 +667,104 @@ function auditWindow(): void {
       !row.oldest || row.oldest >= since,
       `más antiguo ${row.oldest}, ventana desde ${since}`,
     );
+    // Checked HERE and not in auditUpcoming, because the reader's query already
+    // filters these out — asserting it there would be asserting the filter against
+    // itself and could never fail. This looks at the raw table, which is the only
+    // place a stale demo row can still be seen.
+    //
+    // A demo row that has started is invented AND finished: there is no result to
+    // wait for, so nothing should ever carry it over. Its presence means either the
+    // pruning missed the demo case or the slate has not been refreshed since it
+    // aged out — and the reader would have seen a 14:00 kick-off filed under today
+    // at 20:00 that resolves to nothing.
+    const demo = db
+      .prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE source = ? AND commence_time < ?`)
+      .get(DEMO_SOURCE, nowIso) as unknown as { c: number };
+    check(
+      `${label}: ningún partido demo con hora ya pasada`,
+      demo.c === 0,
+      `${demo.c} filas demo antes de ${nowIso}`,
+    );
   }
   console.log(`  ${n} tablas comprobadas contra la ventana (desde ${since})`);
 }
 
 // ---------------------------------------------------------------------------
+/**
+ * Every sport that HAS data must record where it came from.
+ *
+ * This exists because of a bug that produced no error at all: `resetData()`, which the
+ * TENNIS ingest calls, finished with `DELETE FROM meta` — and `meta` is the one table
+ * all five sports share. So `npm run update-data` erased football's, basketball's,
+ * baseball's and the NFL's provenance. Every other tab went back to reading "origen sin
+ * registrar" with no refresh time, and basketball lost its measured margin σ and fell
+ * back to the frozen constant, which is a genuinely worse model. Nothing was logged.
+ *
+ * The property asserted is the one that broke: if a sport's games table has rows,
+ * SOMETHING ingested them, so its source key must exist. It cannot be phrased as
+ * "the key exists" alone — on a fresh clone a sport with no data legitimately has no
+ * key, so the count is what makes the check meaningful rather than merely annoying.
+ */
+function auditProvenance(): void {
+  section('Procedencia de los datos');
+  const db = getDb();
+  const sports: { label: string; table: string; sourceKey: string; timeKey: string }[] = [
+    { label: 'fútbol', table: 'fb_matches', sourceKey: 'fb_data_source', timeKey: 'fb_updated_at' },
+    { label: 'baloncesto', table: 'bb_games', sourceKey: 'bb_data_source', timeKey: 'bb_updated_at' },
+    { label: 'béisbol', table: 'bsb_games', sourceKey: 'bsb_data_source', timeKey: 'bsb_updated_at' },
+    { label: 'tenis', table: 'matches', sourceKey: 'data_source', timeKey: 'updated_at' },
+  ];
+  let n = 0;
+  for (const sp of sports) {
+    const rows = (db.prepare(`SELECT COUNT(*) AS c FROM ${sp.table}`).get() as { c: number }).c;
+    if (rows === 0) {
+      console.log(`  ${sp.label}: sin datos, saltado`);
+      continue;
+    }
+    n++;
+    check(
+      `${sp.label}: ${rows.toLocaleString('es')} partidos pero sin origen registrado`,
+      !!getMeta(sp.sourceKey),
+      `falta ${sp.sourceKey} — la pestaña dirá "origen sin registrar"`,
+    );
+    check(
+      `${sp.label}: sin fecha de actualización`,
+      !!getMeta(sp.timeKey),
+      `falta ${sp.timeKey}`,
+    );
+  }
+
+  // The NFL writes its own key shape, and its per-league model constants live in meta
+  // too — losing those is how a tab starts predicting with defaults it never chose.
+  const nafGames = (db.prepare('SELECT COUNT(*) AS c FROM naf_games').get() as { c: number }).c;
+  if (nafGames > 0) {
+    n++;
+    check('fútbol americano: sin fecha de actualización', !!getMeta('naf:updatedAt'));
+    check(
+      'fútbol americano: ventaja de campo medida presente',
+      getMeta('naf:nfl:homeAdvantage') !== null,
+      'falta naf:nfl:homeAdvantage',
+    );
+  }
+
+  // And basketball's measured margin σ, which is the value the handicap is quoted
+  // with. Its absence is not an error — a league with too few games has none by
+  // design — but for a league with a full archive it means the recompute did not run
+  // or its meta row was wiped.
+  const nbaGames = (
+    db.prepare("SELECT COUNT(*) AS c FROM bb_games WHERE league = 'nba'").get() as { c: number }
+  ).c;
+  if (nbaGames > SIGMA_MIN_GAMES) {
+    check(
+      'baloncesto: σ del margen medida presente para la NBA',
+      !!getMeta('bb_margin_sigma_nba'),
+      `${nbaGames.toLocaleString('es')} partidos en la base pero sin bb_margin_sigma_nba: ` +
+        'el hándicap saldría con la σ de reserva',
+    );
+  }
+  console.log(`  ${n} deportes con datos comprobados`);
+}
+
 function main(): void {
   console.log('\n🔍 Auditoría de consistencia\n' + '='.repeat(46));
   console.log(
@@ -672,6 +772,7 @@ function main(): void {
       'Un fallo aquí es un bug, nunca una cuestión de ajuste.',
   );
 
+  auditProvenance();
   auditWindow();
   auditFootball();
   auditBaseball();

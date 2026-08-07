@@ -29,7 +29,6 @@ import {
   restAdjustment,
   HOME_ADVANTAGE,
   LONG_LAYOFF_DAYS,
-  MARGIN_SIGMA,
   TOTAL_SIGMA,
   type MarginBand,
 } from './elo.ts';
@@ -45,6 +44,7 @@ import {
   getLastGameDate,
   getLeagueAverageScore,
   getLeagueLatestDate,
+  getMarginSigma,
   getMeetings,
   getRating,
   getRecentGames,
@@ -431,15 +431,22 @@ export function buildGamePrediction(
     projHome != null && projAway != null
       ? Math.round((projHome + projAway) * 2) / 2 + 0.5
       : null;
+  // Measured from recent seasons, not the frozen constant — and read ONCE, so the
+  // handicap, the bands and the σ printed on the card can never describe three
+  // different distributions.
+  const marginSigma = getMarginSigma(league);
   const distribution = {
-    marginSigma: MARGIN_SIGMA,
+    // Reported EXACTLY as used, not rounded again: the stored value already carries
+    // two decimals, and re-rounding to 14.1 here while `coverProbability` below runs
+    // on 14.14 would publish a σ that does not reproduce the probabilities beside it.
+    marginSigma,
     totalSigma: TOTAL_SIGMA,
     spreadLine: round1(spreadLine),
-    homeCovers: round5(coverProbability(margin, spreadLine)),
+    homeCovers: round5(coverProbability(margin, spreadLine, marginSigma)),
     totalLine,
     over: totalLine != null ? round5(overProbability(projHome! + projAway!, totalLine)) : null,
     under: totalLine != null ? round5(1 - overProbability(projHome! + projAway!, totalLine)) : null,
-    bands: marginBands(margin),
+    bands: marginBands(margin, marginSigma),
   };
 
   let marketProbs: MarketProbabilities | null = null;

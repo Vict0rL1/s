@@ -20,6 +20,7 @@ import { pruneUpcoming } from '../../freshness.ts';
 import { basketballConfig, env } from '../../config.ts';
 import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
 import { demoKickoffs } from '../../demoSchedule.ts';
+import { buildNameIndex, resolve } from './teamNames.ts';
 import { homeWinProbability } from '../elo.ts';
 import type { LeagueId } from '../types.ts';
 
@@ -104,68 +105,6 @@ async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
       books: (ev.bookmakers ?? []).length,
     };
   });
-}
-
-// ---------------------------------------------------------------------------
-// Team-name resolution (odds feed names → our team slugs)
-// ---------------------------------------------------------------------------
-function normalize(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[.'-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/**
- * Index of a league's teams by several spellings, because feeds disagree:
- * "Los Angeles Lakers", "LA Lakers" and "Lakers" all mean one team. Matching on
- * the full name plus the last word (the nickname) covers the realistic cases
- * without fuzzy matching, which would happily confuse the two Los Angeles teams.
- */
-function buildNameIndex(league: LeagueId): Map<string, string> {
-  const rows = getDb()
-    .prepare('SELECT id, name, abbreviation, location FROM bb_teams WHERE league = ?')
-    .all(league) as unknown as {
-    id: string;
-    name: string;
-    abbreviation: string | null;
-    location: string | null;
-  }[];
-  const idx = new Map<string, string>();
-  const add = (key: string, id: string) => {
-    const k = normalize(key);
-    if (!k) return;
-    // First writer wins: never let a nickname collision silently overwrite a
-    // full-name match.
-    if (!idx.has(k)) idx.set(k, id);
-  };
-  for (const r of rows) add(r.name, r.id);
-  for (const r of rows) {
-    if (r.abbreviation) add(r.abbreviation, r.id);
-    // Nickname = the name minus its location prefix.
-    if (r.location && r.name.startsWith(r.location)) {
-      add(r.name.slice(r.location.length).trim(), r.id);
-    } else {
-      const words = r.name.split(/\s+/);
-      if (words.length > 1) add(words[words.length - 1], r.id);
-    }
-  }
-  return idx;
-}
-
-function resolve(idx: Map<string, string>, name: string): string | null {
-  const n = normalize(name);
-  if (idx.has(n)) return idx.get(n)!;
-  // "LA Clippers" vs "Los Angeles Clippers": try the trailing nickname.
-  const words = n.split(' ');
-  for (let take = 1; take <= Math.min(2, words.length - 1); take++) {
-    const tail = words.slice(words.length - take).join(' ');
-    if (idx.has(tail)) return idx.get(tail)!;
-  }
-  return null;
 }
 
 // ---------------------------------------------------------------------------

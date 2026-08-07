@@ -287,13 +287,30 @@ npm run backtest                      # con calibración (lo que usa la app)
 npm run backtest -- --calibration 1   # curva Elo cruda, para comparar
 ```
 
-### Resultado medido (ATP, 22.062 partidos out-of-sample, 2015–2026)
+### Resultado medido (ATP, 46.166 partidos out-of-sample, 2005–2026)
 
 | Métrica | Valor | Referencia |
 |---|---|---|
-| **Accuracy** (acierta al favorito) | **65.2%** | Decir siempre "gana el mejor rankeado": 63.6% |
-| **Brier score** | **0.2140** | 0 = perfecto · 0.25 = decir siempre 50/50 |
-| **Log loss** | **0.6151** | 0.693 = decir siempre 50/50 |
+| **Accuracy** (acierta al favorito) | **67.0 %** | Decir siempre «gana el mejor clasificado»: 64.8 % |
+| **Brier score** | **0.2072** | 0 = perfecto · 0.25 = decir siempre 50/50 |
+| **Log loss** | **0.5994** | 0.693 = decir siempre 50/50 |
+
+Lo interesante no es el 67 %, es **dónde** se separa del ranking. En los 9.234 partidos
+(20 % del total) en los que el modelo **no** coincide con el ranking oficial, acierta
+**55,4 %** frente al 44,6 % del ranking. Ahí es donde el Elo por superficie, la forma y
+el descanso aportan algo que la clasificación no contiene.
+
+Y la calibración sostiene el semáforo de fiabilidad que muestra la app, que hasta ahora
+era una afirmación sin medir:
+
+| Fiabilidad declarada | n | Accuracy | Brier | Banda media |
+|---|---|---|---|---|
+| alta | 20.619 | 69,1 % | 0,1982 | ±2,3 pp |
+| media | 23.773 | 65,5 % | 0,2137 | ±4,6 pp |
+| baja | 1.774 | 61,6 % | 0,2252 | ±8,5 pp |
+
+Monótona en las tres columnas: cuando la app dice que se fía menos, acierta menos y su
+banda es más ancha. El semáforo mide algo real.
 
 Qué aportaron el margen de victoria, la inactividad y la calibración por formato, sobre esos
 mismos 22.062 partidos:
@@ -444,6 +461,54 @@ estadística**, no una certeza. En particular **no** considera:
 
 El Elo tarda en reaccionar a cambios bruscos de nivel (una lesión superada, un salto de un
 joven) porque promedia el historial. Úsalo como una señal más, no como la única.
+
+
+## De dónde salen los datos de tenis (y por qué el ATP no llega a hoy)
+
+Esto cambió por completo durante el proyecto y conviene dejarlo escrito, porque no es
+un problema de código ni de red:
+
+* **`JeffSackmann/tennis_atp` y `tennis_wta` ya no existen.** Eran el dataset estándar
+  del tenis y aquello sobre lo que se diseñó esta app. Hoy devuelven **404**, y no es un
+  bloqueo de red: otro repo de la misma cuenta (`tennis_MatchChartingProject`) responde
+  con 200 desde el mismo sitio.
+* El ATP se pasó a **`Tennismylife/TML-Database`**: mismo formato de columnas, un CSV
+  por temporada, con el ranking oficial de cada jugador en cada partido. Pero **el repo
+  de GitHub se congeló en enero de 2026** — su propio README dice que la base viva se
+  movió a `stats.tennismylife.org`, que no es GitHub. Así que llega a **2026-01-17**.
+* **TML nunca cubrió WTA.** No queda ninguna fuente de WTA en GitHub.
+
+Lo que sí llega a la temporada en curso es **tennis-data.co.uk**: un `.xlsx` por
+temporada, ATP **y** WTA, y además con las cuotas de cierre. `npm run update-data` ya lo
+intenta como reserva automáticamente. No es alcanzable desde el sandbox donde se
+desarrolló esto, pero sí desde una red normal.
+
+### 12 partidos con estadísticas imposibles
+
+Al ingerir TML de verdad por primera vez, la verificación encontró **12 partidos de
+61.682 (0,02 %)** cuyas estadísticas de saque no pueden existir:
+
+* la final de Lyon 2019 registra **51 primeros saques dentro de 47 puntos al saque**;
+* la final de Montecarlo 2023, un jugador que **salva 13 puntos de break habiendo
+  afrontado 1**;
+* y un grupo de la semana de Copa Davis de septiembre de 2025, que parece un scrapeo
+  malo.
+
+La ingesta ahora **descarta el bloque de saque de ese lado** y conserva el partido:
+ganador, marcador, rankings y superficie no están afectados, y son lo que alimenta el
+Elo. Se descarta el lado **entero**, no solo el campo que falla, porque con `svpt=47` y
+`1stIn=51` no hay forma de saber cuál de los dos números es el corrupto — quedarse con
+el que «parece razonable» sería adivinar disfrazado de dato. Y se pone a **NULL**, no a
+cero: el modelo ya trata un dato ausente como desconocido (no existen antes de ~1991),
+mientras que un cero se leería como «no metió ningún ace, no puso ningún primer saque».
+
+`npm run verify:data` comprueba ahora las seis desigualdades que ninguna estadística de
+saque puede violar, en los dos lados, y **exige cero**. Junto con ellas comprueba lo que
+sí puede caer sin que nada más lo note: que el **marcador concuerde con quién figura
+como ganador** (99,93 % de acuerdo en 59.423 partidos completos; el resto son erratas
+sueltas del archivo, no un cambio sistemático) y que el mejor clasificado gane más veces
+que el peor (65,8 %) — por debajo del 50 % significaría que `winner_rank` y `loser_rank`
+están al revés, y eso es invisible para todo lo demás.
 
 ## Nota sobre los datos de demostración
 

@@ -5,9 +5,9 @@
 // side, where that OR let SQLite choose a full scan of the league and turned a
 // 5 ms prediction into 600 ms.
 
-import { getDb } from '../db.ts';
-import { freshSince } from '../freshness.ts';
-import { INITIAL_ELO } from './elo.ts';
+import { getDb, getMeta } from '../db.ts';
+import { freshFilter } from '../freshness.ts';
+import { INITIAL_ELO, MARGIN_SIGMA } from './elo.ts';
 import type {
   GameRow,
   LeagueId,
@@ -60,9 +60,37 @@ export function getEloRank(league: LeagueId, id: string): number {
   return row.rank;
 }
 
-/** League-wide average points per game, for the total-points estimate. */
+/**
+ * League-wide average points per game, for the total-points estimate.
+ *
+ * MEMOISED, because it is a league CONSTANT that was being recomputed once per
+ * prediction. The query is four scans of bb_games — two branches of the UNION, each
+ * with its own `MAX(season)` subquery — and none of it depends on which two teams are
+ * playing.
+ *
+ * That was invisible while the archive stopped in 2015 at ~15k games. Adding hoopR
+ * took it to 86,305, and the same query went to 224 ms: 83 % of the time spent
+ * building a prediction, and 1.8 s of the 2.3 s the basketball tab took to answer
+ * with eight games on the slate. A five-fold increase in data turned a harmless
+ * inefficiency into the slowest thing in the app.
+ *
+ * The cache key includes the newest game date and the row count rather than just the
+ * league, so an ingest inside a live process invalidates it instead of serving an
+ * average from before the update. Both are index reads and cost nothing next to the
+ * scan they replace.
+ */
+const avgScoreCache = new Map<string, number>();
+
 export function getLeagueAverageScore(league: LeagueId): number {
-  const row = getDb()
+  const db = getDb();
+  const stamp = db
+    .prepare('SELECT MAX(game_date) AS d, COUNT(*) AS c FROM bb_games WHERE league = ?')
+    .get(league) as unknown as { d: string | null; c: number };
+  const key = `${league}|${stamp.d}|${stamp.c}`;
+  const hit = avgScoreCache.get(key);
+  if (hit !== undefined) return hit;
+
+  const row = db
     .prepare(
       `SELECT AVG(pts) AS avg FROM (
          SELECT home_pts AS pts FROM bb_games WHERE league = ?
@@ -73,7 +101,11 @@ export function getLeagueAverageScore(league: LeagueId): number {
        )`,
     )
     .get(league, league, league, league) as unknown as { avg: number | null };
-  return row.avg ?? 100;
+  const avg = row.avg ?? 100;
+  // One entry per league in practice; the key only changes when the data does.
+  if (avgScoreCache.size > 32) avgScoreCache.clear();
+  avgScoreCache.set(key, avg);
+  return avg;
 }
 
 export interface RecentGame {
@@ -222,6 +254,23 @@ export function getLeagueLatestDate(league: LeagueId): string | null {
   return row.d;
 }
 
+/**
+ * The margin σ this league's handicap should be quoted with.
+ *
+ * Written by `measureMarginSigma` at recompute time from the last few seasons,
+ * because the width of an NBA margin has drifted from 11.5 to 14.0 over the
+ * archive and a frozen constant describes the wrong decade — see the long note on
+ * MARGIN_SIGMA. Falls back to the constant when the league has too little
+ * history to measure, or when ratings have not been recomputed since the meta key
+ * was introduced (an empty string means "measured and rejected as noise", which
+ * is the same fallback).
+ */
+export function getMarginSigma(league: LeagueId): number {
+  const raw = getMeta(`bb_margin_sigma_${league}`);
+  const n = Number(raw);
+  return raw && Number.isFinite(n) && n > 0 ? n : MARGIN_SIGMA;
+}
+
 /** Full team dossier for the UI. */
 export function getTeamInfo(league: LeagueId, id: string): TeamInfo | null {
   const team = getTeam(league, id);
@@ -280,19 +329,20 @@ export function getPowerRanking(league: LeagueId, limit = 40) {
 }
 
 export function listUpcoming(league?: string): UpcomingGameRow[] {
+  const fresh = freshFilter();
   const db = getDb();
   return (
     league
       ? db
           .prepare(
-            'SELECT * FROM bb_upcoming WHERE league = ? AND commence_time >= ? ORDER BY commence_time ASC, id ASC',
+            `SELECT * FROM bb_upcoming WHERE league = ? AND ${fresh.sql} ORDER BY commence_time ASC, id ASC`,
           )
-          .all(league, freshSince())
+          .all(league, ...fresh.params)
       : db
           .prepare(
-            'SELECT * FROM bb_upcoming WHERE commence_time >= ? ORDER BY commence_time ASC, id ASC',
+            `SELECT * FROM bb_upcoming WHERE ${fresh.sql} ORDER BY commence_time ASC, id ASC`,
           )
-          .all(freshSince())
+          .all(...fresh.params)
   ) as unknown as UpcomingGameRow[];
 }
 

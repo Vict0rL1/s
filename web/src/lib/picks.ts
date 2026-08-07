@@ -101,15 +101,17 @@ export const CAVEATS: Record<string, string> = {
     'Medido sobre 36.235 partidos: Brier 0.2431 y over/under acertado el 54,9 %. El modelo no ' +
     'conoce el bullpen ni la alineación del día, que es justo lo que mueve una cuota a última hora.',
   basketball:
-    'Elo con ventaja de campo, margen y descanso, calibrado sobre 59.004 partidos. No se ha medido ' +
-    'contra las cuotas de cierre.',
+    'Medido sobre 85.562 partidos: acierto 68,1 % y Brier 0.2044, empatado con el modelo que ' +
+    'publicaba FiveThirtyEight en los mismos partidos. El hándicap sale de una σ medida sobre las ' +
+    'últimas temporadas, no de una constante. No se ha medido contra las cuotas de cierre.',
   nfl:
     'Este modelo NO le gana a la línea de cierre: 50,6 % contra el hándicap donde el punto de ' +
     'equilibrio está en 52,4 %. Está medido y dice que no. Trátalo como una segunda opinión, no ' +
     'como una ventaja.',
   tennis:
-    'Elo por superficie, forma y head-to-head. Las bajas de última hora y las retiradas —que en ' +
-    'tenis deciden partidos enteros— no están dentro.',
+    'Medido sobre 46.166 partidos ATP: acierto 67,0 % frente al 64,8 % de fiarse del ranking, y ' +
+    'cuando discrepa del ranking acierta el 55,4 %. Las bajas de última hora y las retiradas —que ' +
+    'en tenis deciden partidos enteros— no están dentro.',
 };
 
 // ---------------------------------------------------------------------------

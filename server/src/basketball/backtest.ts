@@ -15,6 +15,7 @@
 //   --k <n>             base K-factor
 //   --calibration <s>   shrink applied to the rating gap (1 = none)
 //   --eloPerPoint <n>   Elo points per point of expected margin
+//   --sigma <n>         margin σ used for the handicap (default: the measured one)
 //
 // Reported: accuracy, Brier, log loss, calibration, margin error (what a spread
 // bet depends on) and — for the NBA — a head-to-head against FiveThirtyEight's
@@ -33,7 +34,9 @@ import {
   SEASON_CARRYOVER,
 } from './elo.ts';
 import { loadGames, replayGames } from './ratings.ts';
+import { getMarginSigma } from './repo.ts';
 import { parseFiveThirtyEight } from './ingest/fivethirtyeight.ts';
+import type { LeagueId } from './types.ts';
 
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
@@ -93,6 +96,13 @@ function main() {
     return;
   }
   const benchmark = league === 'nba' ? loadBenchmark() : new Map<string, number>();
+  // The σ the app actually quotes, so the cover-Brier below scores what a reader
+  // would be shown rather than a constant nothing uses. `--sigma` overrides it for
+  // comparing candidates. NOTE: the stored σ is fitted on the most recent seasons,
+  // which are inside this backtest's window — so the cover-Brier is in-sample for
+  // σ (and only for σ). The out-of-sample case for it is the walk-forward study
+  // documented on MARGIN_SIGMA, not this line.
+  const quotedSigma = Number(args.sigma) || getMarginSigma(league as LeagueId);
 
   let scored = 0;
   let correct = 0;
@@ -140,7 +150,7 @@ function main() {
       marginResid.push(actualMargin - predictedMargin);
       const line = -(Math.round(predictedMargin * 2) / 2 + 0.5);
       const covered = actualMargin + line > 0 ? 1 : 0;
-      coverBrier += (coverProbability(predictedMargin, line) - covered) ** 2;
+      coverBrier += (coverProbability(predictedMargin, line, quotedSigma) - covered) ** 2;
       coverN++;
 
       const pFav = Math.max(probHome, 1 - probHome);
@@ -184,11 +194,17 @@ function main() {
       const sd = Math.sqrt(
         marginResid.reduce((a, b) => a + (b - mu) ** 2, 0) / marginResid.length,
       );
+      // Coverage measured against the QUOTED σ, not against the residual's own —
+      // the latter is ~68 % by construction and says nothing about whether the
+      // probabilities the app prints are honest. This is the number that caught the
+      // frozen 11.7 covering only 61.3 % of modern games.
       const within = (k: number) =>
-        (marginResid.filter((e) => Math.abs(e - mu) <= k * sd).length / marginResid.length) * 100;
+        (marginResid.filter((e) => Math.abs(e - mu) <= k * quotedSigma).length /
+          marginResid.length) * 100;
       return (
         `\nDistribución del margen (de dónde sale la probabilidad de cubrir):` +
-        `\n  desviación del residuo: ${sd.toFixed(2)} puntos  (la del modelo: ${MARGIN_SIGMA})` +
+        `\n  desviación del residuo: ${sd.toFixed(2)} puntos  (la que cotiza el modelo: ` +
+          `${quotedSigma.toFixed(2)}${quotedSigma === MARGIN_SIGMA ? ', valor de reserva' : ', medida'})` +
         `\n  ±1σ ${within(1).toFixed(1)}% (normal 68.3) · ±2σ ${within(2).toFixed(1)}% (normal 95.4)` +
         `\n  Brier de cubrir el hándicap: ${(coverBrier / coverN).toFixed(4)}   (0.25 = no saber nada)\n`
       );

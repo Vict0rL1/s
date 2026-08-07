@@ -6,7 +6,7 @@
 // loop lives in `replayGames` and the backtest is just a consumer that hooks the
 // per-game callback, so a change to the update rules is measured by construction.
 
-import { getDb } from '../db.ts';
+import { getDb, setMeta } from '../db.ts';
 import {
   calibratedHomeWinProbability,
   carryOver,
@@ -20,6 +20,8 @@ import {
   INITIAL_ELO,
   K_FACTOR,
   SEASON_CARRYOVER,
+  SIGMA_MIN_GAMES,
+  SIGMA_SEASONS,
 } from './elo.ts';
 import type { LeagueId } from './types.ts';
 
@@ -268,6 +270,11 @@ export function recomputeBasketballRatings(): Record<string, number> {
       db.exec('ROLLBACK');
       throw e;
     }
+    // Measured alongside the ratings, from the same model's own errors — see
+    // measureMarginSigma. Stored rather than computed per request, because it needs a
+    // full replay of 86k games.
+    const sigma = measureMarginSigma(league as LeagueId);
+    setMeta(`bb_margin_sigma_${league}`, sigma == null ? '' : String(sigma));
     out[league] = states.size;
   }
   return out;
@@ -275,4 +282,40 @@ export function recomputeBasketballRatings(): Record<string, number> {
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+
+/**
+ * Measure the margin residual's spread from RECENT seasons, per league.
+ *
+ * Why measured and not a constant: see the long note on MARGIN_SIGMA. The short
+ * version is that the figure has drifted from 11.5 to 14.0 as the NBA got faster,
+ * so a constant describes whichever era it was written in.
+ *
+ * Recent seasons only, and that is the whole point — averaging over 1950 tells you
+ * nothing about 2026. Under SIGMA_MIN_GAMES it returns null and the caller keeps the
+ * fallback, because a σ fitted on 200 games is worse than an honest default.
+ */
+export function measureMarginSigma(league: LeagueId): number | null {
+  const games = loadGames(league, 0);
+  if (games.length < SIGMA_MIN_GAMES) return null;
+  const latest = games[games.length - 1].season;
+  const from = latest - SIGMA_SEASONS + 1;
+
+  const resid: number[] = [];
+  replayGames(games, {
+    onGame: ({ game, home, away, predictedMargin }) => {
+      // The same warm-up the backtest uses: a team with five games has a rating that
+      // says little, and its errors would widen σ for reasons that are not the sport.
+      if (home.games < 20 || away.games < 20) return;
+      if (game.season < from) return;
+      resid.push(game.home_pts - game.away_pts - predictedMargin);
+    },
+  });
+  if (resid.length < SIGMA_MIN_GAMES) return null;
+  const mean = resid.reduce((a, b) => a + b, 0) / resid.length;
+  const sd = Math.sqrt(resid.reduce((a, b) => a + (b - mean) ** 2, 0) / (resid.length - 1));
+  // A guard, not a tuning knob: anything outside this is a bug upstream, and a wild
+  // σ would make every probability on the tab meaningless rather than merely wrong.
+  if (!(sd > 6 && sd < 25)) return null;
+  return Math.round(sd * 100) / 100;
 }

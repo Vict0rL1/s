@@ -240,9 +240,44 @@ contradecir** los porcentajes impresos encima de ella.
 | Para qué | Fuente | Notas |
 |---|---|---|
 | Resultados actuales + **cuotas 1X2 históricas** | [football-data.co.uk](https://www.football-data.co.uk) | Fuente principal. Un CSV por temporada y división para las ligas europeas; un CSV por país para MLS, Liga MX, Brasileirão y Argentina. |
-| Histórico para ajustar | [footballcsv](https://github.com/footballcsv) (GitHub) | ~20 temporadas de Inglaterra, España y Alemania, dominio público. Es con lo que se **ajustó y validó** el modelo. Sin cuotas, y va varias temporadas por detrás. |
+| **Resultados hasta la temporada actual** | [openfootball/football.json](https://github.com/openfootball/football.json) (GitHub) | La fuente principal de *resultados*. Solo GitHub, sin key, y llega a **2026-05-24**. Trae también el marcador al descanso. |
+| Histórico para ajustar | [footballcsv](https://github.com/footballcsv) (GitHub) | ~20 temporadas de Inglaterra, España y Alemania, dominio público. Es con lo que se **ajustó y validó** el modelo. **Ya solo es el último recurso: se quedó en 2020-21.** |
 | Partidos próximos + cuotas | [The Odds API](https://the-odds-api.com) | La misma key que tenis y baloncesto. |
 | **Plantillas y lesionados** (solo Premier) | [vaastav/Fantasy-Premier-League](https://github.com/vaastav/Fantasy-Premier-League) (GitHub) | Minutos, titularidades, goles y asistencias esperados por 90, y el parte de bajas del día. Dominio público, sin key. Se refresca aparte con `npm run update-squads:fb`. |
+
+
+### 6.1 Por qué openfootball, y qué cambió
+
+`footballcsv` está muerto a efectos prácticos: su último partido es del **2020-07-26**.
+El modelo estaba ajustado sobre él, así que los Elo describían el fútbol de hace seis
+años. Buscando por qué, resultó que footballcsv se genera a partir de un proyecto que
+**sí** sigue vivo, `openfootball/football.json`, en el mismo GitHub.
+
+Lo que cambió al pasarse:
+
+| | antes | después |
+|---|---|---|
+| Último partido | 2020-07-26 | **2026-05-24** |
+| Ligas con Elo | 4 | **10** |
+| Partidos | 19.483 | **21.591** |
+
+Serie A, Ligue 1, Eredivisie, Primeira, Liga MX y Argentina **no tenían modelo** y
+ahora lo tienen.
+
+Las dos fuentes son **complementarias, no alternativas**: openfootball trae los
+resultados y llega a la temporada actual, pero no trae cuotas; football-data.co.uk trae
+las **cuotas de cierre 1X2** de las que depende la comparación con el mercado. La
+ingesta corre las dos y, al insertar, openfootball no toca las columnas de cuotas.
+
+Y lo que hay que destacar: al reajustar sobre 10 ligas, **el RPS se quedó en 0,2063**
+sobre 17.049 partidos, cinco de esas ligas nunca vistas durante el ajuste. Que el
+número no se mueva al meterle competiciones nuevas es la mejor señal de que el modelo
+generaliza y no estaba sobreajustado a las cuatro originales.
+
+**Los marcadores al descanso se guardan pero todavía NO se modelan.** openfootball los
+trae (`ht_home_goals` / `ht_away_goals`, entre ~2.000 y ~3.600 por liga) y están en la
+tabla. Es lo que haría posible un mercado tipo «gana cualquier mitad» de verdad, medido,
+en vez de inventado — pero mientras no esté medido, no se ofrece.
 
 **Ligas sin fuente de resultados** (Champions League): sus equipos vienen de ligas distintas y su Elo
 vive en cada tabla doméstica, así que un rating compartido necesitaría una calibración entre ligas

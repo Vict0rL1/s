@@ -2,7 +2,7 @@
 // query lives here so the model modules stay pure and testable.
 
 import { getDb } from './db.ts';
-import { freshSince } from './freshness.ts';
+import { freshFilter } from './freshness.ts';
 import { INITIAL_ELO } from './model/elo.ts';
 import type { FormResult } from './model/form.ts';
 import type { H2HMeeting } from './model/h2h.ts';
@@ -455,11 +455,19 @@ export function getPlayerInfo(
           .get(tour, idOrName.toLowerCase()) as unknown as PlayerRow | undefined) ?? null);
   if (!player) return null;
 
+  // Two indexed counts, NOT `(winner_id = ? OR loser_id = ?)` — the same rule this file
+  // states twice above and this one call site missed. With the OR, SQLite cannot use
+  // either of idx_matches_winner / idx_matches_loser and walks the whole tour.
+  //
+  // It cost nothing while the tennis tab ran on the 1,716-match demo seed. On the real
+  // 61,682-match archive it is 89 ms, and the schedule endpoint calls it twice per
+  // match: 27 matches took 4.9 SECONDS to load. Below 2 ms after this change.
   const played = getDb()
     .prepare(
-      'SELECT COUNT(*) AS c FROM matches WHERE tour = ? AND (winner_id = ? OR loser_id = ?)',
+      `SELECT (SELECT COUNT(*) FROM matches WHERE tour = ? AND winner_id = ?)
+            + (SELECT COUNT(*) FROM matches WHERE tour = ? AND loser_id = ?) AS c`,
     )
-    .get(tour, player.id, player.id) as unknown as { c: number };
+    .get(tour, player.id, tour, player.id) as unknown as { c: number };
 
   return {
     id: player.id,
@@ -503,8 +511,9 @@ export function listUpcoming(filter: {
   // Finished matches are dropped here rather than in the interface: with the
   // schedule grouped by day, yesterday's match files under "Ayer" and sits above
   // tomorrow's. See freshness.ts for why the cutoff has slack.
-  clauses.push('commence_time >= ?');
-  params.push(freshSince());
+  const fresh = freshFilter();
+  clauses.push(fresh.sql);
+  params.push(...fresh.params);
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   return getDb()
     .prepare(`SELECT * FROM upcoming_matches ${where} ORDER BY commence_time ASC`)

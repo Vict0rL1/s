@@ -9,10 +9,8 @@
       "https://cdn.jsdelivr.net/gh/{repo}@master/{file}",
       "https://rawcdn.githack.com/{repo}/master/{file}"
     ],
-    "mirrors": {
-      "JeffSackmann/tennis_atp": ["stakah/tennis_atp"],
-      "JeffSackmann/tennis_wta": []
-    }
+    "mirrorsComment": "Alternative GitHub repos to try if the primary one is unreachable. Deliberately EMPTY: JeffSackmann/tennis_atp and tennis_wta are 404 (deleted, not blocked — another repo on the same account still serves), and the mirror that used to be listed here, stakah/tennis_atp, is 404 as well. A mirror entry that does not resolve is worse than none: it turns one clear failure into two, and the retry advice it produces sends you to a page that no longer exists. Add one back only after checking it actually serves a recent season.",
+    "mirrors": {}
   },
   "tours": [
     {
@@ -33,6 +31,7 @@
       "name": "WTA",
       "label": "WTA · Women's singles",
       "sackmann": {
+        "$comment": "There is no WTA source left on GitHub. JeffSackmann/tennis_wta is 404 and TML covers ATP only, so this block will fail and update-data falls through to tennis-data.co.uk, which serves both tours (plus closing odds) and reaches the current season. The repo is kept here rather than deleted so that the attempt — and its 404 — is visible in the log instead of the WTA silently having no source at all; and so it starts working again by itself if the repo ever returns.",
         "repo": "JeffSackmann/tennis_wta",
         "matchesFile": "wta_matches_{year}.csv",
         "playersFile": "wta_players.csv",

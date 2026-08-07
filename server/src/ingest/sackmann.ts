@@ -289,6 +289,49 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * One player's serve statistics, or nulls if they are arithmetically impossible.
+ *
+ * The TML archive carries a handful of corrupt rows — measured: 12 of 61,682 ATP
+ * matches (0.02 %), mostly one bad scrape of Davis Cup week in September 2025, plus
+ * the 2019 Lyon final which records 51 first serves LANDED out of 47 service points
+ * played, and a 2023 Monte Carlo final where a player saves 13 break points having
+ * faced 1.
+ *
+ * The whole SIDE is dropped, not just the offending field, because there is no way
+ * to tell which of the two numbers is the wrong one: given svpt=47 and 1stIn=51,
+ * keeping whichever looks plausible is a guess dressed up as data. The match itself
+ * is kept — winner, score, ranks and surface are unaffected, and those are what the
+ * Elo is built from. Only the serve stats, which feed the serve/return breakdown on
+ * the card, are set aside.
+ *
+ * NULL and not zero: the model already treats a missing stat as "unknown" (they do
+ * not exist at all before ~1991), whereas a zero would be read as "hit no aces,
+ * landed no first serves" and would drag the player's measured serve down.
+ */
+function serveStats(r: any, side: 'w' | 'l'): (number | null)[] {
+  const g = (f: string) => num(r[`${side}_${f}`]);
+  const ace = g('ace');
+  const df = g('df');
+  const svpt = g('svpt');
+  const in1 = g('1stIn');
+  const won1 = g('1stWon');
+  const won2 = g('2ndWon');
+  const saved = g('bpSaved');
+  const faced = g('bpFaced');
+  // Each clause is a thing that cannot happen in a tennis match. `??` guards keep a
+  // missing value from failing the test — absent is not the same as impossible.
+  const impossible =
+    (in1 ?? 0) > (svpt ?? Infinity) ||
+    (won1 ?? 0) > (in1 ?? Infinity) ||
+    (won2 ?? 0) > (svpt ?? Infinity) - (in1 ?? 0) ||
+    (saved ?? 0) > (faced ?? Infinity) ||
+    (ace ?? 0) > (svpt ?? Infinity) ||
+    (df ?? 0) > (svpt ?? Infinity);
+  if (impossible) return [null, null, null, null, null, null, null, null];
+  return [ace, df, svpt, in1, won1, won2, saved, faced];
+}
+
 interface IngestOptions {
   fromYear: number;
   toYear: number;
@@ -341,6 +384,8 @@ async function ingestTml(tour: TourConfig, opts: IngestOptions) {
 
   const seenPlayers = new Set<number>();
   let matchCount = 0;
+  /** Sides whose serve stats were arithmetically impossible — reported, not hidden. */
+  let droppedStats = 0;
 
   for (let year = opts.fromYear; year <= opts.toYear; year++) {
     const file = tour.sackmann.matchesFile.replace('{year}', String(year));
@@ -372,6 +417,11 @@ async function ingestTml(tour: TourConfig, opts: IngestOptions) {
       const lRank = num(r.loser_rank);
       if (lRank !== null) rankUpsert.run(lId, tour.id, lRank, num(r.loser_rank_points), date);
 
+      const wStats = serveStats(r, 'w');
+      const lStats = serveStats(r, 'l');
+      if (wStats[2] === null && num(r.w_svpt) !== null) droppedStats++;
+      if (lStats[2] === null && num(r.l_svpt) !== null) droppedStats++;
+
       matchInsert.run(
         tour.id,
         r.tourney_id || null,
@@ -386,10 +436,8 @@ async function ingestTml(tour: TourConfig, opts: IngestOptions) {
         r.score || null,
         wRank,
         lRank,
-        num(r.w_ace), num(r.w_df), num(r.w_svpt), num(r.w_1stIn),
-        num(r.w_1stWon), num(r.w_2ndWon), num(r.w_bpSaved), num(r.w_bpFaced),
-        num(r.l_ace), num(r.l_df), num(r.l_svpt), num(r.l_1stIn),
-        num(r.l_1stWon), num(r.l_2ndWon), num(r.l_bpSaved), num(r.l_bpFaced),
+        ...wStats,
+        ...lStats,
       );
       matchCount++;
     }
@@ -397,7 +445,13 @@ async function ingestTml(tour: TourConfig, opts: IngestOptions) {
     process.stdout.write(`  ${tour.id} ${year}: ${rows.length} matches\n`);
   }
 
-  return { players: seenPlayers.size, matches: matchCount };
+  if (droppedStats > 0) {
+    process.stdout.write(
+      `  ⚠️  ${droppedStats} bloques de estadísticas de saque imposibles ` +
+        `(descartados; el resultado del partido se conserva)\n`,
+    );
+  }
+  return { players: seenPlayers.size, matches: matchCount, droppedStats };
 }
 
 // Column order of the players file in older snapshots, which ship WITHOUT a

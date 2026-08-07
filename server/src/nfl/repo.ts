@@ -9,7 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getDb } from '../db.ts';
-import { freshSince } from '../freshness.ts';
+import { freshFilter } from '../freshness.ts';
 import { pythagorean } from './model.ts';
 import { replayGames, type NafTeamState, type ReplayGame } from './ratings.ts';
 import type {
@@ -325,15 +325,16 @@ export function getQbRanking(league: LeagueId, limit = 12) {
 // Upcoming
 // ---------------------------------------------------------------------------
 export function listUpcoming(league: LeagueId, limit = 24): NafUpcomingRow[] {
+  const fresh = freshFilter();
   return getDb()
     .prepare(
       `SELECT id, league, season, week, commence_time, home_name, away_name, home_id, away_id,
               neutral, odds_home, odds_away, spread_line, total_line, books, source, updated_at, roof
-       FROM naf_upcoming WHERE league = ? AND commence_time >= ?
+       FROM naf_upcoming WHERE league = ? AND ${fresh.sql}
        ORDER BY commence_time
        LIMIT ?`,
     )
-    .all(league, freshSince(), limit) as unknown as NafUpcomingRow[];
+    .all(league, ...fresh.params, limit) as unknown as NafUpcomingRow[];
 }
 
 export function getUpcoming(id: string): NafUpcomingRow | null {

@@ -181,12 +181,23 @@ async function main() {
     const monthsOld =
       (new Date().getUTCFullYear() - year) * 12 + (new Date().getUTCMonth() + 1 - month);
     console.log(`\n  Último partido en los datos: ${latest.d}`);
+    // Months, not years: the old message divided by 12 and printed "hace ~0.6
+    // años", which is a strange way to say "seven months" and reads like a bug.
     if (monthsOld > 6) {
       console.warn(
-        `  ⚠️  ATENCIÓN: el historial termina hace ~${Math.round(monthsOld / 12 * 10) / 10} años.\n` +
+        `  ⚠️  ATENCIÓN: el historial termina hace ~${Math.round(monthsOld)} meses.\n` +
           `      Los Elo NO reflejan a los jugadores actuales y las predicciones serán poco fiables.\n` +
-          `      Suele pasar al caer en un repositorio espejo desactualizado. Intenta de nuevo\n` +
-          `      desde una red que no bloquee github.com/JeffSackmann para obtener datos al día.`,
+          `\n` +
+          `      Y NO es un problema de tu red. Las dos fuentes de tenis que había en GitHub\n` +
+          `      dejaron de servir datos al día:\n` +
+          `        · JeffSackmann/tennis_atp y tennis_wta devuelven 404: los repos ya no existen.\n` +
+          `        · Tennismylife/TML-Database se congeló en enero de 2026 — su propio README\n` +
+          `          dice que la base viva se movió a stats.tennismylife.org, que no es GitHub.\n` +
+          `\n` +
+          `      Lo que sí funciona desde tu máquina es tennis-data.co.uk (un .xlsx por\n` +
+          `      temporada, ATP y WTA, con cuotas de cierre). Este script ya lo intenta como\n` +
+          `      reserva; si también falla, descárgalos a mano siguiendo las instrucciones de\n` +
+          `      arriba. Es la única vía que llega a la temporada en curso hoy.`,
       );
     }
   }

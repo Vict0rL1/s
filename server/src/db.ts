@@ -286,6 +286,12 @@ function createSchema(d: DatabaseSync): void {
       -- Closing 1X2 odds where the source has them, so the model can be scored
       -- against the market on identical matches.
       odds_home  REAL, odds_draw REAL, odds_away REAL,
+      -- Half-time score, from openfootball. Stored and NOT yet modelled: it is the
+      -- one piece of data that would make "wins either half" — a market this app's
+      -- reader actually bets — possible rather than invented. Ingesting it now means
+      -- the history is there whenever that gets measured, instead of starting from
+      -- zero the day someone wants it.
+      ht_home_goals INTEGER, ht_away_goals INTEGER,
       UNIQUE (league, match_date, home_id, away_id)
     );
     CREATE INDEX IF NOT EXISTS idx_fb_date ON fb_matches (league, match_date);
@@ -763,6 +769,11 @@ function migrateSchema(d: DatabaseSync): void {
     naf_team_ratings: {
       current_qb: 'TEXT',
     },
+    fb_matches: {
+      // Arrived with the openfootball source — see the note on the schema above.
+      ht_home_goals: 'INTEGER',
+      ht_away_goals: 'INTEGER',
+    },
   };
 
   for (const [table, cols] of Object.entries(wanted)) {
@@ -799,16 +810,44 @@ export function getMeta(key: string): string | null {
  * logged predictions still refer to the same players afterwards. Everything else
  * is re-derivable from the sources.
  */
+/**
+ * The `meta` keys that belong to TENNIS, and therefore the only ones resetData may
+ * touch.
+ *
+ * Listed explicitly because `meta` is the one table shared by all five sports, and
+ * this function used to end with `DELETE FROM meta` — so `npm run update-data`, which
+ * is the TENNIS command, silently erased every other sport's provenance:
+ *
+ *   · fb_data_source / fb_updated_at / fb_squads_*  → the football tab went back to
+ *     showing "origen sin registrar" and no refresh time,
+ *   · bb_ / bsb_ / naf: the same for the other three,
+ *   · and `bb_margin_sigma_nba`, so basketball dropped from its measured σ (14.14)
+ *     back to the frozen fallback of 11.7 — the one that covers 61 % of games where
+ *     a normal says 68 %. A model got quietly worse because a different sport was
+ *     updated.
+ *
+ * Nothing failed and nothing was logged. Every sport keeps its own tables precisely
+ * so that updating one cannot disturb another; this was the single place that broke
+ * that promise.
+ *
+ * Tennis keys are the UNPREFIXED ones, for historical reasons — tennis came first and
+ * the other four adopted a prefix afterwards. A new tennis key must be added here, or
+ * it will survive a reset and go stale.
+ */
+const TENNIS_META_KEYS = [
+  'data_source',
+  'updated_at',
+  'odds_source',
+  'odds_refreshed_at',
+  'seeded_at',
+  'history_through',
+];
+
 export function resetData(): void {
   const d = getDb();
-  for (const t of [
-    'upcoming_matches',
-    'player_ratings',
-    'player_rankings',
-    'matches',
-    'players',
-    'meta',
-  ]) {
+  for (const t of ['upcoming_matches', 'player_ratings', 'player_rankings', 'matches', 'players']) {
     d.exec(`DELETE FROM ${t};`);
   }
+  const del = d.prepare('DELETE FROM meta WHERE key = ?');
+  for (const k of TENNIS_META_KEYS) del.run(k);
 }

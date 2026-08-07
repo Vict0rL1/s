@@ -3,7 +3,7 @@
 // other two sports, where that OR let SQLite pick a full scan of the league.
 
 import { getDb } from '../db.ts';
-import { freshSince } from '../freshness.ts';
+import { freshFilter } from '../freshness.ts';
 import { INITIAL_ELO } from './model.ts';
 import type { FbRecord, FbTeamInfo, FbTeamRatingRow, FbTeamRow, FbUpcomingRow, LeagueId } from './types.ts';
 
@@ -181,19 +181,20 @@ export function getPowerRanking(league: LeagueId, limit = 40) {
 }
 
 export function listUpcoming(league?: string): FbUpcomingRow[] {
+  const fresh = freshFilter();
   const db = getDb();
   return (
     league
       ? db
           .prepare(
-            'SELECT * FROM fb_upcoming WHERE league = ? AND commence_time >= ? ORDER BY commence_time ASC, id ASC',
+            `SELECT * FROM fb_upcoming WHERE league = ? AND ${fresh.sql} ORDER BY commence_time ASC, id ASC`,
           )
-          .all(league, freshSince())
+          .all(league, ...fresh.params)
       : db
           .prepare(
-            'SELECT * FROM fb_upcoming WHERE commence_time >= ? ORDER BY commence_time ASC, id ASC',
+            `SELECT * FROM fb_upcoming WHERE ${fresh.sql} ORDER BY commence_time ASC, id ASC`,
           )
-          .all(freshSince())
+          .all(...fresh.params)
   ) as unknown as FbUpcomingRow[];
 }
 

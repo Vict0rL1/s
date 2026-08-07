@@ -19,6 +19,10 @@
 import { getDb, setMeta } from '../../db.ts';
 import { footballConfig } from '../../config.ts';
 import { ingestFootballCsv } from '../ingest/footballcsv.ts';
+import {
+  ingestOpenFootball,
+  seasonLabels as openfootballSeasons,
+} from '../ingest/openfootball.ts';
 import { ingestFootballData } from '../ingest/footballData.ts';
 import { ingestFplPlayers } from '../ingest/fplPlayers.ts';
 import { refreshFootballOdds } from '../ingest/odds.ts';
@@ -95,7 +99,7 @@ async function main() {
 
   for (const league of leagues) {
     console.log(`\n▸ ${league.label}`);
-    if (!league.footballData && !league.footballcsv) {
+    if (!league.footballData && !league.footballcsv && !league.openfootball) {
       console.log(
         '  sin fuente de resultados: se mostrarán los partidos y las cuotas del mercado,\n' +
           '  pero no habrá modelo Elo. La app lo indica en la interfaz.',
@@ -105,6 +109,28 @@ async function main() {
     }
 
     let got = 0;
+    // openfootball FIRST, and it is the source that matters: it is the only one that
+    // reaches the current season. football-data.co.uk then runs anyway, because it
+    // carries the closing ODDS that this one does not and that the market comparison
+    // depends on — the two are complements, not alternatives.
+    if (source !== 'footballcsv' && source !== 'football-data' && league.openfootball) {
+      try {
+        const r = await ingestOpenFootball(league, openfootballSeasons(seasonCount));
+        if (r.matches > 0) {
+          console.log(
+            `  openfootball: ${r.matches} partidos, temporadas ${r.seasons.join(', ')}` +
+              ` — hasta ${r.through}` +
+              (r.withHalfTime > 0 ? ` · ${r.withHalfTime} con marcador al descanso` : ''),
+          );
+          got += r.matches;
+        } else {
+          console.log('  openfootball: sin partidos para esta liga');
+        }
+      } catch (e) {
+        console.warn(`  ⚠️  openfootball falló: ${(e as Error).message}`);
+      }
+    }
+
     if (source !== 'footballcsv' && league.footballData) {
       try {
         const r = await ingestFootballData(league, seasons);
@@ -120,6 +146,7 @@ async function main() {
       }
     }
 
+    // The old mirror only as a last resort now.
     if (got === 0 && source !== 'football-data' && league.footballcsv) {
       try {
         const r = await ingestFootballCsv(league, seasonLabels(seasons.length >= 20 ? seasons : seasonsToFetch(21)));

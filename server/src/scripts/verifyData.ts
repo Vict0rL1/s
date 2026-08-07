@@ -81,7 +81,10 @@ const SPORTS: SportSpec[] = [
     seasonLeague: 'epl',
     // 46 % home / 26 % draw / 28 % away long-run → 62 % of the decided games.
     homeWinBand: [0.55, 0.68],
-    scoreBand: [0, 12],
+    // The ceiling is 15, and 12 was one goal too low: VVV-Venlo 0-13 Ajax, 24
+    // October 2020, is the biggest win in Eredivisie history and it is in the data.
+    // Widened to the record rather than to the value that made the check pass.
+    scoreBand: [0, 15],
   },
   {
     label: 'Baloncesto',
@@ -240,6 +243,10 @@ const SHORT_SEASONS: Record<string, string> = {
   'nba|2012': 'cierre patronal: 66 partidos por equipo',
   'nba|2020': 'COVID: temporada suspendida y reanudada en una burbuja',
   'nba|2021': 'COVID: 72 partidos por equipo',
+  // Tennis, keyed by tour. The 2020 circuit was suspended in March and did not
+  // restart until August, so both tours played about half a normal calendar.
+  'atp|2020': 'COVID: circuito suspendido de marzo a agosto',
+  'wta|2020': 'COVID: circuito suspendido de marzo a agosto',
 };
 
 /** How far below its neighbours a season may fall before it looks half-downloaded. */
@@ -300,6 +307,109 @@ function auditSeasons(label: string, table: string, league: string): void {
 }
 
 /**
+ * One franchise, one id.
+ *
+ * THE CHECK THAT CAUGHT A REAL BUG. Adding a second results source to basketball
+ * took the NBA from 45 teams to 98: FiveThirtyEight writes the bare nickname
+ * ("Lakers") and hoopR the full name ("Los Angeles Lakers"), so every franchise
+ * ended up split — 6,023 games under one id, 2,134 under another, the shared seasons
+ * stored twice, and each half carrying an Elo built from a fraction of its own
+ * history. Nothing else here would have noticed: every count went UP.
+ *
+ * THE SIGNAL, and the first two attempts were both wrong. Matching on a shared
+ * nickname flagged every English club at once (they nearly all end in "FC") and
+ * called the Red Sox and the White Sox one team. Requiring disjoint date ranges
+ * missed the actual bug, whose two halves overlapped for thirteen seasons.
+ *
+ * What is precise: TWO TEAMS ACTIVE IN THE SAME SEASON WHO NEVER PLAY EACH OTHER
+ * ARE THE SAME TEAM. In a league with a full round robin that is an invariant, and
+ * a split franchise breaks it immediately — `lakers` and `los-angeles-lakers` both
+ * had 2002-2015 games and never met once.
+ *
+ * Which is why it does not run everywhere. The NFL plays 17 games against 31
+ * possible opponents, so two real teams routinely never meet; MLB's interleague
+ * schedule was partial until 2023. Applied only where the round robin is complete.
+ */
+function auditFranchiseIds(label: string, teams: string, games: string): void {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT t.league, t.id, t.name,
+              (SELECT COUNT(*) FROM ${games} g
+                WHERE g.league = t.league AND (g.home_id = t.id OR g.away_id = t.id)) AS n
+         FROM ${teams} t`,
+    )
+    .all() as unknown as { league: string; id: string; name: string; n: number }[];
+
+  // A team with no games is a name that was created and never used — the other half
+  // of the same failure, and it needs no round robin to detect.
+  const orphanTeams = rows.filter((r) => r.n === 0);
+  check(
+    `${label}: ningún equipo sin partidos`,
+    orphanTeams.length === 0,
+    orphanTeams.slice(0, 6).map((r) => r.id).join(', '),
+  );
+}
+
+/** Leagues whose schedule is a complete round robin — see auditFranchiseIds. */
+const ROUND_ROBIN: Record<string, string[]> = {
+  fb_matches: ['epl', 'laliga', 'bundesliga', 'seriea', 'ligue1', 'eredivisie', 'primeira', 'championship'],
+  bb_games: ['nba'],
+};
+
+function auditRoundRobin(label: string, games: string): void {
+  const leagues = ROUND_ROBIN[games];
+  if (!leagues) {
+    console.log(`  ${label}: sin round robin completo, no aplica`);
+    return;
+  }
+  const db = getDb();
+  const problems: string[] = [];
+  let pairs = 0;
+  for (const league of leagues) {
+    // The most recent COMPLETE season: the one in progress has not played itself out.
+    const seasons = (
+      db
+        .prepare(`SELECT DISTINCT season FROM ${games} WHERE league = ? ORDER BY season DESC LIMIT 2`)
+        .all(league) as unknown as { season: number }[]
+    ).map((r) => r.season);
+    const season = seasons[1] ?? seasons[0];
+    if (season == null) continue;
+    const active = (
+      db
+        .prepare(
+          `SELECT DISTINCT id FROM (
+             SELECT home_id AS id FROM ${games} WHERE league = ? AND season = ?
+             UNION SELECT away_id AS id FROM ${games} WHERE league = ? AND season = ?
+           )`,
+        )
+        .all(league, season, league, season) as unknown as { id: string }[]
+    ).map((r) => r.id);
+    const met = db.prepare(
+      `SELECT COUNT(*) AS c FROM ${games}
+        WHERE league = ? AND season = ?
+          AND ((home_id = ? AND away_id = ?) OR (home_id = ? AND away_id = ?))`,
+    );
+    for (let i = 0; i < active.length; i++) {
+      for (let j = i + 1; j < active.length; j++) {
+        pairs++;
+        const r = met.get(league, season, active[i], active[j], active[j], active[i]) as unknown as {
+          c: number;
+        };
+        if (r.c === 0) problems.push(`${league} ${season}: ${active[i]} y ${active[j]} nunca se cruzan`);
+      }
+    }
+  }
+  check(
+    `${label}: todos los equipos de una temporada se cruzan`,
+    problems.length === 0,
+    problems.slice(0, 4).join(' · ') + (problems.length > 4 ? ` (+${problems.length - 4})` : ''),
+  );
+  console.log(`  ${label}: ${pairs} parejas comprobadas en la última temporada completa`);
+}
+
+/**
+ * Do the stored ratings still follow from the stored games?/**
  * Do the stored ratings still follow from the stored games?
  *
  * Baseball only, because it is the one sport whose recompute is cheap enough to run
@@ -342,6 +452,235 @@ function auditRatingsReproduce(): void {
   console.log(`  ${after.length} equipos · mayor diferencia al recalcular: ${worst.toFixed(2)} Elo`);
 }
 
+// ---------------------------------------------------------------------------
+// Tennis
+// ---------------------------------------------------------------------------
+/**
+ * Tennis does not fit SportSpec: there is no home and away, no points-per-side,
+ * and no fixed season length — the calendar is a set of tournaments, not a round
+ * robin. So it gets its own facts, and they are stronger ones, because every row
+ * carries the serve statistics of BOTH players and those have to add up.
+ *
+ * The failure this is really aimed at is a WINNER/LOSER SWAP or a shifted column.
+ * The tennis archive is the only one here where the result is encoded twice — once
+ * in which id is in `winner_id`, and again in the `score` string — so the two can
+ * be checked against each other. Nothing else in this repo can do that, and the
+ * tab spent this whole project on synthetic seed data where it would never have
+ * mattered.
+ */
+function auditTennis(): void {
+  const db = getDb();
+  const total = (db.prepare('SELECT COUNT(*) AS c FROM matches').get() as { c: number }).c;
+  console.log('\n▸ Tenis');
+  if (total === 0) {
+    console.log('  sin partidos, saltado');
+    return;
+  }
+
+  for (const tour of ['atp', 'wta']) {
+    const n = (
+      db.prepare('SELECT COUNT(*) AS c FROM matches WHERE tour = ?').get(tour) as { c: number }
+    ).c;
+    if (n === 0) {
+      console.log(`  ${tour.toUpperCase()}: sin partidos — la pestaña no tendrá modelo`);
+      continue;
+    }
+    const r = db
+      .prepare(
+        `SELECT MIN(tourney_date) lo, MAX(tourney_date) hi, COUNT(DISTINCT tourney_id) t
+         FROM matches WHERE tour = ?`,
+      )
+      .get(tour) as { lo: string; hi: string; t: number };
+    console.log(
+      `  ${tour.toUpperCase()}: ${n.toLocaleString('es')} partidos · ${r.t} torneos · ` +
+        `${r.lo} → ${r.hi}`,
+    );
+
+    // Nobody plays themselves. Cheap, and it is what a self-join gone wrong looks like.
+    check(
+      `tenis ${tour}: ganador y perdedor distintos`,
+      (db.prepare('SELECT COUNT(*) AS c FROM matches WHERE tour = ? AND winner_id = loser_id')
+        .get(tour) as { c: number }).c === 0,
+    );
+
+    // Every id must resolve. An unmatched id means a player row was dropped, and
+    // the app would show a prediction for "undefined".
+    const orphans = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS c FROM matches m WHERE m.tour = ?
+             AND (NOT EXISTS (SELECT 1 FROM players p WHERE p.tour = m.tour AND p.id = m.winner_id)
+               OR NOT EXISTS (SELECT 1 FROM players p WHERE p.tour = m.tour AND p.id = m.loser_id))`,
+        )
+        .get(tour) as { c: number }
+    ).c;
+    check(`tenis ${tour}: todos los jugadores existen`, orphans === 0, `${orphans} partidos huérfanos`);
+
+    // Dates are YYYYMMDD and inside the range the archive claims.
+    const badDate = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS c FROM matches WHERE tour = ?
+             AND (LENGTH(tourney_date) <> 8
+                  OR CAST(substr(tourney_date,5,2) AS INTEGER) NOT BETWEEN 1 AND 12
+                  OR CAST(substr(tourney_date,7,2) AS INTEGER) NOT BETWEEN 1 AND 31)`,
+        )
+        .get(tour) as { c: number }
+    ).c;
+    check(`tenis ${tour}: fechas con forma YYYYMMDD válida`, badDate === 0, `${badDate} fechas`);
+
+    // best_of is 3 or 5 and nothing else. A 4 here means the column moved.
+    const badBo = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS c FROM matches WHERE tour = ? AND best_of IS NOT NULL AND best_of NOT IN (3,5)`,
+        )
+        .get(tour) as { c: number }
+    ).c;
+    check(`tenis ${tour}: best_of es 3 o 5`, badBo === 0, `${badBo} filas`);
+
+    // Surfaces come from a closed set. Carpet is historical but real.
+    const badSurface = db
+      .prepare(
+        `SELECT DISTINCT surface FROM matches WHERE tour = ? AND surface IS NOT NULL
+           AND LOWER(surface) NOT IN ('hard','clay','grass','carpet')`,
+      )
+      .all(tour) as { surface: string }[];
+    check(
+      `tenis ${tour}: superficies conocidas`,
+      badSurface.length === 0,
+      badSurface.map((x) => x.surface).join(', '),
+    );
+
+    // ---------------------------------------------------------------------
+    // The serve statistics have to be arithmetically possible.
+    // ---------------------------------------------------------------------
+    // These are the checks that catch a shifted column, because a shift produces
+    // numbers that are individually plausible and jointly impossible: you cannot
+    // land more first serves than you hit points, nor win more than you landed,
+    // nor save a break point you never faced. The model reads all of these.
+    const impossible: [string, string][] = [
+      ['primeros saques dentro ≤ puntos al saque', '{p}_1stIn > {p}_svpt'],
+      ['primeros ganados ≤ primeros dentro', '{p}_1stWon > {p}_1stIn'],
+      ['segundos ganados ≤ segundos jugados', '{p}_2ndWon > {p}_svpt - {p}_1stIn'],
+      ['puntos de break salvados ≤ afrontados', '{p}_bpSaved > {p}_bpFaced'],
+      ['aces ≤ puntos al saque', '{p}_ace > {p}_svpt'],
+      ['dobles faltas ≤ puntos al saque', '{p}_df > {p}_svpt'],
+    ];
+    for (const [label, expr] of impossible) {
+      for (const side of ['w', 'l']) {
+        const e = expr.replace(/\{p\}/g, side);
+        // Only rows that HAVE the stats: they are absent before ~1991 and on
+        // walkovers, and a NULL is missing data rather than wrong data.
+        const bad = (
+          db
+            .prepare(`SELECT COUNT(*) AS c FROM matches WHERE tour = ? AND ${e}`)
+            .get(tour) as { c: number }
+        ).c;
+        check(`tenis ${tour}: ${label} (${side})`, bad === 0, `${bad} filas`);
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // Does the SCORE agree with who is recorded as the winner?
+    // ---------------------------------------------------------------------
+    // The one check here that would catch a swap. Sets are counted from the score
+    // string and the player in `winner_id` must have won more of them.
+    //
+    // Retirements, walkovers and unfinished matches are excluded rather than
+    // counted as failures: "6-4 2-1 RET" is a real, correctly recorded result in
+    // which the winner leads on fewer sets, and treating it as a defect would bury
+    // the signal under thousands of legitimate rows. That is why the check is a
+    // RATE with a floor and not "zero mismatches" — see the note below.
+    const rows = db
+      .prepare(`SELECT score FROM matches WHERE tour = ? AND score IS NOT NULL AND score <> ''`)
+      .all(tour) as { score: string }[];
+    let clean = 0;
+    let agree = 0;
+    for (const { score } of rows) {
+      if (/[a-z]/i.test(score)) continue; // RET, W/O, DEF, ABD, Def., In Progress…
+      const sets = score.trim().split(/\s+/);
+      let w = 0;
+      let l = 0;
+      let parsed = 0;
+      for (const set of sets) {
+        const m = set.match(/^(\d+)-(\d+)/);
+        if (!m) continue;
+        parsed++;
+        if (Number(m[1]) > Number(m[2])) w++;
+        else if (Number(m[2]) > Number(m[1])) l++;
+      }
+      if (parsed === 0) continue;
+      clean++;
+      if (w > l) agree++;
+    }
+    if (clean > 0) {
+      const rate = agree / clean;
+      // 0.999 and not 1.0: a handful of rows in any hand-corrected archive have a
+      // score typed with the sets the wrong way round. What this is built to catch
+      // is a SYSTEMATIC swap, which would put this near 0, not a stray typo.
+      band(`tenis ${tour}: el marcador concuerda con el ganador`, rate, 0.999, 1);
+      console.log(
+        `    marcador vs ganador: ${(rate * 100).toFixed(2)} % de acuerdo en ` +
+          `${clean.toLocaleString('es')} partidos completos`,
+      );
+    }
+
+    // The favourite by ranking wins more often than not, but not always — and the
+    // direction is the point. Below 50 % would mean `winner_rank` and `loser_rank`
+    // are the wrong way round, which is invisible to every check above.
+    const rk = db
+      .prepare(
+        `SELECT SUM(CASE WHEN winner_rank < loser_rank THEN 1 ELSE 0 END) AS fav, COUNT(*) AS n
+         FROM matches WHERE tour = ? AND winner_rank IS NOT NULL AND loser_rank IS NOT NULL`,
+      )
+      .get(tour) as { fav: number; n: number };
+    if (rk.n > 500) {
+      band(`tenis ${tour}: el mejor clasificado gana más veces`, rk.fav / rk.n, 0.6, 0.75);
+      console.log(
+        `    gana el mejor clasificado: ${((rk.fav / rk.n) * 100).toFixed(1)} % de ` +
+          `${rk.n.toLocaleString('es')} partidos`,
+      );
+    }
+
+    // Per-season volume against the median of its neighbours, same idea as
+    // auditSeasons for the team sports: a half-failed download shows up as a
+    // season with a fraction of the matches of the ones around it.
+    const perYear = db
+      .prepare(
+        `SELECT substr(tourney_date,1,4) AS y, COUNT(*) AS n FROM matches
+         WHERE tour = ? GROUP BY y ORDER BY y`,
+      )
+      .all(tour) as { y: string; n: number }[];
+    // The current season is excluded: it is legitimately incomplete.
+    const thisYear = String(new Date().getUTCFullYear());
+    const full = perYear.filter((r) => r.y !== thisYear);
+    const shortForAReason: string[] = [];
+    for (let i = 0; i < full.length; i++) {
+      const near = full
+        .slice(Math.max(0, i - 2), i + 3)
+        .filter((_, j) => j !== Math.min(i, 2))
+        .map((r) => r.n)
+        .sort((a, b) => a - b);
+      if (near.length < 3) continue;
+      const med = near[Math.floor(near.length / 2)];
+      const excuse = SHORT_SEASONS[`${tour}|${full[i].y}`];
+      if (excuse) {
+        if (full[i].n < med * SEASON_FLOOR) shortForAReason.push(`${full[i].y} (${excuse})`);
+        continue;
+      }
+      check(
+        `tenis ${tour}: la temporada ${full[i].y} no está a medias`,
+        full[i].n >= med * SEASON_FLOOR,
+        `${full[i].n} partidos frente a ~${med} en las temporadas vecinas`,
+      );
+    }
+    if (shortForAReason.length) {
+      console.log(`    cortas por motivos conocidos: ${shortForAReason.join(', ')}`);
+    }
+  }
+}
+
 function main(): void {
   console.log('\n🔎 Verificación de los datos\n' + '='.repeat(46));
   console.log(
@@ -350,6 +689,10 @@ function main(): void {
       'qué marcadores son posibles.',
   );
   for (const s of SPORTS) auditSport(s);
+  console.log('\n▸ Identidad de los equipos');
+  for (const s of SPORTS) auditFranchiseIds(s.label, s.teams, s.games);
+  for (const s of SPORTS) auditRoundRobin(s.label, s.games);
+  auditTennis();
   auditRatingsReproduce();
 
   console.log('\n' + '='.repeat(46));

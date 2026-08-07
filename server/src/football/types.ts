@@ -27,7 +27,19 @@ export interface LeagueConfig {
     | { kind: 'main'; div: string }
     | { kind: 'extra'; file: string; league: string }
     | null;
-  /** GitHub mirror of older seasons, used to fit and validate the model. */
+  /**
+   * The PRIMARY results source: openfootball/football.json on GitHub.
+   *
+   * `key` is its league file name ("en.1" = Premier League, "it.1" = Serie A). This
+   * is the only source that reaches the current season, and the only one that gives
+   * Serie A, Ligue 1, Eredivisie, Primeira, Liga MX and Argentina any results at
+   * all — they were configured as tabs with nothing behind them.
+   */
+  openfootball?: { key: string } | null;
+  /**
+   * GitHub mirror of older seasons. A MIRROR of openfootball, abandoned after
+   * 2020-21, kept as a fallback for anything the upstream is missing.
+   */
   footballcsv: { repo: string; div: string } | null;
 }
 
@@ -37,6 +49,7 @@ export interface FootballConfig {
     footballDataBase: string;
     footballDataExtraBase: string;
     footballCsvBase: string;
+    openfootballBase: string;
   };
   leagues: LeagueConfig[];
 }

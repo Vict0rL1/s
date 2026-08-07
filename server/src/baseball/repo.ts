@@ -7,7 +7,7 @@
 // into a 612 ms operation before it was fixed the same way.
 
 import { getDb } from '../db.ts';
-import { freshSince } from '../freshness.ts';
+import { freshFilter } from '../freshness.ts';
 import { pythagorean } from './model.ts';
 import type {
   BsbGameRow,
@@ -273,12 +273,12 @@ export function listUpcoming(league?: string): BsbUpcomingRow[] {
   const sql = `SELECT id, league, commence_time, home_name, away_name, home_id, away_id,
                       home_sp, away_sp, odds_home, odds_away, books, source, updated_at
                FROM bsb_upcoming`;
-  const since = freshSince();
+  const fresh = freshFilter();
   const rows = league
     ? db
-        .prepare(`${sql} WHERE league = ? AND commence_time >= ? ORDER BY commence_time`)
-        .all(league, since)
-    : db.prepare(`${sql} WHERE commence_time >= ? ORDER BY commence_time`).all(since);
+        .prepare(`${sql} WHERE league = ? AND ${fresh.sql} ORDER BY commence_time`)
+        .all(league, ...fresh.params)
+    : db.prepare(`${sql} WHERE ${fresh.sql} ORDER BY commence_time`).all(...fresh.params);
   return rows as unknown as BsbUpcomingRow[];
 }
 

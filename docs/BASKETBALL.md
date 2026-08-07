@@ -232,8 +232,81 @@ fueran actuales.
 | Para qué | Fuente | Notas |
 |---|---|---|
 | Resultados actuales + equipos | [ESPN API pública](https://site.api.espn.com) | Gratis, sin key. Cubre NBA, WNBA y NCAA (M y F). Se piden ~30 peticiones por temporada (calendario por equipo) en vez de ~250 (marcador por día). |
-| Histórico profundo NBA | [FiveThirtyEight `nba-elo`](https://github.com/fivethirtyeight/data/tree/master/nba-elo) | 59.008 partidos reales 1946–2015 con marcador, local/visitante/neutral y playoffs. Es con lo que se **ajusta y valida** el modelo. **Termina en 2015**, así que nunca es la fuente de los ratings de hoy. |
+| Histórico profundo NBA | [FiveThirtyEight `nba-elo`](https://github.com/fivethirtyeight/data/tree/master/nba-elo) | 59.008 partidos reales 1946–2015 con marcador, local/visitante/neutral y playoffs. Es con lo que se **ajustó y validó** el modelo. **Termina en 2015.** |
+| **Temporadas 2003 → hoy, solo con GitHub** | [sportsdataverse `hoopR-nba-data`](https://github.com/sportsdataverse/hoopR-NBA-data) | Espejo del calendario de ESPN en un CSV público. Cierra el hueco de once años que dejaba 538 sin depender de una API que una red filtrada puede bloquear: el archivo pasó de terminar en **2015-06-16** a terminar en **2026-06-14**, y de 59.008 a 86.305 partidos. |
 | Partidos próximos + cuotas | [The Odds API](https://the-odds-api.com) | La misma key que usa el tenis. Descubre qué ligas de baloncesto están activas ahora en vez de asumir un calendario fijo. |
+
+
+### 6.1 El fallo que casi entró con hoopR: una franquicia partida en dos
+
+Merece estar escrito porque no dio ningún error y habría estropeado el modelo en
+silencio.
+
+538 guarda el **apodo** del equipo (`Lakers`); hoopR trae el **nombre completo**
+(`Los Angeles Lakers`). Al convertir el nombre en id sin más, la NBA pasó de 45
+equipos a **98**: cada franquicia se partió por la mitad. Los Lakers quedaron con
+6.023 partidos bajo un id y 2.134 bajo otro, **solapándose entre 2002 y 2015** — así
+que cada Elo se construía con una fracción de su propia historia y las temporadas
+compartidas estaban guardadas dos veces. Nada falla: los conteos suben, que es lo que
+esperas de una fuente nueva.
+
+Se arregló resolviendo cada nombre contra los equipos que ya están en la tabla antes
+de inventar un id, con una tabla de alias para los casos que ningún resolutor puede
+adivinar:
+
+* `76ers` y `Trail Blazers`, que 538 escribe `Sixers` y `Trailblazers` — no comparten
+  ninguna palabra.
+* **Mudanzas y cambios de nombre.** 538 archiva la historia entera de una franquicia
+  bajo su nombre actual; ESPN usa el de la época. Los Seattle SuperSonics de 2002-2008
+  son historia del Thunder; los New Orleans Hornets son historia de los Pelicans.
+* Y las **exhibiciones**: la jornada del All-Star llega etiquetada como partido de
+  playoffs, y la primera pasada creó diecisiete «equipos» con ella (Team LeBron, USA,
+  World, Rising Stars…), cada uno moviendo el Elo de alguien.
+
+Resultado: **46 equipos, 0 nombres sin emparejar.**
+
+Y como el fallo era invisible, `npm run verify:data` lleva ahora una comprobación que
+lo detecta sin conocerlo: **dos equipos activos en la misma temporada que nunca se
+enfrentan**. En una liga con round robin completo eso es imposible, y es exactamente
+la firma de una franquicia partida. Se probó inyectando el fallo a mano — moviendo 135
+partidos de los Lakers a un id duplicado — y la comprobación lo cazó.
+
+### 6.2 La σ del margen ya no es una constante
+
+El hándicap sale de una normal alrededor del margen esperado, y su anchura era
+`MARGIN_SIGMA = 11.7`, medida sobre un archivo que terminaba en junio de 2015. Con las
+temporadas actuales dentro, el residuo real mide:
+
+| Ventana | σ medida |
+|---|---|
+| todo el archivo | 12.00 |
+| desde 2006 | 12.47 |
+| desde 2015 | 13.35 |
+| desde 2020 | 14.04 |
+
+No es ruido, es una **tendencia**: la NBA moderna juega más rápido y tira más triples,
+así que los márgenes son de verdad más anchos. Con lo cual la σ que se publicaba era
+demasiado **estrecha** para los partidos que la app predice, y cada «cubre −7,5» de la
+tarjeta salía con más confianza de la que aguantan los datos. Medido sobre las últimas
+temporadas (7.739 partidos):
+
+| σ | dentro de ±1σ | dentro de ±2σ | Brier de cubrir |
+|---|---|---|---|
+| 11,7 (fija) | 61,3 % | 90,4 % | 0,2479 |
+| 14,14 (medida) | **70,4 %** | **94,9 %** | 0,2482 |
+| lo que dice una normal | 68,3 % | 95,4 % | — |
+
+**El argumento en contra, que es real:** en el Brier de cubrir un hándicap de medio
+punto puesto en la línea del propio modelo, 11,7 gana en cinco de seis cortes
+walk-forward, por unos 0,0003. Pero esa métrica solo mira el **centro** de la curva,
+donde la CDF es casi recta. La cobertura mira toda la distribución, que es la que usan
+las bandas de margen de la tarjeta y cualquier hándicap lejos de esa línea. Arreglar un
+error de cobertura de siete puntos vale 0,0003 de Brier en una línea concreta.
+
+Y como la tendencia es monótona, **cualquier** constante volvería a quedarse vieja. Así
+que se mide al recalcular los ratings, sobre las últimas 6 temporadas, y se guarda por
+liga (`bb_margin_sigma_<liga>` en `meta`); `MARGIN_SIGMA` queda solo como reserva para
+una liga con menos de 1.500 partidos, donde una σ medida sería ruido.
 
 **Ligas sin fuente de resultados** (EuroLeague, NBL): la app muestra sus partidos y las
 probabilidades **implícitas del mercado**, y dice claramente que no hay modelo Elo, en vez de
