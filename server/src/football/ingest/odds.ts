@@ -8,6 +8,7 @@
 // Rows go to fb_upcoming only: the three sports never share a fixtures table.
 
 import { getDb, setMeta } from '../../db.ts';
+import { pruneUpcoming } from '../../freshness.ts';
 import { env, footballConfig } from '../../config.ts';
 import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
 import { demoKickoffs } from '../../demoSchedule.ts';
@@ -180,7 +181,9 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
 
   db.exec('BEGIN');
   try {
-    db.exec('DELETE FROM fb_upcoming');
+    // Keeps the matches that already kicked off today — see pruneUpcoming.
+    // An unconditional DELETE here is what made this morning's game vanish.
+    pruneUpcoming(db, 'fb_upcoming');
     let count = 0;
     for (const [league, events] of perLeague) {
       const idx = buildNameIndex(league);

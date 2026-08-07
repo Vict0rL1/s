@@ -38,6 +38,10 @@
 //   now 01:00 → min(today 00:00, yest 19:00) = yest 19:00 → last night's game stays
 //   tomorrow 09:00 → min(tmw 00:00, tmw 03:00) = tmw 00:00 → today's are gone
 
+// A type-only import: freshness.ts stays independent of db.ts at runtime, which is
+// what lets the pure date logic above be reasoned about on its own.
+import type { DatabaseSync } from 'node:sqlite';
+
 /** Hours of slack for a match that is probably still being played. */
 export const STALE_AFTER_HOURS = 6;
 
@@ -67,4 +71,77 @@ export function freshSince(now = new Date()): string {
   const midnight = startOfLocalToday(now).getTime();
   const rolling = now.getTime() - STALE_AFTER_HOURS * 3600_000;
   return new Date(Math.min(midnight, rolling)).toISOString();
+}
+
+// ===========================================================================
+// PRUNING: the other half of the same rule
+// ===========================================================================
+// `freshSince` decides what to SHOW. This decides what to KEEP, and the two have
+// to agree — because a filter is worthless if the row it would have kept has
+// already been deleted from the table.
+//
+// That was the bug. Every odds refresh ran an unconditional
+//
+//     DELETE FROM fb_upcoming        (and the same for the other four sports)
+//
+// and then reinserted whatever the source returned. A source of UPCOMING events
+// never returns a match that has already kicked off, so this morning's game was
+// wiped from the database at the next refresh — and the refresh runs on every
+// server start. The whole "today's matches stay until midnight" feature was
+// filtering a row that no longer existed.
+//
+// So the delete is now in three parts:
+//
+//   * FUTURE rows      → delete. The refresh is about to reinsert them with fresh
+//                        prices, so keeping the old copy would just risk a stale one.
+//   * rows before the  → delete. Past the display window; nobody will look at them
+//     window            and they are what made the table grow forever.
+//   * everything else  → KEEP. Started, but still inside today. These are exactly
+//                        the rows the reader wants the result for, and the only
+//                        place they can come from is the copy we already have.
+
+/** The five tables that hold scheduled matches. */
+export type UpcomingTable =
+  | 'fb_upcoming'
+  | 'bb_upcoming'
+  | 'bsb_upcoming'
+  | 'naf_upcoming'
+  | 'upcoming_matches';
+
+/**
+ * Remove the rows a refresh is about to replace, plus anything past the window.
+ *
+ * Returns how many rows survived, which is the number worth logging: it is the
+ * count of already-played matches being carried over.
+ */
+export function pruneUpcoming(
+  db: DatabaseSync,
+  table: UpcomingTable,
+  opts: {
+    /**
+     * Extra columns to scope the delete to, e.g. `{ league: 'nfl', source: 'live' }`.
+     *
+     * The NFL keeps two kinds of row in one table — the published schedule and rows
+     * carrying live prices — and a refresh of one must not touch the other. Keys are
+     * column names supplied by this codebase, never by a request.
+     */
+    scope?: Record<string, string>;
+    now?: Date;
+  } = {},
+): number {
+  const now = opts.now ?? new Date();
+  const nowIso = now.toISOString();
+  const since = freshSince(now);
+  const scope = Object.entries(opts.scope ?? {});
+  const extra = scope.map(([col]) => ` AND ${col} = ?`).join('');
+  db.prepare(
+    // `table` and the scope column names are not interpolated user input — the table
+    // is one of the five literals in UpcomingTable and the columns are written at the
+    // call sites, which is why the type is a union rather than `string`.
+    `DELETE FROM ${table} WHERE (commence_time >= ? OR commence_time < ?)${extra}`,
+  ).run(nowIso, since, ...scope.map(([, v]) => v));
+  const row = db
+    .prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE 1 = 1${extra}`)
+    .get(...scope.map(([, v]) => v)) as { c: number };
+  return row.c;
 }

@@ -13,6 +13,7 @@
 // ingest that everything else rests on IS real and was validated game by game.
 
 import { getDb, setMeta } from '../../db.ts';
+import { pruneUpcoming } from '../../freshness.ts';
 import { env, baseballConfig } from '../../config.ts';
 import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
 import { demoKickoffs } from '../../demoSchedule.ts';
@@ -285,7 +286,9 @@ export async function refreshBaseballOdds(): Promise<BaseballOddsResult> {
 
   db.exec('BEGIN');
   try {
-    db.exec('DELETE FROM bsb_upcoming');
+    // Keeps the matches that already kicked off today — see pruneUpcoming.
+    // An unconditional DELETE here is what made this morning's game vanish.
+    pruneUpcoming(db, 'bsb_upcoming');
     for (const [league, events] of perLeague) {
       const idx = buildNameIndex(league);
       let inserted = 0;

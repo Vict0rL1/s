@@ -51,9 +51,11 @@ export interface ReplayGame {
   away_qb_id?: string | null;
   home_qb_name?: string | null;
   away_qb_name?: string | null;
-  /** Conditions. `wind` is null indoors and before a game is played. */
+  /** Conditions. `wind` and `temp` are null indoors and before a game is played. */
   roof?: string | null;
   wind?: number | null;
+  /** Kick-off temperature in °F, as nflverse reports it. */
+  temp?: number | null;
 }
 
 export interface NafTeamState {

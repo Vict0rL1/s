@@ -16,6 +16,7 @@
 // ===========================================================================
 
 import { getDb, setMeta } from '../../db.ts';
+import { pruneUpcoming } from '../../freshness.ts';
 import { basketballConfig, env } from '../../config.ts';
 import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
 import { demoKickoffs } from '../../demoSchedule.ts';
@@ -276,7 +277,9 @@ export async function refreshBasketballOdds(): Promise<BasketballOddsResult> {
   // or postponed, and leaving it behind would show a stale fixture forever.
   db.exec('BEGIN');
   try {
-    db.exec('DELETE FROM bb_upcoming');
+    // Keeps the matches that already kicked off today — see pruneUpcoming.
+    // An unconditional DELETE here is what made this morning's game vanish.
+    pruneUpcoming(db, 'bb_upcoming');
     let count = 0;
     for (const [league, events] of perLeague) {
       const idx = buildNameIndex(league);

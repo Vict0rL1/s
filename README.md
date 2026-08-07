@@ -268,6 +268,66 @@ próximos partidos con la predicción del modelo y las odds lado a lado.
 
 ---
 
+## Los partidos de hoy se quedan hasta medianoche (arreglado)
+
+Un partido jugado por la mañana desaparecía por la tarde, y el filtro que debía conservarlo estaba
+bien: la causa era que **la fila ya no existía**.
+
+Cada refresco de cuotas hacía un `DELETE FROM …_upcoming` sin condiciones y reinsertaba lo que
+devolvía la fuente. Una fuente de partidos *próximos* nunca devuelve uno que ya empezó, así que el
+partido de la mañana se borraba de la base — y el refresco corre al arrancar el servidor. Toda la
+función de «los partidos de hoy se quedan» estaba filtrando una fila que ya no estaba.
+
+El borrado ahora tiene tres partes:
+
+| | |
+|---|---|
+| Partidos **futuros** | se borran: el refresco los va a reinsertar con cuotas frescas |
+| Anteriores a la ventana | se borran: nadie los va a mirar y son lo que hacía crecer la tabla sin fin |
+| **Todo lo demás** | **se queda**: ya empezaron pero son de hoy, y son justo los que quieres ver el resultado |
+
+Estaba en los cinco deportes, y la NFL además tenía una segunda copia del error: su calendario
+filtraba con una ventana propia de cuatro horas en vez de la de la app, y la más estrecha ganaba en
+silencio. Ahora las dos usan la misma regla.
+
+Verificado plantando un partido ya empezado en cada uno de los cinco y corriendo el refresco: los
+cinco sobreviven, y una fila de 2020 sigue limpiándose. El audit tiene una comprobación nueva para
+que no vuelva.
+
+---
+
+## Verificar los datos (`npm run verify:data`)
+
+Había dos comprobaciones en el proyecto y ninguna respondía a esta pregunta. `npm run audit`
+pregunta si la app cuenta con fidelidad lo que dijo el modelo; `npm run backtest:*` pregunta si el
+modelo es bueno. **Las dos pasan sobre una base a la que le falta media temporada.**
+
+Así que esta comprueba los **datos**, contra hechos de cada deporte que no dependen de ningún
+modelo:
+
+| | |
+|---|---|
+| Partidos por equipo y temporada | comparados con **las temporadas vecinas**, no con un número fijo |
+| Cuánto gana el local | 45 % / 26 % / 29 % en fútbol, 53,5 % en béisbol, 62 % en la NBA |
+| Marcadores posibles | y el suelo sale del archivo, no del juego moderno |
+| Duplicados, equipos huérfanos, marcadores vacíos | uno por partido, todos existen, ninguno nulo |
+| **Que los Elo se reproduzcan desde los partidos** | rehacerlos da la misma cifra: 0,00 de diferencia |
+
+Lo de las temporadas vecinas es el punto fino. Una constante «una temporada son N partidos» no
+funciona sobre un archivo que va de 1947 a hoy: la BAA de 1947-48 jugó 215 partidos donde sus
+vecinas jugaron 380, y eso parece una descarga rota hasta que ves que tenía **ocho** equipos en vez
+de doce — 54 partidos cada uno, perfectamente normal. La métrica es **partidos por equipo**: el
+tamaño de la liga cambia el total y no el calendario; una descarga a medias cambia los dos.
+
+Las temporadas que de verdad fueron cortas están **nombradas una por una** (la huelga del 94, el
+COVID del 2020, los cierres patronales de la NBA), que es la alternativa honesta a ensanchar la
+tolerancia hasta que no cace nada.
+
+Probado quitando 110 partidos de la temporada 2018 de la NFL: la comprobación falla con
+*«2018: 10 partidos por equipo frente a ~17 de sus vecinas»*.
+
+---
+
 ## La navegación y la cabecera
 
 **Los deportes están a la izquierda** desde 1024 px, en un rail de 15 rem, y arriba por debajo de esa
@@ -662,6 +722,7 @@ ves, en vez de fallar en silencio.
 | `npm run backtest:naf` | **Fútbol americano**: mide el modelo **contra la línea de cierre real** |
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
+| `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 

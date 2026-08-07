@@ -207,7 +207,7 @@ export function listReplayGames(league: LeagueId): ReplayGame[] {
     .prepare(
       `SELECT season, week, game_date, home_id, away_id, home_points, away_points,
               neutral, playoff, home_rest, away_rest,
-              home_qb_id, away_qb_id, home_qb_name, away_qb_name, roof, wind
+              home_qb_id, away_qb_id, home_qb_name, away_qb_name, roof, wind, temp
        FROM naf_games WHERE league = ?
        ORDER BY game_date, season, week, home_id`,
     )

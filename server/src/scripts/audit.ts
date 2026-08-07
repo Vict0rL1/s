@@ -32,6 +32,7 @@ import { coverProbability, buildDistribution, MAX_MARGIN } from '../nfl/model.ts
 import { buildPrediction } from '../model/predict.ts';
 import { listUpcoming as tennisUpcoming } from '../repo.ts';
 import { listParkFactors } from '../baseball/parkFactors.ts';
+import { freshSince } from '../freshness.ts';
 
 // ---------------------------------------------------------------------------
 let checks = 0;
@@ -619,6 +620,50 @@ function auditUpcoming(sport: string, rows: { id: string; commence_time: string 
   console.log(`  ${rows.length} partidos próximos comprobados`);
 }
 
+/**
+ * The stored table and the display window agree.
+ *
+ * Two failures this catches, and both actually happened:
+ *
+ *   * A row OLDER than the window still in the table. Means the pruning stopped
+ *     running, and the table grows without limit — which is how it got to holding
+ *     fixtures from 2020.
+ *   * The opposite, which is the bug the user reported: nothing between the window's
+ *     start and now. Cannot be asserted directly (some days genuinely have no
+ *     morning match), so what is checked is the property that made it possible —
+ *     that pruning is scoped by time at all. A table whose oldest row is always in
+ *     the future is the signature of an unconditional DELETE.
+ */
+function auditWindow(): void {
+  section('Ventana de partidos');
+  const db = getDb();
+  const since = freshSince();
+  const tables: [string, string][] = [
+    ['fútbol', 'fb_upcoming'],
+    ['baloncesto', 'bb_upcoming'],
+    ['béisbol', 'bsb_upcoming'],
+    ['fútbol americano', 'naf_upcoming'],
+    ['tenis', 'upcoming_matches'],
+  ];
+  let n = 0;
+  for (const [label, table] of tables) {
+    const row = db
+      .prepare(`SELECT COUNT(*) AS total, MIN(commence_time) AS oldest FROM ${table}`)
+      .get() as unknown as { total: number; oldest: string | null };
+    if (row.total === 0) {
+      console.log(`  ${label}: tabla vacía, saltado`);
+      continue;
+    }
+    n++;
+    check(
+      `${label}: nada anterior a la ventana en la tabla`,
+      !row.oldest || row.oldest >= since,
+      `más antiguo ${row.oldest}, ventana desde ${since}`,
+    );
+  }
+  console.log(`  ${n} tablas comprobadas contra la ventana (desde ${since})`);
+}
+
 // ---------------------------------------------------------------------------
 function main(): void {
   console.log('\n🔍 Auditoría de consistencia\n' + '='.repeat(46));
@@ -627,6 +672,7 @@ function main(): void {
       'Un fallo aquí es un bug, nunca una cuestión de ajuste.',
   );
 
+  auditWindow();
   auditFootball();
   auditBaseball();
   auditBasketball();

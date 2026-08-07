@@ -255,6 +255,31 @@ que la medición sea reproducible:
 | La semana de bye | 0 → 0.6312 · 15 → 0.6310 · 30 → 0.6312 |
 | «Los partidos de división son más cerrados» | 0 → 0.6312 · −20 % → 0.6312 · −40 % → 0.6314 |
 
+#### Y la temperatura, que era la última columna sin usar
+
+`temp` estaba en la base para 5.206 partidos y nadie la leía. El total ya lleva el viento
+(−0,2075 puntos por mph) y el techo (+2,44 bajo cubierta), así que la única pregunta que vale
+es si la temperatura **añade algo encima de esas dos** — no si los partidos fríos anotan
+menos, que obviamente sí, en parte porque los partidos fríos son ventosos y nunca bajo cubierta.
+
+Medida sobre el residuo del modelo tal como se envía, solo al aire libre y con el viento fijo:
+
+| Tramo | n | Residuo medio | **Viento medio** |
+|---|---|---|---|
+| < 0 °C | 338 | −0.08 pts | **10.6 mph** |
+| 7–15 °C | 1.395 | +0.05 pts | 8.6 mph |
+| > 29 °C | 246 | +1.26 pts | **7.7 mph** |
+
+Mira la columna del viento: el tramo bajo cero promedia 10,6 mph contra 7,7 en el más
+caluroso. **Es el viento**, y el modelo ya lo lleva. El ajuste conjunto sale en −0,0117 puntos
+por °C —0,29 puntos entre 0 y 25 °C— y **0 de 5 cortes mejoran** fuera de muestra: todos
+empeoran, el log-lik entre −0,0025 y −0,0047.
+
+El otro medio resultado, gratis: el coeficiente residual del viento sale en −0,04 por mph, lo
+que dice que el −0,2075 que ya se aplica está bien puesto.
+
+`TEMPERATURE_TOTAL_PER_C = 0` en `nfl/model.ts`.
+
 ```bash
 npm run backtest:naf -- --key-numbers 0     # sin números clave
 npm run backtest:naf -- --home 55           # ventaja de campo fija
@@ -345,3 +370,4 @@ eso la liga tendría 39 equipos, varios con media historia cada uno.
 - **El viento del día concreto.** El efecto está medido y aplicado sobre el archivo, pero
   no hay previsión meteorológica en el calendario, así que no puede mover un pronóstico.
 - Si el partido importa: un equipo ya clasificado en la semana 18 no juega igual.
+

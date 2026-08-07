@@ -203,6 +203,35 @@ export function pitcherRunFactor(rating: number | null, weight = PITCHER_WEIGHT)
   return clamp(1 + weight * (rating - 1), 0.7, 1.35);
 }
 
+/**
+ * Each team's own runs-scored / runs-allowed rate, in the total. Measured, worth
+ * nothing, shipped OFF.
+ *
+ * The gap looked obvious and large: `expectedRuns` takes the LEAGUE's runs per game
+ * and never asks how much these two teams score. In 2019 the Astros scored 5.7 a
+ * game and the Tigers 3.6, and basketball's model does use exactly this signal
+ * (expectedPoints, from ppg and papg). The rates are already tracked in the replay
+ * and already persisted as rs/ra.
+ *
+ * Fitted the way basketball does it — what this offence scores against what that
+ * defence concedes, shrunk toward the league mean — and swept across shrinkage
+ * weights, walk-forward over six cut points from 2014 to 2024:
+ *
+ *   w = 0.3   0 de 6 mejoran   Brier over/under 0.24624 → 0.24653
+ *   w = 0.5   0 de 6           0.24624 → 0.24688
+ *   w = 0.7   0 de 6           0.24624 → 0.24735
+ *   w = 1.0   0 de 6           0.24624 → 0.24830
+ *
+ * Every weight, every cut point, worse. The interesting detail is that the MAE of
+ * the total improves very slightly (3.4980 → 3.4955) while the Brier worsens: the
+ * rates nudge the mean toward truth and add more variance than they remove, which is
+ * what a signal that is mostly noise plus already-counted information looks like.
+ * The Elo tilt and the starting pitcher were carrying it.
+ *
+ * Non-zero and re-run `npm run backtest:bsb` to reproduce.
+ */
+export const TEAM_RATE_WEIGHT = 0;
+
 // ---------------------------------------------------------------------------
 // Expected runs
 // ---------------------------------------------------------------------------

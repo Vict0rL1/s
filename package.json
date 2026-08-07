@@ -34,7 +34,8 @@
     "update-data:naf": "npm run update-data:naf --workspace server --",
     "backtest:naf": "npm run backtest:naf --workspace server --",
     "phone": "node scripts/phone.mjs",
-    "dev:fixed": "concurrently -n api,web -c blue,green \"npm:dev:server\" \"npm:dev:web\""
+    "dev:fixed": "concurrently -n api,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
+    "verify:data": "npm run verify:data --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

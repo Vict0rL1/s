@@ -306,7 +306,35 @@ vez de inventar una predicción. «No hay datos» y «no hay ventaja» no son lo
 
 ---
 
-## 7. Limitaciones
+## 7. Medido y descartado
+
+Dos señales que parecían obvias, se midieron y **no se enviaron**. Están en el código con su
+interruptor a cero para que el resultado negativo se pueda reproducir en vez de tener que creérselo.
+
+### La tasa de carreras de cada equipo (`TEAM_RATE_WEIGHT = 0`)
+
+El hueco parecía enorme: `expectedRuns` toma las carreras por partido **de la liga** y nunca pregunta
+cuánto anotan estos dos equipos. En 2019 los Astros anotaron 5,7 por partido y los Tigers 3,6. Y el
+modelo de baloncesto sí usa exactamente esta señal.
+
+Ajustado como en baloncesto —lo que anota este ataque contra lo que concede esa defensa, encogido
+hacia la media— y barrido en pesos, *walk-forward* sobre seis cortes de 2014 a 2024:
+
+| Peso | Cortes que mejoran | Brier del over/under |
+|---|---|---|
+| 0.3 | **0 de 6** | 0.24624 → 0.24653 |
+| 0.5 | **0 de 6** | 0.24624 → 0.24688 |
+| 0.7 | **0 de 6** | 0.24624 → 0.24735 |
+| 1.0 | **0 de 6** | 0.24624 → 0.24830 |
+
+Todos los pesos, todos los cortes, peor. El detalle interesante: el **MAE del total mejora** un pelo
+(3.4980 → 3.4955) mientras el **Brier empeora**. Las tasas acercan la media a la verdad y añaden más
+varianza de la que quitan — que es exactamente el aspecto de una señal que es casi todo ruido más
+información que el Elo y el abridor ya llevaban.
+
+---
+
+## 8. Limitaciones
 
 - **No conoce el bullpen.** Es la mayor. Un abridor controla ~60% de las carreras
   que encaja su equipo; el otro 40% lo deciden relevistas que este modelo no

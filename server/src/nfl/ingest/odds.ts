@@ -13,6 +13,7 @@
 // The archive and the model that rest under this ARE real and were measured.
 
 import { getDb } from '../../db.ts';
+import { pruneUpcoming } from '../../freshness.ts';
 import { env, nflConfig } from '../../config.ts';
 import { activeKeys, creditCost, fetchOdds } from '../../oddsQuota.ts';
 import { resolveTeam } from '../repo.ts';
@@ -155,7 +156,10 @@ export async function refreshOdds(manual = false): Promise<number> {
 
     db.exec('BEGIN');
     try {
-      db.prepare("DELETE FROM naf_upcoming WHERE league = ? AND source = 'live'").run(league);
+      // Scoped to this league's LIVE rows, and sparing the ones from earlier today —
+      // see pruneUpcoming. A blanket delete here dropped a game the moment it
+      // kicked off, because an odds feed stops listing it.
+      pruneUpcoming(db, 'naf_upcoming', { scope: { league, source: 'live' } });
       const ins = db.prepare(
         `INSERT INTO naf_upcoming
            (id, league, season, week, commence_time, home_name, away_name, home_id, away_id,

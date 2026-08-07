@@ -16,6 +16,7 @@
 // every one of those a silent corruption.
 
 import { getDb } from '../../db.ts';
+import { freshSince, pruneUpcoming } from '../../freshness.ts';
 import { zonedToUtc } from '../../timezone.ts';
 import type { LeagueId } from '../types.ts';
 
@@ -355,15 +356,19 @@ export function storeGames(league: LeagueId, games: ParsedGame[], names: Map<str
  */
 export function storeSchedule(league: LeagueId, fixtures: ParsedFixture[], names: Map<string, string>): number {
   const db = getDb();
-  const now = Date.now();
+  // The same window the app displays, not a separate four-hour one. Two rules for
+  // "how long is a fixture still interesting" is one rule too many, and the narrower
+  // of the two silently won: a Sunday afternoon game was dropped from the table four
+  // hours after kick-off even though the schedule was meant to keep it until midnight.
+  const since = freshSince();
   const upcoming = fixtures
-    .filter((f) => new Date(f.commenceTime).getTime() > now - 4 * 3600_000)
+    .filter((f) => f.commenceTime >= since)
     .sort((a, b) => a.commenceTime.localeCompare(b.commenceTime))
     .slice(0, 32);
 
   db.exec('BEGIN');
   try {
-    db.prepare("DELETE FROM naf_upcoming WHERE league = ? AND source = 'schedule'").run(league);
+    pruneUpcoming(db, 'naf_upcoming', { scope: { league, source: 'schedule' } });
     const ins = db.prepare(
       `INSERT INTO naf_upcoming
          (id, league, season, week, commence_time, home_name, away_name, home_id, away_id,

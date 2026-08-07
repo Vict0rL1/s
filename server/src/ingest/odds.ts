@@ -11,6 +11,8 @@
 // ===========================================================================
 
 import { getDb, setMeta } from '../db.ts';
+import { demoKickoffs } from '../demoSchedule.ts';
+import { pruneUpcoming } from '../freshness.ts';
 import { env, tournamentsConfig } from '../config.ts';
 import { canSpend, creditCost, listSports, recordQuota } from '../oddsQuota.ts';
 import { expectedScore } from '../model/elo.ts';
@@ -159,9 +161,19 @@ function generateFixtures(): number {
     `INSERT INTO upcoming_matches (
        id, tour, tournament_id, tournament_name, surface, commence_time,
        p1_name, p2_name, p1_id, p2_id, p1_odds, p2_odds, books, source, updated_at
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(id) DO UPDATE SET
+       commence_time = excluded.commence_time, p1_odds = excluded.p1_odds,
+       p2_odds = excluded.p2_odds, books = excluded.books,
+       source = excluded.source, updated_at = excluded.updated_at`,
   );
-  const now = Date.now();
+  // Plausible kick-off times on the clock, always still ahead. This generator was
+  // missed when the other four were fixed — it is a SECOND demo-fixture builder for
+  // tennis, separate from the one in ingest/seed.ts, and it kept producing
+  // `Date.now() + n hours` (times with stray seconds, ageing into the past). The
+  // audit's "hora de inicio en punto de minuto" check is what found it.
+  const kickoffs = demoKickoffs('tennis', 64);
+  let slot = 0;
   let count = 0;
   db.exec('BEGIN');
   for (const t of tournamentsConfig.tournaments) {
@@ -189,7 +201,7 @@ function generateFixtures(): number {
           t.id,
           t.name,
           surface,
-          new Date(now + (pi + 1) * 8 * 3600 * 1000).toISOString(),
+          kickoffs[slot++],
           a.name,
           b.name,
           a.id,
@@ -211,8 +223,17 @@ function generateFixtures(): number {
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
+/**
+ * Clear the slate a refresh is about to rewrite — but not the matches from earlier
+ * today.
+ *
+ * This used to be an unconditional `DELETE FROM upcoming_matches`, which is what
+ * made a match played this morning disappear: a feed of UPCOMING matches never
+ * returns one that has already started, so the row was deleted and never came back.
+ * See pruneUpcoming in freshness.ts for the three-way rule.
+ */
 export function clearUpcoming(): void {
-  getDb().exec('DELETE FROM upcoming_matches;');
+  pruneUpcoming(getDb(), 'upcoming_matches');
 }
 
 /** Which config tournament (if any) a live sport key belongs to. */

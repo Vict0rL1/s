@@ -139,6 +139,29 @@ export const REST_ELO_PER_DAY = 0;
 export const BYE_WEEK_ELO = 0;
 export const DIVISION_HOME_SCALE = 0;
 
+/**
+ * Temperature, on the total. Measured, worth nothing, shipped OFF.
+ *
+ * `temp` sits in naf_games for 5,206 games and was the last unused column there, so
+ * it got the same treatment as the wind: fit on the residual of the shipped model,
+ * outdoor games only, with the wind held fixed so the two cannot be confused.
+ *
+ *   residuo por tramo:  <0 °C −0.08 pts (viento medio 10.6 mph)
+ *                       7–15  +0.05                   8.6
+ *                       >29   +1.26                   7.7
+ *   ajuste conjunto:    −0.0117 puntos por °C  →  0.29 puntos entre 0 y 25 °C
+ *   walk-forward:       0 de 5 cortes mejoran (log-lik −0.0025 a −0.0047)
+ *
+ * Cold-weather games DO score less — the folklore is right about that. But look at
+ * the wind column: the sub-zero bucket averages 10.6 mph against 7.7 in the hottest
+ * one. It is the wind, and the total already carries it at −0.2075 per mph. Add
+ * temperature on top and every one of the five cut points gets worse.
+ *
+ * The residual wind coefficient landing at −0.04 per mph is the other half of the
+ * result: it says the shipped −0.2075 is already about right.
+ */
+export const TEMPERATURE_TOTAL_PER_C = 0;
+
 // ---------------------------------------------------------------------------
 // Scoring rates, for the total
 // ---------------------------------------------------------------------------
