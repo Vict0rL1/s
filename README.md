@@ -232,6 +232,19 @@ de una tecnológica premiaría a sectores enteros por tener múltiplos
 estructuralmente bajos. Un sector con menos de 3 empresas puntuables se
 descarta entero en vez de contaminar la lista con z-scores sin sentido.
 
+### Precio y minigráfico gratis
+
+Cada fila muestra el último cierre, la variación del día y un minigráfico del
+último año; al desplegarla, el rango de 52 semanas y en qué percentil de ese
+rango cotiza. **No cuesta ninguna llamada adicional**: la descarga masiva que
+el momentum ya hacía por sector trae un año de cierres diarios y solo usaba dos
+puntos. Pedir una cotización por empresa serían ~500 llamadas contra un tier de
+60/min — inviable; derivarlas de lo ya descargado es gratis.
+
+El precio hereda la frescura de esa descarga (caché de 6 h, fuente yfinance), y
+la UI lo dice: la fila desplegada muestra fuente y antigüedad. Es un cierre
+reciente, no una cotización en tiempo real, y la app no finge lo contrario.
+
 ### Cobertura incremental
 
 El S&P 500 son ~500 empresas y los tiers gratuitos dan 60 llamadas/minuto. El

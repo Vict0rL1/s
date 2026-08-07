@@ -535,10 +535,26 @@ export interface ScanResponse {
   disclaimer: string
 }
 
-/** Señal de la lista diaria: como QuantSignal, más su sector. */
+/** Precio y serie derivados de la descarga masiva que ya hacía el momentum. */
+export interface DailyPrice {
+  last: number
+  /** Variación frente al cierre anterior, en %. */
+  change_pct: number | null
+  low_52w: number
+  high_52w: number
+  /** Posición dentro del rango anual: 0 = mínimo, 1 = máximo. */
+  range_position: number | null
+  spark: number[]
+  points: number
+  source: string | null
+  as_of: string | null
+}
+
+/** Señal de la lista diaria: como QuantSignal, más su sector y su precio. */
 export interface DailySignal extends Omit<QuantSignal, 'score' | 'context'> {
   score: number // en /today las no puntuables se descartan: nunca es null
   sector_rank: number | null
+  price: DailyPrice | null
   context: {
     name?: string | null
     sector?: string | null

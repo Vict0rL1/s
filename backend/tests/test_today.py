@@ -105,6 +105,20 @@ class MarketService:
             return {
                 **common,
                 "momentum": {s: (i % 7) / 10 - 0.3 for i, s in enumerate(symbols)},
+                # La descarga real trae un año de cierres; el doble devuelve el
+                # resumen que el proveedor deriva de ellos.
+                "prices": {
+                    s: {
+                        "last": 100.0 + i,
+                        "change_pct": (i % 5) - 2.0,
+                        "low_52w": 80.0 + i,
+                        "high_52w": 130.0 + i,
+                        "range_position": 0.4,
+                        "spark": [90.0 + i, 95.0 + i, 100.0 + i],
+                        "points": 251,
+                    }
+                    for i, s in enumerate(symbols)
+                },
             }
         symbol = kwargs.get("symbol", "")
         if symbol in self.failing:
@@ -344,3 +358,32 @@ def test_una_respuesta_cacheada_con_forma_antigua_se_descarta(client):
     assert "signals" in de_nuevo
     assert "thresholds" in de_nuevo
     assert de_nuevo["counts"]["favorables"] >= 0
+
+
+def test_el_precio_viaja_con_cada_senal_y_con_su_procedencia(client):
+    c, _ = client
+    data = _completar(c)
+    con_precio = [s for s in data["signals"] if s["price"]]
+    assert len(con_precio) == data["scored"]
+    for signal in con_precio[:5]:
+        precio = signal["price"]
+        assert precio["last"] > 0
+        assert precio["low_52w"] <= precio["last"] <= precio["high_52w"]
+        assert len(precio["spark"]) >= 2
+        # Ninguna cifra se enseña sin decir de dónde sale y de cuándo es.
+        assert precio["source"]
+        assert precio["as_of"]
+
+
+def test_el_precio_no_cuesta_ninguna_llamada_adicional(client):
+    """Sale de la descarga masiva que el momentum ya hacía.
+
+    Es la razón por la que se puede mostrar en 500 filas: pedir una cotización
+    por empresa serían 500 llamadas contra un tier de 60/min.
+    """
+    c, service = client
+    c.get("/api/signals/today?market=canada&budget=600")
+    # Una descarga masiva por sector y ni una llamada de cotización o perfil.
+    sectores_usables = len(load_market("canada")["sectors"])
+    assert service.bulk_calls == sectores_usables
+    assert service.profile_calls == 0

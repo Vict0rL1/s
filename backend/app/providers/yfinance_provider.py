@@ -37,6 +37,51 @@ _INFO_MAP = {
 _INTERVAL_MAP = {"1day": "1d", "1week": "1wk", "1month": "1mo"}
 
 
+# Puntos del minigráfico. Suficientes para que se lea la forma de un año sin
+# inflar la respuesta: con 500 empresas, cada punto extra son 500 números más.
+SPARK_POINTS = 32
+
+
+def _price_summary(closes) -> dict | None:
+    """Precio, variación, rango de 52 semanas y serie, a partir de los cierres.
+
+    Todo sale de la descarga que el momentum ya hacía. Es best-effort: si la
+    serie es demasiado corta para un campo, ese campo queda en None en vez de
+    inventarse — un dato ausente no es un cero.
+    """
+    if closes is None or len(closes) == 0:
+        return None
+    try:
+        valores = [float(v) for v in closes.tolist()]
+    except (TypeError, ValueError):
+        return None
+    valores = [v for v in valores if v == v and v not in (float("inf"), float("-inf"))]
+    if not valores:
+        return None
+
+    last = valores[-1]
+    prev = valores[-2] if len(valores) >= 2 else None
+    low, high = min(valores), max(valores)
+
+    # Muestreo uniforme: conserva la forma de la serie sin mandarla entera.
+    if len(valores) <= SPARK_POINTS:
+        spark = valores
+    else:
+        paso = (len(valores) - 1) / (SPARK_POINTS - 1)
+        spark = [valores[round(i * paso)] for i in range(SPARK_POINTS)]
+
+    return {
+        "last": round(last, 2),
+        "change_pct": round((last / prev - 1) * 100, 2) if prev else None,
+        "low_52w": round(low, 2),
+        "high_52w": round(high, 2),
+        # Dónde está el precio dentro de su rango anual: 0 = mínimo, 1 = máximo.
+        "range_position": round((last - low) / (high - low), 3) if high > low else None,
+        "spark": [round(v, 2) for v in spark],
+        "points": len(valores),
+    }
+
+
 def _clean(value):
     if value is None:
         return None
@@ -161,11 +206,17 @@ class YFinanceProvider(DataProvider):
         Twelve Data costaría 30 créditos y ~4 minutos por su límite de 8/min.
         yfinance descarga todo el bloque de golpe y gratis. Para momentum (un
         cociente entre dos precios pasados) su precisión sobra.
+
+        Devuelve además `prices`: la descarga ya trae un año de cierres diarios
+        por empresa y el momentum solo usa dos puntos. Sacar de ahí el último
+        cierre, la variación, el rango de 52 semanas y una serie para el
+        minigráfico **no cuesta ninguna llamada adicional** — es aprovechar
+        datos que ya estaban pagados.
         """
         import yfinance as yf
 
         if not symbols:
-            return {"momentum": {}, "as_of": iso_utc()}
+            return {"momentum": {}, "prices": {}, "as_of": iso_utc()}
         try:
             data = yf.download(
                 " ".join(symbols),
@@ -182,6 +233,7 @@ class YFinanceProvider(DataProvider):
             raise DataNotFoundError("yfinance: sin datos para el universo")
 
         out: dict[str, float | None] = {}
+        prices: dict[str, dict | None] = {}
         for symbol in symbols:
             try:
                 # Con un solo símbolo yfinance no agrupa por ticker.
@@ -190,7 +242,11 @@ class YFinanceProvider(DataProvider):
                 ).dropna()
             except (KeyError, TypeError):
                 out[symbol] = None
+                prices[symbol] = None
                 continue
+
+            prices[symbol] = _price_summary(closes)
+
             # ~252 sesiones/año, ~21/mes: de t−12m a t−1m (se excluye el último
             # mes para evitar la reversión de corto plazo).
             if len(closes) < 200:
@@ -198,7 +254,7 @@ class YFinanceProvider(DataProvider):
                 continue
             start, end = closes.iloc[0], closes.iloc[-21]
             out[symbol] = (end / start - 1) if start else None
-        return {"momentum": out, "as_of": iso_utc()}
+        return {"momentum": out, "prices": prices, "as_of": iso_utc()}
 
     def get_etf_data(self, symbol: str) -> dict:
         """Composición de ETF vía Yahoo. Es la única fuente gratuita razonable

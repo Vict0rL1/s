@@ -152,10 +152,16 @@ def _score_symbols(
     # 1) Momentum de todo el conjunto en una sola descarga (gratis).
     momentum_map: dict[str, float | None] = {}
     momentum_source = None
+    # La misma descarga trae un año de cierres: de ahí salen precio, variación
+    # y minigráfico sin ninguna llamada extra.
+    price_map: dict[str, dict | None] = {}
+    price_as_of = None
     bulk = _safe_get(service, "bulk_momentum", symbols=symbols)
     if bulk:
         momentum_map = bulk.get("momentum", {})
         momentum_source = bulk.get("source")
+        price_map = bulk.get("prices") or {}
+        price_as_of = bulk.get("as_of")
 
     # 2) Fundamentales por empresa (caché 24 h).
     raw_by_symbol: dict[str, dict] = {}
@@ -209,6 +215,14 @@ def _score_symbols(
         signal = build_signal(symbol, composite, calibration, horizon="6-12 meses")
         signal["context"] = context.get(symbol, {})
         signal["events"] = []
+        # Precio y serie con su procedencia: la app nunca enseña una cifra sin
+        # decir de dónde sale y de cuándo es.
+        precio = price_map.get(symbol)
+        signal["price"] = (
+            {**precio, "source": momentum_source, "as_of": price_as_of}
+            if precio
+            else None
+        )
         signals.append(signal)
 
     return {
