@@ -79,6 +79,7 @@ def decide(
     position: dict | None = None,
     favorable_min: float = 0.35,
     desfavorable_max: float = -0.35,
+    reglas: dict | None = None,
 ) -> dict:
     """Decide qué hacer con una empresa, con sus niveles y sus motivos.
 
@@ -168,7 +169,7 @@ def decide(
             "reasons": razones,
             "levels": niveles_posicion,
             "triggers": disparadores,
-            "confidence": _confianza(signal),
+            "confidence": _confianza(signal, reglas),
             "owned": True,
             "pnl_pct": pnl_pct,
         }
@@ -231,13 +232,31 @@ def decide(
         "reasons": razones,
         "levels": niveles if accion in {"comprar", "vigilar"} else None,
         "triggers": disparadores,
-        "confidence": _confianza(signal),
+        "confidence": _confianza(signal, reglas),
         "owned": False,
     }
 
 
-def _confianza(signal: dict) -> str:
-    """Si las reglas están validadas contra histórico o solo son razonables."""
+def _confianza(signal: dict, reglas: dict | None = None) -> str:
+    """En qué apoyarse: reglas probadas, reglas refutadas o solo razonables.
+
+    `reglas` es el resumen guardado por el backtest de reglas. Tiene tres
+    desenlaces posibles y los tres importan:
+
+    - **refutada**: se probaron y perdieron dinero. Es el caso que ninguna app
+      enseña, y el único que de verdad te ahorra dinero. Pesa más que cualquier
+      otra señal, así que se devuelve aunque el modelo de factores esté calibrado.
+    - **calibrada**: hay respaldo histórico con muestra suficiente.
+    - **sin_calibrar**: son razonables y nada más.
+    """
+    if reglas and reglas.get("fiable"):
+        esperanza = reglas.get("esperanza_pct")
+        ventaja = reglas.get("ventaja_pct")
+        if esperanza is not None and (
+            esperanza <= 0 or (ventaja is not None and ventaja <= 0)
+        ):
+            return "refutada"
+        return "calibrada"
     if signal.get("probability") is not None:
         return "calibrada"
     return "sin_calibrar"

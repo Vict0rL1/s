@@ -168,13 +168,31 @@ function DecisionPlan({ decision }: { decision: Decision }) {
         </div>
       )}
 
-      <p className="text-[11px] leading-snug text-slate-400">
-        {decision.confidence === 'calibrada'
-          ? 'Reglas validadas contra el histórico del backtest.'
-          : 'Reglas mecánicas todavía sin validar contra histórico: ejecuta el ' +
-            'backtest en Señales para saber si han funcionado. Que sean ' +
-            'razonables no significa que acierten.'}
-      </p>
+      {/* Un sistema probado y perdedor no puede avisar con la misma letra
+          pequeña gris que uno sin probar: es la información más valiosa que
+          la app puede darte y va en rojo, no de pasada. */}
+      {decision.confidence === 'refutada' ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-[11px] leading-snug text-red-700">
+          <strong>Estas reglas se probaron contra histórico y no funcionaron:</strong>{' '}
+          aplicarlas en el periodo medido habría perdido dinero, o habría ganado
+          menos que comprar a ciegas. La operación de arriba es lo que dictan las
+          reglas, no una recomendación. Revisa el detalle en{' '}
+          <Link to="/senales" className="font-medium underline">
+            Señales
+          </Link>
+          .
+        </p>
+      ) : (
+        <p className="text-[11px] leading-snug text-slate-400">
+          {decision.confidence === 'calibrada'
+            ? 'Reglas validadas contra el histórico del backtest: en el periodo ' +
+              'medido tuvieron esperanza positiva y superaron a comprar a ciegas. ' +
+              'Haber funcionado antes no garantiza que funcionen ahora.'
+            : 'Reglas mecánicas todavía sin validar contra histórico: ejecuta el ' +
+              'backtest de reglas en Señales para saber si han funcionado. Que sean ' +
+              'razonables no significa que acierten.'}
+        </p>
+      )}
     </div>
   )
 }

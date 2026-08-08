@@ -356,23 +356,68 @@ puede ser positiva si el stop ya está perforado. No hay zona de compra ni peso
 sugerido: no se propone entrar en algo que ya tienes, y menos si la acción es
 vender.
 
+### ¿Y funcionan? El backtest de reglas
+
+Hay **dos backtests** en la app porque hay dos preguntas, y una puede salir
+bien con la otra mal:
+
+| Backtest | Pregunta | Endpoint |
+|---|---|---|
+| **Modelo** | ¿La puntuación ordena las empresas mejor que la mediana? | `POST /api/signals/backtest` |
+| **Reglas** | ¿Comprar sobre la SMA200 con este stop y este objetivo gana dinero? | `POST /api/signals/rule-backtest` |
+
+El segundo es el que valida lo que la app realmente ejecuta, y es una
+**simulación por eventos**: en cada fecha se puntúa el universo con datos
+point-in-time, se abre posición en las que cumplen las reglas, y cada operación
+se sigue sesión a sesión hasta que salta el stop, toca el objetivo o vence el
+año. Tres decisiones lo gobiernan:
+
+- **Se entra al cierre siguiente a la señal.** Comprar al precio del día en que
+  se conoce la señal es comprar con información que aún no tenías. Es el error
+  que hace brillar a los backtests caseros.
+- **Los costes van dentro.** Comisión, deslizamiento y —por defecto— la
+  conversión CAD→USD, que en un bróker canadiense ronda el 1,5 % por lado. Un
+  sistema con stops rota posiciones, así que el coste no es un detalle: son
+  ~3,3 % por operación completa, y suele pesar más que la ventaja del modelo.
+- **Ante la duda, el caso malo.** Con datos diarios no se sabe si dentro de una
+  sesión se tocó antes el stop o el objetivo: se asume stop. Y la salida usa el
+  cierre real, no el precio del stop, porque un hueco a la baja no te llena
+  donde querías.
+
+Siempre se compara contra **comprar el universo entero a ciegas** en las mismas
+fechas. Un 55 % de aciertos no significa nada si no hacer nada daba más — y en
+las pruebas hechas hasta ahora, a veces daba más. La app lo dice en esos
+términos: *«las reglas ganan menos que no hacer nada; el trabajo extra no se
+paga»*. También mide el **filtro de la media de 200 sesiones con y sin él**,
+porque mantener una regla sin poder comprobar si aporta es un acto de fe.
+
+**Sesgo de supervivencia: presente y declarado.** Los universos son los miembros
+de HOY del índice; las que quebraron o fueron expulsadas no están. Cualquier
+resultado está inflado en una cantidad que no se puede medir con fuentes
+gratuitas, y la UI lo dice en cada ejecución en vez de esconderlo en la
+metodología.
+
 ### La advertencia que no se quita
 
-Cada decisión lleva un campo `confidence` con dos valores posibles:
-**calibrada** si el backtest tiene muestra suficiente para publicar una
-probabilidad en ese rango de puntuación, y **sin calibrar** si no. Hoy, sin
-haber ejecutado el backtest, casi todas salen sin calibrar, y la UI lo dice
-encima de los niveles:
+Cada decisión lleva un campo `confidence` con tres valores que importan:
 
-> Reglas mecánicas todavía sin validar contra histórico: ejecuta el backtest en
-> Señales para saber si han funcionado. Que sean razonables no significa que
-> acierten.
+| Valor | Qué significa |
+|---|---|
+| **calibrada** | El backtest de reglas tiene ≥ 30 operaciones, esperanza positiva y supera a comprar a ciegas. |
+| **refutada** | Se probaron y **perdieron dinero**, o ganaron menos que no hacer nada. |
+| **sin calibrar** | No se ha ejecutado el backtest, o no hay muestra suficiente. |
 
-Son reglas defendibles —dimensionar el stop por volatilidad, no comprar contra
-la tendencia, arriesgar lo mismo en cada idea—, pero *razonable* y *validado*
-no son lo mismo, y la app no usa una palabra por la otra. Que el sistema te
-diga «Comprar» significa que se cumplen unas condiciones escritas, no que la
-empresa vaya a subir.
+`refutada` es el estado que ninguna herramienta enseña y el único que de verdad
+ahorra dinero, así que no va en gris: la fila desplegada lo pinta en rojo y dice
+que la operación mostrada es lo que dictan las reglas, no una recomendación.
+Pesa más que una probabilidad del modelo de factores, porque son cosas distintas
+—el modelo puede ordenar bien y las reglas perder igualmente.
+
+Las reglas son defendibles —dimensionar el stop por volatilidad, no comprar
+contra la tendencia, arriesgar lo mismo en cada idea—, pero *razonable* y
+*validado* no son lo mismo, y la app no usa una palabra por la otra. Que el
+sistema diga «Comprar» significa que se cumplen unas condiciones escritas, no
+que la empresa vaya a subir.
 
 ## Motor de señales cuantitativas
 

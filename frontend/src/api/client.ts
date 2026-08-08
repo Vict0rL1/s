@@ -12,6 +12,7 @@ import type {
   Portfolio,
   PriceAlert,
   QuantSignal,
+  RuleBacktestResponse,
   ScanResponse,
   ScreenerPreset,
   UniverseInfo,
@@ -236,6 +237,12 @@ export const api = {
       symbols,
       horizon_months: horizonMonths,
       years,
+    }),
+  runRuleBacktest: (symbols: string[], years: number, conDivisa: boolean) =>
+    postJson<RuleBacktestResponse>('/api/signals/rule-backtest', {
+      symbols,
+      years,
+      con_divisa: conDivisa,
     }),
   explainSignal: (symbol: string, signal: QuantSignal) =>
     postJson<SignalExplanation>(`/api/signals/${symbol}/explain`, {

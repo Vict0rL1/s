@@ -581,7 +581,8 @@ export interface Decision {
   reasons: string[]
   levels: DecisionLevels | null
   triggers: string[]
-  confidence: 'calibrada' | 'sin_calibrar' | 'ninguna'
+  /** `refutada` = las reglas se probaron contra histórico y perdieron dinero. */
+  confidence: 'calibrada' | 'refutada' | 'sin_calibrar' | 'ninguna'
   /** Si ya tienes la empresa en cartera: cambia la pregunta a sostener o soltar. */
   owned: boolean
   pnl_pct?: number | null
@@ -829,4 +830,58 @@ export interface DeepDiveNarrative {
   content_md: string
   model: string
   disclaimer: string
+}
+
+/** Una operación simulada por el backtest de reglas. */
+export interface RuleTrade {
+  symbol: string
+  score: number
+  entrada_fecha: string
+  entrada: number
+  salida_fecha: string
+  salida: number
+  motivo: 'stop' | 'objetivo' | 'plazo'
+  sesiones: number
+  stop_pct: number
+  objetivo_pct: number
+  bruto_pct: number
+  neto_pct: number
+  ganadora: boolean
+}
+
+/** ¿Ganan dinero las reglas? Simulación operación a operación, neta de costes. */
+export interface RuleBacktestResponse {
+  n_operaciones: number
+  fiable: boolean
+  tasa_acierto?: number
+  tasa_acierto_ic?: [number, number]
+  esperanza_pct?: number
+  media_ganadora_pct?: number
+  media_perdedora_pct?: number
+  factor_beneficio?: number | null
+  peor_operacion_pct?: number
+  mejor_operacion_pct?: number
+  racha_perdedora?: number
+  salidas?: Record<'stop' | 'objetivo' | 'plazo', number>
+  /** Qué habría dado comprar el universo entero a ciegas en las mismas fechas. */
+  referencia_pct?: number | null
+  ventaja_pct?: number | null
+  coste_por_lado_pct: number
+  coste_total_por_operacion_pct: number
+  filtro_tendencia: boolean
+  umbral: number
+  descartes: Record<string, number>
+  operaciones: RuleTrade[]
+  sesgo_supervivencia: string
+  metodologia?: string
+  nota?: string
+  universo: string[]
+  sin_datos: string[]
+  periodo: { desde: string; hasta: string }
+  comparativa_sin_filtro_tendencia: {
+    n_operaciones: number
+    esperanza_pct?: number
+    tasa_acierto?: number
+  }
+  veredicto: string
 }

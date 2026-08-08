@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import type {
   BacktestResponse,
   QuantSignal,
+  RuleBacktestResponse,
   ScanResponse,
   SignalExplanation,
   SignalResponse,
@@ -474,12 +475,157 @@ function ScanMode() {
 }
 
 /** Modo manual: tú das los tickers. Incluye el backtest. */
+/** Una cifra grande con su rótulo. */
+function Stat({
+  label,
+  value,
+  hint,
+  tone = 'neutral',
+}: {
+  label: string
+  value: string
+  hint?: string
+  tone?: 'neutral' | 'good' | 'bad'
+}) {
+  const color =
+    tone === 'good' ? 'text-emerald-700' : tone === 'bad' ? 'text-red-600' : 'text-slate-900'
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
+      <div className={`text-lg font-semibold tabular-nums ${color}`}>{value}</div>
+      {hint && <div className="text-[10px] leading-tight text-slate-400">{hint}</div>}
+    </div>
+  )
+}
+
+/** ¿Ganan dinero las reglas? Es la pregunta que decide si la app sirve.
+ *
+ *  Se separa a propósito del panel del modelo de factores: son dos preguntas
+ *  distintas y una puede salir bien con la otra mal. Confundirlas es cómo se
+ *  acaba confiando en un sistema que nunca se probó. */
+function RuleBacktestPanel({ result }: { result: RuleBacktestResponse }) {
+  const pct = (v: number | null | undefined, d = 2) =>
+    v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(d)} %`
+
+  if (result.n_operaciones === 0) {
+    return (
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-sm font-semibold text-slate-800">Validación de las reglas</h3>
+        <p className="mt-2 text-sm text-slate-600">{result.nota ?? result.veredicto}</p>
+        <p className="mt-2 text-xs text-slate-400">{result.sesgo_supervivencia}</p>
+      </section>
+    )
+  }
+
+  const rentable = (result.esperanza_pct ?? 0) > 0 && (result.ventaja_pct ?? 0) > 0
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-800">
+          Validación de las reglas de compra y venta
+        </h3>
+        <span className="text-[11px] text-slate-400">
+          {result.periodo.desde} → {result.periodo.hasta} · {result.universo.length} empresas
+        </span>
+      </div>
+
+      {/* El veredicto va primero y en el color que le toca: es la conclusión,
+          no una nota al pie de la tabla. */}
+      <p
+        className={`mt-3 rounded-lg px-3 py-2 text-sm leading-relaxed ${
+          rentable ? 'bg-emerald-50 text-emerald-900' : 'bg-red-50 text-red-800'
+        }`}
+      >
+        {result.veredicto}
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Stat
+          label="Esperanza / operación"
+          value={pct(result.esperanza_pct)}
+          hint="neta de costes"
+          tone={(result.esperanza_pct ?? 0) > 0 ? 'good' : 'bad'}
+        />
+        <Stat
+          label="Comprar a ciegas"
+          value={pct(result.referencia_pct)}
+          hint="misma fecha, sin reglas"
+        />
+        <Stat
+          label="Ventaja"
+          value={pct(result.ventaja_pct)}
+          hint="lo que aportan las reglas"
+          tone={(result.ventaja_pct ?? 0) > 0 ? 'good' : 'bad'}
+        />
+        <Stat
+          label="Operaciones"
+          value={String(result.n_operaciones)}
+          hint={result.fiable ? 'muestra suficiente' : 'muestra insuficiente'}
+          tone={result.fiable ? 'neutral' : 'bad'}
+        />
+        <Stat
+          label="Aciertos"
+          value={`${((result.tasa_acierto ?? 0) * 100).toFixed(0)} %`}
+          hint={
+            result.tasa_acierto_ic
+              ? `IC 95 %: ${(result.tasa_acierto_ic[0] * 100).toFixed(0)}–${(
+                  result.tasa_acierto_ic[1] * 100
+                ).toFixed(0)} %`
+              : undefined
+          }
+        />
+        <Stat
+          label="Media ganadora"
+          value={pct(result.media_ganadora_pct)}
+          tone="good"
+        />
+        <Stat label="Media perdedora" value={pct(result.media_perdedora_pct)} tone="bad" />
+        <Stat
+          label="Peor racha"
+          value={`${result.racha_perdedora ?? 0} seguidas`}
+          hint="¿aguantarías eso?"
+        />
+      </div>
+
+      {result.salidas && (
+        <p className="mt-4 text-xs text-slate-600">
+          <strong>Cómo terminaron:</strong> {result.salidas.objetivo} por objetivo,{' '}
+          {result.salidas.stop} por stop, {result.salidas.plazo} por vencimiento del año.
+          Coste aplicado: {result.coste_total_por_operacion_pct} % por operación completa
+          {result.coste_por_lado_pct > 1 ? ' (incluye conversión de divisa)' : ''}.
+        </p>
+      )}
+
+      {/* Que el filtro de tendencia aporte o no es comprobable, y por eso se
+          comprueba: mantener una regla por intuición es lo contrario de esto. */}
+      {result.comparativa_sin_filtro_tendencia.n_operaciones > 0 && (
+        <p className="mt-2 text-xs text-slate-600">
+          <strong>Sin el filtro de la media de 200 sesiones:</strong>{' '}
+          {result.comparativa_sin_filtro_tendencia.n_operaciones} operaciones y una
+          esperanza de {pct(result.comparativa_sin_filtro_tendencia.esperanza_pct)}.
+        </p>
+      )}
+
+      <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900">
+        {result.sesgo_supervivencia}
+      </p>
+      {result.metodologia && (
+        <p className="mt-2 text-[11px] leading-snug text-slate-400">{result.metodologia}</p>
+      )}
+    </section>
+  )
+}
+
+
 function ManualMode() {
   const [universe, setUniverse] = useState('AAPL, MSFT, GOOGL, JNJ, KO, XOM, JPM, PG')
   const [useNews, setUseNews] = useState(false)
   const [result, setResult] = useState<SignalResponse | null>(null)
   const [backtest, setBacktest] = useState<BacktestResponse | null>(null)
-  const [busy, setBusy] = useState<'score' | 'backtest' | null>(null)
+  const [rules, setRules] = useState<RuleBacktestResponse | null>(null)
+  const [conDivisa, setConDivisa] = useState(true)
+  const [busy, setBusy] = useState<'score' | 'backtest' | 'rules' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const symbols = () =>
@@ -489,11 +635,13 @@ function ManualMode() {
       .filter(Boolean)
       .slice(0, 15)
 
-  const run = async (what: 'score' | 'backtest') => {
+  const run = async (what: 'score' | 'backtest' | 'rules') => {
     setBusy(what)
     setError(null)
     try {
       if (what === 'score') setResult(await api.scoreSignals(symbols(), useNews))
+      else if (what === 'rules')
+        setRules(await api.runRuleBacktest(symbols(), 6, conDivisa))
       else setBacktest(await api.runBacktest(symbols(), 12, 6))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error')
@@ -530,6 +678,22 @@ function ManualMode() {
           >
             {busy === 'backtest' ? 'Validando…' : 'Validar modelo (backtest)'}
           </button>
+          <button
+            onClick={() => run('rules')}
+            disabled={busy !== null}
+            title="Simula las reglas de compra y venta operación a operación, neto de costes"
+            className="rounded-lg border border-slate-900 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {busy === 'rules' ? 'Simulando…' : 'Validar reglas (comprar/vender)'}
+          </button>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={conDivisa}
+              onChange={(e) => setConDivisa(e.target.checked)}
+            />
+            Cobrar conversión CAD→USD
+          </label>
           <label className="flex items-center gap-1.5 text-xs text-slate-600">
             <input
               type="checkbox"
@@ -541,6 +705,8 @@ function ManualMode() {
         </div>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </section>
+
+      {rules && <RuleBacktestPanel result={rules} />}
 
       {backtest && <BacktestPanel result={backtest} />}
 

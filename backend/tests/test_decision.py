@@ -190,3 +190,39 @@ def test_el_objetivo_de_una_posicion_tambien_cuelga_del_coste():
     # Coherente con el precio de hoy: el % es la subida que aún falta.
     esperado = round((niveles["objetivo"] / 120 - 1) * 100, 1)
     assert niveles["objetivo_pct"] == esperado
+
+
+# --- La confianza refleja lo que el backtest de reglas encontró -------------
+
+
+def test_reglas_probadas_y_rentables_se_declaran_calibradas():
+    reglas = {"fiable": True, "esperanza_pct": 1.8, "ventaja_pct": 0.9}
+    assert decide(señal(0.8), precio(), reglas=reglas)["confidence"] == "calibrada"
+
+
+def test_reglas_probadas_que_pierden_dinero_se_declaran_refutadas():
+    """El caso que ninguna app enseña y el único que te ahorra dinero."""
+    reglas = {"fiable": True, "esperanza_pct": -0.7, "ventaja_pct": -2.1}
+    d = decide(señal(0.9), precio(), reglas=reglas)
+    assert d["confidence"] == "refutada"
+    # Y no deja de proponer la operación a escondidas: la acción sigue siendo
+    # la que dictan las reglas; lo que cambia es cuánto puedes fiarte.
+    assert d["action"] == "comprar"
+
+
+def test_ganar_menos_que_comprar_a_ciegas_tambien_es_refutar():
+    """Esperanza positiva no basta: si no supera a no hacer nada, no aporta."""
+    reglas = {"fiable": True, "esperanza_pct": 0.9, "ventaja_pct": -1.4}
+    assert decide(señal(0.8), precio(), reglas=reglas)["confidence"] == "refutada"
+
+
+def test_un_backtest_con_pocas_operaciones_no_valida_ni_refuta():
+    reglas = {"fiable": False, "esperanza_pct": -5.0, "ventaja_pct": -5.0}
+    assert decide(señal(0.8), precio(), reglas=reglas)["confidence"] == "sin_calibrar"
+
+
+def test_las_reglas_refutadas_pesan_mas_que_una_probabilidad_del_modelo():
+    """Son cosas distintas: el modelo puede ordenar bien y las reglas perder."""
+    reglas = {"fiable": True, "esperanza_pct": -1.0, "ventaja_pct": -1.0}
+    d = decide(señal(0.8, probability=0.62), precio(), reglas=reglas)
+    assert d["confidence"] == "refutada"

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.analysis.decision import decide
 from app.analysis.backtest import monthly_rebalance_dates, run_walk_forward
+from app.analysis.rule_backtest import rebalance_dates_mensuales, run_rule_backtest
 from app.analysis.factors import (
     DEFAULT_WEIGHTS,
     build_raw_factors,
@@ -88,6 +89,14 @@ class BacktestRequest(BaseModel):
     years: int = Field(6, ge=2, le=12)
 
 
+class RuleBacktestRequest(BaseModel):
+    symbols: list[str] = Field(min_length=3, max_length=MAX_UNIVERSE)
+    years: int = Field(6, ge=2, le=12)
+    # Quien invierte desde Canadá paga conversión de divisa en cada operación,
+    # y suele pesar más que cualquier ventaja del modelo. Por defecto se cobra.
+    con_divisa: bool = True
+
+
 def _validate(symbols: list[str]) -> list[str]:
     out: list[str] = []
     for raw in symbols:
@@ -114,7 +123,26 @@ def _safe_get(service: MarketDataService, data_type: str, **kwargs):
         return None
 
 
-def _decision_segura(signal: dict, position: dict | None) -> dict:
+def _stored_rule_backtest(session: Session) -> dict | None:
+    """Último backtest de reglas. Es lo que convierte «razonable» en «probada»."""
+    record = session.execute(
+        select(LlmOutput)
+        .where(LlmOutput.kind == "rule_backtest")
+        .order_by(LlmOutput.created_at.desc())
+    ).scalars().first()
+    if record is None:
+        return None
+    import json
+
+    try:
+        return json.loads(record.content_md)
+    except json.JSONDecodeError:
+        return None
+
+
+def _decision_segura(
+    signal: dict, position: dict | None, reglas: dict | None = None
+) -> dict:
     """`decide()` acotado a su propia fila.
 
     Una empresa con datos raros —un precio imposible, una posición con coste
@@ -128,6 +156,7 @@ def _decision_segura(signal: dict, position: dict | None) -> dict:
             position,
             favorable_min=FAVORABLE_MIN,
             desfavorable_max=UNFAVORABLE_MAX,
+            reglas=reglas,
         )
     except Exception as exc:  # noqa: BLE001 — se reporta, no se traga
         logger.exception("decide() falló para %s", signal.get("symbol"))
@@ -625,6 +654,10 @@ def _today(
         ).all()
     }
 
+    # Si hay un backtest de reglas guardado, cada decisión puede decir si su
+    # sistema está probado, refutado o solo es razonable.
+    reglas = _stored_rule_backtest(session)
+
     fetch_budget = FetchBudget(budget)
     ranked: list[dict] = []
     unavailable: list[dict] = []
@@ -659,7 +692,7 @@ def _today(
                 signal["context"]["name"] = names.get(signal["symbol"])
                 signal["sector_rank"] = signal.pop("rank", None)
                 signal["decision"] = _decision_segura(
-                    signal, posiciones.get(signal["symbol"])
+                    signal, posiciones.get(signal["symbol"]), reglas
                 )
                 ranked.append(signal)
 
@@ -826,6 +859,148 @@ def run_backtest(
         "reliable_buckets": len(reliable),
         "verdict": _backtest_verdict(n, len(reliable), hits / n if n else None),
     }
+
+
+@router.post("/rule-backtest")
+def run_rules_backtest(
+    request: RuleBacktestRequest = Body(...),
+    service: MarketDataService = Depends(get_service),
+    session: Session = Depends(get_session),
+):
+    """¿Ganan dinero las reglas de compra y venta? Simulación operación a operación.
+
+    `/backtest` valida el **modelo de factores**: si la puntuación ordena mejor
+    que la mediana. Este endpoint valida el **sistema que se ejecuta**: entrar
+    solo por encima de la media de 200 sesiones, con stop por volatilidad,
+    objetivo al doble y salida por lo que llegue antes — neto de costes.
+
+    Son preguntas distintas y una puede salir bien con la otra mal.
+    """
+    symbols = _validate(request.symbols)
+
+    universe: dict[str, dict] = {}
+    missing: list[str] = []
+    for symbol in symbols:
+        financials = _safe_get(service, "financials", symbol=symbol)
+        filings = _safe_get(service, "filings", symbol=symbol)
+        history = _safe_get(
+            service, "price_history", symbol=symbol, interval="1day", outputsize=5000
+        )
+        if not financials or not history:
+            missing.append(symbol)
+            continue
+        universe[symbol] = {
+            "periods": financials["periods"],
+            "filings": (filings or {}).get("filings", []),
+            "bars": history["bars"],
+        }
+
+    if len(universe) < 3:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Solo {len(universe)} empresas con histórico suficiente "
+                "(se necesitan 3+). EDGAR solo cubre empresas registradas en la SEC."
+            ),
+        )
+
+    # Se deja un año al final para que las operaciones abiertas al borde del
+    # periodo puedan cerrarse. Sin ese margen se contarían solo las rápidas.
+    end = date.today() - timedelta(days=365)
+    start = end - timedelta(days=365 * request.years)
+    fechas = rebalance_dates_mensuales(start, end)
+
+    resultado = run_rule_backtest(universe, fechas, con_divisa=request.con_divisa)
+    # La misma prueba sin el filtro de tendencia. Es la única forma de saber si
+    # esa regla aporta o solo suena bien.
+    sin_filtro = run_rule_backtest(
+        universe, fechas, con_divisa=request.con_divisa, exigir_tendencia=False
+    )
+
+    if resultado["n_operaciones"] > 0:
+        import json
+
+        session.add(
+            LlmOutput(
+                kind="rule_backtest",
+                content_md=json.dumps(
+                    {k: v for k, v in resultado.items() if k != "operaciones"}
+                ),
+                model=f"reglas/{request.years}a",
+            )
+        )
+        session.commit()
+
+    return {
+        **resultado,
+        "universo": list(universe),
+        "sin_datos": missing,
+        "periodo": {"desde": start.isoformat(), "hasta": end.isoformat()},
+        "comparativa_sin_filtro_tendencia": {
+            "n_operaciones": sin_filtro["n_operaciones"],
+            "esperanza_pct": sin_filtro.get("esperanza_pct"),
+            "tasa_acierto": sin_filtro.get("tasa_acierto"),
+        },
+        "veredicto": _rule_verdict(resultado, sin_filtro),
+    }
+
+
+def _rule_verdict(resultado: dict, sin_filtro: dict) -> str:
+    """Lectura honesta. Un resultado malo se dice, no se maquilla."""
+    n = resultado["n_operaciones"]
+    if n == 0:
+        return (
+            "Ninguna operación cumplió las condiciones. Sin operaciones no hay "
+            "nada que validar: las reglas siguen sin respaldo."
+        )
+    if not resultado["fiable"]:
+        return (
+            f"Solo {n} operaciones: por debajo de 30 cualquier tasa de acierto "
+            "es ruido. No sirve para concluir nada todavía."
+        )
+
+    esperanza = resultado["esperanza_pct"]
+    ventaja = resultado.get("ventaja_pct")
+    partes = [
+        f"{n} operaciones, {resultado['tasa_acierto'] * 100:.0f} % de aciertos, "
+        f"esperanza de {esperanza:+.2f} % por operación neta de costes."
+    ]
+
+    if esperanza <= 0:
+        partes.append(
+            "La esperanza es negativa: aplicar estas reglas habría perdido "
+            "dinero. No las uses tal cual."
+        )
+    elif ventaja is not None and ventaja <= 0:
+        partes.append(
+            f"Pero comprar el universo entero a ciegas daba {resultado['referencia_pct']:+.2f} %: "
+            "las reglas ganan menos que no hacer nada. El trabajo extra no se paga."
+        )
+    else:
+        partes.append(
+            f"Supera en {ventaja:+.2f} puntos a comprar a ciegas. Es una ventaja "
+            "real en el periodo probado, no una garantía futura."
+        )
+
+    propia = resultado["esperanza_pct"]
+    otra = sin_filtro.get("esperanza_pct")
+    if otra is not None and sin_filtro["n_operaciones"] >= 30:
+        if propia > otra:
+            partes.append(
+                f"El filtro de la media de 200 sesiones aporta: sin él la "
+                f"esperanza baja a {otra:+.2f} %."
+            )
+        else:
+            partes.append(
+                f"El filtro de la media de 200 sesiones NO aporta: sin él la "
+                f"esperanza sube a {otra:+.2f} %. Conviene revisarlo."
+            )
+
+    partes.append(
+        f"Racha perdedora más larga: {resultado['racha_perdedora']} operaciones "
+        "seguidas. Si no aguantarías eso, el sistema no es para ti aunque gane."
+    )
+    return " ".join(partes)
 
 
 def _backtest_verdict(n: int, reliable_buckets: int, hit_rate: float | None) -> str:
