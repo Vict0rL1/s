@@ -2,6 +2,21 @@
 
 import type { MatchOutcome } from './outcome';
 
+/**
+ * Where the market number came from. `spread` is the normal case in this app:
+ * nflverse ships the closing handicap with the schedule, so it exists without an
+ * ODDS_API_KEY, while a moneyline does not. A handicap is a line rather than a
+ * price, so it carries no vig to remove — hence the nulls.
+ */
+export interface NafMarket {
+  source: 'moneyline' | 'spread';
+  odds: { home: number; away: number } | null;
+  line: number | null;
+  home: number;
+  away: number;
+  overround: number | null;
+}
+
 export interface NflLeague {
   id: string; name: string; label: string; country: string;
   games: number; teams: number; hasUpcoming: boolean; upcomingCount: number;
@@ -37,9 +52,9 @@ export interface NflReliability {
 }
 
 export interface NflMarket {
-  market: { home: number; away: number; overround: number; odds: { home: number; away: number } } | null;
+  market: NafMarket | null;
   edge: { home: number; away: number } | null;
-  verdict: 'value_home' | 'value_away' | 'agree' | 'no_market';
+  verdict: 'differs_home' | 'differs_away' | 'agree' | 'no_market';
 }
 
 /** A handicap price. `push` is the stake coming back — common on whole numbers. */
@@ -130,7 +145,7 @@ export interface NflGameWithPrediction {
   game: NflGameRow;
   outcome: MatchOutcome;
   prediction: NflPrediction | null;
-  marketOnly: { home: number; away: number; overround: number; odds: { home: number; away: number } } | null;
+  marketOnly: NafMarket | null;
   teams: { home: NflTeamInfo | null; away: NflTeamInfo | null };
   linesFromMarket: boolean;
 }

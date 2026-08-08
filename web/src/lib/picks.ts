@@ -106,8 +106,10 @@ export const CAVEATS: Record<string, string> = {
     'últimas temporadas, no de una constante. No se ha medido contra las cuotas de cierre.',
   nfl:
     'Este modelo NO le gana a la línea de cierre: 50,6 % contra el hándicap donde el punto de ' +
-    'equilibrio está en 52,4 %. Está medido y dice que no. Trátalo como una segunda opinión, no ' +
-    'como una ventaja.',
+    'equilibrio está en 52,4 %, y la línea acierta más que él (Brier 0.2115 frente a 0.2180 en ' +
+    '7.276 partidos). Se probó mezclar los dos y el peso ajustado sale en 0,08: el modelo no ' +
+    'añade nada encima del mercado, tampoco en las primeras jornadas. Cuando discrepen, la ' +
+    'apuesta razonable es que se equivoque el modelo.',
   tennis:
     'Medido sobre 46.166 partidos ATP: acierto 67,0 % frente al 64,8 % de fiarse del ranking, y ' +
     'cuando discrepa del ranking acierta el 55,4 %. Las bajas de última hora y las retiradas —que ' +
@@ -217,6 +219,20 @@ function marketCap(distinctMarkets: number): number {
 export function rankPicks(
   all: Pick[],
   now: number = Date.now(),
+  opts: {
+    /**
+     * Force ranking by the model's own probability even when market prices exist.
+     *
+     * The NFL passes this, and it is not a preference — it is the measurement. On
+     * that sport the closing line is a BETTER forecast than the model (Brier 0.2115
+     * against 0.2180 over 7,276 games; the model wins no walk-forward cut and no
+     * regime). Ranking by edge means ranking by "how far the model is from a more
+     * accurate number", which puts the model's worst disagreements at the top of a
+     * list headed "what the model sees as most likely". The market column is still
+     * shown — the reader should see both — it just does not drive the order.
+     */
+    basis?: 'confidence';
+  } = {},
 ): { picks: Pick[]; basis: 'edge' | 'confidence' } {
   // A match that has already kicked off is not a suggestion. The schedule keeps
   // today's games on screen all day on purpose (see server/freshness.ts), which is
@@ -225,7 +241,8 @@ export function rankPicks(
   const upcoming = all.filter((p) => Date.parse(p.when) > now);
 
   const priced = upcoming.filter((p) => p.edge != null);
-  const basis: 'edge' | 'confidence' = priced.length > 0 ? 'edge' : 'confidence';
+  const basis: 'edge' | 'confidence' =
+    opts.basis === 'confidence' ? 'confidence' : priced.length > 0 ? 'edge' : 'confidence';
   const sorted =
     basis === 'edge'
       ? priced.filter((p) => (p.edge ?? 0) >= MIN_EDGE).sort((a, b) => (b.edge ?? 0) - (a.edge ?? 0))
@@ -436,6 +453,9 @@ export function nflPicks(
       model: { home: number; away: number; tie: number };
       spread: { line: number; home: { cover: number }; away: { cover: number } };
       total: { line: number; over: number; under: number };
+      // Derived from the closing handicap when there is no moneyline, which is the
+      // normal case here — nflverse ships the line with the schedule.
+      market?: { market: { home: number; away: number } | null } | null;
     } | null;
   }[],
 ): Pick[] {
@@ -446,7 +466,15 @@ export function nflPicks(
     const p = r.prediction;
     const match = `${g.away_name} @ ${g.home_name}`;
     const has = realMarket(g.source) && g.odds_home != null && g.odds_away != null;
-    const [mh, ma] = has ? devig2(g.odds_home!, g.odds_away!) : [null, null];
+    // Moneyline first when it exists; otherwise the probability read off the closing
+    // line, which is the better forecast of the two on this sport and was being
+    // thrown away — the column showed "—" on every row while the card had the number.
+    const spreadMkt = p.market?.market ?? null;
+    const [mh, ma] = has
+      ? devig2(g.odds_home!, g.odds_away!)
+      : spreadMkt
+        ? [spreadMkt.home, spreadMkt.away]
+        : [null, null];
     const c: Candidate[] = [
       { market: 'Ganador', selection: g.home_name, modelProb: p.model.home, marketProb: mh, odds: g.odds_home },
       { market: 'Ganador', selection: g.away_name, modelProb: p.model.away, marketProb: ma, odds: g.odds_away },

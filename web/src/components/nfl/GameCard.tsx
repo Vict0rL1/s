@@ -203,10 +203,22 @@ export default function GameCard({
                       with `shrink-0` it could neither shrink nor wrap, so a long name
                       pushed the whole page 10px wide. */}
                 <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
-                  {prediction.market.verdict.startsWith('value_') && (
-                    <Badge tone="good" title="El modelo da más probabilidad que el mercado">
-                      Value:{' '}
-                      {prediction.market.verdict === 'value_home'
+                  {prediction.market.verdict.startsWith('differs_') && (
+                    // Neutral tone on purpose. This used to be a green "Value:" badge,
+                    // which read as "here is an edge" on the one tab where the app has
+                    // measured that there is none.
+                    <Badge
+                      tone="neutral"
+                      title={
+                        'El modelo da más probabilidad que el mercado a este equipo. ' +
+                        'En la NFL eso NO es una ventaja: medido sobre 7.276 partidos, ' +
+                        'la línea de cierre acierta más que el modelo (Brier 0.2115 ' +
+                        'frente a 0.2180), así que lo más probable es que se equivoque ' +
+                        'el modelo.'
+                      }
+                    >
+                      Discrepa:{' '}
+                      {prediction.market.verdict === 'differs_home'
                         ? prediction.teams.home.name
                         : prediction.teams.away.name}
                     </Badge>
@@ -540,13 +552,36 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
 
       {market.market && (
         <Panel>
-          <SectionTitle right={`margen ${((market.market.overround - 1) * 100).toFixed(1)}%`}>
+          <SectionTitle
+            right={
+              market.market.overround != null
+                ? `margen ${((market.market.overround - 1) * 100).toFixed(1)}%`
+                : 'de la línea de cierre'
+            }
+          >
             Mercado
           </SectionTitle>
-          <p className="text-[13px] leading-relaxed text-[#c3c9d1]">
-            Cuotas {market.market.odds.away} / {market.market.odds.home} · implícitas sin vig{' '}
-            {pct(market.market.away)} / {pct(market.market.home)}
-          </p>
+          {market.market.odds ? (
+            <p className="text-[13px] leading-relaxed text-[#c3c9d1]">
+              Cuotas {market.market.odds.away} / {market.market.odds.home} · implícitas sin vig{' '}
+              {pct(market.market.away)} / {pct(market.market.home)}
+            </p>
+          ) : (
+            <>
+              <p className="text-[13px] leading-relaxed text-[#c3c9d1]">
+                Línea de cierre {market.market.line! > 0 ? '+' : ''}
+                {market.market.line} → {pct(market.market.away)} / {pct(market.market.home)}
+              </p>
+              {/* Said on the card and not only in the docs, because it changes how the
+                  number above it should be read: on this sport the market is the better
+                  forecast, and the reader is entitled to know that before comparing. */}
+              <p className="mt-1.5 text-[12px] leading-relaxed text-[#9aa1ac]">
+                Medido sobre 7.276 partidos, esta cifra acierta más que la del modelo
+                (Brier 0.2115 frente a 0.2180). Cuando discrepan, lo más probable es que
+                tenga razón el mercado.
+              </p>
+            </>
+          )}
         </Panel>
       )}
 

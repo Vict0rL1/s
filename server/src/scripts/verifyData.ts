@@ -28,6 +28,7 @@
 // Exit code is non-zero on failure, so it can gate a data refresh.
 
 import { getDb } from '../db.ts';
+import { normalCdf, MARGIN_SIGMA as NFL_MARGIN_SIGMA } from '../nfl/model.ts';
 import { recomputeBaseballRatings } from '../baseball/ratings.ts';
 
 let checks = 0;
@@ -681,6 +682,69 @@ function auditTennis(): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// NFL: the closing line, and which way it points
+// ---------------------------------------------------------------------------
+/**
+ * The market probability is now derived from the closing spread, which means a sign
+ * error would invert every NFL card while leaving every number looking plausible —
+ * 62 % instead of 38 %, no crash, no warning.
+ *
+ * It is a real hazard rather than a hypothetical one, because THE TWO SPREAD FIELDS
+ * IN THIS DATABASE USE OPPOSITE CONVENTIONS: `naf_games.close_spread` is in margin
+ * sign (positive = home favoured) and `naf_upcoming.spread_line` is in bookmaker sign
+ * (negative = home favoured). So the sign is measured here, from the results, instead
+ * of being asserted in a comment.
+ *
+ * Two independent directions are checked, because either alone can be satisfied by a
+ * coincidence:
+ *
+ *   1. the historical spread must agree with the actual margin well over half the
+ *      time (it is 66.2 %, which is simply how often the favourite wins), and
+ *   2. the spread-derived probability must SCORE better than the model on the same
+ *      games. That is the claim the card now makes to the reader in words, so it is
+ *      the claim that has to keep being true — and an inverted sign would send it to
+ *      roughly 0.78 instead of 0.21.
+ */
+function auditNflMarket(): void {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT close_spread, home_points, away_points FROM naf_games
+       WHERE league = 'nfl' AND close_spread IS NOT NULL AND home_points <> away_points`,
+    )
+    .all() as unknown as { close_spread: number; home_points: number; away_points: number }[];
+  console.log('\n▸ NFL: la línea de cierre');
+  if (rows.length < 500) {
+    console.log(`  solo ${rows.length} partidos con línea, saltado`);
+    return;
+  }
+
+  let agree = 0;
+  let brierMarket = 0;
+  let n = 0;
+  for (const r of rows) {
+    const margin = r.home_points - r.away_points;
+    if (Math.sign(margin) === Math.sign(r.close_spread)) agree++;
+    // Same normal the model quotes the handicap with. Not the full key-number
+    // distribution: this check must not depend on the model's own shape, or a bug in
+    // that shape would hide a bug in this sign.
+    const p = normalCdf(r.close_spread / NFL_MARGIN_SIGMA);
+    brierMarket += (p - (margin > 0 ? 1 : 0)) ** 2;
+    n++;
+  }
+  const rate = agree / rows.length;
+  const bMarket = brierMarket / n;
+
+  band('NFL: el signo de close_spread apunta al ganador', rate, 0.6, 0.72);
+  // 0.25 is a coin flip. An inverted sign lands far above it; the real figure is ~0.21.
+  band('NFL: la probabilidad deducida de la línea puntúa como un pronóstico', bMarket, 0.15, 0.235);
+  console.log(
+    `  ${rows.length.toLocaleString('es')} partidos · el favorito de la línea gana el ` +
+      `${(rate * 100).toFixed(1)} % · Brier de la línea ${bMarket.toFixed(4)}`,
+  );
+}
+
 function main(): void {
   console.log('\n🔎 Verificación de los datos\n' + '='.repeat(46));
   console.log(
@@ -693,6 +757,7 @@ function main(): void {
   for (const s of SPORTS) auditFranchiseIds(s.label, s.teams, s.games);
   for (const s of SPORTS) auditRoundRobin(s.label, s.games);
   auditTennis();
+  auditNflMarket();
   auditRatingsReproduce();
 
   console.log('\n' + '='.repeat(46));

@@ -843,6 +843,7 @@ export function PicksPanel({
   basis,
   caveat,
   demoOdds = false,
+  confidenceReason,
   stake,
   onStakeChange,
 }: {
@@ -863,6 +864,16 @@ export function PicksPanel({
    * reader to two different actions: wait for a price, or go get an API key.
    */
   demoOdds?: boolean;
+  /**
+   * Why this list is ordered by probability rather than by edge, when the caller
+   * knows a better reason than "there were no prices".
+   *
+   * The NFL has prices — the closing line, on every game — and still ranks by
+   * probability, because the measurement says that line beats the model. Without
+   * this the panel claimed "sin cuotas que comparar" while displaying a full market
+   * column two centimetres to the right.
+   */
+  confidenceReason?: string;
   /** Stake used for the "devolvería" column, so the figure is in the reader's money. */
   stake: number;
   onStakeChange: (n: number) => void;
@@ -899,9 +910,11 @@ export function PicksPanel({
           <span className="block text-[13px] text-[#7b828d]">
             {basis === 'edge'
               ? `${picks.length} ${picks.length === 1 ? 'mercado' : 'mercados'} con diferencia de 4 pp o más, de mayor a menor`
-              : demoOdds
-                ? 'las cuotas son de demostración y salen del propio modelo, así que compararlas no diría nada — ordenado por probabilidad'
-                : 'sin cuotas que comparar — ordenado por probabilidad, que es una base más débil'}
+              : confidenceReason
+                ? confidenceReason
+                : demoOdds
+                  ? 'las cuotas son de demostración y salen del propio modelo, así que compararlas no diría nada — ordenado por probabilidad'
+                  : 'sin cuotas que comparar — ordenado por probabilidad, que es una base más débil'}
           </span>
         </span>
         <span aria-hidden className="shrink-0 text-[#7b828d]">{open ? '▲' : '▼'}</span>

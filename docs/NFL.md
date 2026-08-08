@@ -129,6 +129,67 @@ partidos, que es a la vez falso y la señal de que no estaba midiendo nada.
 
 ---
 
+### 3.1 Si el mercado es mejor, ¿por qué publicar el modelo?
+
+La pregunta obvia que la sección anterior deja abierta. Se probó lo que hacen los
+modelos publicados de este campo (538 entre ellos): **mezclar** el modelo con el
+mercado en escala logit, con el peso ajustado *walk-forward*.
+
+    p_mezcla = sigmoide( w · logit(p_modelo) + (1 − w) · logit(p_mercado) )
+
+| corte | test | w ajustada | Brier modelo | Brier mezcla | Brier mercado |
+|---|---|---|---|---|---|
+| 2010 | 4363 | 0,08 | 0,21841 | 0,21150 | **0,21146** |
+| 2013 | 3562 | 0,04 | 0,21812 | 0,21132 | **0,21132** |
+| 2016 | 2761 | 0,11 | 0,21928 | 0,21100 | **0,21076** |
+| 2019 | 1960 | 0,10 | 0,22003 | 0,21110 | **0,21081** |
+| 2022 | 1139 | 0,08 | 0,22063 | 0,21087 | **0,21057** |
+| 2024 | 570 | 0,03 | 0,21570 | 0,20789 | **0,20787** |
+
+La mezcla le gana al modelo en **6 de 6** cortes, pero el peso ajustado ronda 0,08 y
+la mezcla **nunca** supera al mercado solo. Traducido: el modelo no añade nada encima
+de la línea.
+
+Se buscó el régimen donde sí lo hiciera, que es la hipótesis interesante — la línea
+debería ser más fina donde hay menos información:
+
+| régimen | n | w | Brier modelo | Brier mezcla | Brier mercado |
+|---|---|---|---|---|---|
+| semanas 1-4 | 446 | **0,00** | 0,22479 | 0,21830 | 0,21830 |
+| semanas 5-13 | 909 | 0,18 | 0,22106 | 0,21356 | **0,21301** |
+| semanas 14+ | 605 | 0,12 | 0,21496 | 0,20262 | **0,20198** |
+| línea cerrada (\|spread\| ≤ 3) | 723 | **0,00** | 0,25254 | 0,24595 | 0,24595 |
+| línea amplia (\|spread\| ≥ 10) | 252 | 0,16 | 0,13330 | 0,11948 | **0,11839** |
+
+En la semana 1, sin una sola jornada de la temporada en curso, el peso ajustado del
+modelo sale **exactamente 0,00**. No hay régimen donde aporte.
+
+**Así que la mezcla NO se implementa** — sería complejidad para reproducir el número
+que ya está en la línea. Lo que sí cambió es lo que la app **muestra**, que era el
+verdadero fallo:
+
+1. **La probabilidad del mercado se deduce ahora de la línea de cierre**, no del
+   moneyline. nflverse publica el hándicap con el calendario, así que existe en los
+   7.276 partidos históricos y en los 32 próximos **sin API key**; el moneyline no
+   existe en ninguno de los próximos. La app enseñaba «mercado —» en todas las
+   tarjetas teniendo el mejor pronóstico guardado en su propia base de datos.
+2. **El distintivo verde «Value:» se cambió por «Discrepa:», en tono neutro.**
+   Contradecía al aviso que estaba dos paneles más abajo diciendo que el modelo no
+   bate a la línea. Cuando una tarjeta y su propia medición se contradicen, gana la
+   medición.
+3. **La lista de sugerencias sigue ordenada por probabilidad, no por diferencia con
+   el mercado**, y ahora dice por qué. Ordenar por discrepancia contra un pronóstico
+   mejor es ordenar por dónde es más probable que el modelo se equivoque.
+
+⚠️ **Los dos campos de hándicap de esta base usan signos opuestos**:
+`naf_games.close_spread` va en signo de margen (+2,25 de media, positivo = local
+favorito) y `naf_upcoming.spread_line` en signo de casa (−3,5 = local favorito por
+3,5). Equivocarlo invierte todas las probabilidades sin romper nada y sin que
+ninguna cifra parezca rara. Por eso `verify:data` **mide** el signo contra los
+resultados en vez de fiarse: el favorito de la línea gana el 66,2 % y el Brier de la
+línea es 0,2127; con el signo invertido sube a 0,347 y la comprobación falla.
+
+
 ## 4. Quién juega de quarterback
 
 Era la mayor omisión del modelo, y estaba en el fichero que ya descargábamos. nflverse

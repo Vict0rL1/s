@@ -147,17 +147,44 @@ export interface NafReliability {
 }
 
 export interface NafMarket {
-  odds: { home: number; away: number };
-  /** De-vigged two-way probabilities. */
+  /**
+   * Where this probability came from.
+   *
+   *   'moneyline' — a real two-way price, de-vigged. Needs an ODDS_API_KEY.
+   *   'spread'    — derived from the closing handicap, which nflverse publishes
+   *                 with the schedule and which therefore exists for every game
+   *                 with no key at all.
+   */
+  source: 'moneyline' | 'spread';
+  /** The two-way price, when there was one. Null for a spread-derived figure. */
+  odds: { home: number; away: number } | null;
+  /** The closing handicap it came from, bookmaker sign. Null for a moneyline. */
+  line: number | null;
+  /** Two-way probabilities, de-vigged when they came from a price. */
   home: number;
   away: number;
-  overround: number;
+  /** The book's margin. Null for a spread, which is a line and carries no vig. */
+  overround: number | null;
 }
 
 export interface NafMarketComparison {
   market: NafMarket | null;
   edge: { home: number; away: number } | null;
-  verdict: 'value_home' | 'value_away' | 'agree' | 'no_market';
+  /**
+   * DISAGREEMENT, not value — and the distinction is the measurement.
+   *
+   * The other four sports call this `value_*`, because for them nothing is known
+   * about whether a gap to the market is exploitable. For the NFL it IS known, and
+   * the answer is no: 50.6 % against the closing handicap where −110 needs 52.4 %,
+   * with the market winning every walk-forward cut and every regime tested,
+   * including the early weeks where the line ought to be at its thinnest.
+   *
+   * So a green "Value: Seahawks" badge on this tab contradicted the app's own
+   * caveat two panels below it, which says in as many words that the model does not
+   * beat the line and should be read as a second opinion. When a card and its own
+   * measurement disagree, the measurement wins and the wording changes.
+   */
+  verdict: 'differs_home' | 'differs_away' | 'agree' | 'no_market';
 }
 
 export interface NafSpreadQuote {
@@ -262,10 +289,63 @@ function deVig(oddsHome: number | null, oddsAway: number | null): NafMarket | nu
   const sum = rawH + rawA;
   if (sum <= 0) return null;
   return {
+    source: 'moneyline',
     odds: { home: oddsHome, away: oddsAway },
+    line: null,
     home: rawH / sum,
     away: rawA / sum,
     overround: sum,
+  };
+}
+
+/**
+ * The market's win probability, read off the CLOSING HANDICAP.
+ *
+ * Why this exists: the NFL backtest already reported that the closing line beats
+ * this model — Brier 0.2106 against 0.2185 over 7,276 games — and the app still
+ * showed "mercado —" on every card, because it only ever looked for a moneyline.
+ * There is no moneyline without an ODDS_API_KEY. There IS a closing spread on all
+ * 7,276 historical games and on all 32 upcoming ones, because nflverse publishes it
+ * with the schedule. The better forecast was sitting in the database, unused.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE TWO SPREAD FIELDS IN THIS DATABASE USE OPPOSITE SIGNS.                │
+ * │                                                                           │
+ * │   naf_games.close_spread   MARGIN sign     +2.25 mean, positive = home    │
+ * │                                            favoured (agrees with the      │
+ * │                                            actual margin 66.2 % of games) │
+ * │   naf_upcoming.spread_line BOOKMAKER sign  −3.5 = home favoured by 3.5    │
+ * │                                                                           │
+ * │ This function takes the BOOKMAKER sign, like everything else on the       │
+ * │ prediction path, and negates it to centre the distribution. Get this      │
+ * │ backwards and every probability inverts while still looking perfectly     │
+ * │ plausible — which is why `verify:data` now measures the sign rather than  │
+ * │ trusting it.                                                              │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * The probability is read through the SAME margin distribution the model uses, key
+ * numbers and all. That is deliberate: it means the only difference between the
+ * model's number and the market's is the difference in expected margin — the thing
+ * actually being compared — rather than a difference in the shape of the curve.
+ *
+ * No vig to remove. A handicap is a line, not a price: the book expresses its margin
+ * in the −110 on either side, which is symmetric and cancels. So `overround` is null
+ * here rather than 1.0, because "no margin measured" and "a margin of zero" are
+ * different claims.
+ */
+function marketFromSpread(spreadLine: number | null | undefined, expectedTotal: number): NafMarket | null {
+  if (spreadLine == null || !Number.isFinite(spreadLine)) return null;
+  const d = buildDistribution(-spreadLine, expectedTotal);
+  const o = outcomeProbabilities(d);
+  const two = o.home + o.away;
+  if (two <= 0) return null;
+  return {
+    source: 'spread',
+    odds: null,
+    line: spreadLine,
+    home: o.home / two,
+    away: o.away / two,
+    overround: null,
   };
 }
 
@@ -470,7 +550,12 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
   const ou = overProbability(dist, totalLine);
 
   // --- market ---------------------------------------------------------------
-  const market = deVig(input.oddsHome ?? null, input.oddsAway ?? null);
+  // A real price wins when there is one — it is an actual traded number rather than
+  // one read off a curve. The spread is the fallback that makes the comparison exist
+  // at all without an API key, which is the normal case for this app.
+  const market =
+    deVig(input.oddsHome ?? null, input.oddsAway ?? null) ??
+    marketFromSpread(input.spreadLine, expectedTotal);
   // The moneyline is a two-way price and a tie voids it, so the model's numbers
   // are renormalised onto the same two outcomes before being compared. Without
   // that the model looks 0.2pp short against every book it is measured on.
@@ -482,9 +567,9 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
     verdict: !market
       ? 'no_market'
       : (edgeHome as number) > VALUE_THRESHOLD
-        ? 'value_home'
+        ? 'differs_home'
         : (edgeHome as number) < -VALUE_THRESHOLD
-          ? 'value_away'
+          ? 'differs_away'
           : 'agree',
   };
 
@@ -595,10 +680,15 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
     }.`,
   ];
   if (market) {
+    // The wording says WHERE the number came from, because the two are not equally
+    // strong evidence and the reader should not have to guess which one they got.
     bullets.push(
-      `El mercado da ${pct(market.home)} al local (cuotas ${market.odds.home} / ${market.odds.away}, margen ${(
-        (market.overround - 1) * 100
-      ).toFixed(1)}%).`,
+      market.odds && market.overround != null
+        ? `El mercado da ${pct(market.home)} al local (cuotas ${market.odds.home} / ${market.odds.away}, ` +
+          `margen ${((market.overround - 1) * 100).toFixed(1)}%).`
+        : `El mercado da ${pct(market.home)} al local, deducido de la línea de cierre ` +
+          `(${market.line! > 0 ? '+' : ''}${market.line}). Medido sobre 7.276 partidos, esta cifra ` +
+          `predice mejor que la del modelo: Brier 0.2115 frente a 0.2180.`,
     );
   }
   if (h2h.total > 0) {

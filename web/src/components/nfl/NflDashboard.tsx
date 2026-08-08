@@ -107,7 +107,12 @@ export default function NflDashboard() {
 
   // Ranked markets, from the rows already fetched. Recomputed only when those
   // change: it is pure arithmetic over what is on screen, no extra request.
-  const picks = useMemo(() => rankPicks(nflPicks(games)), [games]);
+  // 'confidence' on purpose — see the note on rankPicks. The market column is
+  // populated, but on this sport it must not decide the order.
+  const picks = useMemo(
+    () => rankPicks(nflPicks(games), Date.now(), { basis: 'confidence' }),
+    [games],
+  );
   const [stake, setStake] = useStake();
   // Every price on screen invented by this app rather than fetched — see picks.ts.
   const demoOdds = games.length > 0 && games.every((r) => r.game.source === 'fixture');
@@ -149,7 +154,18 @@ export default function NflDashboard() {
 
       {/* The ranked-markets panel. Built from the SAME rows the cards below
           render, so the two can never disagree about a number. */}
-      <PicksPanel {...picks} caveat={CAVEATS.nfl} demoOdds={demoOdds} stake={stake} onStakeChange={setStake} />
+      <PicksPanel
+        {...picks}
+        caveat={CAVEATS.nfl}
+        demoOdds={demoOdds}
+        confidenceReason={
+          'ordenado por probabilidad del modelo, no por diferencia con el mercado: ' +
+          'en este deporte la línea de cierre acierta más que el modelo, así que ' +
+          'ordenar por discrepancia sería ordenar por dónde es más probable que se equivoque'
+        }
+        stake={stake}
+        onStakeChange={setStake}
+      />
 
       {error && (
         <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[15px] text-rose-200">
