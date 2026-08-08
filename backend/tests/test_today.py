@@ -476,3 +476,34 @@ def test_una_descarga_cacheada_sin_precios_se_tira_y_se_repide(client):
     assert service.bulk_calls > antes, "debía volver a pedir la descarga"
     con_precio = [s for s in data["signals"] if s.get("price")]
     assert con_precio, "la lista no puede quedarse sin precios por caché vieja"
+
+
+def test_la_lista_diaria_recoge_el_backtest_de_reglas_guardado(client, session_factory):
+    """Sin esto, ejecutar el backtest no cambiaría nada en la pantalla que usas.
+
+    Es la conexión que hace útil al backtest: si las reglas se probaron y
+    perdieron dinero, cada fila tiene que decirlo.
+    """
+    import json
+
+    from app.db.models import LlmOutput
+
+    c, _ = client
+    with session_factory() as session:
+        session.add(
+            LlmOutput(
+                kind="rule_backtest",
+                content_md=json.dumps(
+                    {"fiable": True, "esperanza_pct": -1.2, "ventaja_pct": -3.4}
+                ),
+                model="reglas/6a",
+            )
+        )
+        session.commit()
+
+    data = _completar(c)
+    decididas = [
+        s for s in data["signals"] if s["decision"]["action"] not in {"sin_datos"}
+    ]
+    assert decididas, "hacen falta filas decididas para comprobar la confianza"
+    assert all(s["decision"]["confidence"] == "refutada" for s in decididas)
