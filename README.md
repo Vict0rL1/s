@@ -197,9 +197,43 @@ decisión de la vista **Hoy**, con sus reglas y sus niveles.
 
 ## La vista «Hoy»
 
-La app abre con una lista única de acciones a tomar hoy, no con un tablero que
-haya que interpretar. Las vistas son **Comprar**, **Vigilar**, **Mi cartera** y
-**Todas**, y abre en Comprar. No hay que elegir universo ni configurar nada — se
+La app abre en **Mejores ideas**: como mucho cinco empresas, cada una con su
+puesto, por qué está ahí, a qué precio comprar, dónde vender y qué porcentaje de
+cartera destinarle. Debajo, **lo que NO comprar ahora**.
+
+**Por qué existe esta vista.** El motor de decisión llegaba a marcar ~100
+empresas como «Comprar», y eso no es una recomendación: es un filtro. Un umbral
+contesta *¿quién califica?*; una recomendación contesta *¿cuáles pocas?* Cien
+opciones dejan el trabajo difícil —elegir— exactamente donde estaba.
+
+La convicción que ordena la lista corta no es la puntuación a secas:
+
+- **Cuánto supera el listón**, no si lo supera. Pasar de 0,36 y pasar de 1,20 son
+  situaciones que un umbral binario aplasta.
+- **Si los factores están de acuerdo.** Una empresa buena en valor, calidad y
+  momentum a la vez es más sólida que otra con la misma nota media sostenida por
+  un solo factor mientras otro se hunde — esa segunda es una apuesta a un factor
+  disfrazada por el promedio.
+- **Cuánto hay que arriesgar para participar.** A igualdad de todo, gana la del
+  stop más ceñido: permite más posición con el mismo riesgo.
+- **Máximo dos por sector.** Cinco tecnológicas no son cinco ideas, son una
+  apuesta repartida en cinco tickets; se hunden juntas.
+
+La lista corta **ordena y recorta, no relaja nada**: solo entran empresas que ya
+pasaron todas las reglas del motor. Y las demás no desaparecen — siguen en «Todas
+las que califican», porque esconder información no es simplificar.
+
+Si un día no cumple ninguna, lo dice: *«Hoy no hay ninguna compra. No actuar
+también es una decisión»*. Rellenar la lista con lo mejor de un día malo es
+justo cómo una herramienta te empuja a operar cuando no toca.
+
+**«Lo que NO comprar» tiene su propio texto**, no el de las ideas al revés. Decir
+«destaca en valor» de algo que la app te dice que evites invita justo a lo
+contrario; ahí manda lo que va en contra, y cuando una empresa está barata pero
+en declive se nombra por lo que es: la trampa de valor clásica.
+
+Las demás vistas siguen ahí: **Todas las que califican**, **Vigilar**, **Mi
+cartera** y **Todas**. No hay que elegir universo ni configurar nada — se
 filtra por sector o se busca por ticker, y cada fila se despliega para ver los
 niveles concretos y de dónde sale la puntuación.
 

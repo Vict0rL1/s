@@ -625,7 +625,28 @@ export interface UniversesMeta {
   markets: Record<string, { source: string; companies: number }>
 }
 
+export interface Conviction {
+  valor: number
+  acuerdo: number
+  factores_a_favor: string[]
+  factores_en_contra: string[]
+  eficiencia_riesgo: number
+  puesto?: number
+  resumen?: string
+}
+
+/** Las pocas que comprar y las pocas que evitar. Un umbral dice quién califica;
+ *  esto dice cuáles pocas. */
+export interface Shortlist {
+  ideas: (DailySignal & { conviction: Conviction })[]
+  evitar: (DailySignal & { conviction: Conviction })[]
+  candidatas: number
+  descartadas_por_sector: number
+  nota: string
+}
+
 export interface TodayResponse {
+  shortlist: Shortlist
   as_of: string
   market_key: string
   market_name: string

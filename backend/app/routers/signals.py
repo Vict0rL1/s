@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.analysis.decision import decide
 from app.analysis.backtest import monthly_rebalance_dates, run_walk_forward
 from app.analysis.rule_backtest import rebalance_dates_mensuales, run_rule_backtest
+from app.analysis.shortlist import construir_lista_corta
 from app.analysis.factors import (
     DEFAULT_WEIGHTS,
     build_raw_factors,
@@ -65,7 +66,16 @@ DEFAULT_FETCH_BUDGET = 120
 # Campos que la UI necesita sí o sí en la respuesta de /today. Sirven para
 # descartar respuestas cacheadas por versiones anteriores con otra forma.
 _PAYLOAD_KEYS = frozenset(
-    {"signals", "counts", "thresholds", "sectors", "scored", "requested", "complete"}
+    {
+        "signals",
+        "shortlist",
+        "counts",
+        "thresholds",
+        "sectors",
+        "scored",
+        "requested",
+        "complete",
+    }
 )
 
 
@@ -633,7 +643,7 @@ def _today(
             status_code=404, detail=f"Mercado desconocido: {market}"
         ) from None
 
-    cache_params = {"v": 3, "market": market}
+    cache_params = {"v": 4, "market": market}
     if not refresh:
         cached = service.cache.get("daily_picks", cache_params)
         # Una respuesta guardada por una versión anterior de la app puede no
@@ -738,6 +748,10 @@ def _today(
         # imposible de ver en la UI: si buscabas una empresa concreta y salía
         # neutral, parecía que el modelo no la cubría.
         "signals": ranked,
+        # 98 candidatas no son 98 oportunidades. La lista corta ordena por
+        # convicción y recorta a unas pocas: es la diferencia entre un filtro
+        # y una recomendación.
+        "shortlist": construir_lista_corta(ranked),
         "counts": {
             "favorables": n_favorables,
             "neutrales": len(ranked) - n_favorables - n_desfavorables,

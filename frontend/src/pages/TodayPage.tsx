@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type {
   DailySignal,
+  Conviction,
   Decision,
   DecisionAction,
   MarketInfo,
@@ -17,7 +18,7 @@ const FAMILY_LABELS: Record<string, string> = {
   sentiment: 'Sentimiento',
 }
 
-type View = 'comprar' | 'vigilar' | 'cartera' | 'todas'
+type View = 'ideas' | 'comprar' | 'vigilar' | 'cartera' | 'todas'
 
 /** El compuesto vive de facto en [-2, 2]; se mapea a 0-100 % para la barra. */
 function scoreToPct(score: number): number {
@@ -196,6 +197,136 @@ function DecisionPlan({ decision }: { decision: Decision }) {
     </div>
   )
 }
+
+/** Una idea de la lista corta, con su puesto y su porqué.
+ *
+ *  Se separa de la fila normal a propósito: una fila de tabla invita a
+ *  comparar 98 cosas, y una tarjeta invita a leer una. La pregunta que
+ *  responde es "¿por qué esta y no otra?", no "¿quién califica?". */
+function IdeaCard({
+  signal,
+  onOpen,
+}: {
+  signal: DailySignal & { conviction: Conviction }
+  onOpen: () => void
+}) {
+  const { conviction: c, decision, price } = signal
+  const niveles = decision.levels
+  return (
+    <li className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+            {c.puesto}
+          </span>
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-base font-semibold text-slate-900">
+                {signal.symbol}
+              </span>
+              <span className="text-sm text-slate-500">{signal.context.name}</span>
+            </div>
+            <div className="text-[11px] text-slate-400">
+              {signal.context.sector_name}
+            </div>
+          </div>
+        </div>
+        {price && (
+          <div className="text-right">
+            <div className="text-base tabular-nums text-slate-900">
+              {fmtNumber(price.last, 2)}
+            </div>
+            <div
+              className={`text-xs tabular-nums ${
+                (price.change_pct ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-600'
+              }`}
+            >
+              {fmtChangePct(price.change_pct)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <p className="mt-3 text-sm leading-relaxed text-slate-700">{c.resumen}</p>
+
+      {/* Los tres números que hacen falta para ejecutar. Sin ellos esto sería
+          otra lista de nombres, que es justo lo que sobra. */}
+      {niveles && (
+        <div className="mt-3 grid grid-cols-3 gap-3 rounded-lg bg-slate-50 p-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              Comprar entre
+            </div>
+            <div className="text-sm tabular-nums text-slate-900">
+              {fmtNumber(niveles.entrada_desde, 2)}–{fmtNumber(niveles.entrada_hasta, 2)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              Vender si baja a
+            </div>
+            <div className="text-sm tabular-nums text-red-600">
+              {fmtNumber(niveles.stop, 2)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              Cuánto de tu cartera
+            </div>
+            <div className="text-sm tabular-nums text-slate-900">
+              {niveles.peso_sugerido_pct} %
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          onClick={onOpen}
+          className="text-xs font-medium text-sky-700 hover:underline"
+        >
+          Ver el análisis completo →
+        </button>
+        <span className="text-[11px] text-slate-400">
+          Acuerdo entre factores: {Math.round(c.acuerdo * 100)} %
+        </span>
+      </div>
+    </li>
+  )
+}
+
+/** Las que no hay que comprar. Va junto a las ideas a propósito: saber qué
+ *  evitar es la mitad del trabajo y normalmente la que nadie enseña. */
+function AvoidList({
+  signals,
+}: {
+  signals: (DailySignal & { conviction: Conviction })[]
+}) {
+  if (signals.length === 0) return null
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <h3 className="text-sm font-semibold text-slate-800">
+        Lo que NO comprar ahora
+      </h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Las peor situadas frente a sus comparables de sector. No significa que
+        vayan a caer: significa que hay mejores sitios donde poner el dinero.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {signals.map((s) => (
+          <li key={s.symbol} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+            <span className="font-medium text-slate-800">{s.symbol}</span>
+            <span className="text-slate-500">{s.context.name}</span>
+            <span className="text-xs text-slate-400">
+              · {s.context.sector_name} · {s.conviction.resumen}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 
 const FACTOR_KEYS = ['value', 'quality', 'momentum'] as const
 
@@ -427,7 +558,7 @@ export function TodayPage() {
   const [data, setData] = useState<TodayResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [view, setView] = useState<View>('comprar')
+  const [view, setView] = useState<View>('ideas')
   const [sector, setSector] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -580,7 +711,8 @@ export function TodayPage() {
               <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
                 {(
                   [
-                    ['comprar', `Comprar (${acciones.comprar})`],
+                    ['ideas', `Mejores ideas (${data.shortlist?.ideas.length ?? 0})`],
+                    ['comprar', `Todas las que califican (${acciones.comprar})`],
                     ['vigilar', `Vigilar (${acciones.vigilar})`],
                     ['cartera', `Mi cartera (${acciones.cartera})`],
                     ['todas', `Todas (${data.scored})`],
@@ -666,6 +798,28 @@ export function TodayPage() {
             </div>
           )}
 
+          {view === 'ideas' && data.shortlist ? (
+            <div className="space-y-4">
+              <p className="text-xs leading-relaxed text-slate-500">
+                {data.shortlist.nota}
+              </p>
+              {data.shortlist.ideas.length > 0 && (
+                <ul className="space-y-3">
+                  {data.shortlist.ideas.map((s) => (
+                    <IdeaCard
+                      key={s.symbol}
+                      signal={s}
+                      onOpen={() => {
+                        setView('comprar')
+                        setQuery(s.symbol)
+                      }}
+                    />
+                  ))}
+                </ul>
+              )}
+              <AvoidList signals={data.shortlist.evitar} />
+            </div>
+          ) : (
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             {rows.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-slate-400">
@@ -732,6 +886,7 @@ export function TodayPage() {
               </>
             )}
           </div>
+          )}
 
 
           <div className="flex flex-wrap justify-between gap-3 text-xs text-slate-400">
