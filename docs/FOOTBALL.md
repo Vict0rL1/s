@@ -279,6 +279,103 @@ trae (`ht_home_goals` / `ht_away_goals`, entre ~2.000 y ~3.600 por liga) y está
 tabla. Es lo que haría posible un mercado tipo «gana cualquier mitad» de verdad, medido,
 en vez de inventado — pero mientras no esté medido, no se ofrece.
 
+
+### 6.2 El bug que borraba un resultado entero: los 0-0
+
+El más caro de los encontrados en este proyecto, porque no perdía datos al azar —
+perdía **un resultado concreto**.
+
+openfootball escribe casi todos los partidos así:
+
+```json
+"score": { "ft": [4, 2], "ht": [1, 0] }
+```
+
+pero algunos así, sin documentarlo en ninguna parte:
+
+```json
+"score": [0, 0]
+```
+
+Leer `m.score?.ft` sobre un array da `undefined`, así que el partido se descartaba
+como «no jugado». En los ficheros de 2025-26 eran **178 de 2.919 (6,1 %) y los 178
+eran 0-0**. No una muestra: todos.
+
+Lo que hacía en la base:
+
+| año | proporción de 0-0 |
+|---|---|
+| 2024 | 6,57 % |
+| 2025 | 3,06 % |
+| **2026** | **0,07 %** — un partido de 1.438 |
+
+Un modelo de goles construido sobre eso cree que el empate es más raro, el *over* más
+seguro y el «ambos marcan» más probable de lo que son, **justo en las temporadas que
+la app usa para predecir**. Y nada fallaba: los totales subían, que es lo que se
+espera de una fuente nueva.
+
+Arreglado (`readScore` acepta las dos formas): 21.591 → **21.769 partidos**, la
+proporción de 0-0 vuelve a 5,56-7,13 % en las ocho temporadas, y el RPS del backtest
+mejora de 0,2063 a **0,2059** sobre 17.227 partidos.
+
+`npm run verify:data` comprueba ahora la proporción de 0-0 **por temporada**, no
+sobre todo el archivo: la cifra global se quedaba dentro de cualquier banda razonable
+mientras la temporada en curso estaba completamente rota.
+
+
+### 6.3 Las dos mitades: medido y NO publicado
+
+El marcador al descanso lleva guardado desde la ingesta de openfootball y no lo lee
+nadie. Es la pieza que abriría «resultado al descanso», «gana alguna mitad» y HT/FT
+— los mercados de los boletos reales. Se midió (`npm run study:ht`), se implementó y
+se validó (`npm run study:ht-val`). **No se publica.**
+
+Los hechos, sobre 20.336 partidos:
+
+* El reparto de goles **no es mitad y mitad**: 0,4461 en la primera parte, 5,4 pp por
+  debajo de lo ingenuo.
+* Las dos mitades son **casi independientes**: correlación −0,064.
+* La cuota es **estable**: 0,4374-0,4532 entre ligas, 0,4397-0,4547 entre temporadas.
+  Una constante, no diez.
+
+Con eso el modelo es defendible. Y aun así, sobre 4.238 partidos de 2025-26 que los
+ratings nunca vieron:
+
+| mercado | modelo | real | dif |
+|---|---|---|---|
+| descanso 1 | 35,62 % | 36,39 % | +0,77 pp ✓ |
+| descanso X | 41,09 % | 36,90 % | **−4,19 pp** |
+| descanso 2 | 23,28 % | 26,71 % | **+3,43 pp** |
+| el visitante gana alguna mitad | 41,41 % | 49,76 % | **+8,35 pp** |
+| descanso +0,5 goles | 71,38 % | 75,39 % | **+4,00 pp** |
+| descanso +1,5 goles | 38,19 % | 36,81 % | −1,38 pp ✓ |
+
+El modelo de partido completo está dentro de 1,5 pp en todo lo que publica. De cuatro
+a ocho puntos es otra categoría, y «gana alguna mitad» —el motivo de construirlo— es
+el peor de todos.
+
+**Y el diagnóstico descarta el arreglo fácil.** Barrer el rho de Dixon-Coles mueve
+todo en la dirección correcta pero nunca lo suficiente: en +0,05, que ya invierte el
+sentido físico del parámetro, el visitante sigue 5,9 pp corto. El problema es la
+FORMA de una media parte:
+
+| goles en la 1ª parte | 0 | 1 | 2 o más |
+|---|---|---|---|
+| real | 24,09 % | 38,65 % | 37,26 % |
+| Poisson (media 1,311) | 26,96 % | 35,34 % | 37,71 % |
+
+El fútbol real tiene 2,9 pp **menos** primeras partes en blanco de las que permite una
+Poisson con la media correcta, y rho empuja el 0-0 al lado contrario. La media está
+bien por construcción; la familia de distribución está mal. Arreglarlo pide una
+distribución de goles por mitad ajustada a esa forma 0/1/2+, no la del partido
+completo reescalada.
+
+Contribuye pero no basta: el estado del partido. Tras un descanso igualado hay 1,743
+goles en la segunda parte; tras una ventaja de un gol, 1,539; de dos o más, 1,618.
+
+`halfDistributions`, `winsEitherHalf` y `htFtMatrix` se quedan en `model.ts`,
+exportadas y con sus números escritos al lado. **No las llama nada en la app.**
+
 **Ligas sin fuente de resultados** (Champions League): sus equipos vienen de ligas distintas y su Elo
 vive en cada tabla doméstica, así que un rating compartido necesitaría una calibración entre ligas
 que esta app no hace. Se muestran los partidos y las probabilidades **del mercado**, dicho

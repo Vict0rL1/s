@@ -35,7 +35,9 @@
     "backtest:naf": "npm run backtest:naf --workspace server --",
     "phone": "node scripts/phone.mjs",
     "dev:fixed": "concurrently -n api,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
-    "verify:data": "npm run verify:data --workspace server --"
+    "verify:data": "npm run verify:data --workspace server --",
+    "study:ht": "npm run study:ht --workspace server --",
+    "study:ht-val": "npm run study:ht-val --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

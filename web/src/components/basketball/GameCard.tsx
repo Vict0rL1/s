@@ -17,6 +17,7 @@ import {
   TeamCrest,
 } from '../ui';
 import GameDetail from './GameDetail';
+import { realMarket } from '../../lib/picks';
 
 /**
  * A readable label for a margin band.
@@ -233,7 +234,12 @@ export default function GameCard({
                       with `shrink-0` it could neither shrink nor wrap, so a long name
                       pushed the whole page 10px wide. */}
                 <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
-              {valueTeam && (
+                                {/* Gated on the odds being REAL. Without a key the app prices the
+                      slate from its own model, so a green "Value" badge here was the
+                      card claiming to have found an edge against its own output —
+                      while the panel above it said, in words, that those odds come
+                      from the model and comparing them says nothing. */}
+                  {realMarket(game.source) && valueTeam && (
                 <Badge tone="good" title="El modelo da más probabilidad que el mercado">
                   Value: {valueTeam}
                 </Badge>

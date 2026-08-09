@@ -60,7 +60,50 @@ interface RawMatch {
   time?: string;
   team1?: string;
   team2?: string;
-  score?: { ft?: [number, number]; ht?: [number, number] };
+  /**
+   * TWO SHAPES, and the second one is not documented anywhere.
+   *
+   *   { ft: [4, 2], ht: [1, 0] }   the normal object
+   *   [0, 0]                        a bare array — see `readScore`
+   */
+  score?: { ft?: [number, number]; ht?: [number, number] } | [number, number];
+}
+
+/**
+ * The full-time and half-time score, whichever shape the file used.
+ *
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │ THE BUG THIS EXISTS TO FIX, because it was invisible and it was biased.  │
+ * │                                                                          │
+ * │ openfootball writes most matches as `score: { ft: [...], ht: [...] }`,   │
+ * │ but SOME as a bare `score: [0, 0]`. Reading `m.score?.ft` on the array   │
+ * │ form gives undefined, so the match was skipped as "not played".          │
+ * │                                                                          │
+ * │ In the 2025-26 files, 178 of 2,919 matches (6.1 %) use the array form —  │
+ * │ and every single one of them is 0-0. Not a sample: all 178.              │
+ * │                                                                          │
+ * │ So the loss was not random noise, it was one RESULT going missing. The   │
+ * │ goalless-draw rate in the database fell from 6.6 % in 2024 to 3.1 % in   │
+ * │ 2025 and 0.07 % in 2026 — one match in 1,438. Every goal model built on  │
+ * │ that thinks the draw is rarer, the over safer and "both teams score"     │
+ * │ likelier than they are, in the CURRENT seasons specifically.             │
+ * │                                                                          │
+ * │ Nothing failed. The counts went up, which is what a new source is        │
+ * │ supposed to do.                                                          │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ */
+function readScore(score: RawMatch['score']): {
+  ft: [number, number] | null;
+  ht: [number, number] | null;
+} {
+  const pair = (v: unknown): [number, number] | null =>
+    Array.isArray(v) && v.length >= 2 && Number.isFinite(Number(v[0])) && Number.isFinite(Number(v[1]))
+      ? [Number(v[0]), Number(v[1])]
+      : null;
+  // The array form carries no half-time score, which is consistent with it being
+  // the shorthand for "nothing happened".
+  if (Array.isArray(score)) return { ft: pair(score), ht: null };
+  return { ft: pair(score?.ft), ht: pair(score?.ht) };
 }
 
 export interface OpenFootballMatch {
@@ -93,23 +136,21 @@ export function parseOpenFootball(json: string, source: string): OpenFootballMat
   }
   const out: OpenFootballMatch[] = [];
   for (const m of data.matches ?? []) {
-    const ft = m.score?.ft;
-    if (!Array.isArray(ft) || ft.length < 2) continue;
-    if (!Number.isFinite(ft[0]) || !Number.isFinite(ft[1])) continue;
+    const { ft, ht } = readScore(m.score);
+    if (!ft) continue;
     const d = (m.date ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
     const home = (m.team1 ?? '').trim();
     const away = (m.team2 ?? '').trim();
     if (!d || !home || !away) continue;
-    const ht = m.score?.ht;
     out.push({
       date: `${d[1]}${d[2]}${d[3]}`,
       time: /^\d{1,2}:\d{2}$/.test(m.time ?? '') ? (m.time as string) : null,
       homeName: home,
       awayName: away,
-      homeGoals: Number(ft[0]),
-      awayGoals: Number(ft[1]),
-      htHome: Array.isArray(ht) && Number.isFinite(ht[0]) ? Number(ht[0]) : null,
-      htAway: Array.isArray(ht) && Number.isFinite(ht[1]) ? Number(ht[1]) : null,
+      homeGoals: ft[0],
+      awayGoals: ft[1],
+      htHome: ht ? ht[0] : null,
+      htAway: ht ? ht[1] : null,
     });
   }
   return out;

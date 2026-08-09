@@ -413,3 +413,171 @@ export function impliedFrom1X2(
     overround,
   };
 }
+
+// ===========================================================================
+// LAS DOS MITADES
+// ===========================================================================
+// The half-time score has been stored since the openfootball ingest and nothing
+// read it. It is what a whole family of markets stands on — "resultado al
+// descanso", "gana alguna mitad", HT/FT — and without it the app could only have
+// invented them.
+//
+// Measured over 20,336 matches with a consistent half-time score, across all ten
+// leagues, 2020-2026 (`npm run study:ht`):
+//
+//   · GOALS ARE NOT SPLIT EVENLY. 26,660 in the first half against 33,098 in the
+//     second: a 0.4461 share, 5.4 pp away from the naive half-and-half. Modelling
+//     the halves as identical would overstate every first-half market.
+//
+//   · THE TWO HALVES ARE ESSENTIALLY INDEPENDENT. Correlation between first- and
+//     second-half goals is −0.064. Small, and negative rather than positive, so a
+//     product of two independent distributions is a defensible model rather than a
+//     convenient one.
+//
+//   · THE SHARE IS STABLE. Across leagues it runs 0.4374 (Argentina) to 0.4532
+//     (Bundesliga); across seasons 0.4397 to 0.4547. The spread is under 2 pp and
+//     the ranges overlap, so this is ONE constant. A per-league version would be
+//     fitting noise with a straight face.
+//
+// ===========================================================================
+// VEREDICTO: MEDIDO Y NO PUBLICADO
+// ===========================================================================
+// The facts above are solid and the model below is a faithful implementation of
+// them. It is still not good enough to publish, and the numbers say so plainly.
+// Scored over 4,238 matches of 2025-26 that the ratings never saw (`npm run
+// study:ht-val`), predicted average against realised rate:
+//
+//     descanso 1              35.62 %  vs  36.39 %    +0.77 pp   ✓
+//     descanso X              41.09 %  vs  36.90 %    −4.19 pp   ✗
+//     descanso 2              23.28 %  vs  26.71 %    +3.43 pp   ✗
+//     el local gana una mitad 59.22 %  vs  61.30 %    +2.08 pp
+//     el visitante idem       41.41 %  vs  49.76 %    +8.35 pp   ✗✗
+//     descanso +0.5 goles     71.38 %  vs  75.39 %    +4.00 pp   ✗
+//     descanso +1.5 goles     38.19 %  vs  36.81 %    −1.38 pp   ✓
+//
+// The full-match model is within 1.5 pp on every market it publishes. Four to
+// eight points is a different kind of number, and "gana alguna mitad" — the one
+// on the user's betting slip, the reason this was built — is the worst of them.
+//
+// WHY, because the diagnosis rules out the easy fix. Sweeping the Dixon-Coles rho
+// moves everything monotonically in the right direction but never far enough: even
+// at +0.05, which already inverts the physical meaning of the parameter, the away
+// side is still 5.9 pp short. The reason is the shape of a HALF, not the parameter:
+//
+//     goles en la 1ª parte        0        1      2 o más
+//     real                    24.09 %  38.65 %  37.26 %
+//     Poisson (media 1.311)   26.96 %  35.34 %  37.71 %
+//
+// Real football has 2.9 pp FEWER goalless first halves than a Poisson with the
+// correct mean allows, and rho pushes 0-0 the other way. The mean is right by
+// construction; the family of distribution is wrong. Fixing it needs a half-goal
+// distribution fitted to that observed 0/1/2+ shape, not the full-match one
+// rescaled — which is a real piece of work and not a constant.
+//
+// Contributing but not sufficient: game state. After a level first half there are
+// 1.743 goals in the second, after a one-goal lead 1.539, after two or more 1.618.
+// A pre-match forecast integrates over half-time states it cannot know, using one
+// rate for all of them.
+//
+// So `halfDistributions`, `winsEitherHalf` and `htFtMatrix` below are correct
+// implementations of a model that is not calibrated enough to show anyone. They
+// stay, exported and tested, because the measurement is worth keeping and because
+// the next attempt starts here. NOTHING IN THE APP CALLS THEM.
+
+/**
+ * Share of a match's goals scored before half-time. Measured, see above.
+ *
+ * Not 0.5, and the gap is the whole reason this constant exists rather than the
+ * code simply halving λ.
+ */
+export const HALF_GOAL_SHARE = 0.4461;
+
+/**
+ * Same rho as the full match. Kept only so the study can sweep it; it is not the
+ * knob that would fix the calibration below — see the verdict.
+ */
+export const HALF_DIXON_COLES_RHO = -0.1;
+
+export interface HalfDistributions {
+  first: ScoreDistribution;
+  second: ScoreDistribution;
+}
+
+/**
+ * The match's expected goals split into two independent halves.
+ *
+ * Dixon-Coles rho is applied to each half as it is to the full match. The
+ * low-score correction exists because 0-0, 1-0, 0-1 and 1-1 are more common than
+ * independent Poisson says, and a half is where those scores live: with λ around
+ * 0.6 per side, almost the entire mass sits in exactly those four cells.
+ */
+export function halfDistributions(
+  lambdaHome: number,
+  lambdaAway: number,
+  share = HALF_GOAL_SHARE,
+  rho = HALF_DIXON_COLES_RHO,
+): HalfDistributions {
+  return {
+    first: scoreDistribution(lambdaHome * share, lambdaAway * share, rho),
+    second: scoreDistribution(lambdaHome * (1 - share), lambdaAway * (1 - share), rho),
+  };
+}
+
+/**
+ * P(a given side wins AT LEAST ONE of the two halves) — the market on the user's
+ * own betting slip.
+ *
+ * Computed as 1 − P(wins neither), which is the only way to get it right: adding
+ * P(wins first) and P(wins second) double-counts every match won in both, and
+ * that is not a rare case.
+ */
+export function winsEitherHalf(halves: HalfDistributions, side: 'home' | 'away'): number {
+  const notWin = (d: ScoreDistribution) => {
+    const o = outcomeProbabilities(d);
+    return side === 'home' ? o.draw + o.away : o.draw + o.home;
+  };
+  return 1 - notWin(halves.first) * notWin(halves.second);
+}
+
+/** The nine half-time/full-time combinations, as a flat list. */
+export interface HtFtCell {
+  ht: 'home' | 'draw' | 'away';
+  ft: 'home' | 'draw' | 'away';
+  probability: number;
+}
+
+/**
+ * P(half-time result X and full-time result Y), for all nine.
+ *
+ * Enumerated over the two half grids rather than derived from the full-time
+ * distribution, because the full-time grid has already thrown away WHEN the goals
+ * arrived, which is exactly the information this market is about.
+ */
+export function htFtMatrix(halves: HalfDistributions): HtFtCell[] {
+  const res = (h: number, a: number): 'home' | 'draw' | 'away' =>
+    h > a ? 'home' : h === a ? 'draw' : 'away';
+  const cells = new Map<string, number>();
+  const g1 = halves.first.grid;
+  const g2 = halves.second.grid;
+  for (let h1 = 0; h1 < g1.length; h1++) {
+    for (let a1 = 0; a1 < g1[h1].length; a1++) {
+      const p1 = g1[h1][a1];
+      if (p1 < 1e-9) continue;
+      const ht = res(h1, a1);
+      for (let h2 = 0; h2 < g2.length; h2++) {
+        for (let a2 = 0; a2 < g2[h2].length; a2++) {
+          const p2 = g2[h2][a2];
+          if (p2 < 1e-9) continue;
+          const key = `${ht}|${res(h1 + h2, a1 + a2)}`;
+          cells.set(key, (cells.get(key) ?? 0) + p1 * p2);
+        }
+      }
+    }
+  }
+  const out: HtFtCell[] = [];
+  for (const [key, probability] of cells) {
+    const [ht, ft] = key.split('|') as ['home' | 'draw' | 'away', 'home' | 'draw' | 'away'];
+    out.push({ ht, ft, probability });
+  }
+  return out.sort((a, b) => b.probability - a.probability);
+}

@@ -23,7 +23,9 @@
     "audit": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/audit.ts",
     "update-data:naf": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/nfl/scripts/updateData.ts",
     "backtest:naf": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/nfl/backtest.ts",
-    "verify:data": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/verifyData.ts"
+    "verify:data": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/verifyData.ts",
+    "study:ht": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/_ht.ts",
+    "study:ht-val": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/_htval.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

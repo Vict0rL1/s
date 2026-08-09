@@ -83,8 +83,18 @@ export interface Pick {
  */
 export const MIN_EDGE = 0.04;
 
-/** Rows shown at once. A "top picks" list that needs scrolling is not a top list. */
-export const MAX_PICKS = 6;
+/**
+ * Rows shown at once.
+ *
+ * Was 6. Raised because six is thin on a full Saturday — the football tab can have
+ * sixty fixtures across ten leagues and was showing six lines about them.
+ *
+ * It is raised and NOT the per-match cap, which stays at one. Two suggestions from
+ * the same match are two ways of saying the same forecast, and filling a longer list
+ * with them would make it look like more information while adding none. Ten rows
+ * from ten different matches is more; ten rows from four matches is not.
+ */
+export const MAX_PICKS = 10;
 
 /**
  * What the reader has to know before acting on any of this, per sport.
@@ -94,7 +104,7 @@ export const MAX_PICKS = 6;
  */
 export const CAVEATS: Record<string, string> = {
   football:
-    'Medido sobre 17.200 partidos: RPS 0.2063 frente a 0.2230 de la referencia, y el empate ' +
+    'Medido sobre 17.227 partidos: RPS 0.2059 frente a 0.2230 de la referencia, y el empate ' +
     'calibrado a ±1 pp. Nunca se ha medido contra las cuotas de cierre, así que una diferencia ' +
     'con el mercado es una diferencia, no una ganancia demostrada.',
   baseball:
@@ -133,7 +143,7 @@ export const CAVEATS: Record<string, string> = {
  * because there was no API key. Comparing against those is circular, so they are
  * treated as absent.
  */
-function realMarket(source: string | undefined): boolean {
+export function realMarket(source: string | undefined): boolean {
   return source !== 'fixture';
 }
 
@@ -205,6 +215,43 @@ function marketCap(distinctMarkets: number): number {
 }
 
 /**
+ * How often each market comes true ON AVERAGE, measured over this repo's own archives.
+ *
+ * WHY THIS EXISTS. Without prices the list is ordered by the model's probability, and
+ * that quietly ranks MARKETS instead of opinions: "doble oportunidad" is structurally
+ * around 69 %, so it beat every straight winner pick and the football tab opened with
+ * three double-chance rows and not one answer to "who wins". The model was not being
+ * more confident about them — that market simply starts higher.
+ *
+ * So the confidence ordering uses the LIFT over the base rate: how much the model is
+ * actually saying beyond what the market says on its own. Arsenal at 70.6 % is +27.3
+ * over the 43.3 % a home side wins; a double chance at 88.7 % is +20.1 over 68.6 %.
+ * The winner pick is the stronger claim and now sorts first.
+ *
+ * Measured 2026-08 over: fútbol 21.769 partidos, baloncesto (desde 2015) 46.6k,
+ * béisbol 37.262, NFL 7.276. A market with no entry falls back to 0.5, which for a
+ * two-way market is exactly right and for anything else is the conservative choice.
+ */
+const BASE_RATE: Record<string, number> = {
+  // Football
+  '1X2': 0.433,               // el local gana
+  'Doble oportunidad': 0.686, // 1X; X2 es 0.567, se usa la más común
+  'Ambos marcan': 0.533,
+  'Total de goles': 0.519,    // +2.5
+  // Basketball / baseball / NFL winner markets, home side
+  Ganador: 0.55,
+  Hándicap: 0.5,              // una línea justa es 50/50 por construcción
+  'Línea de carreras': 0.5,
+  'Total de puntos': 0.5,
+  'Total de carreras': 0.5,
+};
+
+/** How much the model is saying beyond the market's own base rate. */
+function lift(p: Pick): number {
+  return p.modelProb - (BASE_RATE[p.market] ?? 0.5);
+}
+
+/**
  * Rank, diversify and trim.
  *
  * Two regimes, and the caller is told which one it got. With prices, order by
@@ -246,7 +293,7 @@ export function rankPicks(
   const sorted =
     basis === 'edge'
       ? priced.filter((p) => (p.edge ?? 0) >= MIN_EDGE).sort((a, b) => (b.edge ?? 0) - (a.edge ?? 0))
-      : [...upcoming].sort((a, b) => b.modelProb - a.modelProb);
+      : [...upcoming].sort((a, b) => lift(b) - lift(a));
 
   const cap = marketCap(new Set(sorted.map((p) => p.market)).size);
   const perMatch = new Map<string, number>();

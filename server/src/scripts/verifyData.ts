@@ -745,6 +745,48 @@ function auditNflMarket(): void {
   );
 }
 
+/**
+ * Football: is any single SCORE going missing?
+ *
+ * A count that goes up looks like success. This is the check that would have caught
+ * the openfootball parser dropping 178 matches of the 2025-26 season, every one of
+ * them 0-0, because the file writes goalless draws as a bare `score: [0,0]` instead
+ * of `score: { ft: [0,0] }`. The goalless-draw rate fell to 0.07 % — one match in
+ * 1,438 — and nothing else in this repo noticed, because the totals still rose.
+ *
+ * The rate is checked PER SEASON, not overall: a whole-archive figure stays inside
+ * any sane band while the newest season, which is the one the app predicts from,
+ * is completely broken.
+ *
+ * 4-10 % is wide on purpose. The measured rate across the healthy seasons is
+ * 5.9-7.1 %, low-scoring leagues sit at the top of that and Eredivisie at the
+ * bottom; the band has to admit a genuinely defensive season without admitting a
+ * parser that lost the result altogether.
+ */
+function auditGoallessDraws(): void {
+  const rows = getDb()
+    .prepare(
+      `SELECT substr(match_date, 1, 4) AS y, COUNT(*) AS n,
+              SUM(CASE WHEN home_goals = 0 AND away_goals = 0 THEN 1 ELSE 0 END) AS zeros
+         FROM fb_matches GROUP BY y HAVING n >= 400 ORDER BY y`,
+    )
+    .all() as unknown as { y: string; n: number; zeros: number }[];
+  console.log('\n▸ Fútbol: ¿se pierde algún resultado?');
+  if (rows.length === 0) {
+    console.log('  sin temporadas con muestra suficiente, saltado');
+    return;
+  }
+  for (const r of rows) {
+    band(`fútbol: proporción de 0-0 en ${r.y}`, r.zeros / r.n, 0.04, 0.1);
+  }
+  const worst = rows.reduce((a, b) => (a.zeros / a.n < b.zeros / b.n ? a : b));
+  console.log(
+    `  ${rows.length} temporadas · 0-0 entre ` +
+      `${((Math.min(...rows.map((r) => r.zeros / r.n))) * 100).toFixed(2)} % (${worst.y}) y ` +
+      `${((Math.max(...rows.map((r) => r.zeros / r.n))) * 100).toFixed(2)} %`,
+  );
+}
+
 function main(): void {
   console.log('\n🔎 Verificación de los datos\n' + '='.repeat(46));
   console.log(
@@ -756,6 +798,7 @@ function main(): void {
   console.log('\n▸ Identidad de los equipos');
   for (const s of SPORTS) auditFranchiseIds(s.label, s.teams, s.games);
   for (const s of SPORTS) auditRoundRobin(s.label, s.games);
+  auditGoallessDraws();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();
