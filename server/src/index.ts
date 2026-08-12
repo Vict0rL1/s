@@ -24,14 +24,27 @@ import { resolveBaseballPredictions } from './baseball/trackRecord.ts';
 import { resolveNflPredictions } from './nfl/trackRecord.ts';
 
 /**
- * Keep odds current on their own: refresh once at startup and then on an
- * interval. Only runs when an ODDS_API_KEY is configured (otherwise there is
- * nothing live to fetch and the demo fixtures are static).
+ * Keep the schedule current on its own: refresh once at startup and then on an
+ * interval.
+ *
+ * IT RUNS WITHOUT AN API KEY TOO, and that is the fix to a bug rather than a
+ * nicety. This used to return early with "the demo fixtures are static", which is
+ * false: `demoKickoffs` builds its times RELATIVE TO NOW, so a slate generated on
+ * Sunday is entirely in the past by Tuesday. With no key and no auto-refresh, the
+ * demo slate was written once by `update-data` and never again — every tab went
+ * empty after a day and stayed empty until the reader happened to press
+ * "Actualizar". Measured: 60 football rows in the table, all from three days
+ * earlier, and the app showing none of them.
+ *
+ * Refreshing without a key costs nothing. Every sport's refresh checks
+ * `env.oddsApiKey` before it reaches for the network and otherwise goes straight to
+ * its fixture generator, so these cycles make zero HTTP requests and spend zero
+ * quota. The interval logic below measures spend per cycle and finds zero, which is
+ * the correct answer.
  */
 function startAutoRefresh(log: (msg: string) => void): void {
   if (!env.oddsApiKey) {
-    log('Auto-refresh disabled (set ODDS_API_KEY to fetch live odds automatically).');
-    return;
+    log('Sin ODDS_API_KEY: se refrescará solo el calendario de demostración (no gasta cuota).');
   }
   if (env.autoRefreshMinutes <= 0) {
     log('Auto-refresh disabled (AUTO_REFRESH_MINUTES=0).');

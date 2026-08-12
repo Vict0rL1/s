@@ -275,6 +275,23 @@ deberían completar los dos huecos sin que toques nada.
 Mientras estén incompletos, la app **lo dice en la propia pestaña** con un aviso
 ámbar que indica cuántos meses de retraso lleva el historial; no finge estar al día.
 
+### Los partidos del día se quedan hasta medianoche
+
+Un partido que ya empezó **sigue en la lista el resto del día** — es cuando más
+quieres ver cómo va. Desaparece a medianoche, no seis horas después de empezar.
+
+Esto se rompió tres veces por mecanismos distintos y cada una pasó la auditoría,
+porque comprobaba las piezas y no el resultado. Ahora hay una comprobación que mete
+un partido de sonda que empezó hace dos horas y pregunta a la app si lo devuelve
+(`npm run audit`, sección «¿Se quedan los partidos del día?»). No puede pasar
+mientras el fallo exista.
+
+**Sin `ODDS_API_KEY` el calendario también se refresca solo.** Antes no: el servidor
+se saltaba el refresco entero sin clave, con el argumento de que las citas de
+demostración son estáticas. No lo son — sus horas se generan relativas a ahora, así
+que el calendario envejecía y la pestaña se quedaba vacía al día siguiente. Refrescar
+sin clave no hace ni una petición HTTP ni gasta cuota.
+
 ---
 
 ## Requisitos

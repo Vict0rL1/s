@@ -73,7 +73,13 @@ export function freshSince(now = new Date()): string {
   return new Date(Math.min(midnight, rolling)).toISOString();
 }
 
-/** Sources whose rows are invented and therefore never worth keeping past kick-off. */
+/**
+ * The source name for an invented slate.
+ *
+ * It does NOT affect the display window — see the note on that below. It is still
+ * meaningful elsewhere: comparing the model against odds the model itself produced
+ * is circular, so the picks panel and the cards check for it before claiming value.
+ */
 export const DEMO_SOURCE = 'fixture';
 
 /**
@@ -89,10 +95,7 @@ export const DEMO_SOURCE = 'fixture';
  * Splice `params` into the query's own parameter list wherever the fragment lands.
  */
 export function freshFilter(now = new Date()): { sql: string; params: string[] } {
-  return {
-    sql: `(commence_time >= ? AND (source <> '${DEMO_SOURCE}' OR commence_time >= ?))`,
-    params: [freshSince(now), now.toISOString()],
-  };
+  return { sql: '(commence_time >= ?)', params: [freshSince(now)] };
 }
 
 // ===========================================================================
@@ -122,15 +125,18 @@ export function freshFilter(now = new Date()): { sql: string; params: string[] }
 //                        the rows the reader wants the result for, and the only
 //                        place they can come from is the copy we already have.
 //
-// WITH ONE EXCEPTION: A DEMO ROW THAT HAS STARTED IS DELETED.
+// NO EXCEPTION FOR DEMO ROWS, and this was got wrong once.
 //
-// The keep-until-midnight rule exists because the reader wants THE RESULT of a
-// match that kicked off this morning. A `source = 'fixture'` row is invented from
-// current ratings — the match does not exist, so there is no result and there never
-// will be one. Carrying it over produces the exact thing the rule was written to
-// prevent: an 14:00 fixture still filed under today at 20:00, above tomorrow's
-// games, that will never resolve. `demoKickoffs` always generates at least 45
-// minutes ahead, so a demo row in the past means the slate is simply old.
+// A carve-out used to delete `source = 'fixture'` rows the moment they kicked off,
+// reasoning that an invented match has no result to wait for. That is true and it
+// was still the wrong call: WITHOUT AN ODDS_API_KEY EVERY ROW IS A DEMO ROW, so the
+// effect was that every match vanished at kick-off — exactly the complaint the whole
+// module exists to fix, reintroduced through the one path the reader actually sees.
+// Measured at the time: a real match that started two hours ago stayed, an identical
+// demo one disappeared.
+//
+// The window is now uniform. What the reader asked for is "today's matches stay
+// today", and that rule does not have an interesting exception.
 
 
 /** The five tables that hold scheduled matches. */
@@ -171,11 +177,8 @@ export function pruneUpcoming(
     // `table` and the scope column names are not interpolated user input — the table
     // is one of the five literals in UpcomingTable and the columns are written at the
     // call sites, which is why the type is a union rather than `string`.
-    `DELETE FROM ${table}
-      WHERE (commence_time >= ?
-             OR commence_time < ?
-             OR (source = '${DEMO_SOURCE}' AND commence_time < ?))${extra}`,
-  ).run(nowIso, since, nowIso, ...scope.map(([, v]) => v));
+    `DELETE FROM ${table} WHERE (commence_time >= ? OR commence_time < ?)${extra}`,
+  ).run(nowIso, since, ...scope.map(([, v]) => v));
   const row = db
     .prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE 1 = 1${extra}`)
     .get(...scope.map(([, v]) => v)) as { c: number };

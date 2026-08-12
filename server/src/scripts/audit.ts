@@ -33,7 +33,7 @@ import { coverProbability, buildDistribution, MAX_MARGIN } from '../nfl/model.ts
 import { buildPrediction } from '../model/predict.ts';
 import { listUpcoming as tennisUpcoming } from '../repo.ts';
 import { listParkFactors } from '../baseball/parkFactors.ts';
-import { DEMO_SOURCE, freshSince } from '../freshness.ts';
+import { DEMO_SOURCE, freshFilter, freshSince } from '../freshness.ts';
 
 // ---------------------------------------------------------------------------
 let checks = 0;
@@ -644,7 +644,6 @@ function auditWindow(): void {
   section('Ventana de partidos');
   const db = getDb();
   const since = freshSince();
-  const nowIso = new Date().toISOString();
   const tables: [string, string][] = [
     ['fútbol', 'fb_upcoming'],
     ['baloncesto', 'bb_upcoming'],
@@ -666,24 +665,6 @@ function auditWindow(): void {
       `${label}: nada anterior a la ventana en la tabla`,
       !row.oldest || row.oldest >= since,
       `más antiguo ${row.oldest}, ventana desde ${since}`,
-    );
-    // Checked HERE and not in auditUpcoming, because the reader's query already
-    // filters these out — asserting it there would be asserting the filter against
-    // itself and could never fail. This looks at the raw table, which is the only
-    // place a stale demo row can still be seen.
-    //
-    // A demo row that has started is invented AND finished: there is no result to
-    // wait for, so nothing should ever carry it over. Its presence means either the
-    // pruning missed the demo case or the slate has not been refreshed since it
-    // aged out — and the reader would have seen a 14:00 kick-off filed under today
-    // at 20:00 that resolves to nothing.
-    const demo = db
-      .prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE source = ? AND commence_time < ?`)
-      .get(DEMO_SOURCE, nowIso) as unknown as { c: number };
-    check(
-      `${label}: ningún partido demo con hora ya pasada`,
-      demo.c === 0,
-      `${demo.c} filas demo antes de ${nowIso}`,
     );
   }
   console.log(`  ${n} tablas comprobadas contra la ventana (desde ${since})`);
@@ -765,6 +746,85 @@ function auditProvenance(): void {
   console.log(`  ${n} deportes con datos comprobados`);
 }
 
+/**
+ * Does a match that kicked off earlier TODAY still show?
+ *
+ * This is the product rule the reader asked for three separate times, and it has now
+ * been broken three ways: an unconditional `DELETE FROM …_upcoming` on every refresh;
+ * a carve-out that deleted demo rows at kick-off (and with no ODDS_API_KEY every row
+ * is a demo row); and an upsert that let a re-sent event id drag a started match into
+ * the evening.
+ *
+ * Every time, the audit passed — because it checked the PIECES (is the table pruned
+ * by time? do the cutoffs agree?) and never the OUTCOME. So this asserts the outcome
+ * on a probe row rather than on whatever the slate happens to hold. It cannot pass
+ * while the reader's complaint is true.
+ *
+ * Both sources are probed: a rule that holds for real rows and not for invented ones
+ * is exactly the bug it is here to catch.
+ */
+function auditTodaysMatchesStay(): void {
+  section('¿Se quedan los partidos del día?');
+  const db = getDb();
+  const now = new Date();
+  const startedToday = new Date(now.getTime() - 2 * 3600_000);
+  // Only meaningful when "two hours ago" is still today; between 00:00 and 02:00 the
+  // probe would land on yesterday, which the window is allowed to drop.
+  if (startedToday.getDate() !== now.getDate()) {
+    console.log('  son menos de las 02:00, la sonda caería en ayer — saltado');
+    return;
+  }
+  const iso = startedToday.toISOString();
+  // Where a careless feed would try to drag it: four hours into the future.
+  const later = new Date(now.getTime() + 4 * 3600_000).toISOString();
+  const fresh = freshFilter(now);
+  let probed = 0;
+  for (const source of ['live', DEMO_SOURCE]) {
+    const id = `__audit-probe-${source}`;
+    db.prepare(
+      `INSERT OR REPLACE INTO fb_upcoming
+         (id, league, commence_time, home_name, away_name, books, source, updated_at)
+       VALUES (?, 'epl', ?, 'Sonda A', 'Sonda B', 0, ?, ?)`,
+    ).run(id, iso, source, now.toISOString());
+    const seen = db
+      .prepare(`SELECT COUNT(*) AS c FROM fb_upcoming WHERE id = ? AND ${fresh.sql}`)
+      .get(id, ...fresh.params) as { c: number };
+    check(
+      `un partido '${source}' que empezó hace 2 h sigue visible`,
+      seen.c === 1,
+      'desaparece al empezar, que es justo lo que freshness.ts existe para evitar',
+    );
+    probed++;
+
+    // And it must survive being RE-SENT by its feed. Making the row survive was not
+    // enough: a regenerated slate reused its id and moved it to tonight's kick-off —
+    // still present, still counted, and gone from today. Only its commence_time gave
+    // that away, so that is what is asserted.
+    db.prepare(
+      `INSERT INTO fb_upcoming
+         (id, league, commence_time, home_name, away_name, books, source, updated_at)
+       VALUES (?, 'epl', ?, 'Sonda A', 'Sonda B', 0, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         commence_time = CASE WHEN fb_upcoming.commence_time >= ?
+                              THEN excluded.commence_time
+                              ELSE fb_upcoming.commence_time END`,
+    ).run(id, later, source, now.toISOString(), now.toISOString());
+    const kept = db.prepare('SELECT commence_time AS t FROM fb_upcoming WHERE id = ?').get(id) as
+      | { t: string }
+      | undefined;
+    check(
+      `un partido '${source}' ya empezado no se mueve al reenviarlo la fuente`,
+      kept?.t === iso,
+      `lo movieron a ${kept?.t}`,
+    );
+    // Cleaned up LAST. Leaving it behind is not cosmetic: the probe's kick-off has
+    // stray seconds, and another check in this same run asserts that every stored
+    // kick-off falls on a whole minute — it caught this leak immediately.
+    db.prepare('DELETE FROM fb_upcoming WHERE id = ?').run(id);
+  }
+  console.log(`  ${probed} orígenes comprobados con una sonda a las ${iso.slice(11, 16)} UTC`);
+}
+
 function main(): void {
   console.log('\n🔍 Auditoría de consistencia\n' + '='.repeat(46));
   console.log(
@@ -773,6 +833,7 @@ function main(): void {
   );
 
   auditProvenance();
+  auditTodaysMatchesStay();
   auditWindow();
   auditFootball();
   auditBaseball();

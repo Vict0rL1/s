@@ -110,7 +110,17 @@ function generateFixtures(league: LeagueId, count = 6): Aggregated[] {
     // Priced so implied probabilities sum to MORE than 1 — a real book's margin.
     const vig = 1.06;
     out.push({
-      id: `fixture-${league}-${i / 2}`,
+      // The kick-off INSTANT is part of the id, and it has to be. These ids used to
+      // be `fixture-epl-0`, stable per league and index, so a regenerated slate
+      // reused them — and the ON CONFLICT UPDATE rewrote this morning's
+      // already-started match with tonight's kick-off, mutating it out of today
+      // instead of leaving it where the reader expects to find it.
+      //
+      // The full instant and not just the date: `demoKickoffs` only ever emits slots
+      // at least 45 minutes ahead, so once 14:00 has passed the next slate starts at
+      // 16:15 and gets its own id. The date alone collides, because the new slate is
+      // usually still the same day.
+      id: `fixture-${league}-${kickoffs[out.length]}-${i / 2}`,
       commence_time: kickoffs[out.length],
       home: home.name,
       away: away.name,
@@ -139,7 +149,14 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
         odds_home, odds_draw, odds_away, books, source, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
-       commence_time = excluded.commence_time, odds_home = excluded.odds_home,
+       -- NEVER move a match that has already kicked off. A feed re-sending an
+       -- event id with a new time — which both the demo generator and a live API
+       -- can do — would otherwise drag this morning's match into tonight, and it
+       -- would vanish from today without anything being deleted. Measured: it did
+       -- exactly that, and the row still existed afterwards, so only its time gave
+       -- the bug away.
+       commence_time = CASE WHEN fb_upcoming.commence_time >= ? THEN excluded.commence_time
+                            ELSE fb_upcoming.commence_time END, odds_home = excluded.odds_home,
        odds_draw = excluded.odds_draw, odds_away = excluded.odds_away,
        books = excluded.books, home_id = excluded.home_id, away_id = excluded.away_id,
        source = excluded.source, updated_at = excluded.updated_at`,
@@ -179,6 +196,7 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
     source = 'fixture';
   }
 
+  const nowIso = new Date().toISOString();
   db.exec('BEGIN');
   try {
     // Keeps the matches that already kicked off today — see pruneUpcoming.
@@ -205,6 +223,9 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
           ev.books,
           source,
           new Date().toISOString(),
+          // Last arg feeds the CASE guard above: the row may only be re-timed
+          // while its stored kick-off is still in the future.
+          nowIso,
         );
         count++;
       }

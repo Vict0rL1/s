@@ -216,7 +216,17 @@ function generateFixtures(league: LeagueId, count = 8): AggregatedEvent[] {
     // produce a negative margin, which no bookmaker offers.
     const vig = 1.045;
     out.push({
-      id: `fixture-${league}-${i / 2}`,
+      // The kick-off INSTANT is part of the id, and it has to be. These ids used to
+      // be `fixture-epl-0`, stable per league and index, so a regenerated slate
+      // reused them — and the ON CONFLICT UPDATE rewrote this morning's
+      // already-started match with tonight's kick-off, mutating it out of today
+      // instead of leaving it where the reader expects to find it.
+      //
+      // The full instant and not just the date: `demoKickoffs` only ever emits slots
+      // at least 45 minutes ahead, so once 14:00 has passed the next slate starts at
+      // 16:15 and gets its own id. The date alone collides, because the new slate is
+      // usually still the same day.
+      id: `fixture-${league}-${kickoffs[out.length]}-${i / 2}`,
       commence_time: kickoffs[out.length],
       home: home.name,
       away: away.name,
@@ -247,7 +257,14 @@ export async function refreshBaseballOdds(): Promise<BaseballOddsResult> {
         home_sp, away_sp, odds_home, odds_away, books, source, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
-       commence_time = excluded.commence_time, home_id = excluded.home_id,
+       -- NEVER move a match that has already kicked off. A feed re-sending an
+       -- event id with a new time — which both the demo generator and a live API
+       -- can do — would otherwise drag this morning's match into tonight, and it
+       -- would vanish from today without anything being deleted. Measured: it did
+       -- exactly that, and the row still existed afterwards, so only its time gave
+       -- the bug away.
+       commence_time = CASE WHEN bsb_upcoming.commence_time >= ? THEN excluded.commence_time
+                            ELSE bsb_upcoming.commence_time END, home_id = excluded.home_id,
        away_id = excluded.away_id, home_sp = excluded.home_sp, away_sp = excluded.away_sp,
        odds_home = excluded.odds_home, odds_away = excluded.odds_away,
        books = excluded.books, source = excluded.source, updated_at = excluded.updated_at`,
@@ -319,6 +336,9 @@ export async function refreshBaseballOdds(): Promise<BaseballOddsResult> {
           ev.price[ev.away] ?? null,
           ev.books,
           source,
+          now,
+          // Last arg feeds the CASE guard above: the row may only be re-timed
+          // while its stored kick-off is still in the future.
           now,
         );
         inserted++;

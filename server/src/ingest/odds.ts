@@ -195,13 +195,17 @@ function generateFixtures(): number {
         // tiny deterministic bias so market != model exactly
         const bias = ((a.id + b.id) % 7) / 100 - 0.03;
         const mp = Math.min(0.9, Math.max(0.1, pa + bias));
+        // The kick-off INSTANT belongs in the id — see the note in football's
+        // generateFixtures. Without it a regenerated slate reuses the same id and
+        // the ON CONFLICT UPDATE drags this morning's match forward to tonight.
+        const kickoff = kickoffs[slot++];
         insert.run(
-          `fx-${tour}-${t.id}-${pi}`,
+          `fx-${tour}-${t.id}-${kickoff}-${pi}`,
           tour,
           t.id,
           t.name,
           surface,
-          kickoffs[slot++],
+          kickoff,
           a.name,
           b.name,
           a.id,
