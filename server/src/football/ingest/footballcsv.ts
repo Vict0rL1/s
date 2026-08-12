@@ -26,13 +26,56 @@ import type { LeagueConfig } from '../types.ts';
 export const CACHE_DIR = path.join(RAW_DIR, 'football', 'footballcsv');
 
 /** Team name → stable slug. */
+/**
+ * Club-name noise that carries no identity: the legal-form suffixes and prefixes.
+ *
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │ THE BUG THIS FIXES: every club that played in 2019-20 was split in two.  │
+ * │                                                                          │
+ * │ openfootball writes the 2019-20 files with short names ("Manchester      │
+ * │ City") and every later season with the legal form ("Manchester City FC").│
+ * │ Slugified as-is those are two ids, so each club's FIRST season was       │
+ * │ orphaned onto a phantom team and its Elo built from six seasons instead  │
+ * │ of seven.                                                                │
+ * │                                                                          │
+ * │ Measured in the Premier League: 40 teams where there are ~29 real ones,  │
+ * │ with `manchester-city` holding 38 matches ending 2020-06-25 while        │
+ * │ `manchester-city-fc` held the rest. The reliability chip on every card   │
+ * │ was reporting it correctly — "Manchester City has 38 matches and has not │
+ * │ played in ~6 years" — and it read like a broken indicator rather than    │
+ * │ what it was, a true statement about a broken team id.                    │
+ * │                                                                          │
+ * │ Stripped rather than aliased, because the list is short, closed and the  │
+ * │ same in every European league. Ten hand-written aliases per league would │
+ * │ be ten chances to miss one.                                              │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ *
+ * NOT stripped: anything that distinguishes two real clubs. "United", "City",
+ * "Athletic", "Real", "Sporting" and "Racing" all stay — Manchester United and
+ * Manchester City are different clubs, and so are Sporting Gijón and Gijón.
+ */
+const CLUB_NOISE = [
+  'fc', 'afc', 'cf', 'sc', 'ac', 'ss', 'as', 'us', 'sv', 'vfl', 'vfb', 'tsg', 'fsv',
+  'bsc', 'sgd', 'sge', 'ogc', 'rc', 'cd', 'ud', 'sd', 'ca', 'aa', 'ec', 'sad',
+];
+
+/**
+ * Club name → stable id.
+ *
+ * The legal-form tokens above are removed wherever they appear, so "Manchester City",
+ * "Manchester City FC" and "FC Manchester City" all land on `manchester-city`.
+ */
 export function slugify(name: string): string {
-  return name
+  const slug = name
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+  const kept = slug.split('-').filter((part) => part && !CLUB_NOISE.includes(part));
+  // If a name is NOTHING but noise the slug would come out empty, which would merge
+  // every such club into one id. Falling back to the raw slug keeps them distinct.
+  return kept.length > 0 ? kept.join('-') : slug;
 }
 
 /** "Sat Aug 17 2013" or "2013-08-17" → YYYYMMDD. */

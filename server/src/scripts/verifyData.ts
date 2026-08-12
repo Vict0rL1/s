@@ -28,6 +28,7 @@
 // Exit code is non-zero on failure, so it can gate a data refresh.
 
 import { getDb } from '../db.ts';
+import { slugify } from '../football/ingest/footballcsv.ts';
 import { normalCdf, MARGIN_SIGMA as NFL_MARGIN_SIGMA } from '../nfl/model.ts';
 import { recomputeBaseballRatings } from '../baseball/ratings.ts';
 
@@ -787,6 +788,55 @@ function auditGoallessDraws(): void {
   );
 }
 
+/**
+ * Two team ids that look like the same club.
+ *
+ * The round-robin check next to this one catches a franchise split when both halves
+ * are ACTIVE AT ONCE — two teams in the same season that never meet. It cannot catch
+ * the other shape, and the other shape is what football had: openfootball wrote
+ * 2019-20 with short names ("Manchester City") and every later season with the legal
+ * form ("Manchester City FC"), so each club's halves sat in DISJOINT seasons and
+ * never had the chance to not-meet. The Premier League held 40 team ids for ~29 real
+ * clubs, and `manchester-city` kept 38 matches ending 2020-06-25 while
+ * `manchester-city-fc` kept the other 228.
+ *
+ * What that costs is not cosmetic: every club that played the first season had that
+ * season orphaned, so its Elo was built from six years instead of seven, and the
+ * reliability chip on every card of the tab read "fiabilidad baja ±15 pp" — correctly,
+ * about a team id that genuinely had 38 matches.
+ *
+ * The test is name-based and deliberately narrow: two ids in the same league whose
+ * names are equal once the legal-form tokens are stripped. `slugify` already does
+ * that stripping, so this asks whether slugify would map two DIFFERENT stored ids
+ * onto the same one — which, after the fix, can only happen if an id was written by
+ * an older build or a source this normalisation does not cover.
+ */
+function auditClubNameSplits(): void {
+  const rows = getDb()
+    .prepare('SELECT league, id, name FROM fb_teams ORDER BY league, id')
+    .all() as unknown as { league: string; id: string; name: string }[];
+  console.log('\n▸ Fútbol: ¿algún club partido en dos ids?');
+  if (rows.length === 0) {
+    console.log('  sin equipos, saltado');
+    return;
+  }
+  const byKey = new Map<string, { id: string; name: string }[]>();
+  for (const r of rows) {
+    const key = `${r.league}|${slugify(r.name)}`;
+    (byKey.get(key) ?? byKey.set(key, []).get(key)!).push({ id: r.id, name: r.name });
+  }
+  const split = [...byKey.entries()].filter(([, v]) => v.length > 1);
+  check(
+    'fútbol: ningún club aparece con dos ids distintos',
+    split.length === 0,
+    split
+      .slice(0, 4)
+      .map(([k, v]) => `${k} → ${v.map((x) => `${x.id} ("${x.name}")`).join(' + ')}`)
+      .join('; '),
+  );
+  console.log(`  ${rows.length} equipos · ${byKey.size} clubes distintos tras normalizar el nombre`);
+}
+
 function main(): void {
   console.log('\n🔎 Verificación de los datos\n' + '='.repeat(46));
   console.log(
@@ -799,6 +849,7 @@ function main(): void {
   for (const s of SPORTS) auditFranchiseIds(s.label, s.teams, s.games);
   for (const s of SPORTS) auditRoundRobin(s.label, s.games);
   auditGoallessDraws();
+  auditClubNameSplits();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

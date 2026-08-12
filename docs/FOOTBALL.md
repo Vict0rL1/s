@@ -376,6 +376,59 @@ goles en la segunda parte; tras una ventaja de un gol, 1,539; de dos o más, 1,6
 `halfDistributions`, `winsEitherHalf` y `htFtMatrix` se quedan en `model.ts`,
 exportadas y con sus números escritos al lado. **No las llama nada en la app.**
 
+
+### 6.4 Cada club estaba partido en dos: los sufijos legales
+
+Encontrado tirando del hilo de algo que parecía un fallo de interfaz: las seis
+tarjetas de la pestaña decían **«fiabilidad baja ±15-18 pp»**. Un indicador que dice
+lo mismo siempre no informa, así que fui a arreglarlo — y resultó que **el indicador
+tenía razón**:
+
+```
+Arsenal FC vs Manchester City     banda ±15.2 pp · baja
+   partidos en la base: 266 / 38
+   last_date:      20260524 / 20200625
+   "Manchester City no tiene partidos desde hace ~6 años"
+```
+
+Manchester City con 38 partidos y sin jugar desde 2020 es imposible. openfootball
+escribe la temporada 2019-20 con nombres cortos («Manchester City») y todas las
+posteriores con la forma legal («Manchester City FC»). Al convertir el nombre en id
+sin normalizar, **cada club que jugó esa temporada quedó partido en dos**: la Premier
+tenía 40 ids para ~29 clubes reales.
+
+Lo que costaba, que no es cosmético:
+
+| | antes | después |
+|---|---|---|
+| Equipos (todas las ligas) | 352 | **310** |
+| Equipos en la Premier | 40 | **28** |
+| Elo del Manchester City | 1556 (#9) | **1733 (#2)** |
+| Banda de fiabilidad típica | ±15-18 pp · **baja** | **±3 pp · alta** |
+| Partidos evaluables en el backtest | 17.227 | **17.735** |
+
+El Elo del City salía del **único** año que le quedaba asignado —la temporada COVID—
+así que la app lo tenía como noveno de la liga. Y las bandas eran anchas porque la
+mitad de los equipos de cada tarjeta tenían 38 partidos de historia.
+
+El RPS queda en 0,2061 frente a 0,2059, sobre **508 partidos más**: los que antes no
+llegaban al mínimo de partidos previos, que son los inicios de temporada y los más
+difíciles. Plano sobre una muestra mayor y más honesta.
+
+Arreglado quitando los tokens de forma legal del slug (`fc`, `afc`, `cf`, `sc`, `ss`,
+`vfl`…), no con una lista de alias por liga: la lista de sufijos es corta, cerrada y
+la misma en toda Europa, mientras que diez alias por liga son diez oportunidades de
+olvidar uno. **No** se quitan las palabras que distinguen clubes reales — «United»,
+«City», «Real», «Sporting», «Athletic» se quedan.
+
+Y el nombre que se guarda es el **más largo** de los dos, porque con last-write-wins
+la misma tarjeta llegó a decir «Arsenal FC vs Manchester City».
+
+`npm run verify:data` comprueba ahora que ningún club aparezca con dos ids. La
+comprobación de round robin que ya existía **no podía** cazarlo: detecta dos equipos
+activos *a la vez* que nunca se enfrentan, y aquí las dos mitades vivían en
+temporadas disjuntas, así que nunca tuvieron ocasión de no enfrentarse.
+
 **Ligas sin fuente de resultados** (Champions League): sus equipos vienen de ligas distintas y su Elo
 vive en cada tabla doméstica, así que un rating compartido necesitaría una calibración entre ligas
 que esta app no hace. Se muestran los partidos y las probabilidades **del mercado**, dicho

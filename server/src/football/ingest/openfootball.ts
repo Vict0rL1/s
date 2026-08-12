@@ -236,8 +236,16 @@ export async function ingestOpenFootball(
 
   const db = getDb();
   const insertTeam = db.prepare(
+    // Keep the LONGER of the two spellings. Once the id is normalised, one club
+    // arrives as both "Manchester City" (the 2019-20 files) and "Manchester City FC"
+    // (every season since), and last-write-wins produced a fixture line reading
+    // "Arsenal FC vs Manchester City" — the same league, the same card, two
+    // conventions. The longer string is the one carrying the legal form, which is
+    // also the current official name.
     `INSERT INTO fb_teams (id, league, name) VALUES (?, ?, ?)
-     ON CONFLICT(league, id) DO UPDATE SET name = excluded.name`,
+     ON CONFLICT(league, id) DO UPDATE SET
+       name = CASE WHEN length(excluded.name) > length(fb_teams.name)
+                   THEN excluded.name ELSE fb_teams.name END`,
   );
   // Odds are left alone on conflict: football-data.co.uk may already have filled
   // them in for this match, and this source has none. Overwriting them with NULL
