@@ -288,6 +288,12 @@ reciente, no una cotización en tiempo real, y la app no finge lo contrario.
 
 ### Cobertura incremental
 
+**La app completa la cobertura sola**, encadenando hasta cuatro pasadas: tener
+que pulsar «Seguir completando» tres o cuatro veces era trabajo manual para
+llegar a algo que la app ya sabía que le faltaba. El tope existe porque cada
+pasada gasta cuota de APIs gratuitas y agotarla en silencio dejaría el resto del
+día sin datos; a partir de ahí el botón sigue estando.
+
 El S&P 500 son ~500 empresas y los tiers gratuitos dan 60 llamadas/minuto. El
 limitador de cuota **descarta, no espera**, así que lanzar 500 llamadas de
 golpe puntuaría las primeras 60 y perdería el resto. En su lugar cada petición

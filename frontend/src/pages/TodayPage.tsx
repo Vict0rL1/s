@@ -559,20 +559,34 @@ export function TodayPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [view, setView] = useState<View>('ideas')
+  const [autoRondas, setAutoRondas] = useState(0)
   const [sector, setSector] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [query, setQuery] = useState('')
 
-  const load = (which: string, refresh = false) => {
+  // Completar la cobertura a mano era pulsar el mismo botón tres o cuatro
+  // veces para llegar a lo que la app ya sabe que falta. Ahora encadena las
+  // pasadas sola, pero con tope: cada una gasta cuota de APIs gratuitas y
+  // agotarla en silencio dejaría el resto del día sin datos.
+  const MAX_PASADAS_AUTO = 4
+
+  const load = (which: string, refresh = false, autoPasada = 0) => {
     setBusy(true)
     setError(null)
     api.today(which, refresh).then(
       (d) => {
         setData(d)
+        if (!d.complete && autoPasada < MAX_PASADAS_AUTO) {
+          setAutoRondas(autoPasada + 1)
+          load(which, true, autoPasada + 1)
+          return
+        }
+        setAutoRondas(0)
         setBusy(false)
       },
       (e) => {
         setError(e instanceof Error ? e.message : 'Error')
+        setAutoRondas(0)
         setBusy(false)
       },
     )
@@ -638,11 +652,22 @@ export function TodayPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">Hoy</h1>
-          {/* Altura acotada: la cabecera no debe crecer con lo larga que sea
-              la descripción del mercado que toque. */}
+          {/* Antes explicaba de dónde salen los datos, que es lo último que
+              hace falta al abrir. Lo que se quiere saber al llegar es cómo
+              está el día: cuántas ideas hay y si toca hacer algo. */}
           <p className="mt-0.5 max-w-3xl text-sm leading-snug text-slate-500">
-            {data?.market_description ??
-              'Empresas puntuadas contra sus comparables de sector. Sin elegir nada.'}
+            {data
+              ? [
+                  `${data.shortlist?.ideas.length ?? 0} ${
+                    (data.shortlist?.ideas.length ?? 0) === 1 ? 'idea' : 'ideas'
+                  } de compra`,
+                  acciones.vender > 0 ? `${acciones.vender} para vender` : null,
+                  acciones.cartera > 0 ? `${acciones.cartera} en cartera` : null,
+                  `${data.scored} empresas puntuadas`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : 'Empresas puntuadas contra sus comparables de sector. Sin elegir nada.'}
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-400">
@@ -783,9 +808,9 @@ export function TodayPage() {
                   />
                 </div>
                 <p className="mt-1.5 text-[11px] leading-snug text-sky-800">
-                  Las APIs gratuitas limitan cuántos fundamentales se descargan de
-                  una vez. Lo descargado queda en caché 24 h, así que cada pasada
-                  avanza y ninguna repite trabajo.
+                  {autoRondas > 0
+                    ? `Completando sola (pasada ${autoRondas} de ${MAX_PASADAS_AUTO}). Las APIs gratuitas limitan cuántos fundamentales se descargan de una vez; lo descargado queda en caché 24 h, así que ninguna pasada repite trabajo.`
+                    : 'Las APIs gratuitas limitan cuántos fundamentales se descargan de una vez. Lo descargado queda en caché 24 h, así que cada pasada avanza y ninguna repite trabajo.'}
                 </p>
               </div>
               <button
@@ -793,7 +818,7 @@ export function TodayPage() {
                 disabled={busy}
                 className="shrink-0 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
               >
-                {busy ? 'Descargando…' : 'Seguir completando'}
+                {busy ? `Descargando… ${autoRondas || ''}` : 'Seguir completando'}
               </button>
             </div>
           )}

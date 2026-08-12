@@ -39,7 +39,10 @@ export function Layout() {
           <div className="text-sm font-semibold tracking-tight text-slate-900">
             Análisis Bursátil
           </div>
-          <div className="text-[11px] text-slate-400">investigación, no señales</div>
+          {/* Decía «investigación, no señales» y la portada dice COMPRAR: una
+              de las dos mentía. La app sí da señales; lo que no hace es
+              predecir. */}
+          <div className="text-[11px] text-slate-400">reglas, no predicciones</div>
         </div>
 
         <nav className="flex flex-col gap-5">
@@ -72,8 +75,9 @@ export function Layout() {
         <div className="mt-auto space-y-3 px-3 pt-6">
           <ApiUsageBar />
           <p className="text-[10px] leading-snug text-slate-400">
-            Herramienta de investigación personal. No es asesoría financiera ni
-            genera recomendaciones de compra o venta.
+            Herramienta personal. Da señales de compra y venta a partir de
+            reglas mecánicas escritas — no es asesoría financiera, no predice
+            precios y no ejecuta órdenes. La decisión es tuya.
           </p>
         </div>
       </aside>
