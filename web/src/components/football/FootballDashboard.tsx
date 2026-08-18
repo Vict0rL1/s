@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
+  EmptySlate,
 } from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, footballPicks } from '../../lib/picks';
@@ -228,9 +229,7 @@ export default function FootballDashboard() {
       {loading ? (
         <SkeletonList />
       ) : fixtures.length === 0 ? (
-        <p className="mb-6 text-[16px] text-[#7b828d]">
-          No hay partidos próximos para {active?.name ?? 'esta liga'}.
-        </p>
+        <EmptySlate what={active?.name ?? 'esta liga'} reason="sin-partidos" />
       ) : (
         <>
           <DayFilter days={dayChips} selected={day} onSelect={setDay} />

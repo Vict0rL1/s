@@ -3,7 +3,7 @@ import type { PlayerInfo, Reliability, UpcomingMatch, UpcomingWithPrediction } f
 import { confidenceLabelEs, flag, surfaceLabelEs } from '../lib/format';
 import ProbabilityBars, { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import MatchDetail from './MatchDetail';
-import { Badge, MatchTime, ResultBanner, SeriesDot } from './ui';
+import { Badge, Card, MatchTime, ResultBanner, SeriesDot } from './ui';
 
 export default function MatchCard({
   item,
@@ -21,7 +21,12 @@ export default function MatchCard({
     value === 'value_p1' ? match.p1_name : value === 'value_p2' ? match.p2_name : null;
 
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-white/[0.04] p-4 shadow-sm">
+    // The shared surface, like the other four sports. This card was the one holdout:
+    // its own background (bg-white/[0.04] instead of the system's #14161b) and a
+    // drop shadow that ui/index.tsx explicitly rules out — "the card is the only
+    // filled box on the page… not a lift, not a shadow". Side by side with a
+    // basketball or football card the tennis one read as a different app.
+    <Card as="article" className="p-4">
       <div className="mb-3 flex items-center justify-between text-[14px] text-[#9aa1ac]">
         <MatchTime iso={match.commence_time} />
         <span className="flex items-center gap-2">
@@ -136,7 +141,7 @@ export default function MatchCard({
       ) : (
         <MissingPlayers match={match} players={players} />
       )}
-    </div>
+    </Card>
   );
 }
 

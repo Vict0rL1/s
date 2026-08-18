@@ -290,6 +290,8 @@ export interface Meta {
   hasOddsKey: boolean;
   historyThrough: string | null;
   counts: { players: number; matches: number; ratings: number; upcoming: number };
+  /** Per-circuit counts. The totals hide a circuit with nothing in it. */
+  byTour?: Record<string, { matches: number; ratings: number }>;
 }
 
 export interface RefreshResult {

@@ -11,6 +11,7 @@ import PlayerProfile from './PlayerProfile';
 import TrackRecordPanel from './TrackRecordPanel';
 import {
   DayFilter, DayHeading, pillClass, StaleHistoryWarning, PicksPanel, DashboardHeader,
+  EmptySlate,
 } from './ui';
 import { staleLabel, staleness } from '../lib/staleness';
 import { CAVEATS, rankPicks, tennisPicks } from '../lib/picks';
@@ -193,9 +194,32 @@ export default function TennisDashboard() {
           </p>
         </div>
       ) : (
-        <p className="mb-6 text-[16px] text-[#7b828d]">
-          No hay próximos partidos para {tour.toUpperCase()}.
-        </p>
+        <EmptySlate
+          what={tour.toUpperCase()}
+          reason={(meta?.byTour?.[tour]?.matches ?? 1) === 0 ? 'sin-fuente' : 'sin-partidos'}
+          detail={
+            (meta?.byTour?.[tour]?.matches ?? 1) === 0 ? (
+              <>
+                <p>
+                  No es un fallo de descarga: las dos fuentes de tenis que había en GitHub dejaron de
+                  servir este circuito.{' '}
+                  <code className="rounded bg-white/[0.06] px-1">JeffSackmann/tennis_wta</code>{' '}
+                  devuelve 404 —el repositorio ya no existe— y{' '}
+                  <code className="rounded bg-white/[0.06] px-1">Tennismylife</code>, que lo
+                  reemplazó, solo cubre ATP.
+                </p>
+                <p className="mt-1.5">
+                  Lo que sí llega a la temporada en curso es{' '}
+                  <strong className="text-[#9aa1ac]">tennis-data.co.uk</strong>, con ATP y WTA y
+                  además con las cuotas de cierre.{' '}
+                  <code className="rounded bg-white/[0.06] px-1">npm run update-data</code> ya lo
+                  intenta solo; desde una red que no lo bloquee debería completar este circuito sin
+                  que toques nada.
+                </p>
+              </>
+            ) : undefined
+          }
+        />
       )}
 
       {/* Matches */}

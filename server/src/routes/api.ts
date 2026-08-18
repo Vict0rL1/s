@@ -143,6 +143,26 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       ratings: countRows('player_ratings'),
       upcoming: countRows('upcoming_matches'),
     },
+    /**
+     * The same counts split by circuit, because the totals hide the case that
+     * matters: the WTA tab has zero players, zero matches and zero fixtures while
+     * the header proudly reads "61.682 partidos · 2218 jugadores". Without this the
+     * UI cannot tell "this circuit has no source" from "nothing is scheduled today",
+     * and it printed the same dead-end line for both.
+     */
+    byTour: Object.fromEntries(
+      (getDb()
+        .prepare(
+          `SELECT t.tour,
+                  (SELECT COUNT(*) FROM matches m WHERE m.tour = t.tour) AS matches,
+                  (SELECT COUNT(*) FROM player_ratings r WHERE r.tour = t.tour) AS ratings
+             FROM (SELECT 'atp' AS tour UNION ALL SELECT 'wta') t`,
+        )
+        .all() as unknown as { tour: string; matches: number; ratings: number }[]).map((r) => [
+        r.tour,
+        { matches: r.matches, ratings: r.ratings },
+      ]),
+    ),
   }));
 
   // --- the app's own measured accuracy on real, already-played matches ---

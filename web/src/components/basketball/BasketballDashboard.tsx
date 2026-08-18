@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
+  EmptySlate,
 } from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, basketballPicks } from '../../lib/picks';
@@ -197,9 +198,7 @@ export default function BasketballDashboard() {
       {loading ? (
         <SkeletonList />
       ) : games.length === 0 ? (
-        <p className="mb-6 text-[16px] text-[#7b828d]">
-          No hay partidos próximos para {activeLeague?.name ?? 'esta liga'}.
-        </p>
+        <EmptySlate what={activeLeague?.name ?? 'esta liga'} reason="sin-partidos" />
       ) : (
         <>
           <DayFilter days={dayChips} selected={day} onSelect={setDay} />

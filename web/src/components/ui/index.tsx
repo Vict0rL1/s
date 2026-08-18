@@ -844,6 +844,7 @@ export function PicksPanel({
   caveat,
   demoOdds = false,
   confidenceReason,
+  considered,
   stake,
   onStakeChange,
 }: {
@@ -874,11 +875,20 @@ export function PicksPanel({
    * column two centimetres to the right.
    */
   confidenceReason?: string;
+  /**
+   * Candidates before filtering. Zero means there was nothing to have an opinion
+   * about, which is not the same as having one and agreeing — see rankPicks.
+   */
+  considered?: number;
   /** Stake used for the "devolvería" column, so the figure is in the reader's money. */
   stake: number;
   onStakeChange: (n: number) => void;
 }) {
   const [open, setOpen] = useState(true);
+  // Nothing on the slate: say nothing. The message below is a claim ABOUT a model's
+  // agreement with prices, and with no matches there is neither. The tab renders its
+  // own explanation of why it is empty.
+  if (considered === 0) return null;
   // "The model agrees with every price" is a finding, not a reason to render
   // nothing — an empty space where a panel was reads as a bug, and the reader is
   // left wondering whether it failed to load.
@@ -1128,5 +1138,58 @@ export function DashboardHeader({
       </div>
       {open && <div className="mt-3">{children}</div>}
     </header>
+  );
+}
+
+/**
+ * What a tab shows when it has nothing to show.
+ *
+ * There were five copies of a single line — "No hay partidos próximos para X." —
+ * and it is a dead end: it does not say whether that is normal, temporary, a
+ * missing download or a permanent limitation, and it offers nothing to do. The WTA
+ * tab is the case that made it obvious: zero players, zero matches, zero fixtures,
+ * and the reader is told only that there are no upcoming matches, under a header
+ * boasting 61,682 matches and 2,218 players.
+ *
+ * Two situations, and they deserve different words:
+ *
+ *   'sin-fuente'  — this competition has NO history in the database, so there is no
+ *                   model and there never will be until a source is found. The
+ *                   reason belongs on screen; it is not the reader's fault and not
+ *                   something retrying fixes.
+ *   'sin-partidos'— there IS a model, nothing is scheduled inside the window. Normal
+ *                   between seasons, and it resolves itself.
+ */
+export function EmptySlate({
+  what,
+  reason,
+  detail,
+}: {
+  what: string;
+  reason: 'sin-fuente' | 'sin-partidos';
+  detail?: ReactNode;
+}) {
+  const noSource = reason === 'sin-fuente';
+  return (
+    <div className="mb-6 rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-4">
+      <p className="text-[15px] font-semibold text-[#c3c9d1]">
+        {noSource ? `No hay modelo para ${what}` : `No hay partidos próximos para ${what}`}
+      </p>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-[#9aa1ac]">
+        {noSource ? (
+          <>
+            No hay ni un partido de {what} en la base, así que no hay Elo que calcular y las
+            tarjetas no tendrían nada que desglosar. La app prefiere decirlo a enseñar una
+            predicción inventada.
+          </>
+        ) : (
+          <>
+            El modelo está listo, pero no hay nada en el calendario dentro de la ventana que se
+            muestra. Es lo normal entre temporadas; el calendario se refresca solo.
+          </>
+        )}
+      </p>
+      {detail && <div className="mt-2 text-[13px] leading-relaxed text-[#7b828d]">{detail}</div>}
+    </div>
   );
 }

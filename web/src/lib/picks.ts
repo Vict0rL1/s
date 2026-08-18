@@ -280,7 +280,7 @@ export function rankPicks(
      */
     basis?: 'confidence';
   } = {},
-): { picks: Pick[]; basis: 'edge' | 'confidence' } {
+): { picks: Pick[]; basis: 'edge' | 'confidence'; considered: number } {
   // A match that has already kicked off is not a suggestion. The schedule keeps
   // today's games on screen all day on purpose (see server/freshness.ts), which is
   // right for reading a RESULT and wrong for proposing a bet — the basketball tab
@@ -307,7 +307,13 @@ export function rankPicks(
     perMarket.set(p.market, (perMarket.get(p.market) ?? 0) + 1);
     picks.push(p);
   }
-  return { picks, basis };
+  // `considered` is how many candidates existed BEFORE any filtering. The panel
+  // needs it to tell two very different situations apart: "there were matches and
+  // the model agreed with every price" — a real finding — and "there were no
+  // matches at all", which is not a finding about anything. Without it the WTA tab,
+  // which has zero players and zero fixtures, announced that the model did not
+  // disagree with the market.
+  return { picks, basis, considered: upcoming.length };
 }
 
 // ---------------------------------------------------------------------------
