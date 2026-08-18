@@ -597,6 +597,23 @@ The Odds API. Sin key, la app muestra un demo con partidos de ejemplo.
    activos** en ese momento (Grand Slams, Masters/1000, 500…) y trae sus partidos, así aparece
    lo que realmente se juega hoy — no una lista fija.
 
+### «Me aparecen cuotas de demostración»: `npm run doctor`
+
+Es un síntoma con **cinco** causas distintas y desde fuera se parecen todas: no hay `.env` en la
+raíz (o está en otra carpeta), la línea de la clave está mal escrita, The Odds API la rechaza,
+el plan del mes está agotado, o el servidor se arrancó **antes** de editar el `.env` — que solo
+se lee al arrancar.
+
+```bash
+npm run doctor
+```
+
+Comprueba las cinco en orden y termina diciendo cuál es y con qué comando se arregla. No gasta
+cuota: la única llamada es a `/v4/sports/`, que The Odds API documenta como gratuita y existe
+justo para validar una clave sin pagar por ello (`--sin-red` se salta incluso esa). Nunca imprime
+la clave entera —`6467••••••••a339`— porque esta salida es lo que uno pega en un chat al pedir
+ayuda. Y no edita el `.env` por ti: es el único dato del proyecto que no se puede regenerar solo.
+
 ### El cupo gratuito, y cómo se agotó
 
 **The Odds API cobra un crédito por mercado y POR REGIÓN.** Una llamada pidiendo
@@ -778,6 +795,7 @@ ves, en vez de fallar en silencio.
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
+| `npm run doctor` | Diagnostica por qué la app muestra **cuotas de demostración**: `.env`, clave, cuota y qué hay guardado |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 
