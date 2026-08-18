@@ -87,6 +87,11 @@ export interface FbTeamRatingRow {
   /** Goals scored / conceded per match, over the recent window. */
   gf: number | null;
   ga: number | null;
+  /**
+   * The division this rating was transplanted from, for a club that has just been
+   * promoted and has no history here yet. Null for every rating earned in place.
+   */
+  seeded_from?: string | null;
 }
 
 export interface FbUpcomingRow {

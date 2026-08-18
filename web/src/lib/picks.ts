@@ -104,9 +104,11 @@ export const MAX_PICKS = 10;
  */
 export const CAVEATS: Record<string, string> = {
   football:
-    'Medido sobre 17.227 partidos: RPS 0.2059 frente a 0.2230 de la referencia, y el empate ' +
-    'calibrado a ±1 pp. Nunca se ha medido contra las cuotas de cierre, así que una diferencia ' +
-    'con el mercado es una diferencia, no una ganancia demostrada.',
+    'Medido sobre 21.867 partidos de 14 ligas: RPS 0.2019 en las primeras divisiones y 0.2206 en ' +
+    'las segundas, frente a 0.2230 de la referencia, con el empate calibrado a ±1 pp. Un equipo ' +
+    'recién ascendido se predice con su Elo de Segunda más el salto de división medido en su país; ' +
+    'la tarjeta lo dice y su banda es más ancha. Nunca se ha medido contra las cuotas de cierre, ' +
+    'así que una diferencia con el mercado es una diferencia, no una ganancia demostrada.',
   baseball:
     'Medido sobre 36.235 partidos: Brier 0.2431 y over/under acertado el 54,9 %. El modelo no ' +
     'conoce el bullpen ni la alineación del día, que es justo lo que mueve una cuota a última hora.',

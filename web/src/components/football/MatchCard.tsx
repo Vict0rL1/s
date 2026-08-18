@@ -122,6 +122,7 @@ export default function MatchCard({
           name={homeName}
           elo={prediction?.teams.home.elo ?? teams.home?.elo ?? null}
           eloRank={prediction?.teams.home.eloRank ?? teams.home?.eloRank ?? null}
+          seededFrom={prediction?.teams.home.seededFrom ?? null}
           homeBadge
           onClick={fixture.home_id ? () => onOpenTeam(fixture.league, fixture.home_id!) : undefined}
         />
@@ -132,6 +133,7 @@ export default function MatchCard({
           name={awayName}
           elo={prediction?.teams.away.elo ?? teams.away?.elo ?? null}
           eloRank={prediction?.teams.away.eloRank ?? teams.away?.eloRank ?? null}
+          seededFrom={prediction?.teams.away.seededFrom ?? null}
           alignRight
           onClick={fixture.away_id ? () => onOpenTeam(fixture.league, fixture.away_id!) : undefined}
         />
@@ -283,10 +285,10 @@ export default function MatchCard({
 }
 
 function TeamName({
-  league, id, name, elo, eloRank, alignRight = false, homeBadge = false, onClick,
+  league, id, name, elo, eloRank, seededFrom = null, alignRight = false, homeBadge = false, onClick,
 }: {
   league: string; id: string | null; logo?: string | null;
-  name: string; elo: number | null; eloRank: number | null;
+  name: string; elo: number | null; eloRank: number | null; seededFrom?: string | null;
   alignRight?: boolean; homeBadge?: boolean; onClick?: () => void;
 }) {
   const logo = null;
@@ -318,6 +320,13 @@ function TeamName({
             Elo {Math.round(elo)}
             {eloRank != null && ` (#${eloRank})`}
           </>
+        )}
+        {/* Said on the line that carries the number, because it changes what the
+            number means: this club has not played a match in this division. */}
+        {seededFrom && (
+          <span className="ml-1 text-[#c08a2e]" title={`Elo trasladado desde ${seededFrom} con el salto de división medido para esta liga. El equipo aún no ha jugado aquí.`}>
+            · recién ascendido
+          </span>
         )}
       </div>
     </div>

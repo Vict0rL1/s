@@ -743,6 +743,15 @@ function migrateSchema(d: DatabaseSync): void {
 
   // table -> column -> definition
   const wanted: Record<string, Record<string, string>> = {
+    // Where a rating came from when the club has never played in this division.
+    // Null for every rating earned normally; the id of the second division for a
+    // club just promoted, whose Elo was transplanted with that country's measured
+    // gap — see football/promotion.ts. It exists so the card can say so and so the
+    // reliability band can use the transplant's MEASURED error (38 Elo in Spain)
+    // instead of the "brand new team, knows nothing" default of 240.
+    fb_team_ratings: {
+      seeded_from: 'TEXT',
+    },
     matches: {
       winner_rank: 'INTEGER',
       loser_rank: 'INTEGER',

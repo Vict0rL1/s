@@ -429,6 +429,59 @@ comprobación de round robin que ya existía **no podía** cazarlo: detecta dos 
 activos *a la vez* que nunca se enfrentan, y aquí las dos mitades vivían en
 temporadas disjuntas, así que nunca tuvieron ocasión de no enfrentarse.
 
+
+### 6.5 Los recién ascendidos: de «sin modelo» a un Elo trasladado y medido
+
+La tarjeta que lo pidió: **Atlético Madrid vs Málaga**, en LaLiga, sin desglose y con
+la línea «Probabilidades implícitas del mercado, no del modelo». No era un fallo:
+Málaga juega en Segunda, no aparece en la tabla de LaLiga que cubre este archivo, y un
+partido cuyo equipo no resuelve no recibe predicción.
+
+No es un caso raro. Son **tres clubes por liga cada agosto**, y durante los primeros
+meses de temporada juegan cerca de una quinta parte de los partidos.
+
+**Por qué no vale copiar el Elo de Segunda.** El juego de liga es de suma cero *dentro*
+de una división y las dos divisiones no se cruzan, así que ambas tablas están centradas
+en 1500 por construcción. Un equipo de 1650 en Segunda no es igual de fuerte que uno de
+1650 en Primera. Copiar el número daría una predicción segura y equivocada, que es peor
+que el hueco honesto.
+
+**Así que se mide el salto**, por país, con los clubes que de verdad lo dieron: se toma
+su Elo de Segunda al final de la temporada del ascenso y se busca el desplazamiento
+constante que mejor explica sus resultados reales arriba la temporada siguiente.
+
+| país | salto | desviación entre temporadas | incertidumbre | clubes |
+|---|---|---|---|---|
+| Inglaterra | −250 Elo | 77 | ±11,1 pp | 18 |
+| España | −125 Elo | 38 | ±5,4 pp | 7 |
+| Alemania | −185 Elo | 53 | ±7,6 pp | 9 |
+| Italia | −200 Elo | 50 | ±7,2 pp | 8 |
+| Francia | −165 Elo | 68 | ±9,8 pp | 7 |
+
+Todos negativos, y el orden es el que diría cualquiera que siga el fútbol: la Premier
+está más por encima de su segunda que LaLiga de la suya. **Cinco países independientes
+coincidiendo en el signo** es lo que convierte esto en un efecto real y no en un ajuste
+a 18 clubes ingleses.
+
+**La muestra es pequeña y decirlo importa**: 7-9 clubes por país sobre 3-6 temporadas.
+Por eso la dispersión entre temporadas no se promedia y se olvida, sino que se lleva a
+la **banda de fiabilidad**: una tarjeta construida sobre un rating trasplantado dice que
+está menos segura, y cuánto. El nivel se limita a «media» aunque la banda salga estrecha
+— mejor que un hueco, nunca presentado como algo asentado.
+
+Para que exista el dato se ingieren cuatro segundas divisiones más (es.2, de.2, it.2,
+fr.2; en.2 ya estaba como Championship): **27.768 partidos en 14 ligas**. El RPS agregado
+sube de 0,2059 a 0,2082 y eso es **composición, no regresión** — las segundas son más
+difíciles de predecir. Por liga:
+
+| | primeras divisiones | segundas |
+|---|---|---|
+| partidos | 14.474 | 7.393 |
+| RPS | **0,2019** | 0,2206 |
+
+Y las primeras quedan igual o mejor que antes de todo esto: LaLiga 0,1996 → 0,1994,
+Bundesliga 0,2071 → 0,2065.
+
 **Ligas sin fuente de resultados** (Champions League): sus equipos vienen de ligas distintas y su Elo
 vive en cada tabla doméstica, así que un rating compartido necesitaría una calibración entre ligas
 que esta app no hace. Se muestran los partidos y las probabilidades **del mercado**, dicho

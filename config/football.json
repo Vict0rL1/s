@@ -1,5 +1,5 @@
 {
-  "$comment": "Football (soccer) leagues, one per tab inside the ⚽ tab. Add one by appending an entry — nothing in the model or API hardcodes these ids. `openfootball` is the primary results source (JSON, current through the latest season, and it carries HALF-TIME scores); `footballData` supplies historical 1X2 closing odds, which is what lets the model be measured against the market; `footballcsv` is the older mirror kept as a fallback for seasons openfootball does not have; `oddsSportKeys` are The Odds API keys for upcoming fixtures.",
+  "$comment": "Football (soccer) leagues, one per tab inside the ⚽ tab. Add one by appending an entry — nothing in the model or API hardcodes these ids. `openfootball` is the primary results source (JSON, current through the latest season, and it carries HALF-TIME scores); `footballData` supplies historical 1X2 closing odds, which is what lets the model be measured against the market; `footballcsv` is the older mirror kept as a fallback for seasons openfootball does not have; `oddsSportKeys` are The Odds API keys for upcoming fixtures. `tier` 2 marks a second division: it is ingested so PROMOTED clubs have a rating (a fixture against one otherwise gets no model at all), and the cross-division offset is measured per country — see docs/FOOTBALL.md.",
   "history": {
     "$comment": "Seasons of history to ingest by default. Football squads change less abruptly than basketball rosters, but promotion/relegation means a league's membership turns over every year, so deep history mostly helps the big clubs. `openfootballBase` is the PRIMARY source and the only one that reaches the current season — footballcsv, its own mirror, was abandoned after 2020-21.",
     "seasons": 8,
@@ -247,6 +247,74 @@
       "$comment_ucl": "No results feed: clubs come from many leagues and their Elo lives in each domestic table, so a shared rating would need cross-league calibration this app does not do. Fixtures and market prices are shown, clearly labelled as market-only.",
       "footballData": null,
       "footballcsv": null
+    },
+    {
+      "id": "laliga2",
+      "name": "LaLiga Hypermotion",
+      "label": "LaLiga Hypermotion · España (2ª)",
+      "country": "🇪🇸 España",
+      "tier": 2,
+      "oddsSportKeys": [
+        "soccer_spain_segunda_division"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "SP2"
+      },
+      "openfootball": {
+        "key": "es.2"
+      }
+    },
+    {
+      "id": "bundesliga2",
+      "name": "2. Bundesliga",
+      "label": "2. Bundesliga · Alemania (2ª)",
+      "country": "🇩🇪 Alemania",
+      "tier": 2,
+      "oddsSportKeys": [
+        "soccer_germany_bundesliga2"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "D2"
+      },
+      "openfootball": {
+        "key": "de.2"
+      }
+    },
+    {
+      "id": "serieb",
+      "name": "Serie B",
+      "label": "Serie B · Italia (2ª)",
+      "country": "🇮🇹 Italia",
+      "tier": 2,
+      "oddsSportKeys": [
+        "soccer_italy_serie_b"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "I2"
+      },
+      "openfootball": {
+        "key": "it.2"
+      }
+    },
+    {
+      "id": "ligue2",
+      "name": "Ligue 2",
+      "label": "Ligue 2 · Francia (2ª)",
+      "country": "🇫🇷 Francia",
+      "tier": 2,
+      "oddsSportKeys": [
+        "soccer_france_ligue_two"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "F2"
+      },
+      "openfootball": {
+        "key": "fr.2"
+      }
     }
   ]
 }

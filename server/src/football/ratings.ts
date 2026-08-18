@@ -5,6 +5,12 @@
 // copy of the update rules drifts from the shipped model, and then its reported
 // accuracy describes something nobody is running.
 
+import {
+  getPromotionGap,
+  measurePromotionGap,
+  secondDivisionOf,
+  storePromotionGap,
+} from './promotion.ts';
 import { getDb } from '../db.ts';
 import {
   carryOver,
@@ -371,11 +377,14 @@ export function recomputeFootballRatings(): Record<string, number> {
   ).map((r) => r.l);
 
   const insert = db.prepare(
+    // seeded_from is cleared here on purpose: this row comes from matches actually
+    // played in this division, so whatever transplant preceded it is now history.
     `INSERT INTO fb_team_ratings (team_id, league, elo, matches_played, last_date, gf, ga)
      VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(league, team_id) DO UPDATE SET
        elo = excluded.elo, matches_played = excluded.matches_played,
-       last_date = excluded.last_date, gf = excluded.gf, ga = excluded.ga`,
+       last_date = excluded.last_date, gf = excluded.gf, ga = excluded.ga,
+       seeded_from = NULL`,
   );
 
   const out: Record<string, number> = {};
@@ -407,7 +416,64 @@ export function recomputeFootballRatings(): Record<string, number> {
     }
     out[league] = states.size;
   }
+
+  // The division gap, measured per country from clubs that actually made the jump.
+  // AFTER the loop, because it replays both divisions and needs their ratings to
+  // exist. See promotion.ts for the numbers and why they are not one constant.
+  for (const league of leagues) {
+    if (secondDivisionOf(league as LeagueId)) {
+      storePromotionGap(league as LeagueId, measurePromotionGap(league as LeagueId));
+    }
+  }
   return out;
+}
+
+/**
+ * Give a club promoted into `league` a rating, so its fixtures get a real model.
+ *
+ * Called when a fixture names a club the top division has never seen. Without it
+ * the card falls back to the market's implied numbers and no breakdown at all —
+ * which is what a reader saw on Atlético Madrid vs Málaga, and what they see for
+ * every promoted club until it has played.
+ *
+ * The rating is its SECOND-DIVISION Elo plus that country's measured gap, and the
+ * row is written with `matches_played = 0` on purpose: it is a transplant, not
+ * earned history, and everything downstream that keys off games played — the
+ * reliability band, the "pocos partidos" warning — should treat it as such.
+ *
+ * Returns what was done so the caller can say it on the card, or null when the club
+ * is not in the second division either (a cup opponent from a third tier, a
+ * foreign side in a friendly) — in which case there is genuinely nothing to build a
+ * model from and the honest answer is still the market's numbers.
+ */
+export function seedPromotedTeam(
+  league: LeagueId,
+  teamId: string,
+): { elo: number; from: LeagueId; offset: number; sd: number } | null {
+  const gap = getPromotionGap(league);
+  if (!gap) return null;
+  const db = getDb();
+  const row = db
+    .prepare('SELECT elo FROM fb_team_ratings WHERE league = ? AND team_id = ?')
+    .get(gap.from, teamId) as unknown as { elo: number } | undefined;
+  if (!row) return null;
+  const elo = round1(row.elo + gap.offset);
+  const name = (
+    db.prepare('SELECT name FROM fb_teams WHERE league = ? AND id = ?').get(gap.from, teamId) as
+      | { name: string }
+      | undefined
+  )?.name;
+  db.prepare(
+    `INSERT INTO fb_teams (id, league, name) VALUES (?, ?, ?)
+     ON CONFLICT(league, id) DO NOTHING`,
+  ).run(teamId, league, name ?? teamId);
+  db.prepare(
+    `INSERT INTO fb_team_ratings
+       (team_id, league, elo, matches_played, last_date, gf, ga, seeded_from)
+     VALUES (?, ?, ?, 0, NULL, NULL, NULL, ?)
+     ON CONFLICT(league, team_id) DO NOTHING`,
+  ).run(teamId, league, elo, gap.from);
+  return { elo, from: gap.from, offset: gap.offset, sd: gap.sd };
 }
 
 function round1(n: number): number {

@@ -28,7 +28,7 @@
 // Exit code is non-zero on failure, so it can gate a data refresh.
 
 import { getDb } from '../db.ts';
-import { slugify } from '../football/ingest/footballcsv.ts';
+import { normalizeTeamName } from '../football/ingest/teamNames.ts';
 import { normalCdf, MARGIN_SIGMA as NFL_MARGIN_SIGMA } from '../nfl/model.ts';
 import { recomputeBaseballRatings } from '../baseball/ratings.ts';
 
@@ -345,7 +345,25 @@ function auditFranchiseIds(label: string, teams: string, games: string): void {
 
   // A team with no games is a name that was created and never used — the other half
   // of the same failure, and it needs no round robin to detect.
-  const orphanTeams = rows.filter((r) => r.n === 0);
+  //
+  // EXCEPT a club just promoted, whose rating was transplanted from the division
+  // below so its fixtures get a model before it has played here (promotion.ts).
+  // Having no matches yet is the entire point of that row, and the marker is what
+  // separates it from a genuine orphan: a name that was created and forgotten has
+  // no `seeded_from`.
+  const seededIds =
+    teams === 'fb_teams'
+      ? new Set(
+          (
+            getDb()
+              .prepare(
+                "SELECT league || '|' || team_id AS k FROM fb_team_ratings WHERE seeded_from IS NOT NULL",
+              )
+              .all() as unknown as { k: string }[]
+          ).map((r) => r.k),
+        )
+      : new Set<string>();
+  const orphanTeams = rows.filter((r) => r.n === 0 && !seededIds.has(`${r.league}|${r.id}`));
   check(
     `${label}: ningún equipo sin partidos`,
     orphanTeams.length === 0,
@@ -820,9 +838,16 @@ function auditClubNameSplits(): void {
     console.log('  sin equipos, saltado');
     return;
   }
+  // normalizeTeamName, NOT slugify — and the difference is a whole class of bug this
+  // check could not see. slugify strips the legal-form suffixes (FC, CF, SC…) and
+  // caught "Manchester City" vs "Manchester City FC". It does not strip "Club" or
+  // "de", so "Atlético Madrid" and "Club Atlético de Madrid" stayed two ids, 38
+  // matches against 227, and this check passed while the split was in front of it.
+  // The resolver's normalisation is the looser one and is what the ingest now uses,
+  // so it is what the audit has to use too.
   const byKey = new Map<string, { id: string; name: string }[]>();
   for (const r of rows) {
-    const key = `${r.league}|${slugify(r.name)}`;
+    const key = `${r.league}|${normalizeTeamName(r.name)}`;
     (byKey.get(key) ?? byKey.set(key, []).get(key)!).push({ id: r.id, name: r.name });
   }
   const split = [...byKey.entries()].filter(([, v]) => v.length > 1);

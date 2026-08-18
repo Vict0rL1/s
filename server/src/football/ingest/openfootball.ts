@@ -49,6 +49,7 @@ import path from 'node:path';
 import { getDb } from '../../db.ts';
 import { RAW_DIR, footballConfig } from '../../config.ts';
 import { slugify } from './footballcsv.ts';
+import { buildTeamIndex, normalizeTeamName } from './teamNames.ts';
 import type { LeagueConfig } from '../types.ts';
 
 export const CACHE_DIR = path.join(RAW_DIR, 'football', 'openfootball');
@@ -270,6 +271,53 @@ export async function ingestOpenFootball(
   let through: string | null = null;
   const used: string[] = [];
 
+  /**
+   * The club's id, RESOLVED against the clubs already ingested for this league.
+   *
+   * Slugifying each spelling independently is what split every club in two the
+   * first time, and stripping the legal-form suffixes only fixed half of it. The
+   * other half is that openfootball changes how much of the formal name it writes
+   * between seasons:
+   *
+   *     2019-20   "Atlético Madrid"           → atletico-madrid          (38 partidos)
+   *     2020-26   "Club Atlético de Madrid"   → club-atletico-de-madrid  (227)
+   *
+   * Two ids, one club, and the whole first season orphaned again — with the card
+   * then reporting, correctly, "Atlético Madrid: 38 partidos, sin jugar desde hace
+   * 6 años".
+   *
+   * So the same resolver the ODDS feed uses is used here: normalise, then accept a
+   * prefix match only when it leaves exactly one candidate. That is what merges
+   * "Rayo Vallecano" with "Rayo Vallecano de Madrid" without merging the two
+   * Manchester clubs. The longest spelling wins the stored NAME (see insertTeam),
+   * so the id keeps whichever came first while the label stays the formal one.
+   */
+  const index = buildTeamIndex(league.id);
+  const clubId = (name: string): string => {
+    // EXACT normalised match only — no prefix matching. This is the difference
+    // between merging a club with itself and merging it with its neighbour:
+    //
+    //   "Atlético Madrid" / "Club Atlético de Madrid" → both "atletico madrid" ✓
+    //   "Paris FC" / "Paris Saint-Germain FC"         → "paris" vs
+    //                                                   "paris saint germain" ✗
+    //
+    // Both are real Ligue 1 clubs in 2025-26. With prefix matching "paris" is a
+    // prefix of "paris saint germain" and leaves exactly one candidate, so Paris FC
+    // was absorbed into PSG — and the archive ended up with two matches of PSG
+    // against itself, which is how it was caught.
+    //
+    // Prefix matching still earns its place in the ODDS feed, where a bookmaker
+    // writes "Man City" and the alternative is no model at all. There it resolves a
+    // single fixture against a settled table; here it would MINT the table.
+    const hit = index.get(normalizeTeamName(name));
+    if (hit) return hit;
+    const id = slugify(name);
+    // Register it under BOTH spellings so the next season's variant resolves to it.
+    index.set(normalizeTeamName(name), id);
+    index.set(normalizeTeamName(id.replace(/-/g, ' ')), id);
+    return id;
+  };
+
   for (const label of labels) {
     const file = await fetchSeason(league, label);
     if (!file) continue;
@@ -287,8 +335,8 @@ export async function ingestOpenFootball(
     db.exec('BEGIN');
     try {
       for (const m of parsed) {
-        const homeId = slugify(m.homeName);
-        const awayId = slugify(m.awayName);
+        const homeId = clubId(m.homeName);
+        const awayId = clubId(m.awayName);
         teams.set(homeId, m.homeName);
         teams.set(awayId, m.awayName);
         insertTeam.run(homeId, league.id, m.homeName);

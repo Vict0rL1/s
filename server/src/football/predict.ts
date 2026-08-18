@@ -40,6 +40,7 @@ import {
   getTeam,
 } from './repo.ts';
 import { getLeagueGoalsPerMatch } from './ratings.ts';
+import { getPromotionGap } from './promotion.ts';
 import type { FbRecord, LeagueId } from './types.ts';
 
 export const DISCLAIMER =
@@ -67,6 +68,13 @@ export interface FbSide {
   elo: number;
   eloRank: number;
   matchesInDb: number;
+  /**
+   * Set when this club has never played in this division and its Elo was carried
+   * up from the one below with that country's measured promotion gap. The card
+   * says so, and the reliability band uses the gap's own error instead of the
+   * "brand new team" default — see football/promotion.ts.
+   */
+  seededFrom: string | null;
   gf: number | null;
   ga: number | null;
   record: FbRecord;
@@ -181,6 +189,7 @@ function buildSide(league: LeagueId, id: string, isHome: boolean): FbSide {
     elo: rating.elo,
     eloRank: getEloRank(league, id),
     matchesInDb: rating.matches_played,
+    seededFrom: rating.seeded_from ?? null,
     gf: rating.gf,
     ga: rating.ga,
     record: rec.overall,
@@ -329,9 +338,21 @@ export function buildFootballPrediction(
   };
   const homeStale = staleMonths(getRating(league, homeId).last_date);
   const awayStale = staleMonths(getRating(league, awayId).last_date);
-  const sigmaGap = Math.sqrt(
-    sigmaFor(home.matchesInDb, homeStale) ** 2 + sigmaFor(away.matchesInDb, awayStale) ** 2,
-  );
+  /**
+   * A club whose rating was carried up from the division below is NOT an unknown
+   * team. Feeding its zero matches into sigmaFor would return 240 Elo — the "we
+   * know nothing" value — and produce a ±25 pp band, when the transplant's own
+   * error has been measured: 38 Elo in Spain, 77 in England (promotion.ts).
+   *
+   * So the measured spread is used instead. It is bigger than a settled club's and
+   * smaller than a blank one's, which is exactly what is true about it.
+   */
+  const sideSigma = (side: FbSide, stale: number): number => {
+    if (!side.seededFrom) return sigmaFor(side.matchesInDb, stale);
+    const gap = getPromotionGap(league);
+    return gap ? Math.max(gap.sd, 30) : sigmaFor(side.matchesInDb, stale);
+  };
+  const sigmaGap = Math.sqrt(sideSigma(home, homeStale) ** 2 + sideSigma(away, awayStale) ** 2);
   // Slope of the outcome probability with respect to the rating gap, at the
   // most likely outcome — how much one Elo point is worth here.
   const pTop = Math.max(probs.home, probs.draw, probs.away);
@@ -343,7 +364,12 @@ export function buildFootballPrediction(
     [home, homeStale],
     [away, awayStale],
   ] as [FbSide, number][]) {
-    if (side.matchesInDb < MIN_MATCHES_FOR_ANY_CONFIDENCE) {
+    if (side.seededFrom) {
+      reasons.push(
+        `${side.name} acaba de subir: su Elo viene de ${side.seededFrom} con el salto de ` +
+          `división medido para esta liga, no de partidos jugados aquí.`,
+      );
+    } else if (side.matchesInDb < MIN_MATCHES_FOR_ANY_CONFIDENCE) {
       reasons.push(
         `${side.name} tiene solo ${side.matchesInDb} partido(s) en el historial ` +
           `(recién ascendido o liga sin datos suficientes).`,
@@ -358,14 +384,28 @@ export function buildFootballPrediction(
       );
     }
   }
-  const worstMatches = Math.min(home.matchesInDb, away.matchesInDb);
+  // A promoted club has zero matches HERE and that is not the same as knowing
+  // nothing about it: its rating came from a full season below plus a gap measured
+  // on clubs that made the same jump, and that uncertainty is already inside
+  // `marginPp`. Counting it a second time as "too few matches" produced a ±4.2 pp
+  // band labelled "fiabilidad baja", which contradicts the app's own thresholds
+  // two lines down. It is capped at "media" instead: better than a blank, never
+  // presented as settled.
+  const seeded = !!home.seededFrom || !!away.seededFrom;
+  const settledMatches = [
+    home.seededFrom ? Infinity : home.matchesInDb,
+    away.seededFrom ? Infinity : away.matchesInDb,
+  ];
+  const worstMatches = Math.min(...settledMatches);
   const worstStale = Math.max(homeStale, awayStale);
   const level: ReliabilityLevel =
     worstMatches < MIN_MATCHES_FOR_ANY_CONFIDENCE || marginPp >= MARGIN_LOW_MIN || worstStale >= 4
       ? 'low'
-      : worstMatches >= MATCHES_FOR_HIGH && marginPp <= MARGIN_HIGH_MAX && worstStale < 2
-        ? 'high'
-        : 'medium';
+      : seeded
+        ? 'medium'
+        : worstMatches >= MATCHES_FOR_HIGH && marginPp <= MARGIN_HIGH_MAX && worstStale < 2
+          ? 'high'
+          : 'medium';
   const reliability: FbReliability = {
     level,
     label:

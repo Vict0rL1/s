@@ -14,6 +14,8 @@ import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.t
 import { demoKickoffs } from '../../demoSchedule.ts';
 import { eloExpectation, HOME_ADVANTAGE } from '../model.ts';
 import { buildTeamIndex as buildNameIndex, resolveTeam as resolve } from './teamNames.ts';
+import { secondDivisionOf } from '../promotion.ts';
+import { seedPromotedTeam } from '../ratings.ts';
 import type { LeagueId } from '../types.ts';
 
 const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
@@ -203,8 +205,41 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
     // An unconditional DELETE here is what made this morning's game vanish.
     pruneUpcoming(db, 'fb_upcoming');
     let count = 0;
+    let promoted = 0;
     for (const [league, events] of perLeague) {
       const idx = buildNameIndex(league);
+      const second = secondDivisionOf(league);
+      const secondIdx = second ? buildNameIndex(second) : null;
+
+      /**
+       * The club's id in THIS division, seeding it from the one below if it has
+       * just come up.
+       *
+       * Without this a promoted club never resolves — it has never played a match
+       * in this division, so it is not in the table the index is built from — and
+       * every one of its fixtures falls back to the market's implied numbers with
+       * no breakdown at all. That is what "Atlético Madrid vs Málaga" looked like:
+       * three clubs a league, every August, roughly a fifth of the fixtures for the
+       * first months of a season.
+       */
+      const resolveOrSeed = (name: string): string | null => {
+        const here = resolve(idx, name);
+        if (here) return here;
+        if (!secondIdx || !second) return null;
+        const below = resolve(secondIdx, name);
+        if (!below) return null;
+        const seeded = seedPromotedTeam(league, below);
+        if (!seeded) return null;
+        promoted++;
+        process.stdout.write(
+          `  ↑ ${name}: Elo trasladado desde ${second} (${seeded.elo}, salto ${seeded.offset})\n`,
+        );
+        // The index is rebuilt so a second fixture for the same club in this run
+        // resolves normally instead of seeding it again.
+        idx.set(name.toLowerCase().trim(), below);
+        return below;
+      };
+
       for (const ev of events) {
         // The draw price is keyed by the literal "Draw" in this provider's h2h
         // market; anything else means the payload changed shape.
@@ -215,8 +250,8 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
           ev.commence_time,
           ev.home,
           ev.away,
-          resolve(idx, ev.home),
-          resolve(idx, ev.away),
+          resolveOrSeed(ev.home),
+          resolveOrSeed(ev.away),
           ev.price[ev.home] ?? null,
           drawPrice,
           ev.price[ev.away] ?? null,

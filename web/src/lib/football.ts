@@ -13,6 +13,8 @@ export interface FbRecord { wins: number; draws: number; losses: number }
 
 export interface FbSide {
   id: string; name: string; elo: number; eloRank: number; matchesInDb: number;
+  /** Set when the club just came up and its Elo was carried over from that league. */
+  seededFrom?: string | null;
   gf: number | null; ga: number | null;
   record: FbRecord; venueRecord: FbRecord;
   last5: ('W' | 'D' | 'L')[];
