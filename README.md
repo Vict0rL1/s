@@ -421,6 +421,23 @@ bien con la otra mal:
 | **Modelo** | ¿La puntuación ordena las empresas mejor que la mediana? | `POST /api/signals/backtest` |
 | **Reglas** | ¿Comprar sobre la SMA200 con este stop y este objetivo gana dinero? | `POST /api/signals/rule-backtest` |
 
+Se ejecuta desde **Señales → Validar reglas** (hasta 15 tickers, el tope del
+formulario) o, mejor, desde la línea de comandos sobre un universo amplio —
+con 15 empresas salen pocas operaciones y el intervalo de confianza no concluye
+nada:
+
+```bash
+cd backend
+.venv/bin/python scripts/run_rule_backtest.py              # 40 empresas, 6 años
+.venv/bin/python scripts/run_rule_backtest.py --n 60 --anos 8
+.venv/bin/python scripts/run_rule_backtest.py --sin-divisa # si evitas el coste de cambio
+```
+
+Las 40 se toman **alternando sectores**, no las primeras alfabéticamente: un
+backtest sobre 40 empresas del mismo sector mide ese sector, no las reglas. El
+resultado se guarda igual que desde la interfaz, así que al terminar la vista
+**Hoy** deja de decir «sin validar».
+
 El segundo es el que valida lo que la app realmente ejecuta, y es una
 **simulación por eventos**: en cada fecha se puntúa el universo con datos
 point-in-time, se abre posición en las que cumplen las reglas, y cada operación
