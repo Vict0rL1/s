@@ -18,7 +18,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.analysis.decision import decide
-from app.analysis.backtest import monthly_rebalance_dates, run_walk_forward
+from app.analysis.backtest import (
+    metrics_from_period,
+    monthly_rebalance_dates,
+    run_walk_forward,
+)
 from app.analysis.rule_backtest import rebalance_dates_mensuales, run_rule_backtest
 from app.analysis.shortlist import construir_lista_corta
 from app.analysis.factors import (
@@ -206,6 +210,38 @@ class FetchBudget:
         return True
 
 
+def _metrics_desde_edgar(
+    service: MarketDataService, symbol: str, precio: float | None
+) -> tuple[dict | None, str | None]:
+    """Métricas de valoración desde EDGAR en vez de Finnhub.
+
+    Es la palanca de coste más grande de toda la app. `fundamentals` iba a
+    Finnhub, que da **60 llamadas por minuto**: puntuar 502 empresas gastaba la
+    cuota entera en los primeros 60 símbolos, dejaba el resto sin puntuar y
+    encima secaba la cuota que necesitan noticias, calendario y cotizaciones.
+
+    EDGAR da los mismos números —los que la propia empresa presentó a la SEC—
+    gratis y con un límite cinco veces mayor. Necesita un precio para los
+    múltiplos, y ese precio ya lo trajo la descarga masiva de momentum sin coste
+    adicional.
+
+    Se usa el último ejercicio **publicado**, así que es anual y no TTM: más
+    rugoso que un dato de proveedor, y a cambio gratis, auditable y trazable
+    hasta el filing. Para un z-score transversal —donde todas las empresas se
+    miden con la misma vara— esa rugosidad no cambia el orden.
+    """
+    if not precio:
+        return None, None
+    financials = _safe_get(service, "financials", symbol=symbol)
+    if not financials or not financials.get("periods"):
+        return None, None
+    periodo = financials["periods"][-1]
+    metrics = metrics_from_period(periodo, precio, periodo.get("shares_outstanding"))
+    if not any(v is not None for v in metrics.values()):
+        return None, None
+    return metrics, financials.get("source", "edgar")
+
+
 def _score_symbols(
     service: MarketDataService,
     session: Session,
@@ -250,6 +286,18 @@ def _score_symbols(
     unavailable = []
     pending: list[str] = []
     for symbol in symbols:
+        # EDGAR primero: gratis y con cinco veces más cuota que Finnhub. Solo
+        # si la empresa no está en la SEC se recurre al proveedor de pago, y
+        # entonces sí consume presupuesto.
+        precio = (price_map.get(symbol) or {}).get("last")
+        metrics_edgar, fuente_edgar = _metrics_desde_edgar(service, symbol, precio)
+        if metrics_edgar is not None:
+            raw_by_symbol[symbol] = build_raw_factors(
+                metrics_edgar, momentum_map.get(symbol), None
+            )
+            context[symbol] = {"source": fuente_edgar or "edgar"}
+            continue
+
         fundamentals = None
         if budget is not None:
             # Lo cacheado es gratis; solo lo nuevo consume presupuesto.

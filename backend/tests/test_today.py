@@ -507,3 +507,64 @@ def test_la_lista_diaria_recoge_el_backtest_de_reglas_guardado(client, session_f
     ]
     assert decididas, "hacen falta filas decididas para comprobar la confianza"
     assert all(s["decision"]["confidence"] == "refutada" for s in decididas)
+
+
+def test_puntuar_el_indice_no_gasta_la_cuota_cara(session_factory):
+    """La palanca de coste más grande de la app, fijada como garantía.
+
+    `fundamentals` iba a Finnhub (60 llamadas/min): puntuar 502 empresas
+    gastaba la cuota entera en los primeros 60 símbolos, dejaba el resto sin
+    puntuar y secaba lo que necesitan noticias, calendario y cotizaciones.
+    EDGAR da lo mismo gratis. Si alguien vuelve a invertir ese orden, esto
+    tiene que romperse.
+    """
+    class ConEdgar(MarketService):
+        def __init__(self):
+            super().__init__()
+            self.financial_calls = 0
+
+        def get(self, data_type, **kwargs):
+            if data_type == "financials":
+                self.financial_calls += 1
+                return {
+                    "source": "edgar",
+                    "as_of": iso_utc(),
+                    "periods": [
+                        {
+                            "end_date": "2024-12-31",
+                            "eps_diluted": 5.0,
+                            "equity": 1000.0,
+                            "revenue": 8000.0,
+                            "net_income": 500.0,
+                            "operating_income": 900.0,
+                            "interest_expense": 40.0,
+                            "shares_outstanding": 100.0,
+                            "cfo": 800.0,
+                            "capex": -150.0,
+                        }
+                    ],
+                }
+            return super().get(data_type, **kwargs)
+
+    service = ConEdgar()
+
+    def override_session():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_service] = lambda: service
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_llm] = lambda: None
+    try:
+        with TestClient(app) as c:
+            data = _completar(c)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert data["scored"] > 400, "EDGAR debe cubrir el índice casi entero"
+    assert service.financial_calls > 400
+    # Y lo importante: ni una sola llamada al proveedor con cuota escasa.
+    assert service.fundamental_calls == 0
