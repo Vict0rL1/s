@@ -1,1 +1,74 @@
 @import 'tailwindcss';
+
+/* Tema oscuro por inversión de paleta.
+ *
+ * La app se escribió con `bg-white` y la escala `slate` en claro. Pasarla a
+ * oscuro tocando cada componente serían cientos de ediciones y otras tantas
+ * ocasiones de dejarse una a medias — que es como se acaba con texto gris
+ * sobre gris. En vez de eso se redefine la paleta: `bg-white` deja de ser
+ * blanco y `text-slate-900` deja de ser casi negro, y todo el árbol cambia a
+ * la vez y de forma coherente.
+ *
+ * La contrapartida, que conviene saber: los nombres ya no describen el color.
+ * `slate-50` es el fondo más OSCURO y `slate-900` el texto más CLARO. Escribir
+ * componentes nuevos exige pensar en jerarquía (fondo → superficie → texto),
+ * no en claro/oscuro.
+ *
+ * Los acentos (verde, rojo, ámbar, azul) se conservan porque son semánticos —
+ * comprar, vender, esperar — y sobre fondo oscuro se leen mejor que sobre
+ * blanco. Solo se oscurecen sus tintes de fondo (-50/-100), que en claro eran
+ * pastel y aquí serían manchas luminosas.
+ */
+@theme {
+  /* Superficies: de la más honda a la más elevada. */
+  --color-white: #111a2e;      /* tarjetas y paneles */
+  --color-slate-50: #080c18;   /* fondo de página */
+  --color-slate-100: #1b2540;  /* superficie hundida dentro de una tarjeta */
+  --color-slate-200: #26314f;  /* bordes y separadores */
+  --color-slate-300: #3a4767;
+
+  /* Texto: de lo más tenue a lo más destacado. */
+  --color-slate-400: #7c8aa8;  /* rótulos y notas al pie */
+  --color-slate-500: #9dabc7;
+  --color-slate-600: #b6c2da;  /* texto secundario */
+  --color-slate-700: #cfd8ea;
+  --color-slate-800: #e4eaf6;
+  --color-slate-900: #f4f7fd;  /* titulares y cifras */
+
+  /* Tintes de fondo: en claro eran pastel; aquí, tinta del mismo tono. */
+  --color-emerald-50: #08251c;
+  --color-emerald-100: #0d3527;
+  --color-sky-50: #08203a;
+  --color-sky-100: #0c2c4e;
+  --color-sky-200: #14395f;
+  --color-red-50: #2c1015;
+  --color-red-100: #3d151c;
+  --color-amber-50: #2b1f06;
+  --color-amber-100: #3a2a08;
+  --color-orange-100: #3a2308;
+
+  /* Y los tonos oscuros de texto pasan a claros, para que sigan leyéndose
+   * sobre esos tintes. */
+  --color-emerald-700: #4ade9c;
+  --color-emerald-800: #6ee7b7;
+  --color-emerald-900: #a7f3d0;
+  --color-sky-700: #56b6f5;
+  --color-sky-800: #7cc9f8;
+  --color-sky-900: #bae1fd;
+  --color-red-600: #f2555f;
+  --color-red-700: #fb7185;
+  --color-red-800: #fda4af;
+  --color-amber-800: #fcd34d;
+  --color-amber-900: #fde68a;
+  --color-orange-800: #fdba74;
+}
+
+/* El navegador debe pintar sus propios controles (scrollbars, autocompletado,
+ * selects) en oscuro; si no, aparecen parches blancos que la paleta no toca. */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-slate-50);
+}

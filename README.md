@@ -29,6 +29,21 @@ precios y no ejecuta órdenes**.
   screener nunca se aprueba por falta de datos; una posición sin precio no
   vale cero, queda fuera de los totales y la UI lo dice.
 
+## Tema oscuro por inversión de paleta
+
+La interfaz se escribió en claro (`bg-white`, escala `slate`). Pasarla a oscuro
+tocando cada componente serían cientos de ediciones y otras tantas ocasiones de
+dejarse una a medias — así se acaba con texto gris sobre gris. En vez de eso,
+`src/index.css` **redefine la paleta**: `bg-white` deja de ser blanco y
+`text-slate-900` deja de ser casi negro, y el árbol entero cambia a la vez.
+
+La contrapartida hay que saberla: los nombres ya no describen el color.
+`slate-50` es el fondo más **oscuro** y `slate-900` el texto más **claro**. Un
+componente nuevo se escribe pensando en jerarquía —fondo, superficie, texto—, no
+en claro/oscuro. Los acentos (verde, rojo, ámbar, azul) se conservan porque son
+semánticos; solo se oscurecen sus tintes de fondo, que en claro eran pastel y
+sobre oscuro serían manchas.
+
 ## Stack
 
 - **Backend:** Python 3.11+, FastAPI, SQLAlchemy (SQLite), pandas/numpy.
@@ -113,7 +128,7 @@ El coste es una restricción de diseño, no una optimización posterior:
 
 | Palanca | Detalle |
 |---|---|
-| **EDGAR primero** | Una descarga de `companyfacts` (gratis, caché 24 h) alimenta ratios, crecimiento, DCF, Altman Z y Piotroski F. Ninguna API de pago participa en el análisis fundamental. |
+| **EDGAR primero** | Una descarga de `companyfacts` (gratis, caché 24 h) alimenta ratios, crecimiento, DCF, Altman Z y Piotroski F. **También la puntuación diaria**: los múltiplos salen del último ejercicio publicado más el precio que la descarga de momentum ya trajo, así que puntuar las 502 del índice cuesta **cero llamadas de Finnhub**. Antes iban ahí y su tier de 60/min se agotaba en los primeros 60 símbolos, dejando el resto sin puntuar y secando la cuota que necesitan noticias y calendario. |
 | **TTL por tipo de dato** | Cotización 1 min · histórico 15 min · fundamentales/filings 24 h · calendario 12 h · **pares 7 días · composición de ETFs 7 días**. |
 | **Carga perezosa en la UI** | La vista de ticker solo pide datos de la pestaña abierta; el resto no gasta nada hasta que la abres. |
 | **LLM bajo demanda** | La interpretación de una noticia solo se genera con botón explícito, con `max_tokens` acotado, y se guarda con hash del prompt: repetirla no vuelve a llamar al API. |

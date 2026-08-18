@@ -198,6 +198,98 @@ function DecisionPlan({ decision }: { decision: Decision }) {
   )
 }
 
+/** Fila de resumen: el estado del día en cifras grandes.
+ *
+ *  Es lo que los paneles de trading ponen arriba del todo, y funciona porque
+ *  responde de un vistazo a "¿tengo que hacer algo hoy?". Lo que no lleva es
+ *  un medidor de "riesgo: BAJO" ni una "puntuación de salud 87/100": esos
+ *  números quedan muy bien y no significan nada — son un promedio de cosas
+ *  que no se pueden promediar, presentado con una precisión que no existe.
+ *  Aquí cada cifra es un recuento de algo que se puede ir a contar a mano. */
+function SummaryStrip({
+  data,
+  acciones,
+  onPick,
+}: {
+  data: TodayResponse
+  acciones: { comprar: number; vigilar: number; cartera: number; vender: number }
+  onPick: (v: View) => void
+}) {
+  const ideas = data.shortlist?.ideas.length ?? 0
+  const cobertura = data.requested ? (data.scored / data.requested) * 100 : 0
+  const celdas: {
+    label: string
+    valor: string
+    tono: string
+    sub?: string
+    vista?: View
+  }[] = [
+    {
+      label: 'Ideas de compra',
+      valor: String(ideas),
+      tono: 'text-emerald-700',
+      sub: `de ${acciones.comprar} que califican`,
+      vista: 'ideas',
+    },
+    {
+      label: 'Para vender',
+      valor: String(acciones.vender),
+      tono: acciones.vender > 0 ? 'text-red-600' : 'text-slate-500',
+      sub: acciones.vender > 0 ? 'en tu cartera' : 'nada urgente',
+      vista: 'cartera',
+    },
+    {
+      label: 'En vigilancia',
+      valor: String(acciones.vigilar),
+      tono: 'text-amber-800',
+      sub: 'esperando tendencia',
+      vista: 'vigilar',
+    },
+    {
+      label: 'En cartera',
+      valor: String(acciones.cartera),
+      tono: 'text-slate-900',
+      sub: 'posiciones abiertas',
+      vista: 'cartera',
+    },
+    {
+      label: 'Cobertura',
+      valor: `${Math.round(cobertura)} %`,
+      tono: data.complete ? 'text-slate-900' : 'text-sky-700',
+      sub: `${data.scored} de ${data.requested}`,
+    },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      {celdas.map((c) => {
+        const Tag = c.vista ? 'button' : 'div'
+        return (
+          <Tag
+            key={c.label}
+            {...(c.vista
+              ? { onClick: () => onPick(c.vista as View), type: 'button' as const }
+              : {})}
+            className={`rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left ${
+              c.vista ? 'transition-colors hover:border-slate-300' : ''
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              {c.label}
+            </div>
+            <div className={`mt-0.5 text-2xl font-semibold tabular-nums ${c.tono}`}>
+              {c.valor}
+            </div>
+            {c.sub && (
+              <div className="text-[10px] leading-tight text-slate-400">{c.sub}</div>
+            )}
+          </Tag>
+        )
+      })}
+    </div>
+  )
+}
+
 /** Una idea de la lista corta, con su puesto y su porqué.
  *
  *  Se separa de la fila normal a propósito: una fila de tabla invita a
@@ -686,6 +778,10 @@ export function TodayPage() {
           </button>
         </div>
       </header>
+
+      {data?.signals && (
+        <SummaryStrip data={data} acciones={acciones} onPick={setView} />
+      )}
 
       {markets.length > 1 && (
         <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
