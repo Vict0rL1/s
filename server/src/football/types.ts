@@ -35,7 +35,18 @@ export interface LeagueConfig {
    * Serie A, Ligue 1, Eredivisie, Primeira, Liga MX and Argentina any results at
    * all — they were configured as tabs with nothing behind them.
    */
-  openfootball?: { key: string } | null;
+  openfootball?: {
+    key: string;
+    /**
+     * El mismo dato en el repo de TEXTO del país, para las temporadas que el mirror
+     * JSON no tiene. `repo` es el repo de openfootball ("espana", "italy") y `file`
+     * el fichero dentro de la temporada ("2-liga2", "2-serieb"), sin extensión.
+     *
+     * Solo se usa cuando el JSON falta: el mirror va ligeramente por delante en los
+     * partidos aplazados que ya se jugaron, así que cuando existen los dos gana él.
+     */
+    txt?: { repo: string; file: string } | null;
+  } | null;
   /**
    * GitHub mirror of older seasons. A MIRROR of openfootball, abandoned after
    * 2020-21, kept as a fallback for anything the upstream is missing.
@@ -50,6 +61,8 @@ export interface FootballConfig {
     footballDataExtraBase: string;
     footballCsvBase: string;
     openfootballBase: string;
+    /** Raíz de los repos de TEXTO por país, de donde salen las temporadas que faltan. */
+    openfootballTxtBase: string;
   };
   leagues: LeagueConfig[];
 }

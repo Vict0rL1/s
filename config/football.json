@@ -1,12 +1,13 @@
 {
   "$comment": "Football (soccer) leagues, one per tab inside the ⚽ tab. Add one by appending an entry — nothing in the model or API hardcodes these ids. `openfootball` is the primary results source (JSON, current through the latest season, and it carries HALF-TIME scores); `footballData` supplies historical 1X2 closing odds, which is what lets the model be measured against the market; `footballcsv` is the older mirror kept as a fallback for seasons openfootball does not have; `oddsSportKeys` are The Odds API keys for upcoming fixtures. `tier` 2 marks a second division: it is ingested so PROMOTED clubs have a rating (a fixture against one otherwise gets no model at all), and the cross-division offset is measured per country — see docs/FOOTBALL.md.",
   "history": {
-    "$comment": "Seasons of history to ingest by default. Football squads change less abruptly than basketball rosters, but promotion/relegation means a league's membership turns over every year, so deep history mostly helps the big clubs. `openfootballBase` is the PRIMARY source and the only one that reaches the current season — footballcsv, its own mirror, was abandoned after 2020-21.",
+    "$comment": "Seasons of history to ingest by default. Football squads change less abruptly than basketball rosters, but promotion/relegation means a league's membership turns over every year, so deep history mostly helps the big clubs. `openfootballBase` is the PRIMARY source and the only one that reaches the current season — footballcsv, its own mirror, was abandoned after 2020-21. `openfootballTxtBase` son los repos de TEXTO por país: el mirror JSON tiene huecos (a es.2 e it.2 les faltan 2021-22, 2022-23 y 2023-24) y el texto sí los trae.",
     "seasons": 8,
     "footballDataBase": "https://www.football-data.co.uk/mmz4281",
     "footballDataExtraBase": "https://www.football-data.co.uk/new",
     "footballCsvBase": "https://raw.githubusercontent.com/footballcsv",
-    "openfootballBase": "https://raw.githubusercontent.com/openfootball/football.json/master"
+    "openfootballBase": "https://raw.githubusercontent.com/openfootball/football.json/master",
+    "openfootballTxtBase": "https://raw.githubusercontent.com/openfootball"
   },
   "leagues": [
     {
@@ -48,7 +49,11 @@
         "div": "es.1"
       },
       "openfootball": {
-        "key": "es.1"
+        "key": "es.1",
+        "txt": {
+          "repo": "espana",
+          "file": "1-liga"
+        }
       }
     },
     {
@@ -69,7 +74,11 @@
         "div": "de.1"
       },
       "openfootball": {
-        "key": "de.1"
+        "key": "de.1",
+        "txt": {
+          "repo": "deutschland",
+          "file": "1-bundesliga"
+        }
       }
     },
     {
@@ -87,7 +96,11 @@
       },
       "footballcsv": null,
       "openfootball": {
-        "key": "it.1"
+        "key": "it.1",
+        "txt": {
+          "repo": "italy",
+          "file": "1-seriea"
+        }
       }
     },
     {
@@ -262,7 +275,11 @@
         "div": "SP2"
       },
       "openfootball": {
-        "key": "es.2"
+        "key": "es.2",
+        "txt": {
+          "repo": "espana",
+          "file": "2-liga2"
+        }
       }
     },
     {
@@ -279,7 +296,11 @@
         "div": "D2"
       },
       "openfootball": {
-        "key": "de.2"
+        "key": "de.2",
+        "txt": {
+          "repo": "deutschland",
+          "file": "2-bundesliga2"
+        }
       }
     },
     {
@@ -296,7 +317,11 @@
         "div": "I2"
       },
       "openfootball": {
-        "key": "it.2"
+        "key": "it.2",
+        "txt": {
+          "repo": "italy",
+          "file": "2-serieb"
+        }
       }
     },
     {

@@ -50,6 +50,7 @@ import { getDb } from '../../db.ts';
 import { RAW_DIR, footballConfig } from '../../config.ts';
 import { slugify } from './footballcsv.ts';
 import { buildTeamIndex, normalizeTeamName } from './teamNames.ts';
+import { txtToJson } from './openfootballTxt.ts';
 import type { LeagueConfig } from '../types.ts';
 
 export const CACHE_DIR = path.join(RAW_DIR, 'football', 'openfootball');
@@ -198,15 +199,57 @@ async function fetchSeason(league: LeagueConfig, label: string): Promise<string 
   const url = `${footballConfig.history.openfootballBase}/${label}/${key}.json`;
   try {
     const res = await fetch(url);
-    if (!res.ok) return null;
-    const body = await res.text();
-    if (body.length < 100) return null;
-    fs.writeFileSync(dest, body);
-    return dest;
+    if (res.ok) {
+      const body = await res.text();
+      if (body.length >= 100) {
+        fs.writeFileSync(dest, body);
+        return dest;
+      }
+    }
   } catch {
     // A missing season is normal — not every league has every year — so this is a
     // skip and not an error. A network that is down shows up as every season
     // missing, which the caller reports as zero matches.
+  }
+  return fetchSeasonFromTxt(league, label, dest);
+}
+
+/**
+ * El mismo dato, del repo de TEXTO del país, cuando el mirror JSON no lo tiene.
+ *
+ * Esto no es redundancia por si acaso: son temporadas concretas que existen y que la
+ * app no estaba leyendo. Medido fichero a fichero contra la fuente, a `es.2` y a
+ * `it.2` les faltan 2021-22, 2022-23 y 2023-24 en el mirror y están las tres en el
+ * texto. Y no es un hueco cualquiera: el salto de división se mide emparejando la
+ * temporada S de un club en Segunda con la S+1 en Primera, así que cada temporada
+ * ausente abajo borra una promoción entera arriba.
+ *
+ * Se convierte a la forma del JSON y se guarda con el MISMO nombre de caché, para que
+ * de aquí en adelante no exista la distinción: hay un solo parser de registro
+ * (`parseOpenFootball`) y un solo camino de inserción.
+ */
+async function fetchSeasonFromTxt(
+  league: LeagueConfig,
+  label: string,
+  dest: string,
+): Promise<string | null> {
+  const txt = league.openfootball?.txt;
+  if (!txt) return null;
+  const url =
+    `${footballConfig.history.openfootballTxtBase}/${txt.repo}/master/${label}/${txt.file}.txt`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const body = await res.text();
+    if (body.length < 100) return null;
+    const converted = txtToJson(body, label);
+    // Un fichero de texto que existe pero no produce partidos es un formato que no
+    // reconocemos, y guardarlo en la caché como JSON vacío lo dejaría envenenado para
+    // todas las ejecuciones siguientes.
+    if (JSON.parse(converted).matches.length === 0) return null;
+    fs.writeFileSync(dest, converted);
+    return dest;
+  } catch {
     return null;
   }
 }

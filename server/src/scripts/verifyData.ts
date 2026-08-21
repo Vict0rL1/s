@@ -29,6 +29,7 @@
 
 import { getDb } from '../db.ts';
 import { normalizeTeamName } from '../football/ingest/teamNames.ts';
+import { parseFootballTxt } from '../football/ingest/openfootballTxt.ts';
 import { normalCdf, MARGIN_SIGMA as NFL_MARGIN_SIGMA } from '../nfl/model.ts';
 import { recomputeBaseballRatings } from '../baseball/ratings.ts';
 
@@ -624,7 +625,13 @@ function auditTennis(): void {
       let l = 0;
       let parsed = 0;
       for (const set of sets) {
-        const m = set.match(/^(\d+)-(\d+)/);
+        // El corchete es del SÚPER TIE-BREAK: un tercer set a diez puntos se escribe
+        // "[10-7]". Sin aceptarlo, el set que DECIDE el partido no se contaba, el
+        // marcador quedaba 1-1 y la comprobación denunciaba un desacuerdo que no
+        // existía — 38 partidos, todos ellos decididos así, todos correctos.
+        // Aceptándolo quedan 13 desacuerdos en 30.852: erratas sueltas del archivo,
+        // que es exactamente lo que el margen de abajo está puesto para tolerar.
+        const m = set.match(/^\[?(\d+)-(\d+)/);
         if (!m) continue;
         parsed++;
         if (Number(m[1]) > Number(m[2])) w++;
@@ -829,6 +836,186 @@ function auditGoallessDraws(): void {
  * onto the same one — which, after the fix, can only happen if an id was written by
  * an older build or a source this normalisation does not cover.
  */
+/**
+ * Huecos que la FUENTE no tiene, con el motivo, no huecos que toleramos.
+ *
+ * Una lista de excepciones es una alfombra debajo de la cual barrer cosas, así que
+ * esta tiene dos defensas. La primera es que se imprime entera en cada ejecución, con
+ * el motivo al lado. La segunda es que CADUCA SOLA: si una temporada exenta aparece
+ * algún día en la base —porque la fuente la publicó, o porque encontramos otra—, la
+ * comprobación falla pidiendo que se borre la excepción. Una lista así no puede
+ * pudrirse en silencio, que es la única forma en que estas listas hacen daño.
+ */
+const KNOWN_SEASON_GAPS: Record<string, { seasons: number[]; why: string }> = {
+  ligamx: {
+    seasons: [2022, 2023, 2024],
+    why: 'el mirror JSON no las publica y el repo de texto de México va por submódulos, que raw.githubusercontent no sirve',
+  },
+  ligue2: {
+    seasons: [2022, 2023, 2024],
+    why: 'igual que Liga MX: sin fr.2 en el mirror JSON esas temporadas y sin repo de texto alcanzable',
+  },
+};
+
+// ===========================================================================
+// ¿LE FALTA UNA TEMPORADA ENTERA A ALGUNA LIGA?
+// ===========================================================================
+// Este es el fallo que no se ve. Una fuente que se cae deja la liga vacía y salta a
+// la vista; una fuente con HUECOS deja la liga llena, con miles de partidos, y sin
+// tres temporadas de en medio. Nada falla, los recuentos suben, y el defecto solo
+// aparece si alguien va a mirar.
+//
+// Pasó, y era caro: el mirror JSON de openfootball no tiene 2021-22, 2022-23 ni
+// 2023-24 de es.2 e it.2 —el repo de texto sí—, así que LaLiga Hypermotion tenía
+// 1.508 partidos en vez de 2.894 y Serie B 1.474 en vez de 2.641. Y no costaba solo
+// precisión abajo: el salto de división se mide emparejando la temporada S de un club
+// en Segunda con la S+1 en Primera, así que cada hueco abajo borra las promociones de
+// ese año. España se medía con 9 clubes en vez de 14, Italia con 9 en vez de 17 y una
+// desviación de 50 Elo en vez de 33.
+//
+// La propiedad es sencilla y no depende de ninguna fuente: entre la temporada más
+// antigua y la más nueva de una liga NO PUEDE FALTAR NINGUNA. Una liga puede empezar
+// tarde o acabar pronto en el archivo; lo que no puede es tener un agujero en medio.
+function auditSeasonGaps(): void {
+  const rows = getDb()
+    .prepare(
+      `SELECT league, season, COUNT(*) AS n FROM fb_matches
+       GROUP BY league, season ORDER BY league, season`,
+    )
+    .all() as unknown as { league: string; season: number; n: number }[];
+  console.log('\n▸ Fútbol: ¿alguna liga con temporadas salteadas?');
+  if (rows.length === 0) {
+    console.log('  sin partidos, saltado');
+    return;
+  }
+  const byLeague = new Map<string, number[]>();
+  for (const r of rows) byLeague.set(r.league, [...(byLeague.get(r.league) ?? []), r.season]);
+
+  for (const [league, seasons] of [...byLeague].sort()) {
+    const first = seasons[0];
+    const last = seasons[seasons.length - 1];
+    // Una liga de una sola temporada no puede tener huecos: no es un aprobado que
+    // signifique nada, así que no se cuenta como comprobación.
+    if (first === last) continue;
+    const have = new Set(seasons);
+    const missing: number[] = [];
+    for (let y = first; y <= last; y++) if (!have.has(y)) missing.push(y);
+
+    const known = KNOWN_SEASON_GAPS[league];
+    const exempt = new Set(known?.seasons ?? []);
+    const unexplained = missing.filter((y) => !exempt.has(y));
+    check(
+      `${league}: sin huecos entre ${first} y ${last}`,
+      unexplained.length === 0,
+      `faltan ${unexplained.join(', ')}`,
+    );
+    // La otra mitad: una excepción que ya no hace falta es una mentira sobre la
+    // fuente, y se caza pidiendo que se borre.
+    if (known) {
+      const recovered = known.seasons.filter((y) => y >= first && y <= last && have.has(y));
+      check(
+        `${league}: la excepción documentada sigue haciendo falta`,
+        recovered.length === 0,
+        `${recovered.join(', ')} ya están en la base — quita esas temporadas de KNOWN_SEASON_GAPS`,
+      );
+    }
+    const notes: string[] = [];
+    if (unexplained.length) notes.push(`⚠ faltan ${unexplained.join(', ')}`);
+    if (known && exempt.size) notes.push(`sin ${[...exempt].join(', ')}: ${known.why}`);
+    console.log(
+      `  ${league.padEnd(13)} ${first}–${last}  ${seasons.length} temporadas` +
+        (notes.length ? `  ${notes.join(' · ')}` : ''),
+    );
+  }
+}
+
+// ===========================================================================
+// EL PARSER DE FOOTBALL.TXT, CONTRA MUESTRAS FIJAS
+// ===========================================================================
+// El parser se verificó contra el mirror JSON en una temporada que existe en los dos
+// formatos: 387 partidos, cero diferencias en goles y cero en descansos. Esa
+// comprobación es la buena y no se puede repetir aquí, porque necesita red.
+//
+// Lo que sí se puede fijar son los dos casos que la primera versión falló, y no son
+// hipotéticos: los descubrió esa comparación.
+//
+//   1. HAY DOS LAYOUTS. Los ficheros viejos ponen el marcador en medio; los nuevos
+//      separan los equipos con `v` y lo ponen al final. La primera versión solo
+//      entendía uno y sacaba 1 partido de 390.
+//   2. EL AÑO NO SE CUENTA, SE DECIDE. Deducirlo sumando uno cada vez que el mes
+//      retrocedía fallaba en 47 partidos de 390: un aplazado escrito fuera de orden
+//      adelantaba el contador y el error se arrastraba hasta el final del fichero.
+function auditFootballTxtParser(): void {
+  console.log('\n▸ Fútbol: el parser de Football.TXT');
+
+  // Layout viejo: marcador en medio. Incluye un club con año en el nombre
+  // ("Parma Calcio 1913"), que es lo que obliga a exigir dos espacios.
+  const viejo = [
+    '= Italian Serie B 2022/23',
+    '',
+    '# Date       Fri Aug 12 2022 - Sun Jun 11 2023 (303d)',
+    '',
+    '▪ Matchday 1',
+    'Fri Aug 12',
+    '  20:45  Parma Calcio 1913        2-2 (2-2)  SSC Bari',
+    'Sat Jan 14',
+    '         Como 1907                1-0 (0-0)  Pisa SC',
+  ].join('\n');
+  const a = parseFootballTxt(viejo, '2022-23');
+  check('TXT viejo: dos partidos', a.length === 2, `salieron ${a.length}`);
+  check(
+    'TXT viejo: club con año en el nombre',
+    a[0]?.team1 === 'Parma Calcio 1913' && a[0]?.team2 === 'SSC Bari',
+    `${a[0]?.team1} / ${a[0]?.team2}`,
+  );
+  check('TXT viejo: agosto es el año de inicio', a[0]?.date === '2022-08-12', a[0]?.date ?? '—');
+  check('TXT viejo: enero es el año de fin', a[1]?.date === '2023-01-14', a[1]?.date ?? '—');
+  check(
+    'TXT viejo: descanso leído',
+    JSON.stringify(a[0]?.score.ht) === '[2,2]',
+    JSON.stringify(a[0]?.score.ht),
+  );
+
+  // Layout nuevo: separador `v`, marcador al final, fechas con sangría. Y las tres
+  // trampas juntas: un aplazado sin marcador, un resultado por resolución de mesa, y
+  // una fecha de abril escrita DESPUÉS de una de mayo, que es lo que descarrilaba al
+  // contador de años.
+  const nuevo = [
+    '= Italian Serie B 2024/25',
+    '',
+    '# Date       Fri Aug 16 2024 - Sun Jun 1 2025 (289d)',
+    '',
+    '▪ Matchday 1',
+    '  Fri Aug 16 2024',
+    '    20:30  Brescia Calcio          v Palermo FC               1-0 (0-0)',
+    '  Sat May 17',
+    '           AS Cittadella           v Pisa SC                  0-3    [awarded]',
+    '           US Salernitana 1919     v Frosinone Calcio         [postponed]',
+    '  Sun Apr 6',
+    '           Cesena FC               v Modena FC                2-1 (1-0)',
+  ].join('\n');
+  const b = parseFootballTxt(nuevo, '2024-25');
+  check('TXT nuevo: tres partidos (el aplazado no cuenta)', b.length === 3, `salieron ${b.length}`);
+  check(
+    'TXT nuevo: equipos separados por v',
+    b[0]?.team1 === 'Brescia Calcio' && b[0]?.team2 === 'Palermo FC',
+    `${b[0]?.team1} / ${b[0]?.team2}`,
+  );
+  check('TXT nuevo: el año escrito manda', b[0]?.date === '2024-08-16', b[0]?.date ?? '—');
+  check('TXT nuevo: [awarded] se guarda', b[1]?.date === '2025-05-17', b[1]?.date ?? '—');
+  check(
+    'TXT nuevo: abril tras mayo NO adelanta el año',
+    b[2]?.date === '2025-04-06',
+    b[2]?.date ?? '—',
+  );
+  check(
+    'TXT nuevo: sin marcador no se inventa un 0-0',
+    !b.some((m) => m.team2 === 'Frosinone Calcio'),
+    'se coló el aplazado',
+  );
+  console.log(`  ${a.length + b.length} partidos de muestra, dos layouts`);
+}
+
 function auditClubNameSplits(): void {
   const rows = getDb()
     .prepare('SELECT league, id, name FROM fb_teams ORDER BY league, id')
@@ -875,6 +1062,8 @@ function main(): void {
   for (const s of SPORTS) auditRoundRobin(s.label, s.games);
   auditGoallessDraws();
   auditClubNameSplits();
+  auditSeasonGaps();
+  auditFootballTxtParser();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

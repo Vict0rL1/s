@@ -234,12 +234,31 @@ function marketCap(distinctMarkets: number): number {
  * béisbol 37.262, NFL 7.276. A market with no entry falls back to 0.5, which for a
  * two-way market is exactly right and for anything else is the conservative choice.
  */
+// ---------------------------------------------------------------------------
+// MEDIDAS SOBRE EL ARCHIVO, no constantes de manual. Remedidas sobre 30.321
+// partidos tras completar las segundas divisiones (antes eran 24.000 y les
+// faltaban tres temporadas de es.2 e it.2).
+//
+// El desglose importa más que el número, porque los dos escalones no juegan al
+// mismo fútbol:
+//
+//                        1ª (17.880)   2ª (12.441)   todo (30.321)
+//     gana el local         43.5 %        42.7 %        43.1 %
+//     1X                    68.5 %        71.2 %        69.6 %
+//     ambos marcan          53.8 %        51.1 %        52.7 %
+//     más de 2.5 goles      53.0 %        46.3 %        50.3 %
+//
+// Seis puntos y medio de diferencia en el over: en Segunda se marca bastante
+// menos. Se usa la cifra global porque la lista mezcla ligas de los dos
+// escalones y esta referencia solo ordena, no publica ninguna probabilidad. Si
+// algún día la lista se separa por escalón, aquí es donde hay que separarla.
+// ---------------------------------------------------------------------------
 const BASE_RATE: Record<string, number> = {
   // Football
-  '1X2': 0.433,               // el local gana
-  'Doble oportunidad': 0.686, // 1X; X2 es 0.567, se usa la más común
-  'Ambos marcan': 0.533,
-  'Total de goles': 0.519,    // +2.5
+  '1X2': 0.431,               // el local gana
+  'Doble oportunidad': 0.696, // 1X; X2 es 0.569, se usa la más común
+  'Ambos marcan': 0.527,
+  'Total de goles': 0.503,    // +2.5
   // Basketball / baseball / NFL winner markets, home side
   Ganador: 0.55,
   Hándicap: 0.5,              // una línea justa es 50/50 por construcción
