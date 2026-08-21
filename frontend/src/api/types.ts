@@ -647,6 +647,9 @@ export interface Shortlist {
 
 export interface TodayResponse {
   shortlist: Shortlist
+  asset_class?: 'accion' | 'cripto' | 'etf'
+  /** Sin fundamentales, la puntuación sale solo de momentum. */
+  solo_momentum?: boolean
   as_of: string
   market_key: string
   market_name: string
@@ -905,4 +908,24 @@ export interface RuleBacktestResponse {
     tasa_acierto?: number
   }
   veredicto: string
+}
+
+/** Evaluación de un ETF con criterios propios del activo, no del modelo de acciones. */
+export interface EtfPick {
+  symbol: string
+  name: string | null
+  valor: number
+  action: 'comprar' | 'vigilar' | 'evitar' | 'ninguna'
+  expense_ratio: number | null
+  aum: number | null
+  reasons: string[]
+}
+
+export interface EtfRecommendation {
+  evaluados: EtfPick[]
+  recomendados: string[]
+  avisos: string[]
+  nota: string
+  errors: Record<string, string>
+  aviso_solapamiento: string
 }

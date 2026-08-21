@@ -155,7 +155,10 @@ def _stored_rule_backtest(session: Session) -> dict | None:
 
 
 def _decision_segura(
-    signal: dict, position: dict | None, reglas: dict | None = None
+    signal: dict,
+    position: dict | None,
+    reglas: dict | None = None,
+    clase: str = "accion",
 ) -> dict:
     """`decide()` acotado a su propia fila.
 
@@ -171,6 +174,7 @@ def _decision_segura(
             favorable_min=FAVORABLE_MIN,
             desfavorable_max=UNFAVORABLE_MAX,
             reglas=reglas,
+            clase=clase,
         )
     except Exception as exc:  # noqa: BLE001 — se reporta, no se traga
         logger.exception("decide() falló para %s", signal.get("symbol"))
@@ -247,6 +251,7 @@ def _score_symbols(
     session: Session,
     symbols: list[str],
     budget: FetchBudget | None = None,
+    solo_momentum: bool = False,
 ) -> dict:
     """Puntúa un conjunto de símbolos unos contra otros.
 
@@ -286,6 +291,20 @@ def _score_symbols(
     unavailable = []
     pending: list[str] = []
     for symbol in symbols:
+        # Cripto no tiene estados financieros que descargar: ni valor ni
+        # calidad existen ahí. Se puntúa con lo único medible —momentum— y la
+        # app lo declara, en vez de fingir un compuesto de cuatro factores del
+        # que tres estarían vacíos.
+        if solo_momentum:
+            if momentum_map.get(symbol) is None:
+                unavailable.append({"symbol": symbol, "reason": "sin histórico suficiente"})
+                continue
+            raw_by_symbol[symbol] = build_raw_factors(
+                {}, momentum_map.get(symbol), None
+            )
+            context[symbol] = {"source": momentum_source or "yfinance"}
+            continue
+
         # EDGAR primero: gratis y con cinco veces más cuota que Finnhub. Solo
         # si la empresa no está en la SEC se recurre al proveedor de pago, y
         # entonces sí consume presupuesto.
@@ -729,7 +748,10 @@ def _today(
         symbols = [c["symbol"] for c in companies]
         names = {c["symbol"]: c["name"] for c in companies}
         requested += len(symbols)
-        scoring = _score_symbols(service, session, symbols, budget=fetch_budget)
+        scoring = _score_symbols(
+            service, session, symbols, budget=fetch_budget,
+            solo_momentum=market_data.get("solo_momentum", False),
+        )
 
         # Un sector con menos de MIN_SECTOR_SIZE puntuadas no produce z-scores
         # con sentido: se descarta entero en vez de contaminar la lista.
@@ -750,7 +772,10 @@ def _today(
                 signal["context"]["name"] = names.get(signal["symbol"])
                 signal["sector_rank"] = signal.pop("rank", None)
                 signal["decision"] = _decision_segura(
-                    signal, posiciones.get(signal["symbol"]), reglas
+                    signal,
+                    posiciones.get(signal["symbol"]),
+                    reglas,
+                    clase=market_data.get("asset_class", "accion"),
                 )
                 ranked.append(signal)
 
@@ -791,6 +816,10 @@ def _today(
         "market_key": market,
         "market_name": market_data["name"],
         "market_description": market_data["description"],
+        # La UI necesita saberlo para avisar: una puntuación de un solo factor
+        # no puede presentarse con la misma cara que una de cuatro.
+        "asset_class": market_data.get("asset_class", "accion"),
+        "solo_momentum": market_data.get("solo_momentum", False),
         # TODAS las puntuadas, de mejor a peor. Antes solo viajaban los dos
         # extremos y la franja neutral —casi la mitad del índice— era
         # imposible de ver en la UI: si buscabas una empresa concreta y salía

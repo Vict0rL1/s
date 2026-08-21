@@ -3,6 +3,7 @@ import type {
   EarningsEvent,
   EtfComparison,
   EtfData,
+  EtfRecommendation,
   FilterSpec,
   Interpretation,
   NewsFeed,
@@ -162,6 +163,10 @@ export const api = {
     postJson<Interpretation>('/api/news/interpret', body),
   // Fase 4
   etf: (symbol: string) => fetchJson<EtfData>(`/api/etfs/${symbol}`),
+  recomendarEtfs: (symbols: string[]) =>
+    fetchJson<EtfRecommendation>(
+      `/api/etfs/recomendar?symbols=${encodeURIComponent(symbols.join(','))}`,
+    ),
   compareEtfs: (symbols: string[]) =>
     fetchJson<EtfComparison>(
       `/api/etfs/compare/side-by-side?symbols=${encodeURIComponent(symbols.join(','))}`,

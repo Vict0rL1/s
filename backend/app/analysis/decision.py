@@ -31,6 +31,22 @@ RIESGO_POR_OPERACION = 0.01  # 1 % del capital en riesgo si salta el stop
 STOP_MIN_PCT = 8.0           # por debajo, el ruido normal te saca sin motivo
 STOP_MAX_PCT = 25.0          # por encima, la pérdida deja de ser asumible
 STOP_VOLATILIDADES = 2.0     # el stop va a 2 desviaciones mensuales
+
+# Los topes del stop dependen de la clase de activo, y no es un detalle. Con el
+# rango de las acciones aplicado a cripto, Bitcoin (27 %), Ethereum (37 %) y
+# cualquier altcoin (60 %) se pegan TODAS al tope de 25 %: el stop deja de
+# dimensionarse por volatilidad y pasa a ser una constante demasiado ceñida que
+# el ruido normal perfora una y otra vez. Un stop que salta por ruido no
+# protege, solo materializa pérdidas.
+#
+# La contrapartida se paga donde toca: con un stop del 60 %, arriesgar el mismo
+# 1 % obliga a una posición de 1,7 % de la cartera. El riesgo por idea sigue
+# siendo el mismo; lo que cambia es cuánto dinero hace falta para asumirlo.
+TOPES_STOP: dict[str, tuple[float, float]] = {
+    "accion": (STOP_MIN_PCT, STOP_MAX_PCT),
+    "cripto": (15.0, 60.0),
+    "etf": (6.0, 20.0),  # un índice diversificado se mueve menos que sus partes
+}
 RATIO_OBJETIVO = 2.0         # se busca ganar el doble de lo que se arriesga
 BANDA_ENTRADA_PCT = 2.0      # zona de compra alrededor del último cierre
 SESIONES_MES = 21
@@ -47,16 +63,19 @@ ACCIONES = {
 }
 
 
-def _stop_pct(vol_diaria_pct: float | None) -> float:
-    """Distancia del stop, dimensionada por la volatilidad de cada empresa."""
+def _stop_pct(vol_diaria_pct: float | None, clase: str = "accion") -> float:
+    """Distancia del stop, dimensionada por la volatilidad y la clase de activo."""
+    minimo, maximo = TOPES_STOP.get(clase, TOPES_STOP["accion"])
     if not vol_diaria_pct:
-        return 12.0  # sin volatilidad medible, un valor intermedio y explícito
+        # Sin volatilidad medible, el punto medio del rango de su clase: es
+        # explícito y no finge una precisión que no hay.
+        return round((minimo + maximo) / 2, 1)
     mensual = vol_diaria_pct * math.sqrt(SESIONES_MES)
-    return round(min(max(STOP_VOLATILIDADES * mensual, STOP_MIN_PCT), STOP_MAX_PCT), 1)
+    return round(min(max(STOP_VOLATILIDADES * mensual, minimo), maximo), 1)
 
 
-def _niveles(precio: float, vol_diaria_pct: float | None) -> dict:
-    stop_pct = _stop_pct(vol_diaria_pct)
+def _niveles(precio: float, vol_diaria_pct: float | None, clase: str = "accion") -> dict:
+    stop_pct = _stop_pct(vol_diaria_pct, clase)
     objetivo_pct = round(stop_pct * RATIO_OBJETIVO, 1)
     return {
         "entrada_desde": round(precio * (1 - BANDA_ENTRADA_PCT / 100), 2),
@@ -80,6 +99,7 @@ def decide(
     favorable_min: float = 0.35,
     desfavorable_max: float = -0.35,
     reglas: dict | None = None,
+    clase: str = "accion",
 ) -> dict:
     """Decide qué hacer con una empresa, con sus niveles y sus motivos.
 
@@ -100,7 +120,7 @@ def decide(
     ultimo = price["last"]
     sobre_media = price.get("above_sma200")
     sma200 = price.get("sma200")
-    niveles = _niveles(ultimo, price.get("daily_vol_pct"))
+    niveles = _niveles(ultimo, price.get("daily_vol_pct"), clase)
     razones: list[str] = []
     disparadores: list[str] = []
 

@@ -258,6 +258,7 @@ niveles concretos y de dónde sale la puntuación.
 |---|---|---|
 | **EE. UU. — S&P 500** | 502 | Los componentes del índice, por sector GICS. Todas reportan a la SEC, así que EDGAR cubre sus fundamentales gratis. |
 | **NASDAQ — grandes cotizadas** | 310 | Las mayores del NASDAQ por bolsa y tamaño. **No se presenta como el índice Nasdaq-100**: no hay fuente pública de su composición que se pueda automatizar, y afirmar que lo es sería atribuirle una precisión que el dato no tiene. |
+| **Cripto — grandes por capitalización** | 20 | **Sin estados financieros no hay valor ni calidad: la puntuación es momentum y nada más.** La app lo avisa en pantalla antes de enseñar ninguna idea, y el motor de convicción penaliza sola una idea sostenida por un factor único. Lista curada por capitalización y liquidez — no viene de un índice publicado, a diferencia de los mercados de acciones. |
 | **Canadá — cotizadas en EE. UU.** | 44 | Grandes canadienses con cotización en NYSE/NASDAQ. **Se usan sus tickers estadounidenses a propósito**: esas empresas presentan formulario 40-F ante la SEC, así que tienen los mismos datos que una estadounidense. Con los tickers de Toronto habría que bajar a yfinance, que el proyecto solo admite como respaldo. |
 
 **Qué queda fuera, y por qué.** Los universos cubren empresas con cotización en
@@ -388,7 +389,14 @@ Toda propuesta de compra viene con su salida ya definida. Se calculan así:
 - **Zona de entrada:** ±2 % sobre el último cierre. Perseguir un precio que ya
   se escapó cambia la relación riesgo/beneficio de la operación.
 - **Stop:** 2 desviaciones mensuales (volatilidad diaria de 63 sesiones ×
-  √21), acotado entre **8 % y 25 %**. Un stop fijo del 10 % para una utility y
+  √21), acotado **según la clase de activo**: acciones 8-25 %, ETFs 6-20 %,
+  cripto 15-60 %. Los topes no son un adorno: con el rango de las acciones
+  aplicado a cripto, Bitcoin (27 %), Ethereum (37 %) y cualquier altcoin (60 %)
+  se pegaban **todas** al tope de 25 % — el stop dejaba de dimensionarse por
+  volatilidad y pasaba a ser una constante que el ruido normal perfora una y
+  otra vez. Un stop que salta por ruido no protege, solo materializa pérdidas.
+  La contrapartida se paga donde toca: con un stop del 60 %, arriesgar el mismo
+  1 % obliga a una posición del 1,7 % de la cartera. Un stop fijo del 10 % para una utility y
   para una biotech no protege de nada: en una es imposible de tocar y en la
   otra salta con el ruido de un martes cualquiera.
 - **Objetivo:** el doble del stop (ratio 1:2). Con esa relación no hace falta
@@ -490,6 +498,33 @@ contra la tendencia, arriesgar lo mismo en cada idea—, pero *razonable* y
 *validado* no son lo mismo, y la app no usa una palabra por la otra. Que el
 sistema diga «Comprar» significa que se cumplen unas condiciones escritas, no
 que la empresa vaya a subir.
+
+## ETFs: otro activo, otros criterios
+
+El modelo de factores de las acciones **no se reutiliza aquí**, y hacerlo sería
+el error más fácil: un ETF no tiene P/E ni ROE propios, y los que se le calculan
+son medias de sus posiciones — comparar el «P/E» de un ETF de tecnología con el
+de uno de utilities mide en qué invierte cada uno, no cuál es mejor. Un z-score
+de valor ahí produciría un ranking con aspecto riguroso y sin significado.
+
+`POST /api/etfs/recomendar` (botón **Analizar y recomendar** en la vista ETFs)
+usa lo que sí predice el resultado de un ETF:
+
+1. **El coste, con peso doble.** Es el único factor con evidencia robusta y, a
+   diferencia de la rentabilidad, es un dato conocido y garantizado: lo pagas
+   gane o pierda el fondo. Se muestra en dinero —«75 € al año por cada
+   10.000»— porque «0,75 %» no significa nada a simple vista.
+2. **La tendencia.** El mismo filtro de la media de 200 sesiones.
+3. **El tamaño.** Por debajo de 100 M$ hay riesgo real de liquidación, y si
+   cierran el fondo te devuelven el dinero cuando a ellos les conviene.
+
+Y avisa del error más caro al montar una cartera de ETFs: **dos fondos que se
+solapan al 60 % no son dos ideas, son una repetida.** Se compran tres creyendo
+que se diversifica y los tres llevan dentro las mismas diez empresas, así que la
+cartera concentra justo lo que creía repartir.
+
+Lo que **no** hace: predecir qué sector irá mejor. Elegir entre salud y energía
+es una apuesta sectorial, y esa decisión es tuya.
 
 ## Motor de señales cuantitativas
 

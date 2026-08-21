@@ -779,6 +779,27 @@ export function TodayPage() {
         </div>
       </header>
 
+      {/* Un mercado sin estados financieros no puede presentar su puntuación
+          con la misma cara que uno de cuatro factores. El aviso vivía en la
+          descripción del mercado, que dejó de mostrarse al resumir el día en
+          la cabecera: aquí es donde tiene que estar. */}
+      {data?.solo_momentum && (
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+          <div className="text-xs font-semibold text-amber-900">
+            Aquí la puntuación es momentum y nada más
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-amber-800">
+            {data.market_name} no tiene estados financieros, así que no hay factor
+            de valor ni de calidad: lo único medible es si el precio viene subiendo.
+            Una idea sostenida por un solo factor es una apuesta a ese factor, no al
+            activo — y comprar algo <em>porque ha subido</em> es exactamente el
+            razonamiento que las otras tres familias existen para contrastar. Los
+            stops son mucho más anchos (hasta 60 %) porque la volatilidad lo exige,
+            y por eso el peso sugerido de cartera sale mucho más pequeño.
+          </p>
+        </div>
+      )}
+
       {data?.signals && (
         <SummaryStrip data={data} acciones={acciones} onPick={setView} />
       )}

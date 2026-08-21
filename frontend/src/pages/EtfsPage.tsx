@@ -1,9 +1,67 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { EtfComparison } from '../api/types'
+import type { EtfComparison, EtfRecommendation } from '../api/types'
 import { SourceBadge } from '../components/SourceBadge'
 import { fmtBig, fmtPct } from '../lib/format'
+
+const ETF_ACTION_STYLES: Record<string, string> = {
+  comprar: 'bg-emerald-600 text-white',
+  vigilar: 'bg-amber-100 text-amber-800',
+  evitar: 'bg-red-600 text-white',
+  ninguna: 'bg-slate-100 text-slate-500',
+}
+
+/** Cuál de estos ETFs está mejor construido, y cuáles se repiten entre sí. */
+function EtfPicks({ reco }: { reco: EtfRecommendation }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <h2 className="text-sm font-semibold text-slate-800">Recomendación</h2>
+
+      {/* El error más caro al montar una cartera de ETFs va arriba, no al pie:
+          se compran tres fondos creyendo que se diversifica y los tres llevan
+          dentro las mismas diez empresas. */}
+      {reco.avisos.map((a, i) => (
+        <p
+          key={i}
+          className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900"
+        >
+          {a}
+        </p>
+      ))}
+
+      <ul className="mt-3 space-y-2">
+        {reco.evaluados.map((e) => (
+          <li key={e.symbol} className="rounded-lg border border-slate-200 p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-semibold text-slate-900">{e.symbol}</span>
+                <span className="text-xs text-slate-500">{e.name}</span>
+              </div>
+              <span
+                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                  ETF_ACTION_STYLES[e.action] ?? ETF_ACTION_STYLES.ninguna
+                }`}
+              >
+                {e.action}
+              </span>
+            </div>
+            <ul className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-slate-600">
+              {e.reasons.map((r, i) => (
+                <li key={i}>· {r}</li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-3 text-[11px] leading-relaxed text-slate-400">{reco.nota}</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+        {reco.aviso_solapamiento}
+      </p>
+    </section>
+  )
+}
 
 function OverlapBar({ value }: { value: number }) {
   // Escala: 40 % de solapamiento por peso ya es mucha exposición duplicada.
@@ -19,6 +77,7 @@ function OverlapBar({ value }: { value: number }) {
 export function EtfsPage() {
   const [input, setInput] = useState('VOO, QQQ, VTI')
   const [data, setData] = useState<EtfComparison | null>(null)
+  const [reco, setReco] = useState<EtfRecommendation | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,10 +92,16 @@ export function EtfsPage() {
     setBusy(true)
     setError(null)
     try {
-      setData(await api.compareEtfs(symbols))
+      const [comparacion, recomendacion] = await Promise.all([
+        api.compareEtfs(symbols),
+        api.recomendarEtfs(symbols),
+      ])
+      setData(comparacion)
+      setReco(recomendacion)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error')
       setData(null)
+      setReco(null)
     } finally {
       setBusy(false)
     }
@@ -57,7 +122,7 @@ export function EtfsPage() {
           disabled={busy}
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
         >
-          {busy ? 'Comparando…' : 'Comparar'}
+          {busy ? 'Analizando…' : 'Analizar y recomendar'}
         </button>
       </form>
 
@@ -66,6 +131,8 @@ export function EtfsPage() {
           {error}
         </p>
       )}
+
+      {reco && <EtfPicks reco={reco} />}
 
       {data && Object.keys(data.errors).length > 0 && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">

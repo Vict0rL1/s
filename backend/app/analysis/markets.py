@@ -20,6 +20,23 @@ from pathlib import Path
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 MARKETS: dict[str, dict] = {
+    "cripto": {
+        "name": "Cripto — grandes por capitalización",
+        "file": "universe_cripto.csv",
+        "asset_class": "cripto",
+        # Sin fundamentales no hay valor ni calidad que medir: la puntuación
+        # sale SOLO de momentum. Eso la hace estructuralmente más débil que la
+        # de una acción, y la app lo dice en vez de disimularlo.
+        "solo_momentum": True,
+        "description": (
+            "Las mayores por capitalización, cotizadas contra el dólar. "
+            "AVISO: aquí no hay estados financieros, así que no hay factor de "
+            "valor ni de calidad — la puntuación es MOMENTUM Y NADA MÁS, y una "
+            "idea sostenida por un solo factor es una apuesta a ese factor, no "
+            "a un activo. Lista curada por capitalización y liquidez; no viene "
+            "de un índice publicado como los mercados de acciones."
+        ),
+    },
     "us_sp500": {
         "name": "EE. UU. — S&P 500",
         "file": "universe_us_sp500.csv",
@@ -79,6 +96,8 @@ def load_market(key: str) -> dict:
         sectors.setdefault(company["sector"], []).append(company)
 
     return {
+        "asset_class": meta.get("asset_class", "accion"),
+        "solo_momentum": meta.get("solo_momentum", False),
         "key": key,
         "name": meta["name"],
         "description": meta["description"],

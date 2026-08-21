@@ -12,6 +12,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.analysis.etf import overlap_weight
+from app.analysis.etf_picks import recomendar
 from app.cache.cache import MarketDataService
 from app.deps import get_service
 from app.providers.base import DataNotFoundError
@@ -80,6 +81,63 @@ def compare_etfs(
         "note": (
             "El solapamiento es una cota inferior: se calcula solo sobre los "
             "mayores holdings publicados. Dos ETFs con poco solapamiento aparente "
+            "pueden compartir mucho más en la cola de la cartera."
+        ),
+    }
+
+@router.get("/recomendar")
+def recomendar_etfs(
+    symbols: str = Query(..., description="Lista separada por comas, máx. 6"),
+    service: MarketDataService = Depends(get_service),
+):
+    """Cuál de estos ETFs está mejor construido, y cuáles se repiten entre sí.
+
+    Criterios propios del activo, no el modelo de factores de las acciones: un
+    ETF no tiene P/E ni ROE propios, y los que se le calculan son medias de sus
+    posiciones — un z-score de valor ahí produciría un ranking con aspecto
+    riguroso y sin significado.
+    """
+    requested = [_validate(s.strip()) for s in symbols.split(",") if s.strip()][:6]
+    if len(requested) < 1:
+        raise HTTPException(status_code=422, detail="Indica al menos un ETF")
+
+    etfs, errors = [], {}
+    for symbol in requested:
+        try:
+            etfs.append(_fetch_etf(service, symbol))
+        except HTTPException as exc:
+            errors[symbol] = exc.detail
+
+    if not etfs:
+        raise HTTPException(
+            status_code=422,
+            detail="No se pudo obtener ninguno de los ETFs indicados.",
+        )
+
+    # La tendencia sale del mismo sitio que en la lista diaria: una sola
+    # descarga masiva para todos, sin llamadas por símbolo.
+    precios: dict[str, dict | None] = {}
+    try:
+        bulk = service.get("bulk_momentum", symbols=[e["symbol"] for e in etfs])
+        precios = bulk.get("prices") or {}
+    except (DataNotFoundError, AllProvidersFailedError):
+        pass
+
+    overlaps = []
+    for i, a in enumerate(etfs):
+        for b in etfs[i + 1 :]:
+            result = overlap_weight(
+                a.get("top_holdings") or [], b.get("top_holdings") or []
+            )
+            overlaps.append({"a": a["symbol"], "b": b["symbol"], **result})
+
+    resultado = recomendar(etfs, precios, overlaps)
+    return {
+        **resultado,
+        "errors": errors,
+        "aviso_solapamiento": (
+            "El solapamiento es una cota inferior: se calcula solo sobre los "
+            "mayores holdings publicados, así que dos ETFs que parecen distintos "
             "pueden compartir mucho más en la cola de la cartera."
         ),
     }
