@@ -73,6 +73,11 @@ def main() -> int:
     p.add_argument("--anos", type=int, default=6, help="años de histórico (por defecto 6)")
     p.add_argument("--simbolos", help="lista propia separada por comas")
     p.add_argument(
+        "--cripto",
+        action="store_true",
+        help="valida el mercado de cripto (solo momentum, sin fundamentales)",
+    )
+    p.add_argument(
         "--sin-divisa",
         action="store_true",
         help="no cobrar la conversión CAD→USD (p. ej. si usas Norbert's Gambit)",
@@ -87,28 +92,34 @@ def main() -> int:
     Base.metadata.create_all(engine)
     service = get_service()
 
-    simbolos = (
-        [s.strip().upper() for s in args.simbolos.split(",") if s.strip()]
-        if args.simbolos
-        else _universo_por_defecto(args.n)
-    )
+    if args.cripto:
+        simbolos = [c["symbol"] for c in load_market("cripto")["companies"]]
+    elif args.simbolos:
+        simbolos = [s.strip().upper() for s in args.simbolos.split(",") if s.strip()]
+    else:
+        simbolos = _universo_por_defecto(args.n)
+    solo_momentum = args.cripto
+    clase = "cripto" if args.cripto else "accion"
+
     print(f"Universo: {len(simbolos)} empresas · {args.anos} años de histórico")
     print("Descargando (EDGAR gratis + histórico de precios). Cacheado 24 h.\n")
 
     universo: dict[str, dict] = {}
     sin_datos: list[str] = []
     for i, symbol in enumerate(simbolos, start=1):
-        financials = _safe(service, "financials", symbol=symbol)
-        filings = _safe(service, "filings", symbol=symbol)
+        # Cripto no tiene estados financieros que pedir: exigirlos dejaría
+        # este mercado imposible de validar por construcción.
+        financials = None if solo_momentum else _safe(service, "financials", symbol=symbol)
+        filings = None if solo_momentum else _safe(service, "filings", symbol=symbol)
         history = _safe(
             service, "price_history", symbol=symbol, interval="1day", outputsize=5000
         )
-        if not financials or not history:
+        if not history or (not solo_momentum and not financials):
             sin_datos.append(symbol)
             print(f"  [{i:3}/{len(simbolos)}] {symbol:6} sin datos suficientes")
             continue
         universo[symbol] = {
-            "periods": financials["periods"],
+            "periods": (financials or {}).get("periods", []),
             "filings": (filings or {}).get("filings", []),
             "bars": history["bars"],
         }
@@ -129,10 +140,9 @@ def main() -> int:
 
     print(f"\nSimulando desde {inicio} hasta {fin} ({len(fechas)} fechas de entrada)…")
     con_divisa = not args.sin_divisa
-    resultado = run_rule_backtest(universo, fechas, con_divisa=con_divisa)
-    sin_filtro = run_rule_backtest(
-        universo, fechas, con_divisa=con_divisa, exigir_tendencia=False
-    )
+    comun = dict(con_divisa=con_divisa, solo_momentum=solo_momentum, clase=clase)
+    resultado = run_rule_backtest(universo, fechas, **comun)
+    sin_filtro = run_rule_backtest(universo, fechas, exigir_tendencia=False, **comun)
 
     _imprimir(resultado, sin_filtro, sin_datos, con_divisa)
 
@@ -144,7 +154,7 @@ def main() -> int:
                     content_md=json.dumps(
                         {k: v for k, v in resultado.items() if k != "operaciones"}
                     ),
-                    model=f"reglas/{args.anos}a",
+                    model=f"reglas/{clase}/{args.anos}a",
                 )
             )
             session.commit()

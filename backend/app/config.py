@@ -41,7 +41,12 @@ class Settings(BaseSettings):
 # que cambian poco son la principal palanca para minimizar créditos de API.
 CACHE_TTL_SECONDS: dict[str, int] = {
     "quote": 60,                 # cotizaciones: ~1 min
-    "price_history": 15 * 60,    # velas diarias/semanales: 15 min
+    # Velas DIARIAS: cambian una vez al día. Con 15 min, cada backtest
+    # volvía a descargar el histórico entero contra un tier de 800
+    # créditos/día. Se alinea con bulk_momentum (6 h): la última vela puede
+    # ir hasta 6 h desfasada intradía, y para un sistema que decide sobre
+    # cierres eso no cambia ninguna decisión.
+    "price_history": 6 * 3600,
     "profile": 24 * 3600,        # perfil de la empresa: 24 h
     "fundamentals": 24 * 3600,   # fundamentales TTM: 24 h
     "financials": 24 * 3600,     # estados financieros EDGAR: 24 h

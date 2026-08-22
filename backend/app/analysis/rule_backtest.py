@@ -162,24 +162,39 @@ def simular_operacion(
     }
 
 
-def _snapshot(universe: dict[str, dict], as_of: date) -> dict[str, dict]:
+def _snapshot(
+    universe: dict[str, dict], as_of: date, solo_momentum: bool = False
+) -> dict[str, dict]:
     """Puntuación y estado técnico de todo el universo en una fecha, sin mirar
-    ni un dato posterior a `as_of`."""
+    ni un dato posterior a `as_of`.
+
+    `solo_momentum` existe para cripto y ETFs: sin estados financieros no hay
+    valor ni calidad que puntuar, y exigirlos dejaba esos activos **imposibles
+    de validar por construcción** — sus señales se quedarían en «sin calibrar»
+    para siempre, no por falta de ejecutar el backtest sino porque nunca podría
+    producir una sola operación.
+    """
     crudo: dict[str, dict] = {}
     for symbol, data in universe.items():
-        period = point_in_time_period(
-            data.get("periods", []), data.get("filings", []), as_of
-        )
-        if period is None:
-            continue
+        period = None
+        if not solo_momentum:
+            period = point_in_time_period(
+                data.get("periods", []), data.get("filings", []), as_of
+            )
+            if period is None:
+                continue
         serie = data["_serie"]
         barra = _closest_bar(
             [(d, {"close": c}) for d, c in serie], as_of
         )
         if barra is None:
             continue
-        metrics = metrics_from_period(
-            period, barra["close"], period.get("shares_outstanding")
+        metrics = (
+            {}
+            if period is None
+            else metrics_from_period(
+                period, barra["close"], period.get("shares_outstanding")
+            )
         )
         crudo[symbol] = {
             "raw": build_raw_factors(
@@ -213,6 +228,8 @@ def run_rule_backtest(
     ratio_objetivo: float = 2.0,
     con_divisa: bool = True,
     exigir_tendencia: bool = True,
+    solo_momentum: bool = False,
+    clase: str = "accion",
 ) -> dict:
     """Simula las reglas de compra tal y como las ejecuta la app.
 
@@ -229,7 +246,7 @@ def run_rule_backtest(
     referencia: list[float] = []
 
     for as_of in rebalance_dates:
-        crudo = _snapshot(universe, as_of)
+        crudo = _snapshot(universe, as_of, solo_momentum)
         if not crudo:
             continue
 
@@ -255,7 +272,7 @@ def run_rule_backtest(
                     descartes["sin_tendencia"] += 1
                     continue
 
-            stop_pct = _stop_pct(entrada["vol"])
+            stop_pct = _stop_pct(entrada["vol"], clase)
             operacion = simular_operacion(
                 universe[symbol]["_serie"],
                 as_of,
@@ -267,9 +284,12 @@ def run_rule_backtest(
                 continue
             operaciones.append({**operacion, "symbol": symbol, "score": round(score, 3)})
 
-    return _resumen(
+    resumen = _resumen(
         operaciones, referencia, descartes, coste_lado, exigir_tendencia, favorable_min
     )
+    resumen["clase"] = clase
+    resumen["solo_momentum"] = solo_momentum
+    return resumen
 
 
 def _resumen(

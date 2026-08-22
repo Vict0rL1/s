@@ -275,3 +275,36 @@ def test_el_endpoint_valida_reglas_y_lo_deja_guardado(session_factory, monkeypat
             assert guardado is not None, "sin guardar, la lista diaria no puede usarlo"
     finally:
         app.dependency_overrides.clear()
+
+
+def test_cripto_se_puede_validar_sin_estados_financieros():
+    """Sin este modo, cripto y ETFs quedaban imposibles de validar POR
+    CONSTRUCCIÓN: sus señales dirían «sin calibrar» para siempre, no por falta
+    de ejecutar el backtest sino porque nunca produciría una sola operación."""
+    universo = _universo_sintetico(n=9)
+    for data in universo.values():  # sin fundamentales, como una cripto real
+        data["periods"] = []
+        data["filings"] = []
+
+    fechas = rebalance_dates_mensuales(date(2021, 3, 1), date(2021, 8, 1))
+    sin_modo = run_rule_backtest(universo, fechas)
+    con_modo = run_rule_backtest(universo, fechas, solo_momentum=True, clase="cripto")
+
+    assert sin_modo["n_operaciones"] == 0, "sin el modo no puede haber operaciones"
+    assert con_modo["n_operaciones"] > 0
+    assert con_modo["clase"] == "cripto"
+    assert con_modo["solo_momentum"] is True
+
+
+def test_el_backtest_de_cripto_usa_los_stops_de_su_clase():
+    """Con los topes de las acciones, cada operación de cripto usaría un stop
+    del 25 % que el ruido normal perfora: mediría otra estrategia."""
+    universo = _universo_sintetico(n=9)
+    for data in universo.values():
+        data["periods"] = []
+        data["filings"] = []
+    fechas = rebalance_dates_mensuales(date(2021, 3, 1), date(2021, 8, 1))
+
+    accion = run_rule_backtest(universo, fechas, solo_momentum=True, clase="accion")
+    cripto = run_rule_backtest(universo, fechas, solo_momentum=True, clase="cripto")
+    assert cripto["operaciones"][0]["stop_pct"] > accion["operaciones"][0]["stop_pct"]

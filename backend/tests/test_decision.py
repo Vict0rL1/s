@@ -226,3 +226,60 @@ def test_las_reglas_refutadas_pesan_mas_que_una_probabilidad_del_modelo():
     reglas = {"fiable": True, "esperanza_pct": -1.0, "ventaja_pct": -1.0}
     d = decide(señal(0.8, probability=0.62), precio(), reglas=reglas)
     assert d["confidence"] == "refutada"
+
+
+# --- Banda muerta en la tendencia: dejar de entrar y salir cada semana ------
+
+
+def test_dentro_de_la_banda_no_se_compra_todavia():
+    """Un precio que roza su media no es una tendencia: exigir margen es lo que
+    evita comprar y vender la misma empresa varias veces al mes."""
+    d = decide(señal(0.8), precio(last=100.5, sma200=100.0))
+    assert d["action"] == "vigilar"
+
+
+def test_hace_falta_superar_la_media_con_margen_para_comprar():
+    assert decide(señal(0.8), precio(last=103.0, sma200=100.0))["action"] == "comprar"
+
+
+def test_dentro_de_la_banda_una_posicion_se_mantiene_no_se_reduce():
+    """La asimetría que corta el vaivén: dentro de la banda no basta para entrar
+    y tampoco basta para salir."""
+    d = decide(señal(0.6), precio(last=99.5, sma200=100.0), {"cost_basis": 90})
+    assert d["action"] == "mantener"
+
+
+def test_perder_la_media_con_claridad_si_manda_reducir():
+    d = decide(señal(0.6), precio(last=97.0, sma200=100.0), {"cost_basis": 90})
+    assert d["action"] == "reducir"
+
+
+def test_cuesta_mas_entrar_que_salir():
+    """Entrar pide 2 % sobre la media; salir, perderla por 1 %. Deliberado: la
+    penalización por equivocarse no es simétrica."""
+    from app.analysis.decision import (
+        BANDA_TENDENCIA_ENTRAR_PCT,
+        BANDA_TENDENCIA_SALIR_PCT,
+    )
+
+    assert BANDA_TENDENCIA_ENTRAR_PCT > BANDA_TENDENCIA_SALIR_PCT
+
+
+def test_no_se_compra_justo_antes_de_resultados():
+    """Entrar dos días antes convierte una apuesta de factores en cara o cruz:
+    el precio lo moverá una noticia que el modelo no puede ver."""
+    d = decide(señal(0.8), precio(last=105, sma200=100), resultados_en="2026-08-25")
+    assert d["action"] == "vigilar"
+    assert "2026-08-25" in d["reasons"][0]
+    # No la descarta: la aplaza, y dice hasta cuándo.
+    assert any("cuando hayan publicado" in t for t in d["triggers"])
+
+
+def test_a_una_posicion_abierta_los_resultados_solo_se_le_avisan():
+    """Aplazar una compra es prudente; forzar una venta por un evento de
+    calendario sería una regla distinta y no está justificada."""
+    d = decide(
+        señal(0.7), precio(last=120, sma200=100), {"cost_basis": 100},
+        resultados_en="2026-08-25",
+    )
+    assert d["action"] == "mantener"

@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.analysis.decision import _stop_pct
+from app.analysis.risk_budget import presupuesto_de_riesgo
 from app.analysis.portfolio import (
     allocation_weights,
     concentration_warning,
@@ -57,6 +59,34 @@ def get_or_create_instrument(session: Session, symbol: str, service=None) -> Ins
     session.add(instrument)
     session.commit()
     return instrument
+
+
+
+def _volatilidad_de(service: MarketDataService, symbol: str) -> float | None:
+    """Volatilidad diaria desde el histórico ya cacheado. Nunca descarga nada.
+
+    Si no está en caché se devuelve None y el stop cae al valor medio de su
+    clase: preferible a gastar una llamada por posición cada vez que se abre
+    el portafolio.
+    """
+    cache = getattr(service, "cache", None)
+    if cache is None:
+        return None
+    history = cache.get(
+        "price_history", {"symbol": symbol, "interval": "1day", "outputsize": 252}
+    )
+    bars = (history or {}).get("bars") or []
+    cierres = [b["close"] for b in bars[-64:] if b.get("close")]
+    if len(cierres) < 21:
+        return None
+    retornos = [
+        cierres[i] / cierres[i - 1] - 1 for i in range(1, len(cierres)) if cierres[i - 1]
+    ]
+    if len(retornos) < 20:
+        return None
+    medio = sum(retornos) / len(retornos)
+    varianza = sum((r - medio) ** 2 for r in retornos) / (len(retornos) - 1)
+    return (varianza ** 0.5) * 100
 
 
 def _price_of(service: MarketDataService, symbol: str) -> float | None:
@@ -245,13 +275,22 @@ def get_portfolio(
         metrics = position_metrics(
             {"quantity": position.quantity, "cost_basis": position.cost_basis}, price
         )
+        # El stop se recalcula con la MISMA regla que la vista Hoy, anclado a
+        # tu coste. Sin él no se puede sumar el riesgo abierto, que es el
+        # número que decide si una mala semana es un contratiempo o un agujero.
+        clase = "cripto" if instrument.symbol.endswith("-USD") else "accion"
+        vol = _volatilidad_de(service, instrument.symbol)
+        stop = round(position.cost_basis * (1 - _stop_pct(vol, clase) / 100), 2)
         open_positions.append(
             {
                 "id": position.id,
                 "symbol": instrument.symbol,
                 "name": instrument.name,
                 "sector": instrument.sector or "Sin clasificar",
+                "asset_class": clase,
                 "opened_at": position.opened_at.isoformat(),
+                "stop": stop,
+                "price": price,
                 **metrics,
             }
         )
@@ -266,6 +305,11 @@ def get_portfolio(
         "allocation_by_position": by_position,
         "allocation_by_sector": by_sector,
         "concentration_warnings": concentration_warning(by_position),
+        # Cada idea se dimensiona para arriesgar un 1 %; lo que no hacía nadie
+        # era sumar. Ocho posiciones al 1 % son un 8 % en riesgo simultáneo.
+        "risk_budget": presupuesto_de_riesgo(
+            open_positions, summary.get("total_market_value")
+        ),
         "note": (
             "Las posiciones sin precio disponible se excluyen de los totales y "
             "de los pesos; el resumen indica sobre cuántas se calculó."

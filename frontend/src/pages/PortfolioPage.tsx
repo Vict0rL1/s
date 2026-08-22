@@ -1,10 +1,58 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { Portfolio, PriceAlert, WatchlistItem } from '../api/types'
+import type { Portfolio, PriceAlert, RiskBudget, WatchlistItem } from '../api/types'
 import { fmtChangePct, fmtNumber, fmtPct } from '../lib/format'
 
 type Tab = 'portafolio' | 'watchlist' | 'alertas'
+
+function RiskBudgetPanel({ risk }: { risk: RiskBudget }) {
+  const excedido = risk.riesgo_total_pct > risk.tope_pct
+  const pct = Math.min(risk.riesgo_total_pct / risk.tope_pct, 1.6) * 100
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-800">Riesgo abierto</h2>
+        <span className="text-[11px] text-slate-400">
+          tope sugerido {risk.tope_pct} % · por grupo {risk.tope_grupo_pct} %
+        </span>
+      </div>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className={`text-3xl font-semibold tabular-nums ${excedido ? 'text-red-600' : 'text-slate-900'}`}>
+          {risk.riesgo_total_pct.toFixed(1)} %
+        </span>
+        <span className="text-xs text-slate-400">
+          {excedido ? 'por encima del tope' : `quedan ${risk.margen_pct.toFixed(1)} % de margen`}
+        </span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div className={`h-full ${excedido ? 'bg-red-500' : 'bg-emerald-500'}`}
+             style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      {risk.avisos.map((a, i) => (
+        <p key={i} className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">{a}</p>
+      ))}
+      {Object.keys(risk.por_grupo).length > 0 && (
+        <div className="mt-3">
+          <div className="text-[10px] uppercase tracking-wide text-slate-400">
+            Por grupo que se mueve junto
+          </div>
+          <ul className="mt-1 space-y-0.5 text-xs">
+            {Object.entries(risk.por_grupo).sort((a, b) => b[1] - a[1]).map(([grupo, valor]) => (
+              <li key={grupo} className="flex justify-between gap-3">
+                <span className="text-slate-600">{grupo}</span>
+                <span className={`tabular-nums ${valor > risk.tope_grupo_pct ? 'text-red-600' : 'text-slate-700'}`}>
+                  {valor.toFixed(1)} %
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="mt-3 text-[11px] leading-relaxed text-slate-400">{risk.nota}</p>
+    </section>
+  )
+}
 
 function Pnl({ value, pct }: { value: number | null; pct: number | null }) {
   if (value === null) return <span className="text-slate-400">—</span>
@@ -120,6 +168,8 @@ function PortfolioTab() {
               precio disponible quedan fuera de los totales. {data.note}
             </p>
           )}
+
+          {data.risk_budget && <RiskBudgetPanel risk={data.risk_budget} />}
 
           {data.concentration_warnings.length > 0 && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">

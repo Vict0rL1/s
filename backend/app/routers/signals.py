@@ -154,11 +154,33 @@ def _stored_rule_backtest(session: Session) -> dict | None:
         return None
 
 
+def _proximos_resultados(service: MarketDataService, dias: int = 7) -> dict[str, str]:
+    """Símbolos que presentan resultados en los próximos `dias`.
+
+    Una sola llamada cubre el mercado entero y está cacheada 12 h, así que
+    aplicar este filtro a 500 empresas cuesta lo mismo que a una.
+    """
+    hoy = date.today()
+    payload = _safe_get(
+        service,
+        "earnings_calendar",
+        start=hoy.isoformat(),
+        end=(hoy + timedelta(days=dias)).isoformat(),
+    )
+    salida: dict[str, str] = {}
+    for evento in (payload or {}).get("events", []):
+        simbolo, fecha = evento.get("symbol"), evento.get("date")
+        if simbolo and fecha and simbolo not in salida:
+            salida[simbolo] = fecha
+    return salida
+
+
 def _decision_segura(
     signal: dict,
     position: dict | None,
     reglas: dict | None = None,
     clase: str = "accion",
+    resultados_en: str | None = None,
 ) -> dict:
     """`decide()` acotado a su propia fila.
 
@@ -175,6 +197,7 @@ def _decision_segura(
             desfavorable_max=UNFAVORABLE_MAX,
             reglas=reglas,
             clase=clase,
+            resultados_en=resultados_en,
         )
     except Exception as exc:  # noqa: BLE001 — se reporta, no se traga
         logger.exception("decide() falló para %s", signal.get("symbol"))
@@ -734,6 +757,8 @@ def _today(
     # Si hay un backtest de reglas guardado, cada decisión puede decir si su
     # sistema está probado, refutado o solo es razonable.
     reglas = _stored_rule_backtest(session)
+    # Una sola llamada cacheada 12 h cubre el mercado entero.
+    resultados = _proximos_resultados(service)
 
     fetch_budget = FetchBudget(budget)
     ranked: list[dict] = []
@@ -776,6 +801,7 @@ def _today(
                     posiciones.get(signal["symbol"]),
                     reglas,
                     clase=market_data.get("asset_class", "accion"),
+                    resultados_en=resultados.get(signal["symbol"]),
                 )
                 ranked.append(signal)
 

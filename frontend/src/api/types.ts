@@ -392,6 +392,7 @@ export interface Allocation {
 }
 
 export interface Portfolio {
+  risk_budget: RiskBudget
   positions: PortfolioPosition[]
   closed_positions: ClosedPosition[]
   summary: {
@@ -928,4 +929,23 @@ export interface EtfRecommendation {
   nota: string
   errors: Record<string, string>
   aviso_solapamiento: string
+}
+
+/** Riesgo abierto: lo que perderías si TODAS tus posiciones tocaran su stop. */
+export interface RiskBudget {
+  riesgo_total_pct: number
+  tope_pct: number
+  por_grupo: Record<string, number>
+  tope_grupo_pct: number
+  posiciones: {
+    symbol: string
+    grupo: string
+    riesgo_pct: number
+    peso_pct: number
+    nota: string | null
+  }[]
+  sin_calcular: number
+  avisos: string[]
+  margen_pct: number
+  nota: string
 }

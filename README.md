@@ -22,6 +22,11 @@ precios y no ejecuta órdenes**.
 - **Lo calculado ≠ lo generado por LLM.** Indicadores y ratios se calculan a
   partir de datos; el contenido de IA aparece con etiqueta morada, modelo
   usado y disclaimer, y queda registrado en `llm_outputs`.
+- **El riesgo se suma, no se mira de una en una.** Cada idea se dimensiona
+  para arriesgar un 1 %, pero ocho posiciones al 1 % son un 8 % en riesgo
+  simultáneo — y si cinco son del mismo sector caen juntas, así que cuentan
+  como una apuesta grande. El Portafolio suma el riesgo abierto total y por
+  grupo correlacionado (cripto va en bloque), y avisa al pasar los topes.
 - **Registro de aciertos.** Toda tesis y escenario se guarda con fecha y
   precio ancla; la vista de Tesis compara después cómo envejeció, con tasa de
   acierto y error mediano de estimación. Si el modelo falla seguido, se ve.
@@ -134,6 +139,7 @@ El coste es una restricción de diseño, no una optimización posterior:
 | **LLM bajo demanda** | La interpretación de una noticia solo se genera con botón explícito, con `max_tokens` acotado, y se guarda con hash del prompt: repetirla no vuelve a llamar al API. |
 | **Screener acotado** | Evalúa el universo que le das (máx. 25 tickers) con fundamentales cacheados, en vez de fingir un barrido de mercado imposible con tiers gratuitos. |
 | **Rate limiter multiventana** | Modela límites simultáneos (Twelve Data: 8/min *y* 800/día) y salta un proveedor sin cuota antes de gastar la llamada. |
+| **Bloqueo por resultados** | Una sola llamada al calendario, cacheada 12 h, cubre el mercado entero: aplicar el filtro a 500 empresas cuesta lo mismo que a una. Entrar dos días antes de una presentación convierte una apuesta de factores en cara o cruz, así que la compra se **aplaza**, no se descarta. |
 | **Contador visible** | Cada API muestra sus llamadas restantes en la barra lateral. |
 
 ## Arquitectura de datos

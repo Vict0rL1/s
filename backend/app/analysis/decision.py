@@ -49,6 +49,18 @@ TOPES_STOP: dict[str, tuple[float, float]] = {
 }
 RATIO_OBJETIVO = 2.0         # se busca ganar el doble de lo que se arriesga
 BANDA_ENTRADA_PCT = 2.0      # zona de compra alrededor del último cierre
+
+# Banda muerta alrededor de la media de 200 sesiones. Sin ella, un precio que
+# oscila un 1 % en torno a su media cruza la línea varias veces por semana y la
+# señal salta de "comprar" a "vigilar" y de "mantener" a "reducir" un día sí y
+# otro también. Cada ida y vuelta cuesta ~3,3 % en comisiones y cambio de
+# divisa, así que el vaivén no es un detalle estético: se paga.
+#
+# Es asimétrica a propósito: hace falta superar la media por 2 % para entrar,
+# pero solo perderla por 1 % para salir. Cuesta más entrar que salir, que es
+# como debe ser cuando la penalización por equivocarse es asimétrica.
+BANDA_TENDENCIA_ENTRAR_PCT = 2.0
+BANDA_TENDENCIA_SALIR_PCT = 1.0
 SESIONES_MES = 21
 
 ACCIONES = {
@@ -100,6 +112,7 @@ def decide(
     desfavorable_max: float = -0.35,
     reglas: dict | None = None,
     clase: str = "accion",
+    resultados_en: str | None = None,
 ) -> dict:
     """Decide qué hacer con una empresa, con sus niveles y sus motivos.
 
@@ -118,8 +131,15 @@ def decide(
         }
 
     ultimo = price["last"]
-    sobre_media = price.get("above_sma200")
     sma200 = price.get("sma200")
+    # `above_sma200` es un booleano crudo que cambia con cualquier roce de la
+    # línea. Aquí se aplica la banda muerta: hay tres estados, no dos.
+    # Tres estados: True (claramente encima), False (claramente debajo) y None
+    # (dentro de la banda). None se propaga a propósito — volver al booleano
+    # crudo aquí anularía la banda entera. Aguas abajo, None no basta para
+    # entrar (se va a "vigilar") ni basta para salir (se queda en "mantener"),
+    # que es exactamente la asimetría que corta el vaivén.
+    sobre_media = _tendencia(ultimo, sma200, price.get("above_sma200"))
     niveles = _niveles(ultimo, price.get("daily_vol_pct"), clase)
     razones: list[str] = []
     disparadores: list[str] = []
@@ -240,6 +260,25 @@ def decide(
         )
         disparadores = [f"Revisar si supera {favorable_min:+.2f}"]
 
+    # Entrar dos días antes de una presentación de resultados convierte una
+    # apuesta de factores en cara o cruz: el precio se moverá por una noticia
+    # que el modelo no conoce y que no está en ningún múltiplo. La idea no se
+    # descarta, se aplaza — que es justo lo que hace "vigilar".
+    if resultados_en and accion == "comprar":
+        accion = "vigilar"
+        razones.insert(
+            0,
+            f"Presenta resultados el {resultados_en}. La idea es buena, pero "
+            "entrar justo antes es apostar a una noticia que el modelo no puede "
+            "ver; el movimiento del día lo decide la sorpresa, no los factores.",
+        )
+        disparadores = [
+            f"Comprar cuando hayan publicado ({resultados_en}) y la puntuación aguante",
+            *disparadores[1:],
+        ]
+    elif resultados_en:
+        razones.append(f"Presenta resultados el {resultados_en}: espera volatilidad.")
+
     if price.get("drawdown_pct") is not None and price["drawdown_pct"] < -25:
         razones.append(
             f"Está un {abs(price['drawdown_pct']):.0f} % por debajo de su "
@@ -280,3 +319,20 @@ def _confianza(signal: dict, reglas: dict | None = None) -> str:
     if signal.get("probability") is not None:
         return "calibrada"
     return "sin_calibrar"
+
+
+def _tendencia(ultimo: float, sma200: float | None, crudo: bool | None) -> bool | None:
+    """¿Acompaña la tendencia? Con banda muerta alrededor de la media.
+
+    Devuelve True (claramente encima), False (claramente debajo) o None (dentro
+    de la banda: ni una cosa ni la otra). El estado intermedio es la pieza clave
+    — sin él, «no está claro» se convierte por defecto en «está debajo», y esa
+    conversión silenciosa es la que produce el vaivén.
+    """
+    if not sma200:
+        return crudo
+    if ultimo >= sma200 * (1 + BANDA_TENDENCIA_ENTRAR_PCT / 100):
+        return True
+    if ultimo <= sma200 * (1 - BANDA_TENDENCIA_SALIR_PCT / 100):
+        return False
+    return None
