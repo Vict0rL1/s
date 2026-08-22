@@ -52,7 +52,52 @@ export const DISCLAIMER =
 
 export type ReliabilityLevel = 'high' | 'medium' | 'low';
 
-const ELO_SIGMA_C = 240;
+/**
+ * Escala del error de estimación del Elo: σ(n) = C / √(n + 1), en puntos Elo.
+ *
+ * ===========================================================================
+ * MEDIDO, YA NO PUESTO A MANO  (`npm run study:sigma`)
+ * ===========================================================================
+ * Esto valía 240 y nadie lo había medido nunca, cuando es el número que fija el
+ * «± X pp» de TODAS las tarjetas de fútbol y, con él, si una tarjeta dice fiabilidad
+ * alta o baja. La NFL sí tenía su sigma calibrada contra la línea de cierre.
+ *
+ * El Elo verdadero de un equipo no se observa, así que no hay nada contra lo que
+ * comparar el estimado. Lo que sí se puede es descomponer la varianza de lo que sí se
+ * ve. Para cada partido, el residuo entre la puntuación esperada y la real tiene dos
+ * fuentes independientes: el azar propio del fútbol —que se CALCULA con las
+ * probabilidades a tres bandas del modelo, no se estima— y el error del Elo. Restando
+ * la primera queda la segunda, y ahí vive C.
+ *
+ * Sobre 30.321 partidos:
+ *
+ *     C = 82 Elo,  IC 95 % por bootstrap [55, 104]
+ *
+ * y la prueba que no depende de la regresión, comparando el error cuadrático medio
+ * observado con el que predice cada valor de C:
+ *
+ *     partidos jugados   observado   predice C=240   predice C=82
+ *     0–4                  0.00779       0.07470        0.00867
+ *     5–9                  0.00264       0.02138        0.00248
+ *     20–39               -0.00096       0.00572        0.00066
+ *
+ * En el tramo de pocos partidos —donde la señal es más fuerte y menos ambigua— 240
+ * predice DIEZ VECES el error que realmente se observa. La banda publicada llevaba
+ * todo este tiempo siendo unas tres veces más ancha de lo que los datos sostienen: un
+ * partido entre dos equipos con 20 jornadas salía «±10.7 pp, fiabilidad baja» cuando
+ * lo medido son ±4.7.
+ *
+ * ===========================================================================
+ * POR QUÉ 105 Y NO 82
+ * ===========================================================================
+ * Se toma el EXTREMO ALTO del intervalo, no el valor central, y a propósito. El
+ * estimador es ruidoso —el término que busca vale un 3 % de la varianza total— y los
+ * dos errores posibles no cuestan lo mismo: una banda demasiado ancha hace que la app
+ * parezca insegura de cosas que sabe, pero una demasiado estrecha le hace prometer
+ * una precisión que no tiene, y eso es lo que no puede pasar. 105 sigue siendo 2,3
+ * veces más ajustado que 240 sin apoyarse en la parte optimista de la medición.
+ */
+const ELO_SIGMA_C = 105;
 const STALE_SIGMA_PER_MONTH = 20;
 const STALE_SIGMA_CAP = 120;
 const MIN_MATCHES_FOR_ANY_CONFIDENCE = 8;
@@ -160,6 +205,16 @@ export interface FbPrediction {
     probability: number;
     /** True when no outcome clears 40% — genuinely open matches. */
     open: boolean;
+    /**
+     * La mejor doble oportunidad (1X o X2) con su probabilidad.
+     *
+     * Está aquí porque en un partido abierto es LO ÚNICO que se puede afirmar con
+     * confianza, y la tarjeta se estaba callando justo ahí. Medido sobre los 30.321
+     * partidos del archivo: 5.465 son abiertos (18,0 %) y en 4.491 de ellos —el
+     * 82,2 %— una doble oportunidad pasa del 65 %. Decir «ninguna opción llega al
+     * 40 %» y parar es esconder un 70 % detrás de tres treintaipicos.
+     */
+    doubleChance: { outcome: '1X' | 'X2'; label: string; probability: number };
   };
   disclaimer: string;
 }
@@ -416,6 +471,18 @@ export function buildFootballPrediction(
   };
 
   // ---- verdict ----
+  //
+  // EL EMPATE NUNCA SALE POR AQUÍ, y conviene saberlo: en los 30.321 partidos del
+  // archivo el empate no es la opción más probable ni una sola vez. No es casualidad
+  // ni un fallo, es aritmética. La probabilidad de empate más alta que este modelo
+  // llega a producir es 32,1 %, así que para que el empate ganase harían falta las
+  // otras dos por debajo de eso — y entre las dos tienen que sumar el 67,9 % restante,
+  // que no cabe en dos números menores de 32,1.
+  //
+  // La rama se queda porque es la lectura correcta de «el más probable» y porque el
+  // día que el modelo de goles cambie dejará de ser inalcanzable. Lo que NO puede
+  // quedarse es una tarjeta que, en un partido igualado, solo sepa decir cuál de tres
+  // treintaipicos es el mayor. Para eso está la doble oportunidad de abajo.
   const outcome: 'home' | 'draw' | 'away' =
     probs.home >= probs.draw && probs.home >= probs.away
       ? 'home'
@@ -428,6 +495,21 @@ export function buildFootballPrediction(
   // Football is genuinely open far more often than the other two sports: with
   // three outcomes, a "favourite" at 38% is not a favourite in any useful sense.
   const open = outcomeProb < 0.4;
+
+  const pHomeDraw = probs.home + probs.draw;
+  const pDrawAway = probs.draw + probs.away;
+  const doubleChance =
+    pHomeDraw >= pDrawAway
+      ? {
+          outcome: '1X' as const,
+          label: `${home.name} o empate`,
+          probability: pHomeDraw,
+        }
+      : {
+          outcome: 'X2' as const,
+          label: `Empate o ${away.name}`,
+          probability: pDrawAway,
+        };
 
   // ---- reasoning ----
   const ratingGap = Math.round((home.elo - away.elo) * 10) / 10;
@@ -460,7 +542,9 @@ export function buildFootballPrediction(
   // Never lowercase the label: it contains a club name, and "gana manchester
   // city fc" reads like a bug even though the number is right.
   const headline = open
-    ? `Partido abierto: ninguna opción llega al 40%. La más probable es «${outcomeLabel}» (${pct1(outcomeProb)}%).`
+    ? `Partido abierto: ninguna opción llega al 40%. Lo más sólido que se puede decir ` +
+      `es «${doubleChance.label}» (${pct1(doubleChance.probability)}%); la opción suelta ` +
+      `más probable es «${outcomeLabel}» (${pct1(outcomeProb)}%).`
     : `Lo más probable: ${outcomeLabel} (${pct1(outcomeProb)}%), con ${top.label} como marcador más probable (${pct1(top.probability)}%).`;
 
   const bullets: string[] = [];
@@ -571,7 +655,7 @@ export function buildFootballPrediction(
     reasoning: { factors, text: reasoningText },
     reliability,
     summary: { headline, bullets },
-    verdict: { outcome, label: outcomeLabel, probability: outcomeProb, open },
+    verdict: { outcome, label: outcomeLabel, probability: outcomeProb, open, doubleChance },
     disclaimer: DISCLAIMER,
   };
 }

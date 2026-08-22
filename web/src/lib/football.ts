@@ -84,7 +84,14 @@ export interface FbPrediction {
   reasoning: { factors: { key: string; label: string; pointsForHome: number }[]; text: string };
   reliability: FbReliability;
   summary: { headline: string; bullets: string[] };
-  verdict: { outcome: 'home' | 'draw' | 'away'; label: string; probability: number; open: boolean };
+  verdict: {
+    outcome: 'home' | 'draw' | 'away';
+    label: string;
+    probability: number;
+    open: boolean;
+    /** La mejor doble oportunidad. Es lo único afirmable en un partido abierto. */
+    doubleChance: { outcome: '1X' | 'X2'; label: string; probability: number };
+  };
   disclaimer: string;
 }
 

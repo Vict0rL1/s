@@ -50,6 +50,11 @@ export interface Pick {
   when: string;
   /** "Toluca vs Necaxa" */
   match: string;
+  /**
+   * La liga, cuando el deporte la tiene. Solo la usa `lift`, para elegir la tabla de
+   * referencia del escalón correcto; los deportes sin escalones la dejan sin poner.
+   */
+  league?: string;
   /** "Total de goles", "Doble oportunidad", "Ganador"… */
   market: string;
   /** The selection: "Over 2.5", "Toluca o empate", "Ambos marcan: Sí". */
@@ -104,7 +109,7 @@ export const MAX_PICKS = 10;
  */
 export const CAVEATS: Record<string, string> = {
   football:
-    'Medido sobre 21.867 partidos de 14 ligas: RPS 0.2019 en las primeras divisiones y 0.2206 en ' +
+    'Medido sobre 24.129 partidos de 14 ligas: RPS 0.2019 en las primeras divisiones y 0.2184 en ' +
     'las segundas, frente a 0.2230 de la referencia, con el empate calibrado a ±1 pp. Un equipo ' +
     'recién ascendido se predice con su Elo de Segunda más el salto de división medido en su país; ' +
     'la tarjeta lo dice y su banda es más ancha. Nunca se ha medido contra las cuotas de cierre, ' +
@@ -177,6 +182,7 @@ function toPicks(
   when: string,
   match: string,
   candidates: Candidate[],
+  league?: string,
 ): Pick[] {
   return candidates
     // A market at 0 or 1 is not a market — it is a rounding artefact or a bug, and
@@ -186,6 +192,7 @@ function toPicks(
       id,
       when,
       match,
+      league,
       market: c.market,
       selection: c.selection,
       modelProb: c.modelProb,
@@ -236,29 +243,39 @@ function marketCap(distinctMarkets: number): number {
  */
 // ---------------------------------------------------------------------------
 // MEDIDAS SOBRE EL ARCHIVO, no constantes de manual. Remedidas sobre 30.321
-// partidos tras completar las segundas divisiones (antes eran 24.000 y les
-// faltaban tres temporadas de es.2 e it.2).
+// partidos tras completar las segundas divisiones.
 //
-// El desglose importa más que el número, porque los dos escalones no juegan al
-// mismo fútbol:
+// Y SEPARADAS POR ESCALÓN, porque los dos no juegan al mismo fútbol:
 //
-//                        1ª (17.880)   2ª (12.441)   todo (30.321)
-//     gana el local         43.5 %        42.7 %        43.1 %
-//     1X                    68.5 %        71.2 %        69.6 %
-//     ambos marcan          53.8 %        51.1 %        52.7 %
-//     más de 2.5 goles      53.0 %        46.3 %        50.3 %
+//                        1ª (17.880)   2ª (12.441)
+//     gana el local         43.5 %        42.7 %
+//     1X                    68.5 %        71.2 %
+//     ambos marcan          53.8 %        51.1 %
+//     más de 2.5 goles      53.0 %        46.3 %
 //
-// Seis puntos y medio de diferencia en el over: en Segunda se marca bastante
-// menos. Se usa la cifra global porque la lista mezcla ligas de los dos
-// escalones y esta referencia solo ordena, no publica ninguna probabilidad. Si
-// algún día la lista se separa por escalón, aquí es donde hay que separarla.
+// Seis puntos y medio en el over: en Segunda se marca bastante menos. Antes había
+// una sola cifra global (50.3 %) para las dos, así que un «Over 2.5» de Segunda se
+// comparaba contra una referencia inflada por la Primera y subía en la lista sin
+// merecerlo, mientras que uno de Primera se comparaba contra una rebajada por la
+// Segunda y bajaba. Con una lista de diez filas, eso decide qué se lee.
+//
+// Esto solo ORDENA; no se publica ninguna de estas cifras como probabilidad.
 // ---------------------------------------------------------------------------
+
+/** Las de segunda división. Los mercados que no dependen del escalón no están. */
+const BASE_RATE_TIER2: Record<string, number> = {
+  '1X2': 0.427,
+  'Doble oportunidad': 0.712,
+  'Ambos marcan': 0.511,
+  'Total de goles': 0.463,
+};
+
 const BASE_RATE: Record<string, number> = {
-  // Football
-  '1X2': 0.431,               // el local gana
-  'Doble oportunidad': 0.696, // 1X; X2 es 0.569, se usa la más común
-  'Ambos marcan': 0.527,
-  'Total de goles': 0.503,    // +2.5
+  // Football, primera división
+  '1X2': 0.435,               // el local gana
+  'Doble oportunidad': 0.685, // 1X; X2 es 0.565, se usa la más común
+  'Ambos marcan': 0.538,
+  'Total de goles': 0.530,    // +2.5
   // Basketball / baseball / NFL winner markets, home side
   Ganador: 0.55,
   Hándicap: 0.5,              // una línea justa es 50/50 por construcción
@@ -267,9 +284,19 @@ const BASE_RATE: Record<string, number> = {
   'Total de carreras': 0.5,
 };
 
+/**
+ * Las segundas divisiones que la app ingiere.
+ *
+ * Una lista explícita y no una heurística sobre el nombre: "Championship" no lleva
+ * ningún "2" y "LaLiga Hypermotion" tampoco, así que cualquier regla por el texto
+ * fallaría justo en las dos ligas con más partidos de este grupo.
+ */
+const TIER2 = new Set(['championship', 'laliga2', 'bundesliga2', 'serieb', 'ligue2']);
+
 /** How much the model is saying beyond the market's own base rate. */
 function lift(p: Pick): number {
-  return p.modelProb - (BASE_RATE[p.market] ?? 0.5);
+  const table = p.league && TIER2.has(p.league) ? BASE_RATE_TIER2 : BASE_RATE;
+  return p.modelProb - (table[p.market] ?? BASE_RATE[p.market] ?? 0.5);
 }
 
 /**
@@ -350,6 +377,8 @@ export function footballPicks(
   rows: {
     fixture: {
       id: string; commence_time: string; home_name: string; away_name: string;
+      /** Elige la tabla de referencia del escalón. Ver BASE_RATE_TIER2. */
+      league?: string;
       odds_home: number | null; odds_draw: number | null; odds_away: number | null;
       /** 'fixture' = this app invented the price from the model. See realMarket(). */
       source?: string;
@@ -400,7 +429,7 @@ export function footballPicks(
       { market: 'Ambos marcan', selection: 'Sí', modelProb: g.bothScore, marketProb: null, odds: null },
       { market: 'Ambos marcan', selection: 'No', modelProb: 1 - g.bothScore, marketProb: null, odds: null },
     ];
-    out.push(...toPicks(f.id, f.commence_time, match, c));
+    out.push(...toPicks(f.id, f.commence_time, match, c, f.league));
   }
   return out;
 }

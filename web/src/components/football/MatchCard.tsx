@@ -211,13 +211,22 @@ export default function MatchCard({
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="min-w-0 text-[15px] leading-snug text-[#c3c9d1]">
+                  {/* En un partido abierto la frase útil NO es cuál de tres treintaipicos
+                      es el mayor: es la doble oportunidad, que en el 82,2 % de los
+                      partidos abiertos del archivo pasa del 65 %. Antes la tarjeta
+                      decía «X es solo el más probable» y se callaba el 70 %. */}
                   {prediction.verdict.open ? (
                     <>
                       Partido abierto —{' '}
                       <strong className="font-semibold text-[#e8eaed]">
-                        {prediction.verdict.label}
+                        {prediction.verdict.doubleChance.label}
                       </strong>{' '}
-                      es solo el más probable
+                      {pct(prediction.verdict.doubleChance.probability)}
+                      <span className="text-[#8b93a1]">
+                        {' '}
+                        · suelto, {prediction.verdict.label.toLowerCase()}{' '}
+                        {pct(prediction.verdict.probability)}
+                      </span>
                     </>
                   ) : (
                     <>

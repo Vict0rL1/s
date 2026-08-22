@@ -38,7 +38,8 @@
     "verify:data": "npm run verify:data --workspace server --",
     "study:ht": "npm run study:ht --workspace server --",
     "study:ht-val": "npm run study:ht-val --workspace server --",
-    "doctor": "npm run doctor --workspace server --"
+    "doctor": "npm run doctor --workspace server --",
+    "study:sigma": "npm run study:sigma --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
