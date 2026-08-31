@@ -164,3 +164,75 @@ def rank_universe(signals: list[dict]) -> list[dict]:
     for i, signal in enumerate(scored, start=1):
         signal["rank"] = i
     return scored + unscored
+
+
+def calibrate_walk_forward(
+    observations: list[dict], min_obs: int = MIN_OBSERVATIONS
+) -> dict:
+    """Calibración fuera de muestra: cada predicción usa solo el pasado.
+
+    `calibrate()` ajusta la tabla con TODAS las observaciones y luego publica
+    esas mismas tasas como si fueran predicciones. Es circular: la probabilidad
+    que se enseña para un cubo se calculó, en parte, con los resultados que
+    pretende anticipar. Sobre datos ruidosos eso produce tasas de acierto
+    bonitas que no sobreviven en vivo.
+
+    Aquí cada observación se predice con la tabla construida **únicamente con
+    observaciones anteriores** y se comprueba después. Es reentrenamiento
+    periódico en su forma más estricta —se reajusta en cada paso— y el
+    resultado sí es una estimación honesta de qué acierto cabe esperar.
+
+    Las primeras observaciones no tienen historia suficiente para predecir nada
+    y quedan fuera del recuento en vez de contarse como aciertos gratis.
+    """
+    utiles = [
+        o
+        for o in observations
+        if o.get("score") is not None and o.get("outperformed") is not None
+        and o.get("as_of")
+    ]
+    utiles.sort(key=lambda o: o["as_of"])
+
+    historia: dict[str, list[bool]] = {}
+    aciertos = evaluadas = 0
+    sin_historia = 0
+    por_cubo: dict[str, dict] = {}
+
+    for obs in utiles:
+        cubo = bucket_of(obs["score"])
+        previas = historia.get(cubo, [])
+        if len(previas) >= min_obs:
+            # Predicción con lo que se sabía ANTES de esta observación.
+            predicho = sum(previas) / len(previas) > 0.5
+            acerto = predicho == bool(obs["outperformed"])
+            aciertos += acerto
+            evaluadas += 1
+            entrada = por_cubo.setdefault(cubo, {"n": 0, "aciertos": 0})
+            entrada["n"] += 1
+            entrada["aciertos"] += acerto
+        else:
+            sin_historia += 1
+        historia.setdefault(cubo, []).append(bool(obs["outperformed"]))
+
+    tasa = (aciertos / evaluadas) if evaluadas else None
+    bajo, alto = wilson_interval(aciertos, evaluadas) if evaluadas else (None, None)
+    for cubo, e in por_cubo.items():
+        e["tasa"] = round(e["aciertos"] / e["n"], 3)
+
+    return {
+        "n_evaluadas": evaluadas,
+        "sin_historia": sin_historia,
+        "tasa_acierto": round(tasa, 4) if tasa is not None else None,
+        "intervalo": [round(bajo, 4), round(alto, 4)] if evaluadas else None,
+        "por_cubo": por_cubo,
+        "fiable": evaluadas >= MIN_OBSERVATIONS,
+        "nota": (
+            "Cada predicción se hace con la tabla construida solo con "
+            "observaciones anteriores, y se comprueba después. Es la única "
+            "forma de estimar el acierto esperable: la calibración normal "
+            "ajusta con la muestra entera y luego publica esas mismas tasas "
+            "como predicción, que es circular. Esperar que este número sea "
+            "peor que el de la tabla in-sample es lo normal — si fuera igual, "
+            "sería la señal de que algo no se está midiendo bien."
+        ),
+    }

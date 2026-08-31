@@ -188,6 +188,26 @@ def _imprimir(r: dict, sin_filtro: dict, sin_datos: list[str], con_divisa: bool)
     if sin_filtro["n_operaciones"] > 0:
         print(f"  Sin filtro de tendencia {sin_filtro['n_operaciones']} operaciones, "
               f"esperanza {pct(sin_filtro.get('esperanza_pct'))}")
+    d = r.get("distribucion") or {}
+    if d.get("n"):
+        print("\n  Distribución del resultado (percentiles reales, no supuestos):")
+        print(f"    bajista (p10) {pct(d['p10']):>9}   una de cada diez fue peor")
+        print(f"    base   (p50)  {pct(d['mediana']):>9}   la operación corriente")
+        print(f"    alcista (p90) {pct(d['p90']):>9}   una de cada diez fue mejor")
+
+    v = r.get("ventanas") or {}
+    if v.get("ventanas"):
+        print("\n  Por ventanas (¿la ventaja es estable o sale de un tramo?):")
+        for w in v["ventanas"]:
+            print(f"    {w['desde']} → {w['hasta']}  n={w['n']:<4} "
+                  f"esperanza {pct(w['esperanza_pct']):>9}  aciertos {w['tasa_acierto']*100:.0f} %")
+        print(f"    {v['nota']}")
+
+    dc = r.get("desglose_costes") or {}
+    if dc.get("por_lado"):
+        partes = " + ".join(f"{k} {v}" for k, v in dc["por_lado"].items())
+        print(f"\n  Costes por lado: {partes} = {dc['total_por_lado_pct']} %")
+
     if sin_datos:
         print(f"  Sin datos               {len(sin_datos)}: {', '.join(sin_datos[:8])}"
               f"{'…' if len(sin_datos) > 8 else ''}")

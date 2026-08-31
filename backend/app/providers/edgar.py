@@ -104,9 +104,19 @@ def _annual_entries(units: list[dict], is_flow: bool) -> dict[str, dict]:
                 continue
             if not 300 <= days <= 400:
                 continue
-        # El mismo año puede aparecer en varios filings (reexpresado):
-        # la iteración en orden deja el más reciente.
-        out[end[:4]] = entry
+        # LOOK-AHEAD BIAS. El mismo ejercicio aparece en varios filings cuando
+        # la empresa lo reexpresa, y quedarse con el más reciente mete en un
+        # backtest de 2021 una cifra corregida en 2023 — información que nadie
+        # tenía entonces. Filtrar por fecha de filing NO basta si el valor ya
+        # es el reexpresado: hay que quedarse con el que se publicó primero.
+        #
+        # Se conserva también `filed`, la fecha real de publicación de ESE
+        # dato, que es más precisa que el retardo de 90 días que el backtest
+        # tenía que suponer.
+        year = end[:4]
+        previo = out.get(year)
+        if previo is None or (entry.get("filed") or "9999") < (previo.get("filed") or "9999"):
+            out[year] = entry
     return out
 
 
@@ -139,6 +149,13 @@ def parse_companyfacts(facts_json: dict) -> list[dict]:
                     period[field] = entry.get("val")
                     if entry["end"] > period["end_date"]:
                         period["end_date"] = entry["end"]
+                # La fecha de publicación más tardía entre los campos del
+                # ejercicio: el periodo completo no se conoció antes que su
+                # último dato. Quedarse con la más temprana adelantaría la
+                # disponibilidad, que es el sesgo que esto viene a evitar.
+                filed = entry.get("filed")
+                if filed and filed > period.get("filed_at", ""):
+                    period["filed_at"] = filed
             return  # primera etiqueta con datos anuales gana
 
     for field, tags in _FLOW_TAGS.items():

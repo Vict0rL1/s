@@ -210,6 +210,7 @@ def decide(
             "levels": niveles_posicion,
             "triggers": disparadores,
             "confidence": _confianza(signal, reglas),
+            "escenarios": _escenarios(reglas),
             "owned": True,
             "pnl_pct": pnl_pct,
         }
@@ -292,7 +293,35 @@ def decide(
         "levels": niveles if accion in {"comprar", "vigilar"} else None,
         "triggers": disparadores,
         "confidence": _confianza(signal, reglas),
+        "escenarios": _escenarios(reglas),
         "owned": False,
+    }
+
+
+def _escenarios(reglas: dict | None) -> dict | None:
+    """Qué pasó de verdad con operaciones como esta, en tres escenarios.
+
+    Un stop y un objetivo describen dónde SALDRÍAS, no qué sueles ganar. Son
+    dos cosas distintas: casi la mitad de las operaciones no llegan a ninguno
+    de los dos y vencen por plazo en algún punto intermedio. Estos percentiles
+    salen del histórico simulado, así que describen lo que pasó — no un
+    supuesto sobre lo que pasará.
+    """
+    if not reglas or not reglas.get("fiable"):
+        return None
+    dist = reglas.get("distribucion") or {}
+    escenarios = dist.get("escenarios")
+    if not escenarios or dist.get("n", 0) < 30:
+        return None
+    return {
+        **escenarios,
+        "n": dist["n"],
+        "nota": (
+            f"De {dist['n']} operaciones simuladas con estas reglas: la mitad "
+            f"quedó por encima de {escenarios['base']:+.1f} %, una de cada diez "
+            f"por debajo de {escenarios['bajista']:+.1f} % y una de cada diez "
+            f"por encima de {escenarios['alcista']:+.1f} %."
+        ),
     }
 
 

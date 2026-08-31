@@ -156,6 +156,38 @@ function DecisionPlan({ decision }: { decision: Decision }) {
         </div>
       )}
 
+      {/* Un stop y un objetivo dicen dónde SALDRÍAS, no qué sueles ganar: casi
+          la mitad de las operaciones no llegan a ninguno de los dos y vencen
+          por plazo en un punto intermedio. Estos tres números salen del
+          histórico simulado, así que describen lo que pasó. */}
+      {decision.escenarios && (
+        <div className="rounded-lg bg-slate-100 p-3">
+          <div className="text-[10px] uppercase tracking-wide text-slate-400">
+            Qué pasó con operaciones como esta ({decision.escenarios.n} simuladas)
+          </div>
+          <div className="mt-1.5 grid grid-cols-3 gap-3">
+            {(
+              [
+                ['Bajista', decision.escenarios.bajista, 'text-red-600'],
+                ['Base', decision.escenarios.base, 'text-slate-900'],
+                ['Alcista', decision.escenarios.alcista, 'text-emerald-700'],
+              ] as const
+            ).map(([label, valor, tono]) => (
+              <div key={label}>
+                <div className="text-[10px] text-slate-400">{label}</div>
+                <div className={`text-sm font-medium tabular-nums ${tono}`}>
+                  {valor >= 0 ? '+' : ''}
+                  {valor.toFixed(1)} %
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] leading-snug text-slate-400">
+            {decision.escenarios.nota}
+          </p>
+        </div>
+      )}
+
       {decision.triggers.length > 0 && (
         <div>
           <div className="text-[10px] uppercase tracking-wide text-slate-400">

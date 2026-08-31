@@ -37,6 +37,7 @@ from app.analysis.signal import (
     UNFAVORABLE_MAX,
     build_signal,
     calibrate,
+    calibrate_walk_forward,
     rank_universe,
 )
 from app.analysis.markets import (
@@ -947,6 +948,10 @@ def run_backtest(
 
     result = run_walk_forward(universe, dates, request.horizon_months)
     calibration = calibrate(result["observations"])
+    # La tabla de arriba se ajusta con la muestra entera y luego publica
+    # esas mismas tasas como predicción, que es circular. Esta se ajusta
+    # solo con el pasado de cada observación: es la estimación honesta.
+    fuera_de_muestra = calibrate_walk_forward(result["observations"])
 
     if result["n_observations"] > 0:
         import json
@@ -965,6 +970,7 @@ def run_backtest(
     n = result["n_observations"]
     return {
         "calibration": calibration,
+        "calibracion_fuera_de_muestra": fuera_de_muestra,
         "n_observations": n,
         "n_rebalances": result["n_rebalances"],
         "overall_hit_rate": (hits / n) if n else None,

@@ -461,14 +461,42 @@ año. Tres decisiones lo gobiernan:
 - **Se entra al cierre siguiente a la señal.** Comprar al precio del día en que
   se conoce la señal es comprar con información que aún no tenías. Es el error
   que hace brillar a los backtests caseros.
-- **Los costes van dentro.** Comisión, deslizamiento y —por defecto— la
-  conversión CAD→USD, que en un bróker canadiense ronda el 1,5 % por lado. Un
-  sistema con stops rota posiciones, así que el coste no es un detalle: son
-  ~3,3 % por operación completa, y suele pesar más que la ventaja del modelo.
+- **Los costes van dentro, desagregados.** Comisión (0,10 %), media horquilla
+  (0,03 %), deslizamiento (0,02 %) y —por defecto— conversión CAD→USD (1,50 %),
+  todos **por lado**: una operación completa paga el doble, ~3,3 %. Van
+  separados porque son mecanismos distintos y ajustarlos al bróker propio exige
+  saber cuál toca. La horquilla es *media* porque se cruza una vez por lado, no
+  entera.
 - **Ante la duda, el caso malo.** Con datos diarios no se sabe si dentro de una
   sesión se tocó antes el stop o el objetivo: se asume stop. Y la salida usa el
   cierre real, no el precio del stop, porque un hueco a la baja no te llena
   donde querías.
+
+**Ventanas rodantes.** El periodo se parte en cuatro y cada una se mide por
+separado, porque una media agregada no puede contestar a la pregunta que
+importa: *¿la ventaja es estable o sale entera de un tramo afortunado?* Un
+sistema que gana en tres ventanas y pierde en una es otra cosa que uno que gana
+en las cuatro — y el promedio los presenta idénticos.
+
+**Distribución, no un número.** Se publican percentiles reales del histórico
+simulado (p10 / mediana / p90, etiquetados bajista / base / alcista), no
+supuestos. Dos sistemas con la misma media son cosas muy distintas si uno gana
+poco casi siempre y el otro pierde nueve veces y acierta una enorme. La mediana
+describe la operación corriente; el p10, lo que hay que poder aguantar.
+
+**Calibración fuera de muestra.** `calibrate()` ajusta la tabla con TODAS las
+observaciones y luego publica esas mismas tasas como si fueran predicciones —
+es circular. `calibrate_walk_forward()` predice cada observación usando solo las
+anteriores y comprueba después: reentrenamiento en cada paso. Ese número será
+peor que el in-sample, y **si sale igual es señal de que algo no se está
+midiendo bien**.
+
+**Point-in-time de verdad, no solo por fecha de filing.** EDGAR devuelve las
+cifras **reexpresadas**: puntuar 2021 con un dato corregido en 2023 es
+look-ahead aunque se respete la fecha de publicación. Ahora se conserva el valor
+tal como se reportó **la primera vez**, junto con la fecha real en que ese dato
+concreto se publicó — más precisa que el retardo de 90 días que había que
+suponer. La disponibilidad se degrada, nunca se adelanta.
 
 Siempre se compara contra **comprar el universo entero a ciegas** en las mismas
 fechas. Un 55 % de aciertos no significa nada si no hacer nada daba más — y en

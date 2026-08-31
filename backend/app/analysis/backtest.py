@@ -70,8 +70,14 @@ def point_in_time_period(
         end = _to_date(period.get("end_date"))
         if end is None:
             continue
-        # Primer 10-K presentado después del cierre del ejercicio.
-        published = next(
+        # Orden de preferencia para saber CUÁNDO se conoció este ejercicio:
+        # 1) la fecha de publicación del propio dato, que EDGAR entrega por
+        #    hecho y es la respuesta exacta;
+        # 2) el primer 10-K presentado tras el cierre;
+        # 3) un retardo conservador de 90 días.
+        # Se degrada, nunca se adelanta: suponer disponibilidad antes de tiempo
+        # es exactamente el sesgo que este módulo existe para evitar.
+        published = _to_date(period.get("filed_at")) or next(
             (_to_date(f["filed_at"]) for f in annual_filings if _to_date(f["filed_at"]) > end),
             end + timedelta(days=90),
         )

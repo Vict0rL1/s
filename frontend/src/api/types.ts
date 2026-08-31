@@ -581,6 +581,14 @@ export interface Decision {
   label: string
   reasons: string[]
   levels: DecisionLevels | null
+  /** Percentiles reales del histórico simulado, no supuestos. */
+  escenarios: {
+    bajista: number
+    base: number
+    alcista: number
+    n: number
+    nota: string
+  } | null
   triggers: string[]
   /** `refutada` = las reglas se probaron contra histórico y perdieron dinero. */
   confidence: 'calibrada' | 'refutada' | 'sin_calibrar' | 'ninguna'

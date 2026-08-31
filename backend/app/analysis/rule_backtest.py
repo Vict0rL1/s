@@ -57,9 +57,18 @@ from app.analysis.signal import FAVORABLE_MIN, wilson_interval
 # --- Costes. Los valores por defecto describen a un inversor particular
 # canadiense comprando acciones estadounidenses, que es el caso de esta app. ---
 
-COMISION_PCT = 0.10   # ida o vuelta, sobre el importe. ~10 $ en una posición de 10 000 $
-DIVISA_PCT = 1.50     # conversión CAD→USD en un bróker canadiense típico, por lado
-DESLIZAMIENTO_PCT = 0.05  # diferencia entre el precio visto y el ejecutado
+# Los cuatro se cobran por LADO (entrar y salir), así que una operación
+# completa paga el doble. Van separados a propósito: son mecanismos distintos y
+# quien quiera ajustarlos a su bróker necesita saber cuál toca.
+COMISION_PCT = 0.10       # ~10 $ en una posición de 10.000 $
+HORQUILLA_PCT = 0.03      # media horquilla compra-venta: se cruza al operar
+DESLIZAMIENTO_PCT = 0.02  # el precio se mueve entre que decides y ejecutas
+DIVISA_PCT = 1.50         # conversión CAD→USD en un bróker canadiense típico
+
+# La horquilla es la mitad del diferencial porque se cruza una vez por lado, no
+# entero: comprar paga la mitad de arriba y vender la mitad de abajo. Los
+# valores son de una gran cotizada líquida; en una pequeña la horquilla puede
+# ser diez veces mayor y ahí es donde se comen las estrategias que rotan mucho.
 
 MAX_SESIONES = 252    # un año: si no salta stop ni objetivo, se cierra y se cuenta
 SESIONES_SMA = 200
@@ -68,7 +77,28 @@ MIN_BARRAS_VOL = 63
 
 def costes_por_lado(con_divisa: bool = True) -> float:
     """Coste porcentual de UNA operación (entrar o salir)."""
-    return COMISION_PCT + DESLIZAMIENTO_PCT + (DIVISA_PCT if con_divisa else 0.0)
+    return (
+        COMISION_PCT
+        + HORQUILLA_PCT
+        + DESLIZAMIENTO_PCT
+        + (DIVISA_PCT if con_divisa else 0.0)
+    )
+
+
+def desglose_de_costes(con_divisa: bool = True) -> dict:
+    """El coste, desagregado. Un total sin desglose no se puede discutir."""
+    partes = {
+        "comision": COMISION_PCT,
+        "horquilla": HORQUILLA_PCT,
+        "deslizamiento": DESLIZAMIENTO_PCT,
+    }
+    if con_divisa:
+        partes["divisa"] = DIVISA_PCT
+    return {
+        "por_lado": {k: round(v, 3) for k, v in partes.items()},
+        "total_por_lado_pct": round(sum(partes.values()), 3),
+        "total_ida_y_vuelta_pct": round(2 * sum(partes.values()), 3),
+    }
 
 
 def _serie(bars: list[dict]) -> list[tuple[date, float]]:
@@ -364,10 +394,17 @@ def _resumen(
         ),
         "coste_por_lado_pct": round(coste_lado, 2),
         "coste_total_por_operacion_pct": round(2 * coste_lado, 2),
+        "desglose_costes": desglose_de_costes(coste_lado > COMISION_PCT + HORQUILLA_PCT + DESLIZAMIENTO_PCT),
         "filtro_tendencia": exigir_tendencia,
         "umbral": favorable_min,
         "descartes": descartes,
         "operaciones": operaciones[-200:],
+        # Una media resume mal: dos sistemas con el mismo +2 % son cosas
+        # distintas si uno gana poco casi siempre y el otro pierde nueve veces
+        # y acierta una enorme. Y una ventaja que sale entera de un tramo no es
+        # una ventaja. Por eso van los percentiles y cada ventana por separado.
+        "distribucion": distribucion(operaciones),
+        "ventanas": ventanas_rodantes(operaciones),
         "sesgo_supervivencia": _AVISO_SUPERVIVENCIA,
         "metodologia": (
             "Simulación por eventos. En cada fecha de rebalanceo se puntúa el "
@@ -418,3 +455,121 @@ def rebalance_dates_mensuales(start: date, end: date, step_months: int = 1) -> l
         mes = (mes - 1) % 12 + 1
         actual = date(año, mes, min(actual.day, 28))
     return fechas
+
+
+# --- Validación por ventanas y distribución de resultados --------------------
+#
+# Una esperanza media resume mal lo que va a pasarte. Dos sistemas con el mismo
+# +2 % medio son cosas distintas si uno gana un 2 % casi siempre y el otro
+# pierde un 5 % nueve veces y gana un 65 % la décima. Y un +2 % que sale entero
+# de un único año alcista no es una ventaja, es una coincidencia con muestra.
+#
+# Por eso aquí no se publica un número: se publican percentiles y el resultado
+# de cada ventana por separado.
+
+MIN_OPERACIONES_VENTANA = 10
+
+
+def _percentil(valores: list[float], q: float) -> float | None:
+    """Percentil por interpolación lineal. Sin numpy: son listas cortas."""
+    if not valores:
+        return None
+    ordenados = sorted(valores)
+    if len(ordenados) == 1:
+        return round(ordenados[0], 2)
+    pos = q * (len(ordenados) - 1)
+    bajo = int(pos)
+    alto = min(bajo + 1, len(ordenados) - 1)
+    peso = pos - bajo
+    return round(ordenados[bajo] * (1 - peso) + ordenados[alto] * peso, 2)
+
+
+def distribucion(operaciones: list[dict]) -> dict:
+    """La forma completa del resultado, no solo su media.
+
+    `bajista`/`base`/`alcista` son percentiles reales del histórico simulado
+    (10, 50 y 90), no supuestos inventados: describen lo que pasó, no lo que
+    alguien cree que pasará.
+    """
+    netos = [o["neto_pct"] for o in operaciones]
+    if not netos:
+        return {"n": 0}
+    return {
+        "n": len(netos),
+        "p10": _percentil(netos, 0.10),
+        "p25": _percentil(netos, 0.25),
+        "mediana": _percentil(netos, 0.50),
+        "p75": _percentil(netos, 0.75),
+        "p90": _percentil(netos, 0.90),
+        "media": round(sum(netos) / len(netos), 2),
+        "escenarios": {
+            "bajista": _percentil(netos, 0.10),
+            "base": _percentil(netos, 0.50),
+            "alcista": _percentil(netos, 0.90),
+        },
+        "nota": (
+            "Percentiles del histórico simulado, no supuestos. La MEDIANA suele "
+            "estar por debajo de la media porque unas pocas operaciones muy "
+            "buenas tiran del promedio: la mediana describe mejor la operación "
+            "corriente, y el p10 lo que hay que poder aguantar."
+        ),
+    }
+
+
+def ventanas_rodantes(operaciones: list[dict], n_ventanas: int = 4) -> dict:
+    """Parte el periodo en ventanas y mide cada una por separado.
+
+    Es la pregunta que una media agregada no puede contestar: ¿la ventaja es
+    estable, o sale entera de un tramo afortunado? Un sistema que gana en tres
+    de cuatro ventanas es otra cosa que uno que pierde en tres y compensa con
+    un año excepcional — y el promedio los presenta idénticos.
+    """
+    if len(operaciones) < MIN_OPERACIONES_VENTANA * 2:
+        return {
+            "ventanas": [],
+            "estable": None,
+            "nota": (
+                f"Hacen falta al menos {MIN_OPERACIONES_VENTANA * 2} operaciones "
+                "para partir el periodo en ventanas con sentido."
+            ),
+        }
+
+    ordenadas = sorted(operaciones, key=lambda o: o["entrada_fecha"])
+    tamano = len(ordenadas) // n_ventanas
+    ventanas = []
+    for i in range(n_ventanas):
+        inicio = i * tamano
+        fin = len(ordenadas) if i == n_ventanas - 1 else (i + 1) * tamano
+        trozo = ordenadas[inicio:fin]
+        if len(trozo) < MIN_OPERACIONES_VENTANA:
+            continue
+        netos = [o["neto_pct"] for o in trozo]
+        ventanas.append(
+            {
+                "desde": trozo[0]["entrada_fecha"],
+                "hasta": trozo[-1]["entrada_fecha"],
+                "n": len(trozo),
+                "esperanza_pct": round(sum(netos) / len(netos), 2),
+                "tasa_acierto": round(sum(1 for o in trozo if o["ganadora"]) / len(trozo), 3),
+                "mediana_pct": _percentil(netos, 0.50),
+            }
+        )
+
+    positivas = sum(1 for v in ventanas if v["esperanza_pct"] > 0)
+    estable = bool(ventanas) and positivas == len(ventanas)
+    return {
+        "ventanas": ventanas,
+        "ventanas_positivas": positivas,
+        "estable": estable,
+        "nota": (
+            f"{positivas} de {len(ventanas)} ventanas con esperanza positiva. "
+            + (
+                "La ventaja aparece en todas, que es lo mínimo para creérsela."
+                if estable
+                else "Una ventaja que solo aparece en algunas ventanas puede ser "
+                "suerte de un tramo concreto, no una propiedad del sistema."
+            )
+        )
+        if ventanas
+        else "Sin ventanas evaluables.",
+    }

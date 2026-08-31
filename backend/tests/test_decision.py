@@ -283,3 +283,26 @@ def test_a_una_posicion_abierta_los_resultados_solo_se_le_avisan():
         resultados_en="2026-08-25",
     )
     assert d["action"] == "mantener"
+
+
+# --- Escenarios: una distribución, no un número ------------------------------
+
+
+def _reglas_con(dist):
+    return {"fiable": True, "esperanza_pct": 2.0, "ventaja_pct": 1.0, "distribucion": dist}
+
+
+def test_se_publican_escenarios_cuando_hay_histórico_suficiente():
+    """Un stop y un objetivo dicen dónde saldrías, no qué sueles ganar."""
+    reglas = _reglas_con(
+        {"n": 80, "escenarios": {"bajista": -14.0, "base": 1.5, "alcista": 22.0}}
+    )
+    e = decide(señal(0.8), precio(), reglas=reglas)["escenarios"]
+    assert e["bajista"] == -14.0 and e["base"] == 1.5 and e["alcista"] == 22.0
+    assert "una de cada diez" in e["nota"]
+
+
+def test_sin_muestra_suficiente_no_se_inventan_escenarios():
+    reglas = _reglas_con({"n": 12, "escenarios": {"bajista": -5, "base": 1, "alcista": 9}})
+    assert decide(señal(0.8), precio(), reglas=reglas)["escenarios"] is None
+    assert decide(señal(0.8), precio())["escenarios"] is None
