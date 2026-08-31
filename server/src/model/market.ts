@@ -1,3 +1,4 @@
+import { devig } from '../market/devig.ts';
 // ---------------------------------------------------------------------------
 // MARKET ODDS → IMPLIED PROBABILITY
 // ---------------------------------------------------------------------------
@@ -25,16 +26,21 @@ export interface MarketProbabilities {
   overround: number; // bookmaker margin, e.g. 1.045
 }
 
-/** Convert a two-way decimal-odds market into vig-free implied probabilities. */
+/**
+ * Convert a two-way decimal-odds market into vig-free implied probabilities.
+ *
+ * El reparto del margen vive en market/devig.ts, una sola vez para todo el servidor.
+ * Ver allí la comparación entre el multiplicativo, Shin y el de potencia sobre 5.281
+ * moneylines reales de la NFL, y por qué se quedó el que se quedó.
+ */
 export function impliedProbabilities(odds1: number, odds2: number): MarketProbabilities | null {
   if (!(odds1 > 1) || !(odds2 > 1)) return null;
-  const raw1 = 1 / odds1;
-  const raw2 = 1 / odds2;
-  const overround = raw1 + raw2;
+  const { probs, overround } = devig([odds1, odds2]);
+  const raw1 = probs[0];
   // Round one side and derive the other so the pair always sums to exactly 1 —
   // rounding both independently can yield 50.0%/50.1% and undermine the figures
   // shown side by side. 5 decimals keeps far more resolution than we display.
-  const implied1 = round5(raw1 / overround);
+  const implied1 = round5(raw1);
   return {
     odds1,
     odds2,

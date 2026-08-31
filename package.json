@@ -39,7 +39,9 @@
     "study:ht": "npm run study:ht --workspace server --",
     "study:ht-val": "npm run study:ht-val --workspace server --",
     "doctor": "npm run doctor --workspace server --",
-    "study:sigma": "npm run study:sigma --workspace server --"
+    "study:sigma": "npm run study:sigma --workspace server --",
+    "study:devig": "npm run study:devig --workspace server --",
+    "study:features": "npm run study:features --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

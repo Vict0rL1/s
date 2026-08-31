@@ -30,6 +30,7 @@
 // See docs/FOOTBALL.md.
 // ===========================================================================
 
+import { devig } from '../market/devig.ts';
 export const INITIAL_ELO = 1500;
 export const MEAN_ELO = 1500;
 
@@ -395,23 +396,24 @@ export function rankedProbabilityScore(
   return sum / 2;
 }
 
-/** Strip the bookmaker margin from three-way decimal odds. */
+/**
+ * Quitar el margen de la casa a un 1X2.
+ *
+ * El reparto en sí vive en market/devig.ts, no aquí. Había cuatro copias de la misma
+ * aritmética repartidas por el proyecto —esta, la del tenis, y dos en el frontend— y
+ * eso no es duplicación cosmética: significa que cambiar de método es cambiar cuatro
+ * cosas y acertar en las cuatro. Se comparó el multiplicativo contra Shin y contra el
+ * de potencia sobre 5.281 moneylines reales de la NFL (`npm run study:devig`); el
+ * porqué de que gane el multiplicativo está escrito allí.
+ */
 export function impliedFrom1X2(
   oddsHome: number,
   oddsDraw: number,
   oddsAway: number,
 ): (MarketProbabilities1X2 & { overround: number }) | null {
   if (!(oddsHome > 1) || !(oddsDraw > 1) || !(oddsAway > 1)) return null;
-  const rawH = 1 / oddsHome;
-  const rawD = 1 / oddsDraw;
-  const rawA = 1 / oddsAway;
-  const overround = rawH + rawD + rawA;
-  return {
-    home: rawH / overround,
-    draw: rawD / overround,
-    away: rawA / overround,
-    overround,
-  };
+  const { probs, overround } = devig([oddsHome, oddsDraw, oddsAway]);
+  return { home: probs[0], draw: probs[1], away: probs[2], overround };
 }
 
 // ===========================================================================
