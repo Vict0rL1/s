@@ -796,6 +796,7 @@ ves, en vez de fallar en silencio.
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
+| `npm run study:baselines` | **Lo primero que hay que mirar**: el modelo contra la línea de cierre, contra solo la ventaja de local y contra un Elo pelado, con intervalos por bootstrap |
 | `npm run study:devig` | Compara **multiplicativo vs. Shin vs. potencia** para quitar el margen de la casa, sobre 5.281 moneylines reales de la NFL |
 | `npm run study:features` | Mide cada feature del modelo de fútbol por **log loss fuera de muestra**: lo que no se gana el sitio, fuera |
 | `npm run study:sigma` | **Fútbol**: mide la escala del error del Elo (`ELO_SIGMA_C`), que fija el «± pp» de todas las tarjetas |
