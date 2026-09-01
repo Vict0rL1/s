@@ -796,6 +796,7 @@ ves, en vez de fallar en silencio.
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
+| `npm run experiments` | **El registro**: cuántas veces se han mirado estos datos, y qué resultados sobreviven a la corrección por comparaciones múltiples |
 | `npm run study:baselines` | **Lo primero que hay que mirar**: el modelo contra la línea de cierre, contra solo la ventaja de local y contra un Elo pelado, con intervalos por bootstrap |
 | `npm run study:devig` | Compara **multiplicativo vs. Shin vs. potencia** para quitar el margen de la casa, sobre 5.281 moneylines reales de la NFL |
 | `npm run study:features` | Mide cada feature del modelo de fútbol por **log loss fuera de muestra**: lo que no se gana el sitio, fuera |
@@ -804,6 +805,55 @@ ves, en vez de fallar en silencio.
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 | `npm run lint` | Lint real (oxlint, solo la categoría **correctness**) |
+
+## El registro de experimentos y el holdout final
+
+Un intervalo del 95 % significa «si esto fuera ruido, me equivocaría 1 de cada 20
+veces». Vale para **una** comparación. Cuando llevas veinte sobre los mismos partidos
+esperas una falsa por pura aritmética — y es justo la que se publica, porque es la que
+salió bonita.
+
+Este proyecto llevaba nueve valores del decay, cuatro pesos de Glicko, seis
+ablaciones, tres baselines y dos métodos de de-vig sobre el mismo archivo de fútbol,
+cada uno con su intervalo del 95 % citado como si fuera el único.
+
+```bash
+npm run experiments
+```
+
+Cada comparación se apunta en `experiments/registry.jsonl` —hipótesis, features,
+hiperparámetros, resultado, veredicto— **gane o pierda**: un registro donde solo se
+apuntan los aciertos cuenta mal el denominador, y el denominador es lo único que da
+sentido a un p de 0,03. Es un fichero versionado y no una tabla de la base de datos
+porque `data/` se borra al reingerir, y un contador que se puede perder no cuenta nada.
+
+El CLI aplica las dos correcciones, que contestan preguntas distintas: **Bonferroni**
+controla la probabilidad de cometer al menos un error en toda la familia —el listón
+para decir «esto es real»— y **Benjamini–Hochberg** controla la proporción de falsos
+entre los declarados buenos, que es el listón razonable para una lista de candidatos.
+
+Lo primero que dijo al encenderlo fue incómodo: de once experimentos sobre el fútbol,
+**dos cosas que están en producción no pasan Bonferroni**.
+
+### Tres conjuntos, no dos
+
+Hasta ahora había entrenamiento y «reservado». Y el reservado se miró en el barrido
+del decay, en los pesos de Glicko, en las ablaciones y en los baselines. Después de la
+primera mirada dejó de ser un holdout: si eliges entre veinte opciones por lo que hace
+un conjunto, ese conjunto ya está dentro de la decisión aunque no hayas entrenado sobre
+él.
+
+| | fútbol | NFL |
+|---|---|---|
+| entrenamiento | hasta 2024 | hasta 2022 |
+| validación (elige) | 2025 | 2023 |
+| **holdout final (cerrado)** | **2026 →** | **2024 →** |
+
+El candado es código, no un acuerdo: `assertNotFinalHoldout()` **lanza**, el holdout no
+entra ni en los agregados, y abrirlo exige `unlockFinalHoldout("motivo")` — que escribe
+la apertura en el registro. La constancia importa más que el candado: un candado se
+salta editando el fichero, pero el registro convierte esa edición en algo que hay que
+explicar.
 
 ### Por qué `npm run lint` solo mira una categoría
 

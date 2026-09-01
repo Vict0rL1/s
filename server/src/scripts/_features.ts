@@ -20,11 +20,21 @@
 //      app: cuando llega a un partido, los ratings solo han visto los anteriores.
 //      Ningún partido se puntúa con información suya ni posterior.
 //
-//   2. TEMPORADAS RESERVADAS. Lo anterior no protege de la otra fuga, la de quien
-//      elige los parámetros: si miro el agregado, ajusto, y vuelvo a mirar el
-//      agregado, acabo ajustando al archivo entero. Así que se reporta también solo
-//      2025–2026, las últimas temporadas, que es donde una feature sobreajustada se
-//      cae.
+//   2. TRES CONJUNTOS, no dos. Lo anterior no protege de la otra fuga, la de quien
+//      elige los parámetros: si miro un conjunto, ajusto, y vuelvo a mirarlo, acabo
+//      ajustando a él. Y eso es justo lo que pasó aquí — el conjunto que este script
+//      llamaba «reservado» se miró en el barrido del decay, en los cuatro pesos de
+//      Glicko, en las seis ablaciones y en los tres baselines.
+//
+//      Así que ahora: entrenamiento (hasta 2024) construye, VALIDACIÓN (2025) elige, y
+//      el HOLDOUT FINAL (2026 en adelante) no se toca. El holdout no entra ni en el
+//      agregado: ver experiments/holdout.ts, que lanza si alguien lo intenta.
+//
+//   3. Y COMO SE MIRA MUCHAS VECES, SE CUENTA. Cada comparación de este fichero se
+//      apunta en experiments/registry.jsonl, y `npm run experiments` aplica la
+//      corrección por comparaciones múltiples. Un intervalo del 95 % en el
+//      experimento número veinte no vale lo que dice, y el registro es lo que impide
+//      olvidarlo.
 //
 // ===========================================================================
 // CÓMO SE LEE LA TABLA
@@ -44,6 +54,8 @@ import {
 import { loadMatches, replayMatches, type ReplayOptions } from '../football/ratings.ts';
 import { footballConfig } from '../config.ts';
 import { getDb } from '../db.ts';
+import { recordExperiment, bootstrapP, familySize } from '../experiments/registry.ts';
+import { splitOf, FINAL_HOLDOUT_FROM, VALIDATION_SEASON } from '../experiments/holdout.ts';
 
 interface Result {
   ll: number;
@@ -94,9 +106,13 @@ function evaluate(opts: ReplayOptions, warmup = 10): Result {
               ? p.draw
               : p.away;
         const q = Math.min(Math.max(actual, 1e-9), 1);
+        const where = splitOf('football', Number(match.season));
+        // EL HOLDOUT NO ENTRA NI EN EL TOTAL. Sumarlo al agregado y luego decir que no
+        // se ha mirado sería exactamente la trampa que el candado existe para impedir.
+        if (where === 'holdout') return;
         ll -= Math.log(q);
         n++;
-        if (Number(match.season) >= 2025) {
+        if (where === 'validation') {
           llRecent -= Math.log(q);
           nRecent++;
           perMatch.push(-Math.log(q));
@@ -118,7 +134,10 @@ function evaluate(opts: ReplayOptions, warmup = 10): Result {
  * Devuelve el intervalo del 95 % de la diferencia media (b − a): si contiene el cero,
  * no hay mejora que defender por muy bonito que sea el punto estimado.
  */
-function pairedCI(a: number[], b: number[]): { mean: number; lo: number; hi: number } {
+function pairedCI(
+  a: number[],
+  b: number[],
+): { mean: number; lo: number; hi: number; p: number; resampled: number[] } {
   const d = a.map((x, i) => b[i] - x);
   const mean = d.reduce((s, x) => s + x, 0) / d.length;
   let seed = 987654321;
@@ -135,35 +154,79 @@ function pairedCI(a: number[], b: number[]): { mean: number; lo: number; hi: num
     for (let k = 0; k < d.length; k++) s += d[(rnd() * d.length) | 0];
     means.push(s / d.length);
   }
-  means.sort((x, y) => x - y);
-  return { mean, lo: means[10], hi: means[389] };
+  const sorted = [...means].sort((x, y) => x - y);
+  return {
+    mean,
+    lo: sorted[10],
+    hi: sorted[389],
+    p: bootstrapP(means),
+    resampled: means,
+  };
 }
 
 const base = evaluate({});
 console.log(
-  `Base: ${base.n.toLocaleString('es')} partidos · log loss ${base.ll.toFixed(5)}` +
-    `   ·   2025–26: ${base.nRecent.toLocaleString('es')} partidos, ${base.llRecent.toFixed(5)}\n`,
+  `Base: ${base.n.toLocaleString('es')} partidos (entrenamiento + validación) · ` +
+    `log loss ${base.ll.toFixed(5)}`,
+);
+console.log(
+  `      validación ${VALIDATION_SEASON.football}: ${base.nRecent.toLocaleString('es')} partidos, ` +
+    `${base.llRecent.toFixed(5)}`,
+);
+console.log(
+  `      holdout final desde ${FINAL_HOLDOUT_FROM.football}: CERRADO, no entra en ningún número de aquí.`,
+);
+console.log(
+  `      experimentos ya registrados sobre este conjunto: ` +
+    `${familySize({ sport: 'football', split: 'validation', n: base.nRecent })}\n`,
 );
 
-function row(label: string, opts: ReplayOptions): void {
+/**
+ * Una ablación: apagar algo y anotar qué pasa.
+ *
+ * Se registra SIEMPRE, sirva o no. Un registro que solo apunta los aciertos cuenta mal
+ * el denominador, y el denominador es justo lo que hace falta para saber cuánto vale
+ * un p de 0.03.
+ */
+function row(label: string, opts: ReplayOptions, hypothesis: string): void {
   const r = evaluate(opts);
   const d = r.ll - base.ll;
-  const dr = r.llRecent - base.llRecent;
+  const ci = pairedCI(base.perMatch, r.perMatch);
   const verdict = d > 0.0005 ? 'sirve' : d < -0.0005 ? '← ESTORBA' : 'no aporta';
   console.log(
     `  ${label.padEnd(34)} ${(d >= 0 ? '+' : '') + d.toFixed(5)}   ` +
-      `${(dr >= 0 ? '+' : '') + dr.toFixed(5)}   ${verdict}`,
+      `${(ci.mean >= 0 ? '+' : '') + ci.mean.toFixed(5)}  p=${ci.p.toFixed(4)}   ${verdict}`,
   );
+  recordExperiment({
+    hypothesis,
+    dataset: { sport: 'football', split: 'validation', n: base.nRecent },
+    features: Object.keys(opts).filter((k) => k !== 'onMatch'),
+    hyperparams: Object.fromEntries(
+      Object.entries(opts).filter(([k]) => k !== 'onMatch'),
+    ) as Record<string, number | string | boolean>,
+    metric: 'logloss',
+    baseline: 'modelo publicado',
+    result: { delta: ci.mean, ciLo: ci.lo, ciHi: ci.hi, p: ci.p, n: r.nRecent },
+    // El delta es el de QUITARLA. Si quitarla empeora de forma significativa
+    // (intervalo entero por encima de cero), la feature está justificada y sigue en
+    // producción. Si quitarla MEJORA, la feature estorba y habría que borrarla.
+    verdict: ci.lo > 0 ? 'shipped' : ci.hi < 0 ? 'rejected' : 'inconclusive',
+  });
 }
 
 console.log('APAGANDO LO QUE YA ESTÁ  (positivo = apagarlo empeora = la feature sirve)');
-console.log('  feature                             todo      2025–26   veredicto');
-row('sin decay entre temporadas', { carryover: 1 });
-row('sin margen de victoria', { goalWeight: 0 });
-row('sin ataque/defensa por equipo', { strengthAlpha: 0 });
-row('sin forma reciente', { momentumWeight: 0 });
-row('sin descanso / congestión', { restWeight: 0 });
-row('sin ancla de goles móvil', { anchorAlpha: 0 });
+console.log('  feature                             todo    validación   veredicto');
+// La hipótesis se escribe como lo que REALMENTE se prueba: quitar la feature. Así el
+// signo del delta significa lo mismo en todas las filas del registro —negativo = el
+// cambio propuesto mejora— y una ablación se puede leer al lado de una candidata nueva
+// sin traducir mentalmente. Escribirlas como «la feature mejora» dejaba una tabla donde
+// «+0.004» aparecía bajo la columna EMPEORA para algo que en realidad funciona.
+row('sin decay entre temporadas', { carryover: 1 }, 'quitar el decay entre temporadas mejora el log loss');
+row('sin margen de victoria', { goalWeight: 0 }, 'quitar el margen de victoria mejora el log loss');
+row('sin ataque/defensa por equipo', { strengthAlpha: 0 }, 'quitar ataque/defensa por equipo mejora el log loss');
+row('sin forma reciente', { momentumWeight: 0 }, 'quitar la forma reciente mejora el log loss');
+row('sin descanso / congestión', { restWeight: 0 }, 'quitar el descanso y la congestión mejora el log loss');
+row('sin ancla de goles móvil', { anchorAlpha: 0 }, 'quitar el ancla de goles móvil mejora el log loss');
 
 // ===========================================================================
 // EL DECAY, ELEGIDO SIN MIRAR EL EXAMEN
@@ -217,6 +280,17 @@ console.log(
       ? '    → empeora de forma significativa: no se toca.'
       : '    → el intervalo CONTIENE el cero: no hay mejora que defender, se deja 0.85.',
 );
+recordExperiment({
+  hypothesis: `carryover ${bestC} mejora sobre el 0.85 publicado`,
+  dataset: { sport: 'football', split: 'validation', n: base.nRecent },
+  features: ['elo-decay'],
+  hyperparams: { carryover: bestC, elegidoCon: 'temporadas <= 2024' },
+  metric: 'logloss',
+  baseline: 'carryover 0.85 (publicado)',
+  result: { delta: ci.mean, ciLo: ci.lo, ciHi: ci.hi, p: ci.p, n: chosenRun.nRecent },
+  verdict: ci.hi < 0 ? 'shipped' : 'inconclusive',
+  notes: 'Barrido de 9 valores. La elección se hizo solo con entrenamiento.',
+});
 
 console.log('\nEL DESCANSO, BARRIDO  (Elo perdidos con la peor congestión)');
 console.log('  restWeight                          todo      2025–26');

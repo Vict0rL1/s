@@ -30,6 +30,8 @@
 import { getDb } from '../db.ts';
 import { normalizeTeamName } from '../football/ingest/teamNames.ts';
 import { parseFootballTxt } from '../football/ingest/openfootballTxt.ts';
+import { readRegistry } from '../experiments/registry.ts';
+import { FINAL_HOLDOUT_FROM } from '../experiments/holdout.ts';
 import { normalCdf, MARGIN_SIGMA as NFL_MARGIN_SIGMA } from '../nfl/model.ts';
 import { recomputeBaseballRatings } from '../baseball/ratings.ts';
 
@@ -836,6 +838,65 @@ function auditGoallessDraws(): void {
  * onto the same one — which, after the fix, can only happen if an id was written by
  * an older build or a source this normalisation does not cover.
  */
+// ===========================================================================
+// EL REGISTRO DE EXPERIMENTOS SIGUE SIENDO VERDAD
+// ===========================================================================
+// Un registro que nadie comprueba se convierte en decoración: basta con que un script
+// deje de llamar a recordExperiment para que el contador se quede corto, y un contador
+// corto hace que Bonferroni sea más permisivo de lo que debe — o sea, exactamente el
+// error que el registro existía para evitar, pero ahora con aspecto de rigor.
+//
+// Así que se comprueba lo que puede romperse en silencio: que las entradas están
+// completas, que ningún experimento dice haberse medido sobre el holdout mientras el
+// candado consta cerrado, y que las hipótesis no se repiten (dos entradas idénticas
+// suelen ser un script corrido dos veces, y eso infla el denominador tanto como
+// olvidarse infla al revés).
+function auditExperimentRegistry(): void {
+  console.log('\n▸ Registro de experimentos');
+  const { experiments, unlocks } = readRegistry();
+  if (experiments.length === 0) {
+    console.log('  registro vacío, saltado');
+    return;
+  }
+  console.log(`  ${experiments.length} experimentos · candado del holdout abierto ${unlocks.length} vez/veces`);
+
+  let incompletos = 0;
+  let pMalos = 0;
+  let ciMalos = 0;
+  for (const e of experiments) {
+    if (!e.hypothesis || !e.baseline || !e.dataset?.sport || !e.metric) incompletos++;
+    if (!(e.result.p >= 0 && e.result.p <= 1)) pMalos++;
+    // El intervalo tiene que contener a su propia estimación. Suena obvio y no lo es:
+    // un generador aleatorio roto produjo exactamente ese síntoma en este proyecto —
+    // IC [87, 97] alrededor de un punto de 82— y pasó desapercibido hasta que alguien
+    // se paró a mirarlo.
+    if (e.result.delta < e.result.ciLo || e.result.delta > e.result.ciHi) ciMalos++;
+  }
+  check('experimentos: todos con hipótesis, baseline, deporte y métrica', incompletos === 0, `${incompletos} incompletos`);
+  check('experimentos: todos los p entre 0 y 1', pMalos === 0, `${pMalos} fuera de rango`);
+  check('experimentos: el intervalo contiene su estimación', ciMalos === 0, `${ciMalos} incoherentes`);
+
+  const sobreHoldout = experiments.filter((e) => e.dataset.split === 'holdout');
+  check(
+    'experimentos: nadie ha medido sobre el holdout sin abrir el candado',
+    sobreHoldout.length === 0 || unlocks.length > 0,
+    `${sobreHoldout.length} entradas sobre el holdout y ninguna apertura registrada`,
+  );
+
+  const vistas = new Map<string, number>();
+  for (const e of experiments) vistas.set(e.hypothesis, (vistas.get(e.hypothesis) ?? 0) + 1);
+  const repes = [...vistas].filter(([, n]) => n > 1);
+  check(
+    'experimentos: sin hipótesis duplicadas',
+    repes.length === 0,
+    repes.map(([h, n]) => `${h} ×${n}`).join('; '),
+  );
+  console.log(
+    `  holdout final: fútbol desde ${FINAL_HOLDOUT_FROM.football}, NFL desde ${FINAL_HOLDOUT_FROM.nfl}` +
+      (unlocks.length === 0 ? ' · intacto' : ' · ⚠ YA ABIERTO'),
+  );
+}
+
 /**
  * Huecos que la FUENTE no tiene, con el motivo, no huecos que toleramos.
  *
@@ -1064,6 +1125,7 @@ function main(): void {
   auditClubNameSplits();
   auditSeasonGaps();
   auditFootballTxtParser();
+  auditExperimentRegistry();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

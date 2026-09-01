@@ -42,7 +42,9 @@
     "study:sigma": "npm run study:sigma --workspace server --",
     "study:devig": "npm run study:devig --workspace server --",
     "study:features": "npm run study:features --workspace server --",
-    "study:baselines": "npm run study:baselines --workspace server --"
+    "study:baselines": "npm run study:baselines --workspace server --",
+    "experiments": "npm run experiments --workspace server --",
+    "seed:experiments": "npm run seed:experiments --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
