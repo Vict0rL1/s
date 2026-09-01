@@ -296,6 +296,10 @@ def comparar(
             for nombre, r in resultados.items()
         },
         "curvas": {n: r["curva"] for n, r in resultados.items()},
+        # Los retornos crudos de la estrategia: el Sharpe deflactado los
+        # necesita para calcular asimetría y curtosis, que un resumen ya
+        # agregado no puede reconstruir.
+        "_retornos_estrategia": estrategia["retornos"],
         "comparaciones": comparaciones,
         "veredicto": _veredicto(resultados, comparaciones),
         "metodologia": (

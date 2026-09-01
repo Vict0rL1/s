@@ -605,6 +605,68 @@ Y mira el **Sharpe**, no solo el retorno: si la estrategia rinde más con peor
 Sharpe, lo dice — el retorno extra viene de asumir más volatilidad, y esa
 palanca se consigue sin modelo, comprando el baseline con margen.
 
+## Registro de experimentos: ¿cuántas veces has mirado?
+
+Si pruebas cuarenta variantes y te quedas con la mejor, esa mejor tiene buen
+Sharpe **por construcción**: con cuarenta intentos sobre ruido puro alguno sale
+bien. El número que publicas no mide la estrategia, mide cuántas veces miraste —
+y nadie lleva la cuenta, porque las variantes descartadas se olvidan enseguida.
+
+`analysis/experiments.py` + tabla `experiments`. Cuatro piezas, y ninguna sirve
+sin las otras tres.
+
+**1· El registro.** Cada ejecución guarda hipótesis, parámetros, periodo,
+universo y resultado. Se escribe **siempre, salga bien o mal**: registrar solo
+los aciertos es justo lo que rompe el descuento, porque el recuento sale corto y
+todo parece mejor de lo que es.
+
+```bash
+.venv/bin/python scripts/run_rule_backtest.py --hipotesis "El filtro de tendencia aporta"
+```
+
+**2· Sharpe deflactado** (Bailey y López de Prado, 2014). Descuenta el Sharpe
+que cabría esperar del mejor de N intentos aunque ninguno tuviera ventaja, y
+devuelve la probabilidad de que el verdadero sea positivo. En la verificación:
+
+| Pruebas registradas | Umbral por haber mirado | DSR | Veredicto |
+|---|---|---|---|
+| 1 | +0,0000 | 0,976 | HALLAZGO |
+| 10 | +0,3030 | 0,723 | NO llega a hallazgo |
+
+**El mismo resultado** deja de ser un hallazgo por haber mirado diez veces. Y el
+DSR solo es tan honesto como el recuento: las variantes que pruebes sin registrar
+lo inflan, y la salida lo dice cada vez.
+
+**3· Corrección por comparaciones múltiples.** Bonferroni y Benjamini-Hochberg
+sobre los tres baselines, porque responden a preguntas distintas: Bonferroni
+controla la probabilidad de *un solo* falso positivo (muy estricto), BH controla
+la *proporción* de falsos entre los declarados — lo adecuado cuando buscas
+candidatos que luego vas a verificar por separado.
+
+**4· Holdout bloqueado.** El último 30 % del periodo queda reservado y ningún
+experimento lo toca; el corte es **cronológico**, porque partir al azar dejaría
+un holdout que comparte régimen de mercado con el desarrollo y no sería
+información nueva.
+
+No se puede impedir por código que alguien mire —siempre se puede editar el
+código—, pero sí que mire **sin dejar huella**. Abrirlo exige una frase exacta
+(no un booleano: un `True` se teclea sin pensar), y la apertura queda registrada
+para siempre:
+
+```
+$ ... --abrir-holdout "si"
+El holdout está reservado y no se toca durante el desarrollo. Para abrirlo hay
+que pasar exactamente: "SI, QUEMAR EL HOLDOUT".
+
+$ ... --abrir-holdout "SI, QUEMAR EL HOLDOUT"
+Primera apertura: este resultado sí es fuera de muestra. A partir de ahora el
+holdout está quemado.
+
+$ ... --abrir-holdout "SI, QUEMAR EL HOLDOUT"   # segunda vez
+El holdout ya se abrió 1 vez. Este resultado NO es fuera de muestra: ya has
+ajustado mirándolo, aunque haya sido sin querer. Trátalo como desarrollo.
+```
+
 ## Motor de señales cuantitativas
 
 Puntúa un universo de empresas **unas contra otras** (z-score transversal, no

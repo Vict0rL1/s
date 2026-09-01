@@ -32,6 +32,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.analysis.markets import load_market  # noqa: E402
 from app.analysis.baselines import comparar  # noqa: E402
+from app.analysis.experiments import (  # noqa: E402
+    HoldoutBloqueado,
+    abrir_holdout,
+    corregir_multiples,
+    historial,
+    partir_periodo,
+    pvalor_desde_bootstrap,
+    registrar,
+    sharpe_deflactado,
+)
 from app.analysis.rule_backtest import (  # noqa: E402
     rebalance_dates_mensuales,
     run_rule_backtest,
@@ -82,6 +92,19 @@ def main() -> int:
         "--sin-divisa",
         action="store_true",
         help="no cobrar la conversión CAD→USD (p. ej. si usas Norbert's Gambit)",
+    )
+    p.add_argument(
+        "--hipotesis",
+        default="Las reglas de compra/venta baten a comprar y mantener tras costes.",
+        help="qué se está probando; queda escrito en el registro",
+    )
+    p.add_argument(
+        "--abrir-holdout",
+        metavar="CONFIRMACION",
+        help=(
+            'evalúa sobre el tramo reservado. Exige la frase exacta '
+            '"SI, QUEMAR EL HOLDOUT" — solo la primera vez es fuera de muestra'
+        ),
     )
     p.add_argument(
         "--no-guardar",
@@ -139,6 +162,30 @@ def main() -> int:
     inicio = fin - timedelta(days=365 * args.anos)
     fechas = rebalance_dates_mensuales(inicio, fin)
 
+    # El último tramo queda reservado y ningún experimento lo toca. Se abre
+    # con una frase exacta y la apertura queda registrada para siempre: no se
+    # puede impedir por código que alguien mire, pero sí que mire sin dejar
+    # huella y sin saber que ha quemado el conjunto.
+    with SessionLocal() as s_hist:
+        previo = historial(s_hist)
+
+    particion = partir_periodo(fechas)
+    usando_holdout = False
+    if args.abrir_holdout is not None:
+        try:
+            apertura = abrir_holdout(args.abrir_holdout, previo["veces_holdout_abierto"])
+        except HoldoutBloqueado as exc:
+            print(f"\n{exc}")
+            return 1
+        fechas_uso = particion["holdout"] or fechas
+        usando_holdout = True
+        print(f"\n*** HOLDOUT ABIERTO ***\n{apertura['aviso']}")
+    else:
+        fechas_uso = particion["desarrollo"]
+        if particion["suficiente"]:
+            print(f"\n{particion['nota']}")
+
+    fechas = fechas_uso
     print(f"\nSimulando desde {inicio} hasta {fin} ({len(fechas)} fechas de entrada)…")
     con_divisa = not args.sin_divisa
     comun = dict(con_divisa=con_divisa, solo_momentum=solo_momentum, clase=clase)
@@ -164,6 +211,30 @@ def main() -> int:
             top_momentum=top,
         )
         _imprimir_baselines(bases)
+        _imprimir_rigor(bases, previo, usando_holdout)
+
+        # Se registra SIEMPRE, salga bien o mal: si las pruebas fallidas no se
+        # anotan, el recuento sale corto y el Sharpe deflactado se infla.
+        if not args.no_guardar:
+            with SessionLocal() as s_reg:
+                registrar(
+                    s_reg,
+                    hipotesis=args.hipotesis,
+                    estrategia=f"reglas/{clase}",
+                    parametros={
+                        "anos": args.anos,
+                        "n_universo": len(universo),
+                        "con_divisa": con_divisa,
+                        "solo_momentum": solo_momentum,
+                        "top_momentum": top,
+                    },
+                    desde=fechas[0].isoformat(),
+                    hasta=fechas[-1].isoformat(),
+                    universo=list(universo),
+                    resultado=bases["tabla"]["estrategia"],
+                    sharpe=_sharpe_por_periodo(bases),
+                    uso_holdout=usando_holdout,
+                )
 
     if resultado["n_operaciones"] > 0 and not args.no_guardar:
         with SessionLocal() as session:
@@ -180,6 +251,64 @@ def main() -> int:
         print("\nGuardado. Recarga la vista «Hoy»: cada idea dirá ahora si sus")
         print("reglas están validadas o refutadas, en vez de «sin validar».")
     return 0
+
+
+def _sharpe_por_periodo(bases: dict) -> float | None:
+    """Sharpe mensual sin anualizar: es la unidad que usa el DSR."""
+    import math
+
+    fila = bases["tabla"]["estrategia"]
+    if fila.get("sharpe") is None:
+        return None
+    return round(fila["sharpe"] / math.sqrt(12), 4)
+
+
+def _imprimir_rigor(bases: dict, previo: dict, usando_holdout: bool) -> None:
+    """Cuántas veces has mirado, y qué queda en pie después de descontarlo."""
+    linea = "═" * 78
+    print(f"\n{linea}\nRIGOR: ¿CUÁNTAS VECES HAS MIRADO?\n{linea}")
+
+    n_pruebas = previo["n_pruebas"] + 1
+    print(f"  Pruebas registradas (incluida esta): {n_pruebas}")
+    if previo["veces_holdout_abierto"]:
+        print(f"  Holdout abierto antes: {previo['veces_holdout_abierto']} vez/veces")
+
+    # Sharpe deflactado sobre los retornos de la estrategia.
+    retornos = bases.get("_retornos_estrategia") or []
+    if retornos:
+        dsr = sharpe_deflactado(
+            retornos, n_pruebas=n_pruebas, sharpes_probados=previo["sharpes"] or None
+        )
+        if dsr.get("suficiente"):
+            print(f"\n  Sharpe observado (mensual)  {dsr['sharpe_observado']:+.4f}")
+            print(f"  Umbral por haber mirado     {dsr['sharpe_umbral']:+.4f}")
+            print(f"  Sharpe deflactado (DSR)     {dsr['dsr']:.3f}"
+                  f"   {'HALLAZGO' if dsr['es_hallazgo'] else 'NO llega a hallazgo'}")
+            print(f"\n  {dsr['nota']}")
+
+    # Corrección por comparaciones múltiples sobre los tres baselines.
+    pvalores = {}
+    for clave, c in bases["comparaciones"].items():
+        if c.get("suficiente") and c.get("prob_supera") is not None:
+            p = 2 * min(c["prob_supera"], 1 - c["prob_supera"])
+            pvalores[clave] = round(min(1.0, p), 4)
+    if pvalores:
+        corr = corregir_multiples(pvalores)
+        print(f"\n  Comparaciones múltiples ({corr['n']} baselines, alfa {corr['alfa']}):")
+        for clave, p in pvalores.items():
+            print(
+                f"    {clave:22} p={p:.4f}"
+                f"   Bonferroni {'pasa' if corr['bonferroni'][clave] else 'NO'}"
+                f"   Benjamini-Hochberg {'pasa' if corr['benjamini_hochberg'][clave] else 'NO'}"
+            )
+        print(f"\n  {corr['nota']}")
+
+    if not usando_holdout:
+        print(
+            "\n  El tramo final sigue reservado y sin mirar. Cuando creas que has "
+            "terminado de ajustar, ábrelo UNA vez con --abrir-holdout: ese será "
+            "el único resultado realmente fuera de muestra que vas a tener."
+        )
 
 
 def _imprimir_baselines(b: dict) -> None:

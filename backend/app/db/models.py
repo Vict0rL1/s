@@ -303,3 +303,31 @@ class LlmOutput(Base):
     content_md: Mapped[str] = mapped_column(Text)
     model: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Experiment(Base):
+    """Cada estrategia probada, con su hipótesis y su resultado.
+
+    Existe para poder contar. El Sharpe deflactado necesita saber cuántas veces
+    se miró, y sin registro esa cuenta es una estimación sentimental y siempre a
+    la baja: las variantes descartadas se olvidan a los dos días. Un experimento
+    que no se escribe no deja de haber ocurrido — solo deja de descontarse.
+    """
+
+    __tablename__ = "experiments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    hipotesis: Mapped[str] = mapped_column(Text)
+    estrategia: Mapped[str] = mapped_column(String(64), index=True)
+    parametros: Mapped[dict] = mapped_column(JSON)
+    periodo_desde: Mapped[str] = mapped_column(String(10))
+    periodo_hasta: Mapped[str] = mapped_column(String(10))
+    universo: Mapped[dict] = mapped_column(JSON)
+    resultado: Mapped[dict] = mapped_column(JSON)
+    # Sharpe por periodo (no anualizado): es la unidad que usa el DSR.
+    sharpe: Mapped[float | None] = mapped_column(Float)
+    # Un experimento sobre el holdout se marca para siempre. La cuenta de
+    # aperturas es el dato que impide fingir que solo se miró una vez.
+    uso_holdout: Mapped[bool] = mapped_column(Boolean, default=False)
+    notas: Mapped[str | None] = mapped_column(Text)
