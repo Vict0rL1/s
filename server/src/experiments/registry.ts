@@ -138,6 +138,37 @@ export function readRegistry(): { experiments: Experiment[]; unlocks: UnlockEntr
 export const datasetKey = (d: DatasetId): string => `${d.sport}/${d.split}`;
 
 /**
+ * Un experimento distinto por hipótesis y conjunto, quedándose con la MEDICIÓN MÁS
+ * RECIENTE — y contando cuántas veces se ha medido.
+ *
+ * El fichero es un log de solo-añadir y así tiene que seguir: es la historia. Pero
+ * volver a correr `study:features` no son siete hipótesis nuevas, son las mismas siete
+ * medidas otra vez, y contarlas dos veces infla el denominador de Bonferroni tanto como
+ * olvidarlas lo desinfla. (Además la comprobación de duplicados de verify:data fallaba
+ * en cuanto alguien corría un script dos veces, que es un motivo pésimo para poner una
+ * verificación en rojo.)
+ *
+ * `times` se conserva y se enseña, y esa es la parte importante: repetir una medición
+ * hasta que salga bonita es una forma de p-hacking, así que el número de repeticiones
+ * tiene que estar a la vista, no escondido detrás de una deduplicación silenciosa.
+ */
+export function distinctExperiments(
+  registry = readRegistry().experiments,
+): (Experiment & { times: number; pSpread: [number, number] })[] {
+  const by = new Map<string, Experiment[]>();
+  for (const e of registry) {
+    const k = `${datasetKey(e.dataset)}|${e.hypothesis}`;
+    by.set(k, [...(by.get(k) ?? []), e]);
+  }
+  return [...by.values()].map((runs) => {
+    const sorted = [...runs].sort((a, b) => a.date.localeCompare(b.date));
+    const latest = sorted[sorted.length - 1];
+    const ps = runs.map((r) => r.result.p);
+    return { ...latest, times: runs.length, pSpread: [Math.min(...ps), Math.max(...ps)] };
+  });
+}
+
+/**
  * Cuántos experimentos se han hecho ya sobre el mismo conjunto.
  *
  * Este es EL número. Es el que convierte «p = 0.03, significativo» en «p = 0.03 sobre
@@ -145,7 +176,9 @@ export const datasetKey = (d: DatasetId): string => `${d.sport}/${d.split}`;
  */
 export function familySize(d: DatasetId, registry = readRegistry().experiments): number {
   const key = datasetKey(d);
-  return registry.filter((e) => datasetKey(e.dataset) === key).length;
+  // Sobre los DISTINTOS, no sobre las líneas del log: repetir una medición no es una
+  // comparación nueva y no debe encarecer el listón de las demás.
+  return distinctExperiments(registry).filter((e) => datasetKey(e.dataset) === key).length;
 }
 
 // ===========================================================================

@@ -6,6 +6,7 @@
 
 import {
   readRegistry,
+  distinctExperiments,
   datasetKey,
   bonferroniAlpha,
   benjaminiHochberg,
@@ -14,7 +15,9 @@ import {
 } from '../experiments/registry.ts';
 import { FINAL_HOLDOUT_FROM, VALIDATION_SEASON } from '../experiments/holdout.ts';
 
-const { experiments, unlocks } = readRegistry();
+const { experiments: allRuns, unlocks } = readRegistry();
+// Distintos, no líneas del log: volver a medir lo mismo no es una comparación nueva.
+const experiments = distinctExperiments(allRuns);
 
 if (experiments.length === 0) {
   console.log('El registro está vacío.');
@@ -22,7 +25,13 @@ if (experiments.length === 0) {
   process.exit(0);
 }
 
-console.log(`${experiments.length} experimentos registrados en total.\n`);
+console.log(
+  `${experiments.length} experimentos distintos registrados` +
+    (allRuns.length !== experiments.length
+      ? ` · ${allRuns.length} mediciones en total (algunos se han repetido)`
+      : '') +
+    '.\n',
+);
 
 // ---------------------------------------------------------------------------
 console.log('EL HOLDOUT FINAL');
@@ -43,7 +52,8 @@ if (unlocks.length === 0) {
 
 // ---------------------------------------------------------------------------
 // El conteo por conjunto, que es lo que fija el listón.
-const families = new Map<string, Experiment[]>();
+type Row = Experiment & { times: number; pSpread: [number, number] };
+const families = new Map<string, Row[]>();
 for (const e of experiments) {
   const k = datasetKey(e.dataset);
   families.set(k, [...(families.get(k) ?? []), e]);
@@ -93,7 +103,9 @@ for (const [key, fam] of [...families].sort()) {
         : (e.result.delta >= 0 ? '+' : '') + e.result.delta.toFixed(5);
     console.log(
       `  ${e.hypothesis.slice(0, 45).padEnd(46)} ${e.metric.padEnd(8)} ${delta.padStart(9)} ` +
-        `${dir} ${e.result.p.toFixed(4)}  ${nominal}  ${bonf}  ${bhOk}  ${e.verdict}`,
+        `${dir} ${e.result.p.toFixed(4)}  ${nominal}  ${bonf}  ${bhOk}  ${e.verdict}` +
+        // Repetir una medición hasta que salga bonita es p-hacking. Se enseña.
+        (e.times > 1 ? `  (medido ${e.times}×, p de ${e.pSpread[0].toFixed(4)} a ${e.pSpread[1].toFixed(4)})` : ''),
     );
   });
 

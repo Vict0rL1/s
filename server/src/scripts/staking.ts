@@ -7,7 +7,7 @@
 import { getDb } from '../db.ts';
 import { listUpcoming } from '../football/repo.ts';
 import { buildFootballPrediction } from '../football/predict.ts';
-import { decideStake, lossState, DEFAULT_CONFIG } from '../staking/policy.ts';
+import { decideEvent, lossState, pendingExposure, DEFAULT_CONFIG } from '../staking/policy.ts';
 import { readCalibration, calibrationMultiplier } from '../staking/calibration.ts';
 import { simulate, type PlannedBet } from '../staking/drawdown.ts';
 import { DEMO_SOURCE } from '../freshness.ts';
@@ -57,6 +57,10 @@ console.log(`  tope por evento          ${(cfg.maxPerEvent * 100).toFixed(1)} % 
 console.log(`  límite diario            ${(cfg.dailyLossLimit * 100).toFixed(1)} % = ${(bankroll * cfg.dailyLossLimit).toFixed(2)}`);
 console.log(`  límite semanal           ${(cfg.weeklyLossLimit * 100).toFixed(1)} % = ${(bankroll * cfg.weeklyLossLimit).toFixed(2)}`);
 console.log(`  ventaja mínima           ${(cfg.minEdge * 100).toFixed(1)} %`);
+console.log(
+  `  exposición máxima        ${(cfg.maxTotalExposure * 100).toFixed(1)} % = ${(bankroll * cfg.maxTotalExposure).toFixed(2)} a la vez`,
+);
+console.log('  una sola selección por partido (los tres lados de un 1X2 son excluyentes)');
 
 console.log('\nCALIBRACIÓN MEDIDA → MULTIPLICADOR DE TAMAÑO');
 if (Object.keys(cal).length === 0) {
@@ -84,6 +88,7 @@ console.log(
 const fixtures = listUpcoming() as unknown as {
   id: string;
   league: string;
+  commence_time: string | null;
   home_name: string;
   away_name: string;
   home_id: string | null;
@@ -107,6 +112,10 @@ const planned: (PlannedBet & { event: string; stake: number })[] = [];
 let blocked = 0;
 const blockedBy = new Map<string, number>();
 let shown = 0;
+// La exposición se ACUMULA a lo largo de la lista. Si cada decisión consultara solo la
+// base de datos, las veinte apuestas del sábado se dimensionarían todas como si fueran
+// la primera — que es exactamente el agujero que la puerta 6 viene a tapar.
+let exposure = pendingExposure();
 
 for (const f of fixtures) {
   if (f.source === DEMO_SOURCE) continue;
@@ -119,36 +128,56 @@ for (const f of fixtures) {
   } catch {
     continue;
   }
-  const sides: [string, number, number][] = [
-    [f.home_name, pred.model.home, f.odds_home],
-    ['Empate', pred.model.draw, f.odds_draw],
-    [f.away_name, pred.model.away, f.odds_away],
-  ];
-  for (const [label, p, odds] of sides) {
-    const d = decideStake({ sport: 'football', p, odds, bankroll }, cfg, cal);
-    if (d.stake <= 0) {
-      blocked++;
-      blockedBy.set(d.blockedBy ?? '?', (blockedBy.get(d.blockedBy ?? '?') ?? 0) + 1);
-      continue;
-    }
-    planned.push({
-      label,
-      event: `${f.home_name} vs ${f.away_name}`,
-      p,
-      odds,
-      fraction: d.fraction,
-      stake: d.stake,
-    });
-    if (shown < 8) {
-      shown++;
-      console.log(`\n  ${f.home_name} vs ${f.away_name} — ${label} @ ${odds.toFixed(2)}`);
-      for (const s of d.steps) console.log(`    ${s.gate.padEnd(22)} ${s.result}`);
-      console.log(`    → ARRIESGAR ${d.stake.toFixed(2)} (${(d.fraction * 100).toFixed(2)} % del banco)`);
-    }
+  // UNA decisión por partido, no una por resultado. Los tres lados de un 1X2 son
+  // mutuamente excluyentes: dimensionarlos por separado construía posiciones sobre el
+  // mismo partido donde una de las ramas pierde con certeza.
+  const d = decideEvent(
+    [
+      { label: f.home_name, p: pred.model.home, odds: f.odds_home },
+      { label: 'Empate', p: pred.model.draw, odds: f.odds_draw },
+      { label: f.away_name, p: pred.model.away, odds: f.odds_away },
+    ],
+    { sport: 'football', bankroll, openExposure: exposure },
+    cfg,
+    cal,
+  );
+  if (!d) continue;
+  if (d.stake <= 0) {
+    blocked++;
+    blockedBy.set(d.blockedBy ?? '?', (blockedBy.get(d.blockedBy ?? '?') ?? 0) + 1);
+    continue;
+  }
+  exposure += d.stake;
+  const odds =
+    d.label === 'Empate' ? f.odds_draw : d.label === f.home_name ? f.odds_home : f.odds_away;
+  const p =
+    d.label === 'Empate' ? pred.model.draw : d.label === f.home_name ? pred.model.home : pred.model.away;
+  planned.push({
+    label: d.label,
+    event: `${f.home_name} vs ${f.away_name}`,
+    p,
+    odds,
+    fraction: d.fraction,
+    stake: d.stake,
+    // La tanda es EL DÍA en que se juega, no «todo lo de hoy»: lo que se liquida junto
+    // es lo que se juega junto. Meter una semana entera en una sola liquidación haría
+    // el drawdown poco informativo —una única oportunidad de caer— y agrupar de menos
+    // subestimaría la cola. Se agrupa por lo que de verdad ocurre a la vez.
+    round: (f.commence_time ?? 'sin-fecha').slice(0, 10),
+  });
+  if (shown < 8) {
+    shown++;
+    console.log(`\n  ${f.home_name} vs ${f.away_name} — ${d.label} @ ${odds.toFixed(2)}`);
+    for (const s of d.steps) console.log(`    ${s.gate.padEnd(22)} ${s.result}`);
+    console.log(`    → ARRIESGAR ${d.stake.toFixed(2)} (${(d.fraction * 100).toFixed(2)} % del banco)`);
   }
 }
 
-console.log(`\n  ${planned.length} apuestas pasarían las cinco puertas · ${blocked} paradas:`);
+const totalStake = planned.reduce((a, b) => a + b.stake, 0);
+console.log(
+  `\n  ${planned.length} apuestas pasarían las seis puertas · ${blocked} paradas · ` +
+    `${totalStake.toFixed(2)} en riesgo (${((100 * totalStake) / bankroll).toFixed(1)} % del banco)`,
+);
 for (const [gate, n] of [...blockedBy].sort((a, b) => b[1] - a[1])) {
   console.log(`    ${String(n).padStart(4)} × ${gate}`);
 }
@@ -162,12 +191,15 @@ if (planned.length === 0) {
   // más importante de este módulo solo se ve el día que ya hay dinero en juego, que es
   // el peor momento para descubrir cómo se lee.
   console.log('\nEJEMPLO ILUSTRATIVO (no son partidos reales, son números puestos a mano)');
-  console.log('  20 apuestas al 2 % del banco, cuota 2.00, con una ventaja real del 5 %:');
+  console.log('  20 apuestas al 2 % del banco, cuota 2.00, ventaja del 5 %, repartidas en');
+  console.log('  4 jornadas de 5 — que es como caen de verdad, no todas el mismo día:');
   const ejemplo = Array.from({ length: 20 }, (_, i) => ({
     label: `ejemplo ${i + 1}`,
     p: 0.525,
     odds: 2,
     fraction: 0.02,
+    // Cinco por jornada: dentro de una jornada se liquidan juntas, entre jornadas no.
+    round: `jornada-${Math.floor(i / 5)}`,
   }));
   report(ejemplo);
 } else {

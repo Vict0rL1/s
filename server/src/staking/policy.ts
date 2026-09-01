@@ -12,7 +12,7 @@
 // predicción se parecen demasiado.
 //
 // ===========================================================================
-// LAS CINCO PUERTAS, EN ORDEN
+// LAS SEIS PUERTAS, EN ORDEN
 // ===========================================================================
 // Una apuesta tiene que pasar por todas. Se evalúan en este orden porque las primeras
 // son las más baratas y las que más apuestas descartan:
@@ -22,12 +22,27 @@
 //   3. Kelly fraccional (1/4 o 1/5)           → el tamaño base
 //   4. Tope duro por evento                   → recorta
 //   5. Límite de pérdida diario y semanal     → corta la operativa entera
+//   6. Exposición total simultánea            → recorta hasta lo que quepa
 //
 // El paso 5 no recorta: CORTA. Un límite que reduce el tamaño en vez de parar es un
 // límite que se puede cruzar apostando más veces, y entonces no es un límite.
+//
+// La puerta 6 se añadió DESPUÉS, al medir: 25 candidatas al 2 % sumaban el 50 % del
+// banco expuesto de golpe, y cada una decía «2 %, prudente». Kelly y el tope por evento
+// dimensionan cada apuesta como si fuera la única, y en un sábado no lo es.
+//
+// Y una regla que no es una puerta sino una forma de entrar: `decideEvent` elige UNA
+// selección por partido. Los tres lados de un 1X2 son mutuamente excluyentes y
+// dimensionarlos por separado —lo que esto hacía— construía tres posiciones sobre el
+// mismo partido con una rama que pierde con certeza.
 
 import { getDb } from '../db.ts';
-import { fractionalKelly, expectedValue, type KellyFraction } from './kelly.ts';
+import {
+  fractionalKelly,
+  expectedValue,
+  expectedLogGrowth,
+  type KellyFraction,
+} from './kelly.ts';
 import { calibrationMultiplier, type CalibrationFile, readCalibration } from './calibration.ts';
 
 export interface StakingConfig {
@@ -41,6 +56,14 @@ export interface StakingConfig {
   weeklyLossLimit: number;
   /** Ventaja mínima al precio ofrecido para molestarse. */
   minEdge: number;
+  /**
+   * Tope de dinero EN RIESGO A LA VEZ, como fracción del banco.
+   *
+   * Kelly y el tope por evento dimensionan cada apuesta como si fuera la única, y en un
+   * sábado no lo es. Sin esto, 25 candidatas al 2 % suman el 50 % del banco expuesto de
+   * golpe — medido, no supuesto — y el sizing de cada una decía «2 %, prudente».
+   */
+  maxTotalExposure: number;
 }
 
 /**
@@ -67,6 +90,9 @@ export const DEFAULT_CONFIG: StakingConfig = {
   dailyLossLimit: 0.05,
   weeklyLossLimit: 0.1,
   minEdge: 0.02,
+  // 10 %: cinco apuestas al tope simultáneas. Por encima de eso, una mala jornada deja
+  // de ser una mala jornada.
+  maxTotalExposure: 0.1,
 };
 
 export interface StakeRequest {
@@ -76,6 +102,15 @@ export interface StakeRequest {
   /** Cuota decimal ofrecida, con el margen de la casa dentro. */
   odds: number;
   bankroll: number;
+  /**
+   * Dinero ya comprometido y sin resolver, incluyendo lo que se acaba de decidir en
+   * esta misma tanda. Por defecto se lee de las apuestas pendientes en la base.
+   *
+   * Se pasa explícitamente porque al dimensionar una lista hay que ir acumulando: si
+   * cada llamada consultara solo la base, las veinte apuestas de la lista se
+   * dimensionarían todas como si fueran la primera.
+   */
+  openExposure?: number;
 }
 
 export interface StakeDecision {
@@ -247,11 +282,78 @@ export function decideStake(
   if (loss.dayBreached) return zero('límite de pérdida DIARIA alcanzado');
   if (loss.weekBreached) return zero('límite de pérdida SEMANAL alcanzado');
 
+  // --- 6. Exposición total simultánea ---
+  const open = req.openExposure ?? pendingExposure();
+  const room = Math.max(0, cfg.maxTotalExposure * req.bankroll - open);
+  const wanted = capped * req.bankroll;
+  // Se REDONDEA HACIA ABAJO a céntimos, no al más cercano: redondear al más cercano
+  // puede subir la apuesta por encima del tope que se acaba de aplicar, que es una
+  // forma pequeña y tonta de que un límite no sea un límite.
+  const stake = Math.floor(Math.min(wanted, room) * 100) / 100;
+  steps.push({
+    gate: '6 · exposición total',
+    result:
+      `${open.toFixed(2)} ya en riesgo de ${(cfg.maxTotalExposure * req.bankroll).toFixed(2)} · ` +
+      (stake < wanted ? `RECORTADO de ${wanted.toFixed(2)} a ${stake.toFixed(2)}` : 'cabe entera'),
+  });
+  if (stake <= 0) return zero('sin margen de exposición: ya hay demasiado en juego');
+
   return {
-    stake: Math.round(capped * req.bankroll * 100) / 100,
-    fraction: capped,
+    stake,
+    fraction: stake / req.bankroll,
     edge,
     steps,
     blockedBy: null,
   };
+}
+
+/**
+ * Una sola decisión por EVENTO, no una por resultado posible.
+ *
+ * Este es el bug que más caro salía. Los tres resultados de un 1X2 son mutuamente
+ * excluyentes: dimensionarlos por separado daba tres apuestas sobre el mismo partido
+ * —medido: 20 + 11,29 + 5,48 sobre un banco de 1.000— y una de las tres ramas pierde
+ * dinero con certeza. Kelly sobre resultados excluyentes es una optimización CONJUNTA,
+ * no tres independientes, y hacerlo mal siempre sobreapuesta.
+ *
+ * La solución práctica y la que se usa: se elige UNA selección y se dimensiona esa.
+ * Renuncia a la ganancia teórica de repartir entre varias, y a cambio no puede
+ * construir una posición que pierde pase lo que pase.
+ *
+ * Y se elige por CRECIMIENTO ESPERADO, no por ventaja. Es una distinción que parece
+ * cosmética y no lo es: f* = ventaja / (cuota − 1), así que una selección a cuota alta
+ * puede tener más ventaja y muchísimo menos Kelly. Con estas tres —0.15, 0.131 y 0.092
+ * de ventaja— el orden coincide, pero solo por casualidad: sus Kelly son 0.115, 0.045 y
+ * 0.022, y bastaría una cuota más larga para que el de más ventaja fuese el de menos
+ * crecimiento. Se ordena por lo que el módulo entero está maximizando.
+ */
+export function decideEvent(
+  selections: { label: string; p: number; odds: number }[],
+  base: Omit<StakeRequest, 'p' | 'odds'>,
+  cfg: StakingConfig = DEFAULT_CONFIG,
+  cal: CalibrationFile = readCalibration(),
+  now = new Date(),
+): (StakeDecision & { label: string }) | null {
+  if (selections.length === 0) return null;
+  const growth = (s: { p: number; odds: number }): number =>
+    expectedLogGrowth(s.p, s.odds, fractionalKelly(s.p, s.odds, cfg.kellyFraction));
+  let best = selections[0];
+  for (const s of selections) {
+    if (growth(s) > growth(best)) best = s;
+  }
+  const d = decideStake({ ...base, p: best.p, odds: best.odds }, cfg, cal, now);
+  return { ...d, label: best.label };
+}
+
+/**
+ * Dinero comprometido en apuestas todavía sin resolver.
+ *
+ * `pending` únicamente: una apuesta resuelta ya no está en riesgo, esté ganada o
+ * perdida, y contarla aquí bloquearía la operativa por dinero que ya volvió.
+ */
+export function pendingExposure(): number {
+  const row = getDb()
+    .prepare(`SELECT COALESCE(SUM(stake), 0) AS s FROM bets WHERE status = 'pending'`)
+    .get() as unknown as { s: number };
+  return row.s;
 }

@@ -30,6 +30,28 @@ export interface PlannedBet {
   odds: number;
   /** Fracción del banco arriesgada, tal y como la decidió la política. */
   fraction: number;
+  /**
+   * Qué apuestas se resuelven A LA VEZ. Mismo valor = misma tanda.
+   *
+   * Sin esto el simulador subestimaba la COLA. La primera versión resolvía las
+   * apuestas de una en una sobre el banco ya actualizado, así que perderlas todas nunca
+   * costaba la suma de lo apostado: veinte al 2 % tocaban techo en 1 − 0.98²⁰ = 33,2 %,
+   * cuando liquidadas juntas el mismo sábado cuestan el 40 % exacto.
+   *
+   * Y una precisión que la primera versión de este comentario se saltaba: agrupar NO
+   * empeora el drawdown en todas partes. Empeora el extremo —que es lo que arruina— y
+   * puede MEJORAR el percentil típico, porque una sola liquidación ofrece una sola
+   * oportunidad de caer desde un máximo, mientras que veinte pasos sueltos pueden
+   * deambular hacia abajo. Medido con veinte apuestas al 2 % y p = 0.55: p95 del 12,0 %
+   * agrupadas contra 15,0 % sueltas, y peor caso 24,0 % contra 24,7 % con 4.000 caminos
+   * (los extremos teóricos, 40 % y 33 %, no se alcanzan porque perder las veinte tiene
+   * probabilidad de una entre un millón).
+   *
+   * Lo correcto es agrupar por lo que de verdad se liquida junto, ni más ni menos. Sin
+   * `round`, cada apuesta va en su propia tanda y se recupera el comportamiento
+   * secuencial — que es el correcto para apuestas separadas en el tiempo.
+   */
+  round?: string | number;
 }
 
 export interface DrawdownReport {
@@ -71,6 +93,14 @@ export function simulate(
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
+  // Agrupar por tanda una sola vez, fuera del bucle de caminos.
+  const byRound = new Map<string, PlannedBet[]>();
+  bets.forEach((b, i) => {
+    const key = String(b.round ?? `__solo_${i}`);
+    byRound.set(key, [...(byRound.get(key) ?? []), b]);
+  });
+  const groups = [...byRound.values()];
+
   const maxDDs: number[] = [];
   let sumFinal = 0;
   let losing = 0;
@@ -80,29 +110,39 @@ export function simulate(
     let bank = 1;
     let peak = 1;
     let maxDD = 0;
-    // Las apuestas se barajan en cada camino: el orden real no se conoce, y un orden
-    // fijo mide la caída de UNA secuencia concreta en vez de la de la estrategia.
-    const order = bets.map((_, k) => k);
+    // Se barajan las TANDAS, no las apuestas: el orden real de las jornadas no se
+    // conoce, pero lo que va junto tiene que seguir yendo junto.
+    const order = groups.map((_, k) => k);
     for (let k = order.length - 1; k > 0; k--) {
       const j = (rnd() * (k + 1)) | 0;
       [order[k], order[j]] = [order[j], order[k]];
     }
-    for (const idx of order) {
-      const b = bets[idx];
-      const p = b.p + (0.5 - b.p) * shift;
-      // Se apuesta una fracción del banco ACTUAL, no del inicial: es lo que hace Kelly
-      // y es lo que evita la ruina — al caer, las apuestas encogen solas.
-      const stake = bank * b.fraction;
-      bank += rnd() < p ? stake * (b.odds - 1) : -stake;
+    // Las tandas se recorren en orden; dentro de una tanda, TODAS las apuestas se
+    // dimensionan sobre el mismo banco y se liquidan juntas. Es lo que pasa un sábado:
+    // no esperas a que acabe el de las 13:00 para decidir el de las 13:00.
+    let broke = false;
+    for (const groupIdx of order) {
+      const group = groups[groupIdx];
+      const snapshot = bank;
+      let delta = 0;
+      for (const b of group) {
+        const p = b.p + (0.5 - b.p) * shift;
+        // Fracción del banco al ABRIR la tanda, no del que va quedando dentro de ella.
+        const stake = snapshot * b.fraction;
+        delta += rnd() < p ? stake * (b.odds - 1) : -stake;
+      }
+      bank += delta;
       if (bank > peak) peak = bank;
       const dd = (peak - bank) / peak;
       if (dd > maxDD) maxDD = dd;
       if (bank <= 0) {
         bank = 0;
         maxDD = 1;
+        broke = true;
         break;
       }
     }
+    void broke;
     maxDDs.push(maxDD);
     sumFinal += bank;
     if (bank < 1) losing++;

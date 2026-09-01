@@ -833,6 +833,14 @@ Una apuesta pasa por todas, en este orden:
 4. **Tope duro por evento** — 2 % del banco.
 5. **Límites de pérdida diario y semanal** — que **cortan**, no recortan. Un límite que
    reduce el tamaño se puede cruzar apostando más veces, y entonces no es un límite.
+6. **Exposición total simultánea** — 10 % del banco en riesgo a la vez, contando lo
+   pendiente. Las cinco primeras dimensionan cada apuesta como si fuera la única, y en
+   un sábado no lo es: sin esta puerta, 25 candidatas al 2 % sumaban el 50 % del banco.
+
+Y antes de las seis, una regla de entrada: **una sola selección por partido**. Los tres
+lados de un 1X2 son mutuamente excluyentes, así que se elige la de mayor **crecimiento
+esperado** —no la de mayor ventaja, que no es lo mismo: `f* = ventaja / (cuota − 1)`, y
+una selección a cuota larga puede tener más ventaja y un Kelly ridículo.
 
 ### El tamaño baja solo cuando el modelo es peor
 

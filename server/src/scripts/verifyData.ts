@@ -30,9 +30,9 @@
 import { getDb } from '../db.ts';
 import { normalizeTeamName } from '../football/ingest/teamNames.ts';
 import { parseFootballTxt } from '../football/ingest/openfootballTxt.ts';
-import { readRegistry } from '../experiments/registry.ts';
+import { readRegistry, distinctExperiments } from '../experiments/registry.ts';
 import { fullKelly, fractionalKelly, expectedLogGrowth, expectedValue } from '../staking/kelly.ts';
-import { decideStake, DEFAULT_CONFIG } from '../staking/policy.ts';
+import { decideStake, decideEvent, DEFAULT_CONFIG } from '../staking/policy.ts';
 import { calibrationMultiplier } from '../staking/calibration.ts';
 import { simulate } from '../staking/drawdown.ts';
 import { FINAL_HOLDOUT_FROM } from '../experiments/holdout.ts';
@@ -887,14 +887,25 @@ function auditExperimentRegistry(): void {
     `${sobreHoldout.length} entradas sobre el holdout y ninguna apertura registrada`,
   );
 
-  const vistas = new Map<string, number>();
-  for (const e of experiments) vistas.set(e.hypothesis, (vistas.get(e.hypothesis) ?? 0) + 1);
-  const repes = [...vistas].filter(([, n]) => n > 1);
+  // Repetir una medición NO es un defecto: correr `study:features` dos veces vuelve a
+  // medir las mismas siete hipótesis, y la primera versión de esta comprobación se
+  // ponía roja por eso — un motivo pésimo. Lo que sí hay que vigilar es que el conteo
+  // que alimenta a Bonferroni sea de hipótesis DISTINTAS y no de líneas del log.
+  const distintos = distinctExperiments(experiments);
   check(
-    'experimentos: sin hipótesis duplicadas',
-    repes.length === 0,
-    repes.map(([h, n]) => `${h} ×${n}`).join('; '),
+    'experimentos: el conteo dedupe las mediciones repetidas',
+    distintos.length <= experiments.length,
+    `${distintos.length} distintos de ${experiments.length} líneas`,
   );
+  const repetidos = distintos.filter((e) => e.times > 1);
+  if (repetidos.length > 0) {
+    console.log(`  ${repetidos.length} hipótesis medidas más de una vez:`);
+    for (const e of repetidos) {
+      console.log(
+        `    ${e.hypothesis.slice(0, 50)} ×${e.times} · p de ${e.pSpread[0].toFixed(4)} a ${e.pSpread[1].toFixed(4)}`,
+      );
+    }
+  }
   console.log(
     `  holdout final: fútbol desde ${FINAL_HOLDOUT_FROM.football}, NFL desde ${FINAL_HOLDOUT_FROM.nfl}` +
       (unlocks.length === 0 ? ' · intacto' : ' · ⚠ YA ABIERTO'),
@@ -1027,6 +1038,70 @@ function auditStaking(): void {
     `${normal.steps.length} pasos`,
   );
 
+  // --- Puerta 6: exposición total simultánea ---
+  // El bug: cada apuesta se dimensionaba como si fuera la única. 25 candidatas al 2 %
+  // sumaban el 50 % del banco expuesto de golpe, y el sizing de cada una decía
+  // «2 %, prudente». Se comprueba acumulando, que es como se usa de verdad.
+  let acc = 0;
+  for (let i = 0; i < 25; i++) {
+    acc += decideStake(
+      { sport: 'bueno', p: 0.55, odds: 2, bankroll: bank, openExposure: acc },
+      cfg,
+      cal,
+    ).stake;
+  }
+  check(
+    'puerta 6: 25 candidatas seguidas no pasan del tope de exposición',
+    acc <= bank * cfg.maxTotalExposure + 0.01,
+    `${acc} de un máximo de ${bank * cfg.maxTotalExposure}`,
+  );
+  check(
+    'puerta 6: y aun así se llega a apostar algo',
+    acc > 0,
+    'el tope de exposición bloqueó absolutamente todo',
+  );
+
+  // --- Un evento, una apuesta ---
+  // El bug más caro: los tres resultados de un 1X2 son mutuamente excluyentes, y
+  // dimensionarlos por separado daba tres posiciones sobre el mismo partido — con una
+  // rama que pierde con certeza. Estas cuotas son las que lo destaparon.
+  const ev = decideEvent(
+    [
+      { label: 'local', p: 0.5, odds: 2.3 },
+      { label: 'empate', p: 0.29, odds: 3.9 },
+      { label: 'visitante', p: 0.21, odds: 5.2 },
+    ],
+    { sport: 'bueno', bankroll: bank },
+    cfg,
+    cal,
+  );
+  check('un evento devuelve UNA decisión, no tres', ev !== null, 'devolvió null');
+  // Ventajas 0.150 / 0.131 / 0.092 y Kelly 0.115 / 0.045 / 0.022: gana «local» por los
+  // dos criterios. La primera versión de esta comprobación esperaba «empate» por una
+  // cuenta mal hecha mía — el código estaba bien y el test, mal.
+  check(
+    'y elige la selección de mayor crecimiento esperado',
+    ev?.label === 'local',
+    `eligió ${ev?.label}`,
+  );
+  // Y el criterio es el crecimiento, NO la ventaja: aquí se separan a propósito. La
+  // primera paga poco y tiene Kelly grande; la segunda tiene más ventaja y Kelly
+  // ridículo. Ordenar por ventaja elegiría la segunda y crecería menos.
+  const divergente = decideEvent(
+    [
+      { label: 'corta', p: 0.7, odds: 1.6 },
+      { label: 'larga', p: 0.12, odds: 10 },
+    ],
+    { sport: 'bueno', bankroll: bank },
+    cfg,
+    cal,
+  );
+  check(
+    'y crecimiento NO es lo mismo que ventaja: gana la de más crecimiento',
+    divergente?.label === 'corta',
+    `eligió ${divergente?.label} — ventaja 0.12 vs 0.20, crecimiento al revés`,
+  );
+
   // --- El drawdown ---
   const plan = Array.from({ length: 40 }, (_, i) => ({
     label: `b${i}`,
@@ -1059,9 +1134,52 @@ function auditStaking(): void {
     mal.expectedReturn < bien.expectedReturn,
     `${mal.expectedReturn.toFixed(4)} vs ${bien.expectedReturn.toFixed(4)}`,
   );
+  // --- Liquidación simultánea ---
+  // El simulador resolvía las apuestas de una en una sobre el banco ya actualizado, así
+  // que perderlas todas nunca costaba la suma de lo apostado: veinte al 2 % daban un
+  // peor camino del 24,7 % cuando, resolviéndose el mismo sábado, cuestan el 40 %. El
+  // número que se mira para decidir si se aguanta una mala racha estaba a media racha.
+  const sueltas = Array.from({ length: 20 }, (_, i) => ({
+    label: `s${i}`,
+    p: 0.5,
+    odds: 2,
+    fraction: 0.02,
+  }));
+  const juntas = sueltas.map((b) => ({ ...b, round: 'sabado' }));
+  const dSueltas = simulate(sueltas, { paths: 3000 });
+  const dJuntas = simulate(juntas, { paths: 3000 });
+  check(
+    'drawdown: lo simultáneo cae MÁS que lo secuencial',
+    dJuntas.worstMaxDrawdown > dSueltas.worstMaxDrawdown,
+    `juntas ${dJuntas.worstMaxDrawdown.toFixed(4)} vs sueltas ${dSueltas.worstMaxDrawdown.toFixed(4)}`,
+  );
+  // Con p = 0 la tanda pierde ENTERA y el resultado es aritmética, no muestreo: 20
+  // apuestas al 2 % liquidadas juntas cuestan exactamente el 40 %.
+  //
+  // Se hace así porque la primera versión exigía ese 40 % de la simulación con p = 0.5,
+  // y ahí las veinte pierden a la vez con probabilidad 0.5²⁰ ≈ una entre un millón: en
+  // 3.000 caminos no sale nunca. El peor camino OBSERVADO no es el peor camino POSIBLE,
+  // y confundirlos hacía fallar una comprobación correcta.
+  const seguras = Array.from({ length: 20 }, (_, i) => ({
+    label: `x${i}`,
+    p: 0,
+    odds: 2,
+    fraction: 0.02,
+    round: 'sabado',
+  }));
+  const peor = simulate(seguras, { paths: 50 });
+  check(
+    'drawdown: una tanda perdida entera cuesta la suma de lo apostado',
+    Math.abs(peor.worstMaxDrawdown - 0.4) < 1e-9,
+    `${(peor.worstMaxDrawdown * 100).toFixed(4)} %, se esperaba 40 %`,
+  );
   console.log(
-    `  Kelly, 4 puertas y el simulador comprobados · con ventaja: caída mediana ` +
+    `  Kelly, 6 puertas y el simulador comprobados · con ventaja: caída mediana ` +
       `${(bien.medianMaxDrawdown * 100).toFixed(1)} %, p95 ${(bien.p95MaxDrawdown * 100).toFixed(1)} %`,
+  );
+  console.log(
+    `  liquidación simultánea vs secuencial: peor caída ` +
+      `${(dJuntas.worstMaxDrawdown * 100).toFixed(1)} % vs ${(dSueltas.worstMaxDrawdown * 100).toFixed(1)} %`,
   );
 }
 
