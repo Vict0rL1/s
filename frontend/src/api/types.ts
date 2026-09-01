@@ -571,8 +571,9 @@ export interface DecisionLevels {
   objetivo: number
   objetivo_pct: number
   ratio: number
-  /** Peso de cartera para arriesgar un 1 % si salta el stop. Nulo si ya la tienes. */
-  peso_sugerido_pct: number | null
+  /** Peso BRUTO: lo que este stop permite mirando esta empresa sola. NO es
+   *  el peso final — ese depende de toda la cartera y lo decide el sizer. */
+  peso_bruto_pct: number | null
 }
 
 /** Qué hacer, a qué precio y con qué salida. Reglas mecánicas, no opinión. */
@@ -646,8 +647,22 @@ export interface Conviction {
 
 /** Las pocas que comprar y las pocas que evitar. Un umbral dice quién califica;
  *  esto dice cuáles pocas. */
+export interface Sizing {
+  pesos: Record<string, number>
+  invertido_pct: number
+  liquidez_pct: number
+  vol_estimada_pct: number | null
+  objetivo_vol_pct: number
+  escala_aplicada: number
+  clusters: string[][]
+  recortes: string[]
+  nota: string
+}
+
 export interface Shortlist {
-  ideas: (DailySignal & { conviction: Conviction })[]
+  /** El tamaño se decide sobre el conjunto, no idea por idea. */
+  sizing: Sizing
+  ideas: (DailySignal & { conviction: Conviction; peso_final_pct: number | null })[]
   evitar: (DailySignal & { conviction: Conviction })[]
   candidatas: number
   descartadas_por_sector: number

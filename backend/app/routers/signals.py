@@ -25,6 +25,7 @@ from app.analysis.backtest import (
 )
 from app.analysis.rule_backtest import rebalance_dates_mensuales, run_rule_backtest
 from app.analysis.shortlist import construir_lista_corta
+from app.analysis.sizing import dimensionar
 from app.analysis.factors import (
     DEFAULT_WEIGHTS,
     build_raw_factors,
@@ -136,6 +137,39 @@ def _safe_get(service: MarketDataService, data_type: str, **kwargs):
         return service.get(data_type, **kwargs)
     except (DataNotFoundError, AllProvidersFailedError):
         return None
+
+
+def _lista_corta_dimensionada(ranked: list[dict]) -> dict:
+    """La lista corta, con el tamaño decidido sobre el conjunto.
+
+    El peso que trae cada decisión es BRUTO: lo que su stop permitiría mirando
+    esa empresa sola. Aquí se aplica lo que solo se puede saber viendo la
+    cartera entera — topes por posición, por sector y por correlación, más el
+    objetivo de volatilidad. Sin este paso, cinco ideas «del 12 %» suman 60 %
+    en cinco apuestas que probablemente caen juntas.
+    """
+    corta = construir_lista_corta(ranked)
+    candidatas = [
+        {
+            "symbol": s["symbol"],
+            "sector": (s.get("context") or {}).get("sector_name"),
+            "peso_bruto_pct": ((s.get("decision") or {}).get("levels") or {}).get(
+                "peso_bruto_pct"
+            ),
+            "vol_anual_pct": _vol_anual(s),
+        }
+        for s in corta["ideas"]
+    ]
+    corta["sizing"] = dimensionar([c for c in candidatas if c["peso_bruto_pct"]])
+    for idea in corta["ideas"]:
+        idea["peso_final_pct"] = corta["sizing"]["pesos"].get(idea["symbol"])
+    return corta
+
+
+def _vol_anual(signal: dict) -> float | None:
+    """Volatilidad anualizada desde la diaria que ya trae el precio."""
+    diaria = (signal.get("price") or {}).get("daily_vol_pct")
+    return round(diaria * (252 ** 0.5), 2) if diaria else None
 
 
 def _stored_rule_backtest(session: Session) -> dict | None:
@@ -734,7 +768,7 @@ def _today(
             status_code=404, detail=f"Mercado desconocido: {market}"
         ) from None
 
-    cache_params = {"v": 4, "market": market}
+    cache_params = {"v": 5, "market": market}
     if not refresh:
         cached = service.cache.get("daily_picks", cache_params)
         # Una respuesta guardada por una versión anterior de la app puede no
@@ -855,7 +889,7 @@ def _today(
         # 98 candidatas no son 98 oportunidades. La lista corta ordena por
         # convicción y recorta a unas pocas: es la diferencia entre un filtro
         # y una recomendación.
-        "shortlist": construir_lista_corta(ranked),
+        "shortlist": _lista_corta_dimensionada(ranked),
         "counts": {
             "favorables": n_favorables,
             "neutrales": len(ranked) - n_favorables - n_desfavorables,

@@ -22,6 +22,11 @@ precios y no ejecuta órdenes**.
 - **Lo calculado ≠ lo generado por LLM.** Indicadores y ratios se calculan a
   partir de datos; el contenido de IA aparece con etiqueta morada, modelo
   usado y disclaimer, y queda registrado en `llm_outputs`.
+- **Analizar y dimensionar son dos preguntas, y viven en módulos distintos.**
+  `decision.py` mira UNA empresa: si la tesis se sostiene, dónde está el stop,
+  qué la invalidaría. El tamaño no se puede contestar desde ahí — depende de qué
+  más tienes, de cuánto se parecen tus posiciones y de la volatilidad del
+  conjunto — así que lo decide `sizing.py` viendo la cartera entera.
 - **El riesgo se suma, no se mira de una en una.** Cada idea se dimensiona
   para arriesgar un 1 %, pero ocho posiciones al 1 % son un 8 % en riesgo
   simultáneo — y si cinco son del mismo sector caen juntas, así que cuentan
@@ -559,6 +564,46 @@ cartera concentra justo lo que creía repartir.
 
 Lo que **no** hace: predecir qué sector irá mejor. Elegir entre salud y energía
 es una apuesta sectorial, y esa decisión es tuya.
+
+## Tamaño de posición: `sizing.py`
+
+Tenerlo dentro de `decide()` producía un error silencioso: cada idea devolvía
+«peso sugerido 12,5 %» mirándose sola, así que aceptar ocho ideas daba el 100 %
+de la cartera en ocho apuestas, varias del mismo sector, sin que nada lo
+impidiera. **Cada número era correcto; el conjunto, insostenible.**
+
+Ahora `decide()` devuelve `peso_bruto_pct` —lo que ese stop permite arriesgando
+el 1 %— y el dimensionador aplica cuatro límites en cadena:
+
+| Límite | Por qué |
+|---|---|
+| **10 % por posición** | Un stop ceñido puede justificar aritméticamente un 25 % en una empresa. El modelo puede estar equivocado sobre esa empresa, y entonces el tamaño no te salva el stop. |
+| **25 % por sector** | Cinco tecnológicas no son cinco apuestas. |
+| **25 % por clúster de correlación** | El sector es una aproximación. Dos empresas de sectores distintos con correlación 0,85 son una sola posición repartida. Se agrupa por enlace simple: basta un camino de correlación alta, porque exigir que *todas* las parejas lo estén partiría clusters reales y daría falsa diversificación. |
+| **Volatility targeting al 12 %** | Se escala el libro entero. **Solo hacia abajo**: escalar hacia arriba es apalancarse, y esa decisión no la toma un algoritmo. |
+
+Verificado de punta a punta: `12,5 % bruto → 10 % (tope) → 9,24 % (volatilidad)`,
+con la cartera al 18,5 % invertido y volatilidad estimada clavada en el objetivo.
+
+La volatilidad de cartera es √(wᵀΣw), no la suma ponderada: sumar volatilidades
+ignora que las posiciones no se mueven a la vez y siempre exagera. Cuando una
+correlación no se puede medir **se asume 0,5** — ni independencia (que
+subestimaría) ni movimiento idéntico — y eso se declara como el supuesto que es.
+
+### Ningún retorno se enseña sin su caída al lado
+
+«+12 % anual» y «+12 % anual con un −45 % por el camino» son propuestas
+distintas, y quien solo ve la primera abandona en el peor momento — con lo cual
+nunca cobra ese +12 %. `con_caida_esperada()` empareja las dos por construcción.
+
+La caída no sale de un supuesto: se aplica **la cartera actual** a todo el
+histórico disponible y se reporta la peor racha real, con sus fechas. Y con la
+advertencia que más se olvida:
+
+> ATENCIÓN: el histórico solo cubre 2,2 años, desde 2021. Esta cartera NO ha
+> vivido la crisis financiera de 2008, ni el desplome de marzo de 2020. Su peor
+> caída histórica es el peor de los escenarios que dio tiempo a ocurrir, que no
+> es lo mismo que el peor escenario posible.
 
 ## Contra los baselines: ¿bate esto a lo simple?
 

@@ -97,10 +97,15 @@ def _niveles(precio: float, vol_diaria_pct: float | None, clase: str = "accion")
         "objetivo": round(precio * (1 + objetivo_pct / 100), 2),
         "objetivo_pct": objetivo_pct,
         "ratio": RATIO_OBJETIVO,
-        # Cuánto capital destinar para arriesgar RIESGO_POR_OPERACION si salta
-        # el stop. Es un porcentaje de la cartera, no un número de acciones:
-        # la app no sabe cuánto dinero tienes y no va a fingir que sí.
-        "peso_sugerido_pct": round(RIESGO_POR_OPERACION * 100 / (stop_pct / 100), 1),
+        # Peso BRUTO: lo que este stop permitiría arriesgando el 1 % del
+        # capital, mirando esta empresa y nada más. NO es el peso final.
+        #
+        # El tamaño real depende de toda la cartera —qué más tienes, cuánto se
+        # parecen entre sí tus posiciones, qué volatilidad soporta el conjunto—
+        # y eso no se puede saber desde aquí. Lo decide `analysis/sizing.py`.
+        # Cuando este número se usaba directamente, aceptar ocho ideas al 12,5 %
+        # daba el 100 % de la cartera en ocho apuestas sin que nada lo impidiera.
+        "peso_bruto_pct": round(RIESGO_POR_OPERACION * 100 / (stop_pct / 100), 1),
     }
 
 
@@ -195,7 +200,7 @@ def decide(
                 "objetivo": objetivo,
                 "objetivo_pct": round((objetivo / ultimo - 1) * 100, 1),
                 "ratio": niveles["ratio"],
-                "peso_sugerido_pct": None,
+                "peso_bruto_pct": None,
             }
         disparadores = [
             f"Vender si cierra por debajo de {stop_posicion}" if stop_posicion else

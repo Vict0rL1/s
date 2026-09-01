@@ -79,15 +79,28 @@ def test_el_objetivo_respeta_la_relacion_riesgo_beneficio():
     assert niveles["objetivo_pct"] == niveles["stop_pct"] * niveles["ratio"]
 
 
-def test_el_tamano_baja_cuando_el_stop_esta_lejos():
-    """Arriesgar lo mismo en cada idea: stop lejano, posición pequeña."""
+def test_el_peso_bruto_baja_cuando_el_stop_esta_lejos():
+    """Arriesgar lo mismo en cada idea: stop lejano, posición pequeña.
+
+    Es el peso BRUTO — lo que este stop permite mirando esta empresa sola. El
+    peso final depende de toda la cartera y lo decide `analysis/sizing.py`;
+    tenerlos juntos era lo que dejaba sumar ocho ideas hasta el 100 %.
+    """
     cerca = decide(señal(0.8), precio(vol=0.5))["levels"]
     lejos = decide(señal(0.8), precio(vol=3.0))["levels"]
-    assert lejos["peso_sugerido_pct"] < cerca["peso_sugerido_pct"]
+    assert lejos["peso_bruto_pct"] < cerca["peso_bruto_pct"]
     # El riesgo efectivo es el mismo en ambos casos.
     for n in (cerca, lejos):
-        riesgo = n["peso_sugerido_pct"] / 100 * n["stop_pct"] / 100
+        riesgo = n["peso_bruto_pct"] / 100 * n["stop_pct"] / 100
         assert abs(riesgo - RIESGO_POR_OPERACION) < 0.0005
+
+
+def test_decide_no_devuelve_un_peso_final():
+    """La separación, fijada: `decide()` mira UNA empresa y no puede saber
+    cuánto poner. Si alguien vuelve a meter aquí el peso final, esto rompe."""
+    niveles = decide(señal(0.8), precio())["levels"]
+    assert "peso_bruto_pct" in niveles
+    assert "peso_sugerido_pct" not in niveles
 
 
 # --- Con posición abierta: sostener o soltar ---------------------------------
@@ -160,7 +173,7 @@ def test_sobre_lo_que_ya_tienes_no_se_propone_zona_de_compra():
     assert d["levels"]["entrada_desde"] is None
     assert d["levels"]["entrada_hasta"] is None
     # Y no sugiere cuánto comprar de algo que ya tienes.
-    assert d["levels"]["peso_sugerido_pct"] is None
+    assert d["levels"]["peso_bruto_pct"] is None
 
 
 def test_el_stop_de_una_posicion_cuelga_del_coste_y_se_mide_desde_hoy():

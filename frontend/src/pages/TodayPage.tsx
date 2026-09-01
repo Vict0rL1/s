@@ -140,15 +140,15 @@ function DecisionPlan({ decision }: { decision: Decision }) {
               </span>
             </div>
           </div>
-          {levels.peso_sugerido_pct !== null && (
+          {levels.peso_bruto_pct !== null && (
             <div>
               <div className="text-[10px] uppercase tracking-wide text-slate-400">
-                Peso sugerido
+                Peso bruto
               </div>
               <div className="text-sm tabular-nums text-slate-800">
-                {levels.peso_sugerido_pct} %
+                {levels.peso_bruto_pct} %
                 <span className="block text-[10px] text-slate-400">
-                  para arriesgar 1 %
+                  antes de límites de cartera
                 </span>
               </div>
             </div>
@@ -331,7 +331,7 @@ function IdeaCard({
   signal,
   onOpen,
 }: {
-  signal: DailySignal & { conviction: Conviction }
+  signal: DailySignal & { conviction: Conviction; peso_final_pct?: number | null }
   onOpen: () => void
 }) {
   const { conviction: c, decision, price } = signal
@@ -398,7 +398,15 @@ function IdeaCard({
               Cuánto de tu cartera
             </div>
             <div className="text-sm tabular-nums text-slate-900">
-              {niveles.peso_sugerido_pct} %
+              {signal.peso_final_pct ?? niveles.peso_bruto_pct} %
+              {signal.peso_final_pct !== null &&
+                signal.peso_final_pct !== undefined &&
+                niveles.peso_bruto_pct !== null &&
+                signal.peso_final_pct < niveles.peso_bruto_pct && (
+                  <span className="block text-[10px] text-amber-800">
+                    recortado desde {niveles.peso_bruto_pct} %
+                  </span>
+                )}
             </div>
           </div>
         </div>

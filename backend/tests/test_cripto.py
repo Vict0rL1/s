@@ -59,10 +59,10 @@ def test_un_stop_mas_ancho_obliga_a_una_posicion_mas_pequena():
     cripto = decide({"symbol": "X", "score": 0.9}, precio, clase="cripto")["levels"]
     accion = decide({"symbol": "Y", "score": 0.9}, precio, clase="accion")["levels"]
     assert cripto["stop_pct"] > accion["stop_pct"]
-    assert cripto["peso_sugerido_pct"] < accion["peso_sugerido_pct"]
+    assert cripto["peso_bruto_pct"] < accion["peso_bruto_pct"]
     # El riesgo efectivo es idéntico en ambos casos.
     for n in (cripto, accion):
-        assert abs(n["peso_sugerido_pct"] / 100 * n["stop_pct"] / 100 - 0.01) < 0.0006
+        assert abs(n["peso_bruto_pct"] / 100 * n["stop_pct"] / 100 - 0.01) < 0.0006
 
 
 def test_sin_volatilidad_medible_no_se_hereda_el_valor_de_las_acciones():
