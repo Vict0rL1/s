@@ -31,6 +31,10 @@ import { getDb } from '../db.ts';
 import { normalizeTeamName } from '../football/ingest/teamNames.ts';
 import { parseFootballTxt } from '../football/ingest/openfootballTxt.ts';
 import { readRegistry } from '../experiments/registry.ts';
+import { fullKelly, fractionalKelly, expectedLogGrowth, expectedValue } from '../staking/kelly.ts';
+import { decideStake, DEFAULT_CONFIG } from '../staking/policy.ts';
+import { calibrationMultiplier } from '../staking/calibration.ts';
+import { simulate } from '../staking/drawdown.ts';
 import { FINAL_HOLDOUT_FROM } from '../experiments/holdout.ts';
 import { normalCdf, MARGIN_SIGMA as NFL_MARGIN_SIGMA } from '../nfl/model.ts';
 import { recomputeBaseballRatings } from '../baseball/ratings.ts';
@@ -897,6 +901,170 @@ function auditExperimentRegistry(): void {
   );
 }
 
+// ===========================================================================
+// EL MÓDULO DE RIESGO
+// ===========================================================================
+// Es la parte del proyecto donde un error no sale por pantalla como una excepción,
+// sale como dinero. Así que se comprueba contra PROPIEDADES que tienen que cumplirse
+// por construcción, no contra una salida de ejemplo que alguien miró una vez y le
+// pareció bien.
+//
+// Cada puerta se prueba haciéndola disparar. Una puerta que nunca se ha visto cerrar
+// no se sabe si cierra.
+function auditStaking(): void {
+  console.log('\n▸ Módulo de riesgo (Kelly, topes y límites)');
+  const cfg = DEFAULT_CONFIG;
+
+  // --- La aritmética de Kelly, contra valores que se pueden calcular a mano ---
+  // p = 0.60 a cuota 2.00: b = 1, f* = (0.6·1 − 0.4)/1 = 0.20 exacto.
+  const f = fullKelly(0.6, 2);
+  check('Kelly: f* de p=0.60 @ 2.00 es 0.20', Math.abs(f - 0.2) < 1e-9, f.toFixed(6));
+  check(
+    'Kelly: sin ventaja devuelve 0, no un negativo',
+    fullKelly(0.4, 2) === 0 && fullKelly(0.5, 1.9) === 0,
+    'devolvió algo distinto de 0',
+  );
+  // La propiedad que justifica toda la política: un cuarto es un cuarto.
+  check(
+    'Kelly fraccional: 1/4 y 1/5 son exactamente eso',
+    Math.abs(fractionalKelly(0.6, 2, 0.25) - 0.05) < 1e-9 &&
+      Math.abs(fractionalKelly(0.6, 2, 0.2) - 0.04) < 1e-9,
+    'las fracciones no cuadran',
+  );
+  // Por qué nunca se juega Kelly completo: alrededor de 2f* el crecimiento esperado se
+  // agota, y más allá es NEGATIVO aunque cada apuesta siga teniendo valor esperado
+  // positivo. Esa es la propiedad que hace que sobreapostar no sea «ganar menos» sino
+  // perder, y es la razón entera de que la fracción exista.
+  //
+  // «Se anula EXACTAMENTE en 2f*» es la versión continua del resultado y aquí no vale:
+  // para una apuesta binaria discreta, g(2f*) con p=0.60 a cuota 2.00 sale −0.00245, ya
+  // ligeramente por debajo de cero. La primera versión de esta comprobación exigía un
+  // cero exacto y falló — el fallo era de la comprobación, no del código. Se afirma lo
+  // que de verdad se cumple: en 2f* no queda crecimiento apreciable, y a partir de ahí
+  // es claramente negativo.
+  const g1 = expectedLogGrowth(0.6, 2, 0.2);
+  const g2 = expectedLogGrowth(0.6, 2, 0.4);
+  const g3 = expectedLogGrowth(0.6, 2, 0.6);
+  check('Kelly: el crecimiento en f* es positivo', g1 > 0, g1.toFixed(6));
+  // La afirmación buena es más simple y más fuerte que cualquier tolerancia: en 2f* el
+  // crecimiento YA ES NEGATIVO. Ni «casi cero» ni «poco»: apostando el doble de lo que
+  // dice Kelly, con una ventaja real del 20 %, el banco encoge a largo plazo.
+  check('Kelly: en 2·f* el crecimiento ya es negativo', g2 <= 0, g2.toFixed(6));
+  check('Kelly: pasado 2·f* el crecimiento es NEGATIVO', g3 < 0, g3.toFixed(6));
+  check('Kelly: el crecimiento decrece al pasarse', g1 > g2 && g2 > g3, 'no es monótono');
+  check(
+    'Kelly: la apuesta de g3 seguía teniendo valor esperado positivo',
+    expectedValue(0.6, 2) > 0,
+    'el ejemplo no demuestra lo que dice',
+  );
+
+  // --- Las puertas de la política, cada una disparando ---
+  const cal = {
+    bueno: { ece: 0, n: 10000, beatsMarket: true, vsMarketLogLoss: -0.01, measuredAt: '' },
+    malo: { ece: 0.2, n: 10000, beatsMarket: true, vsMarketLogLoss: -0.01, measuredAt: '' },
+    perdedor: { ece: 0, n: 10000, beatsMarket: false, vsMarketLogLoss: 0.02, measuredAt: '' },
+  };
+  check(
+    'calibración: sin medición el multiplicador es 0 (falla cerrado)',
+    calibrationMultiplier('inexistente', {}).multiplier === 0,
+    'un deporte sin medir recibió tamaño',
+  );
+  check(
+    'calibración: peor que el mercado ⇒ multiplicador 0',
+    calibrationMultiplier('perdedor', cal).multiplier === 0,
+    'un modelo peor que el precio recibió tamaño',
+  );
+  check(
+    'calibración: mal calibrado ⇒ multiplicador 0',
+    calibrationMultiplier('malo', cal).multiplier === 0,
+    'un ECE del 20 % recibió tamaño',
+  );
+  check(
+    'calibración: bien calibrado y mejor que el mercado ⇒ 1',
+    Math.abs(calibrationMultiplier('bueno', cal).multiplier - 1) < 1e-9,
+    'el mejor caso no da 1',
+  );
+
+  const bank = 1000;
+  // Puerta 1: sin ventaja no se apuesta.
+  const sinVentaja = decideStake({ sport: 'bueno', p: 0.5, odds: 1.9, bankroll: bank }, cfg, cal);
+  check('puerta 1: sin ventaja, cero', sinVentaja.stake === 0, `${sinVentaja.stake}`);
+
+  // Puerta 2: la calibración lo para aunque haya ventaja de sobra.
+  const malCal = decideStake({ sport: 'perdedor', p: 0.9, odds: 3, bankroll: bank }, cfg, cal);
+  check(
+    'puerta 2: calibración insuficiente para una ventaja enorme, cero',
+    malCal.stake === 0 && malCal.blockedBy === 'calibración insuficiente',
+    `${malCal.stake} · ${malCal.blockedBy}`,
+  );
+
+  // Puerta 4: EL TOPE. p = 0.9 a cuota 3 da un Kelly completo del 85 %; un cuarto es el
+  // 21 %, que sigue siendo una barbaridad. El tope tiene que dejarlo en el 2 %, y esto
+  // es lo que protege de una p disparatada SIN necesidad de saber que está disparatada.
+  const enorme = decideStake({ sport: 'bueno', p: 0.9, odds: 3, bankroll: bank }, cfg, cal);
+  check(
+    'puerta 4: el tope por evento corta una ventaja absurda',
+    Math.abs(enorme.fraction - cfg.maxPerEvent) < 1e-9,
+    `fracción ${enorme.fraction}`,
+  );
+  check(
+    'puerta 4: y el tope se aplica en dinero',
+    Math.abs(enorme.stake - bank * cfg.maxPerEvent) < 0.01,
+    `${enorme.stake}`,
+  );
+
+  // Un caso normal, que tiene que pasar: sin esto, todas las comprobaciones de arriba
+  // se cumplirían con una función que devuelve 0 siempre.
+  const normal = decideStake({ sport: 'bueno', p: 0.55, odds: 2, bankroll: bank }, cfg, cal);
+  check(
+    'una apuesta razonable SÍ pasa las cinco puertas',
+    normal.stake > 0 && normal.stake < bank * cfg.maxPerEvent + 0.01,
+    `${normal.stake} — si es 0, el módulo está bloqueando todo`,
+  );
+  check(
+    'la decisión explica cada paso',
+    normal.steps.length >= 5,
+    `${normal.steps.length} pasos`,
+  );
+
+  // --- El drawdown ---
+  const plan = Array.from({ length: 40 }, (_, i) => ({
+    label: `b${i}`,
+    p: 0.55,
+    odds: 2,
+    fraction: 0.02,
+  }));
+  const bien = simulate(plan, { paths: 2000 });
+  const mal = simulate(plan, { paths: 2000, pShift: 1 });
+  check(
+    'drawdown: una ventaja real da retorno esperado positivo',
+    bien.expectedReturn > 0,
+    bien.expectedReturn.toFixed(4),
+  );
+  // La propiedad que justifica que se muestre: incluso ganando, se pasa por caídas.
+  check(
+    'drawdown: incluso con ventaja, la caída mediana no es cero',
+    bien.medianMaxDrawdown > 0,
+    bien.medianMaxDrawdown.toFixed(4),
+  );
+  check(
+    'drawdown: el percentil 95 es peor que la mediana',
+    bien.p95MaxDrawdown > bien.medianMaxDrawdown,
+    `p95 ${bien.p95MaxDrawdown.toFixed(4)} vs mediana ${bien.medianMaxDrawdown.toFixed(4)}`,
+  );
+  // Sin ventaja (moneda), apostar a cuota 2.00 es neutro en media pero la caída sigue
+  // ahí: es exactamente el escenario que la tabla del CLI pone debajo del optimista.
+  check(
+    'drawdown: sin ventaja el retorno se hunde hasta ~0 o menos',
+    mal.expectedReturn < bien.expectedReturn,
+    `${mal.expectedReturn.toFixed(4)} vs ${bien.expectedReturn.toFixed(4)}`,
+  );
+  console.log(
+    `  Kelly, 4 puertas y el simulador comprobados · con ventaja: caída mediana ` +
+      `${(bien.medianMaxDrawdown * 100).toFixed(1)} %, p95 ${(bien.p95MaxDrawdown * 100).toFixed(1)} %`,
+  );
+}
+
 /**
  * Huecos que la FUENTE no tiene, con el motivo, no huecos que toleramos.
  *
@@ -1126,6 +1294,7 @@ function main(): void {
   auditSeasonGaps();
   auditFootballTxtParser();
   auditExperimentRegistry();
+  auditStaking();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

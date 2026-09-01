@@ -796,6 +796,8 @@ ves, en vez de fallar en silencio.
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
+| `npm run staking` | **La capa de decisión**: Kelly fraccional, topes, límites de pérdida y drawdown esperado |
+| `npm run study:calibration` | Mide el ECE por deporte y escribe lo que el módulo de riesgo lee para dimensionar |
 | `npm run experiments` | **El registro**: cuántas veces se han mirado estos datos, y qué resultados sobreviven a la corrección por comparaciones múltiples |
 | `npm run study:baselines` | **Lo primero que hay que mirar**: el modelo contra la línea de cierre, contra solo la ventaja de local y contra un Elo pelado, con intervalos por bootstrap |
 | `npm run study:devig` | Compara **multiplicativo vs. Shin vs. potencia** para quitar el margen de la casa, sobre 5.281 moneylines reales de la NFL |
@@ -805,6 +807,67 @@ ves, en vez de fallar en silencio.
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 | `npm run lint` | Lint real (oxlint, solo la categoría **correctness**) |
+
+## Modelo y decisión son dos cosas
+
+El modelo dice una probabilidad. Otra cosa distinta decide un dinero. Viven en
+carpetas separadas y `server/src/staking/` no importa ni un Elo: entran `p`, cuota,
+deporte y banco.
+
+La consecuencia práctica es la que importa: se puede **apretar el riesgo sin tocar el
+modelo**. Cuando las dos cosas viven en la misma función, subir un límite y mejorar una
+predicción se parecen demasiado.
+
+```bash
+npm run staking -- --bankroll 1000
+```
+
+### Las cinco puertas
+
+Una apuesta pasa por todas, en este orden:
+
+1. **¿Hay ventaja al precio ofrecido?** Con el margen dentro, no contra la cuota limpia.
+2. **¿Está el modelo calibrado?** Multiplica el tamaño y puede anularlo.
+3. **Kelly fraccional** — 1/4 o 1/5. `KellyFraction` es un tipo que **no admite 1**, así
+   que probar Kelly completo exige editar el fichero.
+4. **Tope duro por evento** — 2 % del banco.
+5. **Límites de pérdida diario y semanal** — que **cortan**, no recortan. Un límite que
+   reduce el tamaño se puede cruzar apostando más veces, y entonces no es un límite.
+
+### El tamaño baja solo cuando el modelo es peor
+
+`npm run study:calibration` mide el ECE de cada deporte y lo escribe en
+`experiments/calibration.json`. El módulo **falla cerrado**: sin medición, el tamaño es
+cero.
+
+| deporte | ECE | ¿mejor que el mercado? | multiplicador |
+|---|---|---|---|
+| fútbol | 0,72 pp | no medible (cero cuotas históricas) | **×0,50** |
+| NFL | 1,82 pp | **no**, +0.01609 de log loss | **×0,00** |
+
+La NFL sale a cero y no porque alguien lo decidiera: está medido que su modelo es peor
+que la línea de cierre, y apostar contra un precio mejor que tu propia estimación es
+perder por definición. El fútbol se queda a la mitad porque sin cuotas históricas no se
+puede descartar que le pase lo mismo.
+
+### El drawdown, no solo el retorno
+
+«+2 % esperado» no dice nada del camino. La tabla simula 5.000 caminos y enseña la caída
+mediana y la del percentil 95 — y lo hace **cuatro veces**, desplazando las
+probabilidades hacia la moneda:
+
+```
+  escenario                  retorno   caída mediana   caída p95   pierde
+  el modelo tiene razón       +2.03 %          7.80 %     15.13 %      50 %
+  el modelo se equivoca 1/4   +1.51 %          7.84 %     16.69 %      52 %
+  el modelo se equivoca 1/2   +0.98 %          7.84 %     16.73 %      54 %
+  el modelo no sabe nada      -0.04 %          7.91 %     16.79 %      59 %
+```
+
+La fila que importa no es la primera: esa supone que `p` es exacta, que es la hipótesis
+que Kelly necesita y que nunca se cumple. Y fíjate en que **la caída apenas cambia entre
+filas** — el retorno depende de acertar la probabilidad, la caída depende del tamaño que
+pusiste.
 
 ## El registro de experimentos y el holdout final
 
