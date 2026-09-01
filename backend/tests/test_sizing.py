@@ -84,6 +84,110 @@ def test_el_enlace_simple_no_parte_clusters_reales():
     assert sorted(grupos[0]) == ["A", "B", "C"]
 
 
+# --- Los topes cuentan lo que YA tienes --------------------------------------
+#
+# Sin esto los límites solo miraban las ideas nuevas: un libro con un 20 % en
+# tecnología seguía autorizando otro 25 % del mismo sector, y el resultado era un
+# 45 % en una sola apuesta con el tope marcando verde.
+
+
+def pos(symbol, peso, sector="Tech", vol=20.0):
+    return {"symbol": symbol, "sector": sector, "peso_pct": peso, "vol_anual_pct": vol}
+
+
+def test_el_sector_que_ya_tienes_gasta_su_parte_del_tope():
+    r = dimensionar(
+        [cand("NUEVA", 9.0, "Tech")],
+        cartera=[pos("VIEJA", 20.0, "Tech")],
+        objetivo_vol_pct=100.0,
+    )
+    # 25 % de tope − 20 % ya en libro = 5 % de margen, no 9 %.
+    assert r["pesos"]["NUEVA"] == 5.0, r["pesos"]
+    assert any("tope por sector" in x for x in r["recortes"])
+    assert any("Ya tienes un 20.0 %" in x for x in r["recortes"])
+
+
+def test_un_sector_agotado_no_deja_margen_y_lo_dice():
+    r = dimensionar(
+        [cand("NUEVA", 9.0, "Tech")],
+        cartera=[pos("A", 15.0, "Tech"), pos("B", 12.0, "Tech")],
+        objetivo_vol_pct=100.0,
+    )
+    assert r["pesos"]["NUEVA"] == 0.0
+    assert any("exige soltar antes" in x for x in r["recortes"])
+
+
+def test_el_tope_por_posicion_cuenta_lo_que_ya_tienes_de_ese_simbolo():
+    """Reforzar hasta el 10 % teniendo ya un 8 % deja la posición en el 18 %."""
+    r = dimensionar(
+        [cand("A", 10.0, "Tech")],
+        cartera=[pos("A", 8.0, "Tech")],
+        objetivo_vol_pct=100.0,
+    )
+    assert r["pesos"]["A"] == MAX_POR_POSICION_PCT - 8.0
+    assert any("cuenta lo que tienes más lo que añades" in x for x in r["recortes"])
+
+
+def test_una_idea_correlacionada_con_lo_que_ya_tienes_se_recorta():
+    """El caso que más falta hace detectar y el que era invisible: el cluster se
+    forma entre una candidata y una posición abierta, no entre dos candidatas."""
+    rng = random.Random(11)
+    base = [rng.gauss(0, 0.02) for _ in range(200)]
+    ruido = random.Random(12)
+    gemela = [x + ruido.gauss(0, 0.002) for x in base]
+
+    r = dimensionar(
+        [cand("NUEVA", 9.0, "Salud")],
+        retornos={"VIEJA": base, "NUEVA": gemela},
+        cartera=[pos("VIEJA", 22.0, "Tech")],
+        objetivo_vol_pct=100.0,
+    )
+    assert any(set(g) == {"NUEVA", "VIEJA"} for g in r["clusters"]), r["clusters"]
+    # Sectores distintos, así que el tope por sector no la ve: la recorta el de
+    # correlación, que reparte 25 % entre el 22 % en libro y lo nuevo.
+    assert r["pesos"]["NUEVA"] == 3.0, r["pesos"]
+    assert any("tope por correlación" in x for x in r["recortes"])
+
+
+def test_sin_cartera_los_topes_se_comportan_igual_que_antes():
+    r = dimensionar([cand(f"T{i}", 9.0, "Tech") for i in range(5)], objetivo_vol_pct=100.0)
+    assert abs(sum(r["pesos"].values()) - MAX_POR_SECTOR_PCT) < 0.01
+    assert r["ya_invertido_pct"] == 0.0
+
+
+def test_si_la_cartera_actual_ya_supera_el_objetivo_de_volatilidad_no_se_añade():
+    """No es que las ideas sean malas: es que no cabe más riesgo. Y se dice."""
+    r = dimensionar(
+        [cand("NUEVA", 5.0, "Salud", vol=30.0)],
+        cartera=[pos("A", 60.0, "Tech", vol=40.0), pos("B", 40.0, "Energía", vol=40.0)],
+        objetivo_vol_pct=12.0,
+    )
+    assert r["pesos"]["NUEVA"] == 0.0
+    assert r["escala_aplicada"] == 0.0
+    assert any("no cabe más riesgo" in x for x in r["recortes"])
+    assert r["vol_cartera_actual_pct"] > 12.0
+
+
+def test_el_objetivo_de_volatilidad_se_mide_sobre_la_cartera_combinada():
+    """Con un libro abierto la volatilidad no es proporcional a la escala: hay
+    términos cruzados. La bisección tiene que quedarse dentro del objetivo."""
+    r = dimensionar(
+        [cand(f"N{i}", 10.0, f"S{i}", vol=60.0) for i in range(3)],
+        cartera=[pos("VIEJA", 20.0, "Tech", vol=40.0)],
+        objetivo_vol_pct=12.0,
+    )
+    # La cartera actual sola (~8 %) cabe en el objetivo; la combinada (~21 %) no.
+    assert r["vol_cartera_actual_pct"] < 12.0
+    assert 0.0 < r["escala_aplicada"] < 1.0
+    assert r["vol_estimada_pct"] <= 12.05, r["vol_estimada_pct"]
+
+
+def test_la_nota_declara_que_la_app_no_conoce_tu_efectivo():
+    r = dimensionar([cand("A", 5.0)], cartera=[pos("B", 10.0, "Salud")])
+    assert "no registra tu efectivo" in r["nota"]
+    assert "lo que se AÑADE" in r["nota"]
+
+
 # --- Volatility targeting ----------------------------------------------------
 
 
@@ -144,6 +248,49 @@ def test_avisa_de_las_crisis_que_el_historico_NO_vio():
     assert "NO ha vivido" in r["aviso_cobertura"]
     assert "2008" in r["aviso_cobertura"]
     assert "2020" in r["aviso_cobertura"]
+
+
+def test_la_ventana_de_12_meses_no_se_rotula_sobre_diez_semanas():
+    """Recortar la ventana al histórico disponible y seguir llamándola «12
+    meses» produce un número que se compara con otros que sí significan lo que
+    dicen. Mejor vacío."""
+    serie = [(date(2024, 1, 1) + timedelta(days=i), 100.0 * 0.995 ** i) for i in range(70)]
+    r = peor_ventana({"A": 100.0}, {"A": serie})
+    assert r["suficiente"] is True
+    assert r["max_drawdown_pct"] < 0          # la caída sí se puede medir
+    assert r["peor_ventana_pct"] is None      # la ventana de 12 meses, no
+    assert "no hay ninguna ventana entera" in r["peor_ventana_nota"]
+
+
+def test_la_cartera_se_simula_con_los_pesos_que_tienes_no_con_los_que_derivan():
+    """Si los pesos simulados no son los que tienes, el número contesta a otra
+    pregunta — y aquí la diferencia es entre un −29 % y un −4 %.
+
+    A está plana mientras B se multiplica por diez; después A se parte por la
+    mitad. Quien tiene HOY un 50 % en A se come la mitad de ese desplome. Pero
+    comprando y no tocando, A habría quedado diluida al 9 % del libro y el mismo
+    desplome apenas se notaría: la simulación diría que no hay nada que temer de
+    una posición que es la mitad de tu cartera.
+    """
+    inicio = date(2020, 1, 1)
+    plana_luego_cae = [(inicio + timedelta(days=i), 100.0) for i in range(200)]
+    plana_luego_cae += [
+        (inicio + timedelta(days=200 + i), 100.0 * 0.5 ** ((i + 1) / 60))
+        for i in range(60)
+    ]
+    sube_y_se_queda = [
+        (inicio + timedelta(days=i), 100.0 * 10 ** (min(i, 199) / 199))
+        for i in range(260)
+    ]
+
+    r = peor_ventana(
+        {"A": 50.0, "B": 50.0},
+        {"A": plana_luego_cae, "B": sube_y_se_queda},
+    )
+    # Mezcla constante: A pesa la mitad cuando cae, así que el libro pierde
+    # ~29 %. Comprar y no tocar daría ~−4 % y ese es exactamente el aviso que se
+    # perdía.
+    assert r["max_drawdown_pct"] < -20.0, r["max_drawdown_pct"]
 
 
 def test_un_historico_largo_no_avisa_de_lo_que_si_vio():

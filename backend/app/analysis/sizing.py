@@ -27,6 +27,11 @@ Cuatro límites, en orden de aplicación:
 4. **Volatility targeting.** Se escala el libro entero para que la volatilidad
    estimada de la cartera se acerque a un objetivo. Solo hacia ABAJO: escalar
    hacia arriba es apalancarse, y eso es una decisión que no toma un algoritmo.
+
+Los cuatro cuentan **lo que ya tienes**, no solo lo que se propone comprar. Un
+tope que ignora la cartera abierta no es un tope: con un 20 % en tecnología ya
+en el libro, seguía autorizando otro 25 % del mismo sector y el resultado era un
+45 % en una sola apuesta con el límite marcando verde.
 """
 
 from __future__ import annotations
@@ -113,7 +118,10 @@ def volatilidad_cartera(
     vol_anual: dict[str, float],
     corr: dict[tuple[str, str], float],
 ) -> float | None:
-    """√(wᵀΣw) anualizada, en %.
+    """√(wᵀΣw) anualizada. **Pesos y volatilidades, ambos en FRACCIÓN.**
+
+    El contrato de unidades es explícito y no se adivina: 0,10 para un 10 % de
+    peso y 0,20 para un 20 % de volatilidad. Devuelve también fracción.
 
     Sumar volatilidades ponderadas sería el error clásico y siempre exagera:
     ignora que las posiciones no se mueven a la vez. Y usar correlación cero
@@ -123,16 +131,17 @@ def volatilidad_cartera(
     simbolos = [s for s in pesos if vol_anual.get(s)]
     if not simbolos:
         return None
-    # Pesos y volatilidades TIENEN que estar en la misma unidad. Mezclar peso en
-    # fracción (0,10) con volatilidad en porcentaje (20,0) daba una volatilidad
-    # de cartera cien veces mayor, y el targeting recortaba el libro entero por
-    # un error de unidades. Aquí ambos son fracción.
-    escala_vol = 100.0 if max(vol_anual.values()) > 3 else 1.0
+    # UNIDADES EXPLÍCITAS. Antes se adivinaban por magnitud («si la volatilidad
+    # pasa de 3, estará en porcentaje»), y eso fallaba justo con las carteras
+    # tranquilas: dos activos al 2,5 % anual se tomaban por fracciones y daban
+    # una volatilidad de cartera del 216 %, con lo que el targeting habría
+    # recortado el libro a la nada. Un heurístico de unidades es un bug
+    # esperando su caso; el contrato se declara y ya está.
     total = 0.0
     for i, a in enumerate(simbolos):
         for b in simbolos[i:]:
             wa, wb = pesos[a], pesos[b]
-            va, vb = vol_anual[a] / escala_vol, vol_anual[b] / escala_vol
+            va, vb = vol_anual[a], vol_anual[b]
             if a == b:
                 total += (wa * va) ** 2
             else:
@@ -152,6 +161,7 @@ def dimensionar(
     candidatas: list[dict],
     *,
     retornos: dict[str, list[float]] | None = None,
+    cartera: list[dict] | None = None,
     objetivo_vol_pct: float = OBJETIVO_VOL_ANUAL_PCT,
     max_posicion_pct: float = MAX_POR_POSICION_PCT,
     max_sector_pct: float = MAX_POR_SECTOR_PCT,
@@ -162,9 +172,33 @@ def dimensionar(
     `candidatas`: [{symbol, sector, peso_bruto_pct, vol_anual_pct}]. El peso
     bruto es el que sale del riesgo por operación — el que `decision.py` calcula
     mirando solo esa empresa. Aquí se recorta.
+
+    `cartera`: [{symbol, sector, peso_pct, vol_anual_pct}], las posiciones ya
+    abiertas. **Ocupan presupuesto pero no se redimensionan**: qué hacer con lo
+    que ya tienes es una decisión de mantener o soltar, y esa la toma
+    `decision.py` mirando la tesis, no el dimensionador mirando el tamaño. Sin
+    este argumento los topes solo veían las ideas nuevas, con lo que un libro
+    con un 20 % en tecnología seguía autorizando otro 25 % del mismo sector: el
+    tope existía en el código y no existía en la cartera.
+
+    Los pesos devueltos son lo que se AÑADE, no el peso final de la posición.
     """
+    cartera = cartera or []
+    en_libro = {p["symbol"]: float(p.get("peso_pct") or 0.0) for p in cartera}
+    sector_libro = {p["symbol"]: p.get("sector") or "Sin sector" for p in cartera}
+    vol_libro = {
+        p["symbol"]: float(p["vol_anual_pct"])
+        for p in cartera
+        if p.get("vol_anual_pct")
+    }
+
     if not candidatas:
-        return {"pesos": {}, "recortes": [], "nota": "Sin candidatas que dimensionar."}
+        return {
+            "pesos": {},
+            "recortes": [],
+            "clusters": [],
+            "nota": "Sin candidatas que dimensionar.",
+        }
 
     pesos = {c["symbol"]: float(c.get("peso_bruto_pct") or 0.0) for c in candidatas}
     sectores = {c["symbol"]: c.get("sector") or "Sin sector" for c in candidatas}
@@ -175,87 +209,192 @@ def dimensionar(
     }
     recortes: list[str] = []
 
-    # 1) Tope por posición.
+    # 1) Tope por posición. Lo que ya tienes de ese mismo símbolo cuenta contra
+    #    el mismo tope: reforzar una posición hasta el 10 % teniendo ya un 8 %
+    #    la deja en el 18 %, y el tope diría que todo está en orden.
     for s, w in list(pesos.items()):
-        if w > max_posicion_pct:
-            recortes.append(
-                f"{s}: {w:.1f} % → {max_posicion_pct:.1f} % (tope por posición). "
-                "Un stop ceñido puede justificar aritméticamente mucho más, pero "
-                "el modelo puede estar equivocado sobre esa empresa y entonces el "
-                "tamaño no te salva el stop."
-            )
-            pesos[s] = max_posicion_pct
+        tope = max(0.0, max_posicion_pct - en_libro.get(s, 0.0))
+        if w > tope:
+            if en_libro.get(s):
+                recortes.append(
+                    f"{s}: {w:.1f} % → {tope:.1f} % (tope por posición). Ya tienes "
+                    f"un {en_libro[s]:.1f} % en {s}, y el tope de "
+                    f"{max_posicion_pct:.0f} % cuenta lo que tienes más lo que añades."
+                )
+            else:
+                recortes.append(
+                    f"{s}: {w:.1f} % → {tope:.1f} % (tope por posición). "
+                    "Un stop ceñido puede justificar aritméticamente mucho más, pero "
+                    "el modelo puede estar equivocado sobre esa empresa y entonces el "
+                    "tamaño no te salva el stop."
+                )
+            pesos[s] = tope
 
-    # 2) Tope por sector.
+    # 2) Tope por sector, contando lo que el libro ya ocupa en cada uno.
+    ocupado_sector: dict[str, float] = {}
+    for s, w in en_libro.items():
+        clave = sector_libro[s]
+        ocupado_sector[clave] = ocupado_sector.get(clave, 0.0) + w
+
     pesos, r = _recortar_por_grupo(
-        pesos, {s: [k for k, v in sectores.items() if v == s] for s in set(sectores.values())},
-        max_sector_pct, "sector",
+        pesos,
+        {s: [k for k, v in sectores.items() if v == s] for s in set(sectores.values())},
+        max_sector_pct, "sector", ocupado=ocupado_sector,
     )
     recortes += r
 
     # 3) Tope por correlación. El sector es una aproximación; lo que importa es
-    #    qué se mueve junto, y eso cruza sectores.
+    #    qué se mueve junto, y eso cruza sectores. Los clusters se calculan
+    #    sobre candidatas Y posiciones abiertas: una idea nueva correlacionada
+    #    con algo que ya tienes es la que más falta hace detectar, y mirando
+    #    solo las candidatas entre sí era invisible.
     corr = matriz_correlacion(retornos or {})
-    clusters = agrupar_por_correlacion(list(pesos), corr)
-    grupos = {
-        f"grupo {'+'.join(g[:3])}{'…' if len(g) > 3 else ''}": g
-        for g in clusters
-        if len(g) > 1
-    }
-    pesos, r = _recortar_por_grupo(pesos, grupos, max_cluster_pct, "correlación")
+    clusters = agrupar_por_correlacion(sorted(set(pesos) | set(en_libro)), corr)
+    grupos: dict[str, list[str]] = {}
+    ocupado_cluster: dict[str, float] = {}
+    for g in clusters:
+        if len(g) < 2:
+            continue
+        nombre = f"grupo {'+'.join(g[:3])}{'…' if len(g) > 3 else ''}"
+        grupos[nombre] = g
+        ya = sum(en_libro.get(s, 0.0) for s in g)
+        if ya:
+            ocupado_cluster[nombre] = ya
+    pesos, r = _recortar_por_grupo(
+        pesos, grupos, max_cluster_pct, "correlación", ocupado=ocupado_cluster
+    )
     recortes += r
 
-    # 4) Volatility targeting sobre el libro entero.
-    vol_estimada = volatilidad_cartera(
-        {s: w / 100 for s, w in pesos.items()}, vols, corr
-    )
+    # 4) Volatility targeting sobre el libro entero: el que tienes más el que
+    #    propones. Las candidatas traen la volatilidad en PORCENTAJE; aquí se
+    #    convierte, que es el único sitio donde se conoce la unidad de origen.
+    vols_frac = {s: v / 100 for s, v in vols.items()}
+    for s, v in vol_libro.items():
+        vols_frac.setdefault(s, v / 100)
+
+    def vol_con(escala: float) -> float | None:
+        combinados = {s: w / 100 for s, w in en_libro.items()}
+        for s, w in pesos.items():
+            combinados[s] = combinados.get(s, 0.0) + (w * escala) / 100
+        return volatilidad_cartera(combinados, vols_frac, corr)
+
+    vol_solo_libro = vol_con(0.0) if en_libro else None
+    vol_llena = vol_con(1.0)
     escala = 1.0
-    if vol_estimada and vol_estimada * 100 > objetivo_vol_pct:
-        escala = objetivo_vol_pct / (vol_estimada * 100)
+    if vol_llena and vol_llena * 100 > objetivo_vol_pct:
+        if vol_solo_libro and vol_solo_libro * 100 >= objetivo_vol_pct:
+            escala = 0.0
+            recortes.append(
+                f"Ideas nuevas al 0 %: la cartera que YA tienes estima un "
+                f"{vol_solo_libro * 100:.1f} % de volatilidad, por encima del "
+                f"objetivo ({objetivo_vol_pct} %). No es que las ideas sean malas "
+                "— es que no cabe más riesgo. Bajar del objetivo pasa por soltar "
+                "algo de lo que ya tienes, y eso no lo decide el dimensionador."
+            )
+        else:
+            # Bisección en vez de despejar: con un libro ya abierto la
+            # volatilidad combinada no es proporcional a la escala (hay términos
+            # cruzados entre lo que tienes y lo que añades), así que la fórmula
+            # cerrada «objetivo / vol» solo vale para la cartera vacía.
+            bajo, alto = 0.0, 1.0
+            for _ in range(40):
+                medio = (bajo + alto) / 2
+                v = vol_con(medio)
+                if v and v * 100 > objetivo_vol_pct:
+                    alto = medio
+                else:
+                    bajo = medio
+            escala = bajo
+            recortes.append(
+                f"Ideas nuevas escaladas al {escala * 100:.0f} %: la volatilidad "
+                f"estimada de la cartera combinada ({vol_llena * 100:.1f} %) "
+                f"superaba el objetivo ({objetivo_vol_pct} %)."
+            )
         pesos = {s: w * escala for s, w in pesos.items()}
-        recortes.append(
-            f"Cartera escalada al {escala * 100:.0f} %: la volatilidad estimada "
-            f"({vol_estimada * 100:.1f} %) superaba el objetivo ({objetivo_vol_pct} %)."
-        )
 
     invertido = sum(pesos.values())
-    vol_final = volatilidad_cartera({s: w / 100 for s, w in pesos.items()}, vols, corr)
+    ya_invertido = sum(en_libro.values())
+    vol_final = vol_con(1.0)
 
     return {
         "pesos": {s: round(w, 2) for s, w in sorted(pesos.items(), key=lambda kv: -kv[1])},
         "invertido_pct": round(invertido, 2),
-        "liquidez_pct": round(max(0.0, 100 - invertido), 2),
+        "ya_invertido_pct": round(ya_invertido, 2),
+        "invertido_total_pct": round(invertido + ya_invertido, 2),
+        "liquidez_pct": round(max(0.0, 100 - invertido - ya_invertido), 2),
         "vol_estimada_pct": round(vol_final * 100, 2) if vol_final else None,
+        "vol_cartera_actual_pct": (
+            round(vol_solo_libro * 100, 2) if vol_solo_libro else None
+        ),
         "objetivo_vol_pct": objetivo_vol_pct,
         "escala_aplicada": round(escala, 3),
         "clusters": [g for g in clusters if len(g) > 1],
+        "cartera_actual": {
+            s: round(w, 2) for s, w in sorted(en_libro.items(), key=lambda kv: -kv[1])
+        },
         "recortes": recortes,
         "nota": (
             "El tamaño se decide sobre la cartera entera, no idea por idea: la "
-            "misma empresa merece un peso distinto según qué más tengas. La "
-            "volatilidad solo se escala hacia ABAJO — escalar hacia arriba es "
-            "apalancarse, y esa decisión no la toma un algoritmo. Si la "
-            "correlación entre dos posiciones no se pudo medir se asume 0,5: es "
-            "un supuesto, no un dato."
+            "misma empresa merece un peso distinto según qué más tengas. Los "
+            "topes cuentan lo que YA tienes — con un 20 % en tecnología, una "
+            "idea nueva del sector solo puede aspirar al 5 % que queda — y los "
+            "pesos que salen aquí son lo que se AÑADE, no el peso final. La "
+            "volatilidad solo se escala hacia ABAJO: escalar hacia arriba es "
+            "apalancarse, y esa decisión no la toma un algoritmo. Dos supuestos "
+            "que conviene tener presentes: si la correlación entre dos "
+            "posiciones no se pudo medir se asume 0,5 —es un supuesto, no un "
+            "dato—, y el peso de lo que ya tienes se mide sobre el valor de tus "
+            "posiciones abiertas, porque la app no registra tu efectivo: si "
+            "guardas liquidez fuera, tu concentración real es menor y los topes "
+            "aprietan antes de lo debido."
         ),
     }
 
 
 def _recortar_por_grupo(
-    pesos: dict[str, float], grupos: dict[str, list[str]], tope: float, etiqueta: str
+    pesos: dict[str, float],
+    grupos: dict[str, list[str]],
+    tope: float,
+    etiqueta: str,
+    ocupado: dict[str, float] | None = None,
 ) -> tuple[dict[str, float], list[str]]:
-    """Recorta proporcionalmente los grupos que superan su tope."""
+    """Recorta proporcionalmente los grupos que superan su tope.
+
+    `ocupado` es lo que las posiciones ya abiertas consumen de cada grupo. El
+    tope se reparte entre lo que tienes y lo que añades, así que el margen para
+    ideas nuevas es `tope − ocupado`, no `tope`.
+    """
     salida = dict(pesos)
     avisos = []
+    ocupado = ocupado or {}
     for nombre, miembros in grupos.items():
         presentes = [s for s in miembros if s in salida]
-        total = sum(salida[s] for s in presentes)
-        if total > tope and total > 0:
-            factor = tope / total
-            for s in presentes:
-                salida[s] *= factor
+        nuevo = sum(salida[s] for s in presentes)
+        if nuevo <= 0:
+            continue
+        ya = ocupado.get(nombre, 0.0)
+        disponible = max(0.0, tope - ya)
+        if nuevo <= disponible:
+            continue
+        factor = disponible / nuevo
+        for s in presentes:
+            salida[s] *= factor
+        if ya and disponible <= 0:
             avisos.append(
-                f"«{nombre}»: {total:.1f} % → {tope:.1f} % (tope por {etiqueta}). "
+                f"«{nombre}»: sin margen para ideas nuevas (tope por {etiqueta}). "
+                f"Lo que ya tienes ({ya:.1f} %) agota el tope del {tope:.0f} %: "
+                f"añadir aquí exige soltar antes. Afecta a {', '.join(presentes)}."
+            )
+        elif ya:
+            avisos.append(
+                f"«{nombre}»: {nuevo:.1f} % → {disponible:.1f} % (tope por "
+                f"{etiqueta}). Ya tienes un {ya:.1f} % en el libro y el tope de "
+                f"{tope:.0f} % cuenta lo que tienes más lo que añades. Afecta a "
+                f"{', '.join(presentes)}."
+            )
+        else:
+            avisos.append(
+                f"«{nombre}»: {nuevo:.1f} % → {tope:.1f} % (tope por {etiqueta}). "
                 f"Afecta a {', '.join(presentes)}, que se mueven juntas y por "
                 "tanto cuentan como una sola apuesta."
             )
@@ -281,6 +420,10 @@ def peor_ventana(
 
     No es una simulación de escenarios inventados: se aplica la cartera actual
     a cada ventana del pasado disponible y se reporta la peor, con sus fechas.
+
+    Se simula **con mezcla constante**, rebalanceando a los pesos que tienes en
+    cada paso. Comprar y no tocar respondería a otra pregunta: los pesos derivan
+    hacia lo que más subió y la caída sale más suave que la de tu cartera real.
     """
     if not pesos or not series:
         return {"suficiente": False, "nota": "Sin cartera o sin histórico."}
@@ -298,14 +441,24 @@ def peor_ventana(
     orden = sorted(fechas_comunes)
     precios = {s: dict(series[s]) for s in pesos if s in series}
     total_peso = sum(pesos[s] for s in precios) or 1.0
+    normal = {s: pesos[s] / total_peso for s in precios}
 
-    valores = []
-    for d in orden:
-        v = sum(
-            (pesos[s] / total_peso) * (precios[s][d] / precios[s][orden[0]])
-            for s in precios
-        )
-        valores.append((d, v))
+    # Mezcla constante: los pesos se mantienen en los que TIENES, rebalanceando
+    # en cada paso. Antes se acumulaba `Σ wᵢ·(Pᵢ(t)/Pᵢ(0))`, que es comprar y no
+    # tocar, y con eso los pesos derivan solos: una cartera declarada 50/50
+    # acababa simulada como 92/8 en favor de lo que más había subido, justo
+    # porque había subido. El sesgo no tiene un signo fijo —lo que se desploma al
+    # final llega sobreponderado y exagera la caída; lo que baja despacio se
+    # diluye y la tapa— y por eso no se puede corregir leyendo el número con
+    # cuidado: sencillamente contesta a otra pregunta que la que se hizo.
+    valores = [(orden[0], 1.0)]
+    for anterior, d in zip(orden, orden[1:]):
+        retorno = 0.0
+        for s, w in normal.items():
+            p0, p1 = precios[s][anterior], precios[s][d]
+            if p0:
+                retorno += w * (p1 / p0 - 1)
+        valores.append((d, valores[-1][1] * (1 + retorno)))
 
     # Peor caída pico-a-valle de todo el histórico.
     pico, peor, pico_f, valle_f = valores[0][1], 0.0, valores[0][0], valores[0][0]
@@ -317,15 +470,20 @@ def peor_ventana(
         if caida < peor:
             peor, pico_f, valle_f = caida, p_actual, d
 
-    # Peor ventana de `meses` consecutivos.
-    paso = max(1, len(orden) // max(1, int(len(orden) / 21)))
+    # Peor ventana de `meses` consecutivos. Si no cabe ni una ventana entera no
+    # se calcula: antes se recortaba al histórico disponible y se seguía
+    # rotulando «12 meses», así que un −29 % de diez semanas viajaba con la
+    # etiqueta de un año. Un número mal rotulado es peor que ninguno, porque se
+    # compara con otros que sí significan lo que dicen.
     ventana = meses * 21
-    peor_v, desde_v, hasta_v = 0.0, None, None
-    for i in range(0, max(1, len(valores) - ventana), paso):
-        j = min(i + ventana, len(valores) - 1)
-        ret = valores[j][1] / valores[i][1] - 1 if valores[i][1] else 0.0
-        if ret < peor_v:
-            peor_v, desde_v, hasta_v = ret, valores[i][0], valores[j][0]
+    peor_v, desde_v, hasta_v = None, None, None
+    if len(valores) > ventana:
+        paso = 21  # se desplaza la ventana mes a mes
+        for i in range(0, len(valores) - ventana, paso):
+            j = i + ventana
+            ret = valores[j][1] / valores[i][1] - 1 if valores[i][1] else 0.0
+            if peor_v is None or ret < peor_v:
+                peor_v, desde_v, hasta_v = ret, valores[i][0], valores[j][0]
 
     cobertura_desde, cobertura_hasta = orden[0], orden[-1]
     años = (cobertura_hasta - cobertura_desde).days / 365.25
@@ -334,10 +492,19 @@ def peor_ventana(
         "max_drawdown_pct": round(peor * 100, 2),
         "drawdown_desde": pico_f.isoformat(),
         "drawdown_hasta": valle_f.isoformat(),
-        "peor_ventana_pct": round(peor_v * 100, 2),
+        "peor_ventana_pct": round(peor_v * 100, 2) if peor_v is not None else None,
         "peor_ventana_meses": meses,
         "peor_ventana_desde": desde_v.isoformat() if desde_v else None,
         "peor_ventana_hasta": hasta_v.isoformat() if hasta_v else None,
+        "peor_ventana_nota": (
+            None
+            if peor_v is not None
+            else (
+                f"El histórico común no llega a {meses} meses, así que no hay "
+                "ninguna ventana entera que medir. Se deja vacío en vez de "
+                "recortar el periodo y seguir rotulándolo igual."
+            )
+        ),
         "cobertura": f"{cobertura_desde.isoformat()} → {cobertura_hasta.isoformat()}",
         "años_cubiertos": round(años, 1),
         # La advertencia más importante del módulo, y la que más se olvida.

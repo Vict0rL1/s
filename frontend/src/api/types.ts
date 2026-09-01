@@ -391,8 +391,28 @@ export interface Allocation {
   weight: number
 }
 
+/** Qué le habría pasado a ESTA composición en el peor tramo del histórico.
+ *  No son escenarios inventados: son tus pesos de hoy aplicados al pasado. */
+export interface Estres {
+  suficiente: boolean
+  nota?: string
+  max_drawdown_pct?: number
+  drawdown_desde?: string
+  drawdown_hasta?: string
+  peor_ventana_pct?: number | null
+  peor_ventana_meses?: number
+  peor_ventana_desde?: string | null
+  peor_ventana_hasta?: string | null
+  /** Por qué la peor ventana viene vacía: el histórico no llega. */
+  peor_ventana_nota?: string | null
+  cobertura?: string
+  años_cubiertos?: number
+  aviso_cobertura?: string
+}
+
 export interface Portfolio {
   risk_budget: RiskBudget
+  estres: Estres
   positions: PortfolioPosition[]
   closed_positions: ClosedPosition[]
   summary: {
@@ -403,6 +423,10 @@ export interface Portfolio {
     realized_pnl: number
     priced_positions: number
     total_positions: number
+    /** Ninguna rentabilidad viaja sola: esta es la caída que la acompaña. */
+    max_drawdown_esperado_pct: number | null
+    peor_ventana_pct?: number | null
+    aviso_cobertura: string
   }
   allocation_by_position: Allocation[]
   allocation_by_sector: Allocation[]
@@ -648,14 +672,23 @@ export interface Conviction {
 /** Las pocas que comprar y las pocas que evitar. Un umbral dice quién califica;
  *  esto dice cuáles pocas. */
 export interface Sizing {
+  /** Lo que se AÑADE a cada posición, no su peso final. */
   pesos: Record<string, number>
   invertido_pct: number
+  /** Lo que las posiciones abiertas ya ocupan: los topes lo cuentan. */
+  ya_invertido_pct?: number
+  invertido_total_pct?: number
   liquidez_pct: number
   vol_estimada_pct: number | null
+  /** Volatilidad de la cartera actual sola, sin las ideas nuevas. */
+  vol_cartera_actual_pct?: number | null
   objetivo_vol_pct: number
   escala_aplicada: number
   clusters: string[][]
+  cartera_actual?: Record<string, number>
   recortes: string[]
+  /** Posiciones abiertas que este barrido no pudo valorar. */
+  aviso_cartera?: string
   nota: string
 }
 

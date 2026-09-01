@@ -7,6 +7,7 @@ import type {
   Decision,
   DecisionAction,
   MarketInfo,
+  Sizing,
   TodayResponse,
 } from '../api/types'
 import { fmtChangePct, fmtNumber, relativeTime } from '../lib/format'
@@ -455,6 +456,79 @@ function AvoidList({
           </li>
         ))}
       </ul>
+    </section>
+  )
+}
+
+
+/** Por qué el peso final no es el que pedía el stop.
+ *
+ *  El dimensionador ya explicaba cada recorte y esas explicaciones no llegaban
+ *  a la pantalla: la tarjeta enseñaba «recortado desde 9 %» sin decir por qué, y
+ *  con la cartera abierta contando contra los topes un peso puede salir en 0 %.
+ *  Un 0 % sin motivo se lee como un error de la app; con motivo es la respuesta.
+ */
+function SizingPanel({ sizing }: { sizing: Sizing }) {
+  const enLibro = Object.entries(sizing.cartera_actual ?? {})
+  const hayAlgoQueContar =
+    sizing.recortes.length > 0 || enLibro.length > 0 || sizing.aviso_cartera
+  if (!hayAlgoQueContar) return null
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <h3 className="text-sm font-semibold text-slate-800">
+        Cómo se repartió el tamaño
+      </h3>
+
+      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          ['Se añade', `${sizing.invertido_pct} %`],
+          ['Ya en cartera', `${sizing.ya_invertido_pct ?? 0} %`],
+          [
+            'Volatilidad estimada',
+            sizing.vol_estimada_pct === null
+              ? 'sin dato'
+              : `${sizing.vol_estimada_pct} % / ${sizing.objetivo_vol_pct} %`,
+          ],
+          ['Liquidez', `${sizing.liquidez_pct} %`],
+        ].map(([rotulo, valor]) => (
+          <div key={rotulo}>
+            <dt className="text-[10px] uppercase tracking-wide text-slate-400">
+              {rotulo}
+            </dt>
+            <dd className="text-sm tabular-nums text-slate-900">{valor}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {enLibro.length > 0 && (
+        <p className="mt-3 text-xs text-slate-500">
+          <span className="font-medium text-slate-700">Lo que ya tienes</span> cuenta
+          contra los mismos topes:{' '}
+          {enLibro.map(([s, w]) => `${s} ${w} %`).join(' · ')}
+        </p>
+      )}
+
+      {sizing.recortes.length > 0 && (
+        <ul className="mt-3 space-y-1.5 text-xs leading-relaxed text-amber-900">
+          {sizing.recortes.map((r) => (
+            <li key={r} className="flex gap-2">
+              <span aria-hidden className="text-amber-500">
+                ·
+              </span>
+              <span>{r}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {sizing.aviso_cartera && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+          {sizing.aviso_cartera}
+        </p>
+      )}
+
+      <p className="mt-3 text-[11px] leading-relaxed text-slate-400">{sizing.nota}</p>
     </section>
   )
 }
@@ -999,6 +1073,7 @@ export function TodayPage() {
                   ))}
                 </ul>
               )}
+              <SizingPanel sizing={data.shortlist.sizing} />
               <AvoidList signals={data.shortlist.evitar} />
             </div>
           ) : (

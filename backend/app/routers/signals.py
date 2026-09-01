@@ -139,7 +139,9 @@ def _safe_get(service: MarketDataService, data_type: str, **kwargs):
         return None
 
 
-def _lista_corta_dimensionada(ranked: list[dict]) -> dict:
+def _lista_corta_dimensionada(
+    ranked: list[dict], posiciones: dict[str, dict] | None = None
+) -> dict:
     """La lista corta, con el tamaño decidido sobre el conjunto.
 
     El peso que trae cada decisión es BRUTO: lo que su stop permitiría mirando
@@ -147,6 +149,11 @@ def _lista_corta_dimensionada(ranked: list[dict]) -> dict:
     cartera entera — topes por posición, por sector y por correlación, más el
     objetivo de volatilidad. Sin este paso, cinco ideas «del 12 %» suman 60 %
     en cinco apuestas que probablemente caen juntas.
+
+    Y «la cartera entera» incluye lo que ya tienes abierto, no solo las ideas
+    nuevas. Se le pasan las dos cosas al dimensionador: las series de retornos
+    (sin las cuales el límite por correlación no se ejecutaba) y las posiciones
+    en libro (sin las cuales los topes por sector solo contaban la mitad).
     """
     corta = construir_lista_corta(ranked)
     candidatas = [
@@ -160,7 +167,17 @@ def _lista_corta_dimensionada(ranked: list[dict]) -> dict:
         }
         for s in corta["ideas"]
     ]
-    corta["sizing"] = dimensionar([c for c in candidatas if c["peso_bruto_pct"]])
+    candidatas = [c for c in candidatas if c["peso_bruto_pct"]]
+    cartera, aviso_cartera = _cartera_actual(ranked, posiciones or {})
+    interesan = {c["symbol"] for c in candidatas} | {p["symbol"] for p in cartera}
+
+    corta["sizing"] = dimensionar(
+        candidatas,
+        retornos=_retornos_desde_spark(ranked, interesan),
+        cartera=cartera,
+    )
+    if aviso_cartera:
+        corta["sizing"]["aviso_cartera"] = aviso_cartera
     for idea in corta["ideas"]:
         idea["peso_final_pct"] = corta["sizing"]["pesos"].get(idea["symbol"])
     return corta
@@ -170,6 +187,126 @@ def _vol_anual(signal: dict) -> float | None:
     """Volatilidad anualizada desde la diaria que ya trae el precio."""
     diaria = (signal.get("price") or {}).get("daily_vol_pct")
     return round(diaria * (252 ** 0.5), 2) if diaria else None
+
+
+# `correlacion()` exige 20 retornos, o sea 21 puntos de precio.
+SPARK_MIN_PUNTOS = 21
+# Dos series solo se cruzan si sus historiales tienen longitudes parecidas.
+TOLERANCIA_HISTORIAL = 0.05
+
+
+def _retornos_desde_spark(
+    signals: list[dict], simbolos: set[str]
+) -> dict[str, list[float]]:
+    """Retornos aproximados desde la miniatura de precio que ya viaja en la señal.
+
+    El límite por correlación estaba escrito y nunca se ejecutaba: `dimensionar`
+    aceptaba `retornos` y se llamaba sin ellos, así que la matriz salía vacía,
+    `clusters` salía siempre `[]` y dos posiciones con correlación 0,9 pasaban el
+    filtro como si fueran apuestas independientes. Esto lo alimenta con datos que
+    ya están en la respuesta, sin una sola llamada más a ninguna API.
+
+    La contrapartida hay que decirla: `spark` son 32 puntos muestreados
+    uniformemente sobre el año de historial, o sea retornos de ~11 sesiones, no
+    diarios. La correlación que sale de ahí es GRUESA — 31 observaciones, justo
+    por encima del mínimo de la función — y sirve para detectar «esto se mueve
+    claramente junto», no para dar un número fino. Se prefiere una estimación
+    tosca a ninguna: sin ella el límite sencillamente no existe.
+
+    Solo se cruzan símbolos con historiales de longitud parecida. Los puntos se
+    muestrean sobre la serie de cada uno, así que si una empresa tiene 250
+    sesiones y otra 100, sus 32 puntos cubren periodos distintos y correlacionar
+    los dos no mide nada — daría un número con la misma pinta que uno bueno.
+    """
+    crudos: dict[str, tuple[int, list[float]]] = {}
+    for signal in signals:
+        if signal["symbol"] not in simbolos:
+            continue
+        precio = signal.get("price") or {}
+        spark = precio.get("spark") or []
+        if len(spark) < SPARK_MIN_PUNTOS:
+            continue
+        crudos[signal["symbol"]] = (precio.get("points") or len(spark), spark)
+
+    if len(crudos) < 2:
+        return {}
+
+    longitudes = sorted(p for p, _ in crudos.values())
+    mediana = longitudes[len(longitudes) // 2]
+
+    salida: dict[str, list[float]] = {}
+    for symbol, (puntos, spark) in crudos.items():
+        if mediana and abs(puntos - mediana) / mediana > TOLERANCIA_HISTORIAL:
+            continue
+        retornos = [
+            spark[i] / spark[i - 1] - 1
+            for i in range(1, len(spark))
+            if spark[i - 1]
+        ]
+        if len(retornos) >= 20:
+            salida[symbol] = retornos
+    return salida
+
+
+def _cartera_actual(
+    ranked: list[dict], posiciones: dict[str, dict]
+) -> tuple[list[dict], str | None]:
+    """Las posiciones abiertas, con peso y sector, para que los topes las cuenten.
+
+    El peso se mide sobre el valor de mercado de las posiciones abiertas, que es
+    la misma convención que ya usa el presupuesto de riesgo. La app no registra
+    efectivo: asume que lo anotado es la cartera entera. El error va hacia el
+    lado prudente (sobreestima la concentración, los topes aprietan antes), pero
+    se dice, aquí y en la nota que viaja al frontend.
+
+    Las posiciones que este barrido no puede valorar —de otro mercado, o sin
+    precio— quedan fuera y se avisa: un tope calculado sobre media cartera es
+    peor que ninguno si no sabes que le falta la otra mitad.
+    """
+    if not posiciones:
+        return [], None
+
+    por_simbolo = {s["symbol"]: s for s in ranked}
+    valoradas: list[dict] = []
+    sin_valorar: list[str] = []
+    for symbol, datos in posiciones.items():
+        signal = por_simbolo.get(symbol)
+        precio = ((signal or {}).get("price") or {}).get("last")
+        cantidad = datos.get("quantity")
+        if not signal or not precio or not cantidad:
+            sin_valorar.append(symbol)
+            continue
+        valoradas.append(
+            {
+                "symbol": symbol,
+                "sector": (signal.get("context") or {}).get("sector_name"),
+                "valor": precio * cantidad,
+                "vol_anual_pct": _vol_anual(signal),
+            }
+        )
+
+    total = sum(p["valor"] for p in valoradas)
+    aviso = None
+    if sin_valorar:
+        muestra = ", ".join(sorted(sin_valorar)[:5])
+        aviso = (
+            f"{len(sin_valorar)} posición(es) abierta(s) no entran en los topes "
+            f"por sector y correlación ({muestra}): este barrido no las cubre o "
+            "no tienen precio. Tu concentración real es mayor que la que se ve "
+            "aquí."
+        )
+    if not total:
+        return [], aviso
+
+    return [
+        {
+            "symbol": p["symbol"],
+            "sector": p["sector"],
+            "peso_pct": round(p["valor"] / total * 100, 2),
+            "vol_anual_pct": p["vol_anual_pct"],
+        }
+        for p in valoradas
+    ], aviso
 
 
 def _stored_rule_backtest(session: Session) -> dict | None:
@@ -768,7 +905,7 @@ def _today(
             status_code=404, detail=f"Mercado desconocido: {market}"
         ) from None
 
-    cache_params = {"v": 5, "market": market}
+    cache_params = {"v": 6, "market": market}
     if not refresh:
         cached = service.cache.get("daily_picks", cache_params)
         # Una respuesta guardada por una versión anterior de la app puede no
@@ -889,7 +1026,7 @@ def _today(
         # 98 candidatas no son 98 oportunidades. La lista corta ordena por
         # convicción y recorta a unas pocas: es la diferencia entre un filtro
         # y una recomendación.
-        "shortlist": _lista_corta_dimensionada(ranked),
+        "shortlist": _lista_corta_dimensionada(ranked, posiciones),
         "counts": {
             "favorables": n_favorables,
             "neutrales": len(ranked) - n_favorables - n_desfavorables,

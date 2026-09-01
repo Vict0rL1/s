@@ -135,10 +135,18 @@ def simular_cartera(
             # Los pesos derivan solos con el precio: sin esto, el rebalanceo
             # parecería gratis incluso cuando no cambia la selección.
             if factor:
-                pesos = {
-                    s: w * ((_precio(universo[s], as_of) or 1) / (_precio(universo[s], anterior) or 1)) / factor
-                    for s, w in pesos.items()
-                }
+                # Un precio ausente deja el peso COMO ESTABA. El `or 1` que
+                # había aquí convertía la falta de dato en un ratio absurdo
+                # (1/250 o 250/1) y descuadraba la cartera entera por un hueco
+                # en el histórico de un solo símbolo. La revalorización de
+                # arriba ya lo trataba bien; esta línea se había quedado atrás.
+                nuevos_pesos = {}
+                for s, w in pesos.items():
+                    p0 = _precio(universo[s], anterior)
+                    p1 = _precio(universo[s], as_of)
+                    ratio = (p1 / p0) if (p0 and p1) else 1.0
+                    nuevos_pesos[s] = w * ratio / factor
+                pesos = nuevos_pesos
 
         # 2) Reasignar según la estrategia.
         elegidos = seleccionar(universo, as_of, i == 0)

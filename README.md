@@ -590,6 +590,49 @@ ignora que las posiciones no se mueven a la vez y siempre exagera. Cuando una
 correlación no se puede medir **se asume 0,5** — ni independencia (que
 subestimaría) ni movimiento idéntico — y eso se declara como el supuesto que es.
 
+### Los cuatro límites cuentan lo que YA tienes
+
+Un tope que solo mira las ideas nuevas no es un tope. Con un 20 % en tecnología
+ya en el libro, el dimensionador seguía autorizando otro 25 % del mismo sector:
+45 % en una sola apuesta con el límite marcando verde. Ahora las posiciones
+abiertas **ocupan presupuesto** en los cuatro límites:
+
+- El tope por posición cuenta lo que ya tienes de ese símbolo.
+- Sector y clúster reparten su 25 % entre lo que tienes y lo que añades.
+- Los clústeres se calculan sobre candidatas **y** posiciones abiertas: una idea
+  nueva correlacionada con algo que ya llevas es la que más falta hace detectar,
+  y mirando solo las candidatas entre sí era invisible.
+- El objetivo de volatilidad se mide sobre la cartera combinada. Si la que ya
+  tienes se pasa sola, las ideas nuevas salen al 0 % y se dice por qué: no es
+  que sean malas, es que no cabe más riesgo.
+
+Las posiciones abiertas **no se redimensionan** aquí — qué hacer con lo que ya
+tienes es mantener o soltar, y eso lo decide `decide()` mirando la tesis. Los
+pesos que salen del dimensionador son **lo que se añade**, no el peso final.
+
+Dos supuestos que van escritos en la respuesta y en pantalla: el peso de lo que
+tienes se mide sobre el valor de tus posiciones abiertas —la app no registra tu
+efectivo—, así que si guardas liquidez fuera tu concentración real es menor y
+los topes aprietan antes de lo debido; y las posiciones que un barrido no cubre
+(otro mercado, sin precio) quedan fuera de los topes, lo cual se avisa en vez de
+dejar que un tope calculado sobre media cartera pase por completo.
+
+### Correlaciones: gruesas, pero existentes
+
+El límite por correlación estaba escrito, probado y documentado, y **no se
+ejecutaba ni una vez**: `dimensionar()` aceptaba `retornos` y el router la
+llamaba sin ellos, así que la matriz salía vacía y `clusters` salía siempre `[]`.
+Una función correcta a la que nunca se le pasan los datos es una función que no
+existe.
+
+Ahora las series salen de la miniatura de precio que ya viaja en cada señal, a
+coste cero en llamadas. La contrapartida se dice: son 32 puntos muestreados
+sobre el año, o sea retornos de ~11 sesiones y 31 observaciones — una estimación
+**gruesa**, buena para detectar «esto se mueve claramente junto» y no para dar un
+número fino. Solo se cruzan símbolos con historiales de longitud parecida: 32
+puntos sobre 250 sesiones y 32 sobre 100 cubren periodos distintos, y
+correlacionarlos daría un número con la misma pinta que uno bueno.
+
 ### Ningún retorno se enseña sin su caída al lado
 
 «+12 % anual» y «+12 % anual con un −45 % por el camino» son propuestas
@@ -604,6 +647,25 @@ advertencia que más se olvida:
 > vivido la crisis financiera de 2008, ni el desplome de marzo de 2020. Su peor
 > caída histórica es el peor de los escenarios que dio tiempo a ocurrir, que no
 > es lo mismo que el peor escenario posible.
+
+Se simula con **mezcla constante**, rebalanceando a los pesos que tienes en cada
+paso. Comprar y no tocar contesta a otra pregunta: los pesos derivan solos hacia
+lo que más subió, y una cartera declarada 50/50 acaba simulada como 92/8. El
+sesgo no tiene signo fijo —lo que se desploma al final llega sobreponderado y
+exagera la caída; lo que baja despacio se diluye y la tapa— así que no se
+corrige leyendo el número con cuidado. En un caso construido a propósito la
+diferencia era **−29 % contra −4 %** sobre la misma cartera.
+
+Y si el histórico común no llega a la ventana pedida, la peor ventana sale
+**vacía** en vez de recortarse al periodo disponible: antes un −29 % de diez
+semanas viajaba rotulado como «peor 12 meses», y un número mal rotulado es peor
+que ninguno porque se compara con otros que sí significan lo que dicen.
+
+Nada de esto se calculaba en la aplicación hasta ahora: `peor_ventana()` y
+`con_caida_esperada()` existían en el repositorio, con sus tests, y **no las
+llamaba ningún endpoint**. Hoy `/api/portfolio` las sirve y el portafolio las
+enseña — la caída va pegada a la rentabilidad en la misma tarjeta, no en otra
+pantalla.
 
 ## Contra los baselines: ¿bate esto a lo simple?
 

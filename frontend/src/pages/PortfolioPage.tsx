@@ -1,10 +1,99 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { Portfolio, PriceAlert, RiskBudget, WatchlistItem } from '../api/types'
+import type {
+  Estres,
+  Portfolio,
+  PriceAlert,
+  RiskBudget,
+  WatchlistItem,
+} from '../api/types'
 import { fmtChangePct, fmtNumber, fmtPct } from '../lib/format'
 
 type Tab = 'portafolio' | 'watchlist' | 'alertas'
+
+/** El peor tramo que ESTA composición habría sufrido, con sus fechas.
+ *
+ *  No son escenarios inventados: son los pesos que tienes hoy aplicados al
+ *  histórico guardado, rebalanceando en cada paso para que los pesos simulados
+ *  sigan siendo los tuyos. Y lo que el histórico NO vio se dice tan alto como
+ *  lo que vio, porque un «peor caso» de cinco años tranquilos no es el peor
+ *  caso: es el peor de lo que dio tiempo a pasar.
+ */
+function EstresPanel({ estres }: { estres: Estres }) {
+  if (!estres.suficiente) {
+    return (
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-sm font-semibold text-slate-800">
+          Peor escenario histórico
+        </h3>
+        <p className="mt-1 text-xs text-slate-500">
+          {estres.nota ?? 'Histórico insuficiente para estresar esta cartera.'}
+        </p>
+      </section>
+    )
+  }
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <h3 className="text-sm font-semibold text-slate-800">
+        Peor escenario histórico de esta cartera
+      </h3>
+      <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <dt className="text-[10px] uppercase tracking-wide text-slate-400">
+            Peor caída pico a valle
+          </dt>
+          <dd className="text-lg font-semibold tabular-nums text-red-700">
+            {estres.max_drawdown_pct} %
+          </dd>
+          <dd className="text-[11px] text-slate-400">
+            {estres.drawdown_desde} → {estres.drawdown_hasta}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] uppercase tracking-wide text-slate-400">
+            Peor {estres.peor_ventana_meses} meses seguidos
+          </dt>
+          {estres.peor_ventana_pct !== null &&
+          estres.peor_ventana_pct !== undefined ? (
+            <>
+              <dd className="text-lg font-semibold tabular-nums text-red-700">
+                {estres.peor_ventana_pct} %
+              </dd>
+              <dd className="text-[11px] text-slate-400">
+                {estres.peor_ventana_desde} → {estres.peor_ventana_hasta}
+              </dd>
+            </>
+          ) : (
+            <dd className="text-[11px] leading-tight text-slate-500">
+              {estres.peor_ventana_nota}
+            </dd>
+          )}
+        </div>
+        <div>
+          <dt className="text-[10px] uppercase tracking-wide text-slate-400">
+            Histórico usado
+          </dt>
+          <dd className="text-lg font-semibold tabular-nums text-slate-800">
+            {estres.años_cubiertos} años
+          </dd>
+          <dd className="text-[11px] text-slate-400">{estres.cobertura}</dd>
+        </div>
+      </dl>
+      {estres.aviso_cobertura && (
+        <p
+          className={`mt-3 rounded-lg px-3 py-2 text-xs leading-relaxed ${
+            estres.aviso_cobertura.startsWith('ATENCIÓN')
+              ? 'bg-amber-50 text-amber-900'
+              : 'text-slate-500'
+          }`}
+        >
+          {estres.aviso_cobertura}
+        </p>
+      )}
+    </section>
+  )
+}
 
 function RiskBudgetPanel({ risk }: { risk: RiskBudget }) {
   const excedido = risk.riesgo_total_pct > risk.tope_pct
@@ -153,6 +242,21 @@ function PortfolioTab() {
               <div className="text-xl">
                 <Pnl value={data.summary.unrealized_pnl} pct={data.summary.unrealized_pct} />
               </div>
+              {/* La rentabilidad no se enseña sola, nunca. Un «+12 %» y un
+                  «+12 % con un −45 % por el camino» son propuestas distintas, y
+                  quien solo ve la primera abandona en el peor momento. */}
+              <div className="mt-1 text-[11px] leading-tight text-slate-500">
+                {data.summary.max_drawdown_esperado_pct !== null ? (
+                  <>
+                    Peor caída histórica de esta cartera:{' '}
+                    <span className="font-medium text-red-700 tabular-nums">
+                      {data.summary.max_drawdown_esperado_pct} %
+                    </span>
+                  </>
+                ) : (
+                  'Sin histórico para estimar la caída máxima.'
+                )}
+              </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-3">
               <div className="text-xs text-slate-400">Realizado (cerradas)</div>
@@ -170,6 +274,8 @@ function PortfolioTab() {
           )}
 
           {data.risk_budget && <RiskBudgetPanel risk={data.risk_budget} />}
+
+          {data.estres && <EstresPanel estres={data.estres} />}
 
           {data.concentration_warnings.length > 0 && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">

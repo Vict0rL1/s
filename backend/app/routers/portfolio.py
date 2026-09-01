@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.analysis.decision import _stop_pct
 from app.analysis.risk_budget import presupuesto_de_riesgo
+from app.analysis.sizing import con_caida_esperada, peor_ventana
 from app.analysis.portfolio import (
     allocation_weights,
     concentration_warning,
@@ -87,6 +88,38 @@ def _volatilidad_de(service: MarketDataService, symbol: str) -> float | None:
     medio = sum(retornos) / len(retornos)
     varianza = sum((r - medio) ** 2 for r in retornos) / (len(retornos) - 1)
     return (varianza ** 0.5) * 100
+
+
+def _series_cacheadas(
+    service: MarketDataService, symbols: list[str]
+) -> dict[str, list[tuple[date, float]]]:
+    """Cierres diarios de la caché, para estresar la cartera. Nunca descarga.
+
+    Misma disciplina que `_volatilidad_de`: si el histórico no está guardado, esa
+    posición no entra en el estrés en vez de gastar una llamada por posición cada
+    vez que se abre el portafolio. `peor_ventana` solo cruza fechas comunes, así
+    que una posición ausente encoge el histórico compartido pero no lo falsea.
+    """
+    cache = getattr(service, "cache", None)
+    if cache is None:
+        return {}
+    salida: dict[str, list[tuple[date, float]]] = {}
+    for symbol in symbols:
+        history = cache.get(
+            "price_history", {"symbol": symbol, "interval": "1day", "outputsize": 252}
+        )
+        puntos = []
+        for bar in (history or {}).get("bars") or []:
+            cierre, ts = bar.get("close"), bar.get("ts")
+            if not cierre or not ts:
+                continue
+            try:
+                puntos.append((date.fromisoformat(str(ts)[:10]), float(cierre)))
+            except ValueError:
+                continue
+        if len(puntos) >= 60:
+            salida[symbol] = puntos
+    return salida
 
 
 def _price_of(service: MarketDataService, symbol: str) -> float | None:
@@ -298,10 +331,26 @@ def get_portfolio(
     summary = portfolio_summary(open_positions)
     by_position = allocation_weights(open_positions, "symbol")
     by_sector = allocation_weights(open_positions, "sector")
+
+    # Qué le habría pasado a ESTA composición en el peor tramo del histórico
+    # disponible. No son escenarios inventados: son los pesos que tienes hoy
+    # aplicados al pasado que hay guardado, con sus fechas y con el aviso de qué
+    # crisis quedan fuera de la cobertura.
+    estres = peor_ventana(
+        {p["symbol"]: p["market_value"] for p in open_positions if p.get("market_value")},
+        _series_cacheadas(service, [p["symbol"] for p in open_positions]),
+    )
     return {
         "positions": open_positions,
         "closed_positions": closed,
-        "summary": {**summary, "realized_pnl": realized_pnl(closed)},
+        # El retorno nunca viaja solo: `con_caida_esperada` le engancha la caída
+        # que esta misma cartera habría sufrido. Un «+12 %» y un «+12 % con un
+        # −45 % por el camino» son propuestas distintas, y quien solo ve la
+        # primera abandona en el peor momento.
+        "summary": con_caida_esperada(
+            {**summary, "realized_pnl": realized_pnl(closed)}, estres
+        ),
+        "estres": estres,
         "allocation_by_position": by_position,
         "allocation_by_sector": by_sector,
         "concentration_warnings": concentration_warning(by_position),
