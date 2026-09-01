@@ -31,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.analysis.markets import load_market  # noqa: E402
+from app.analysis.baselines import comparar  # noqa: E402
 from app.analysis.rule_backtest import (  # noqa: E402
     rebalance_dates_mensuales,
     run_rule_backtest,
@@ -146,6 +147,24 @@ def main() -> int:
 
     _imprimir(resultado, sin_filtro, sin_datos, con_divisa)
 
+    # La pregunta que ordena todo lo demás: ¿bate esto a lo simple? Se compara
+    # con el MISMO motor, las mismas fechas y los mismos costes.
+    if resultado["n_operaciones"] > 0:
+        from app.analysis.rule_backtest import costes_por_lado
+
+        # El top del momentum se escala al universo: con "top 10" sobre 8
+        # empresas, el baseline 3 selecciona a todas y deja de ser un baseline
+        # distinto del 2 — dos filas idénticas no comparan nada.
+        top = max(3, min(10, len(universo) // 4))
+        bases = comparar(
+            universo,
+            fechas,
+            resultado["operaciones"],
+            costes_por_lado(con_divisa),
+            top_momentum=top,
+        )
+        _imprimir_baselines(bases)
+
     if resultado["n_operaciones"] > 0 and not args.no_guardar:
         with SessionLocal() as session:
             session.add(
@@ -161,6 +180,45 @@ def main() -> int:
         print("\nGuardado. Recarga la vista «Hoy»: cada idea dirá ahora si sus")
         print("reglas están validadas o refutadas, en vez de «sin validar».")
     return 0
+
+
+def _imprimir_baselines(b: dict) -> None:
+    """La tabla comparativa y el veredicto, sin adornos."""
+    linea = "═" * 78
+    print(f"\n{linea}\nCONTRA LOS BASELINES\n{linea}")
+    print(f"  {'':22} {'Retorno':>9} {'Volat.':>8} {'Sharpe':>7} {'Máx.caída':>10} {'Rotación':>9}")
+    etiquetas = {
+        "estrategia": "TU ESTRATEGIA",
+        "comprar_y_mantener": "1· Comprar y mantener",
+        "equiponderada": "2· Equiponderada",
+        "momentum_12m": "3· Momentum 12 meses",
+    }
+    for clave, etiqueta in etiquetas.items():
+        f = b["tabla"].get(clave) or {}
+        num = lambda v, s="": "—" if v is None else f"{v:{s}}"  # noqa: E731
+        print(
+            f"  {etiqueta:22} {num(f.get('cagr_pct'), '+8.2f'):>9}"
+            f" {num(f.get('vol_pct'), '7.1f'):>8}"
+            f" {num(f.get('sharpe'), '6.2f'):>7}"
+            f" {num(f.get('max_drawdown_pct'), '9.1f'):>10}"
+            f" {num(f.get('rotacion_media'), '8.2f'):>9}"
+        )
+
+    print("\n  Diferencia anual frente a cada baseline (bootstrap por bloques):")
+    for clave, c in b["comparaciones"].items():
+        if not c.get("suficiente"):
+            print(f"    {etiquetas[clave]:22} muestra insuficiente para un intervalo")
+            continue
+        marca = "SÍ" if c["distinguible_del_azar"] else "no"
+        print(
+            f"    {etiquetas[clave]:22} {c['diferencia_anual_pct']:+7.2f} %"
+            f"   IC95 [{c['ic95'][0]:+.2f}, {c['ic95'][1]:+.2f}]"
+            f"   ¿fuera del azar? {marca}"
+        )
+
+    print(f"\n{linea}\nVEREDICTO FRENTE A LO SIMPLE\n{linea}")
+    print(f"  {b['veredicto']}")
+    print(f"\n  {b['metodologia']}")
 
 
 def _imprimir(r: dict, sin_filtro: dict, sin_datos: list[str], con_divisa: bool) -> None:

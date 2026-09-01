@@ -560,6 +560,51 @@ cartera concentra justo lo que creía repartir.
 Lo que **no** hace: predecir qué sector irá mejor. Elegir entre salud y energía
 es una apuesta sectorial, y esa decisión es tuya.
 
+## Contra los baselines: ¿bate esto a lo simple?
+
+La pregunta que ordena todo lo demás, y la única cuya respuesta puede hacer que
+el resto sobre. Un sistema puede tener esperanza positiva y aun así ser peor que
+comprar el índice y no mirarlo — y entonces puntuar, filtrar y rebalancear no
+solo no aporta: cuesta comisiones y atención.
+
+`analysis/baselines.py` compara la estrategia con tres alternativas tontas:
+
+1. **Comprar el universo y no tocarlo.**
+2. **Equiponderada con rebalanceo periódico** (paga la rotación).
+3. **Momentum de 12 meses**, top N rebalanceado.
+
+**Un solo motor, cuatro selectores.** Las cuatro carteras se simulan con el
+mismo código y solo difieren en una función: *dado este mes, ¿qué tengo?*
+Comparar implementaciones distintas es como se cuelan las ventajas ficticias —
+una paga costes y otra no, una mira un dato que la otra no tiene. Aquí eso es
+imposible por construcción.
+
+**Curvas de capital, no listas de operaciones.** Volatilidad, Sharpe y drawdown
+son propiedades de una serie de patrimonio; una media de trades sueltos no puede
+producirlas. Y sin ellas, «esperanza +4 %» no dice si el camino fue soportable:
+un +4 % con un −60 % por medio no se aguanta.
+
+**Bootstrap por bloques de 6 meses.** Los retornos están autocorrelados y
+agrupan la volatilidad; remuestrear meses sueltos rompe esa estructura y da
+intervalos demasiado estrechos — declararía «significativo» lo que no lo es. Se
+remuestrean **pares** (no cada serie por su lado) porque las dos carteras viven
+el mismo mercado.
+
+### El veredicto no suaviza
+
+Está escrito para poder decir que no, y dice tres cosas distintas:
+
+- **«NO SUPERA AL BASELINE»**, con los puntos de diferencia a favor de no hacer
+  nada, cuando un baseline rinde más.
+- **«Trátalo como un empate»** si gana por menos de 1 punto anual: ese margen se
+  lo come cualquier diferencia de comisiones o de fechas.
+- **«No se distingue del azar»** si gana pero ningún intervalo deja el cero
+  fuera.
+
+Y mira el **Sharpe**, no solo el retorno: si la estrategia rinde más con peor
+Sharpe, lo dice — el retorno extra viene de asumir más volatilidad, y esa
+palanca se consigue sin modelo, comprando el baseline con margen.
+
 ## Motor de señales cuantitativas
 
 Puntúa un universo de empresas **unas contra otras** (z-score transversal, no
