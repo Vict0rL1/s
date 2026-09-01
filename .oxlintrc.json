@@ -1,0 +1,9 @@
+{
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "unicorn/no-new-array": "off"
+  },
+  "ignorePatterns": ["**/dist/**", "**/node_modules/**", "**/data/**"]
+}

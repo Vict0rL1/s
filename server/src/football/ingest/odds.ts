@@ -141,6 +141,15 @@ export interface FootballOddsResult {
   source: 'live' | 'fixture';
   count: number;
   leagues: string[];
+  /**
+   * Clubes cuyo Elo hubo que traer de la división de abajo porque acaban de subir.
+   *
+   * Se contaba y no se decía. Merece salir por pantalla: es el número que explica
+   * por qué unas cuantas tarjetas llevan la banda más ancha y la etiqueta «recién
+   * ascendido», y si algún agosto sale 0 en una liga que acaba de tener ascensos,
+   * es que el emparejamiento de nombres se rompió.
+   */
+  promoted: number;
 }
 
 export async function refreshFootballOdds(): Promise<FootballOddsResult> {
@@ -268,7 +277,7 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
     db.exec('COMMIT');
     setMeta('fb_odds_source', source);
     setMeta('fb_odds_refreshed_at', new Date().toISOString());
-    return { source, count, leagues: [...perLeague.keys()] };
+    return { source, count, leagues: [...perLeague.keys()], promoted };
   } catch (e) {
     db.exec('ROLLBACK');
     throw e;

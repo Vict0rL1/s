@@ -639,20 +639,40 @@ function auditUpcoming(
  *     morning match), so what is checked is the property that made it possible —
  *     that pruning is scoped by time at all. A table whose oldest row is always in
  *     the future is the signature of an unconditional DELETE.
+ *
+ * ===========================================================================
+ * POR QUÉ SE COMPARA CONTRA LA ÚLTIMA ACTUALIZACIÓN Y NO CONTRA «AHORA»
+ * ===========================================================================
+ * La primera versión fallaba si había CUALQUIER fila fuera de la ventana, y eso la
+ * hacía inútil: la limpieza ocurre cuando se refresca, así que basta con no abrir la
+ * app un día para que las filas de ayer queden fuera de la ventana y la auditoría se
+ * ponga roja sin que haya ningún defecto. Pasó tres veces seguidas en una sola sesión
+ * de trabajo, y una comprobación que se pone roja sola es una comprobación que se
+ * acaba ignorando — que es justo lo que no puede pasarle a esta.
+ *
+ * El defecto de verdad no es «hay filas viejas», es «hubo un refresco Y NO LAS
+ * LIMPIÓ». Así que la fila vieja solo cuenta como fallo si el último refresco de ese
+ * deporte es POSTERIOR al momento en que la fila se quedó fuera de la ventana. Si el
+ * refresco es anterior, la fila está esperando su turno y eso es el funcionamiento
+ * normal: se informa y no se falla.
+ *
+ * Esto sigue cazando el bug original —un DELETE incondicional limpia en cada refresco,
+ * y un pruning roto deja filas que sobreviven a refrescos posteriores— sin depender de
+ * cuánto tiempo lleve la app sin abrirse.
  */
 function auditWindow(): void {
   section('Ventana de partidos');
   const db = getDb();
   const since = freshSince();
-  const tables: [string, string][] = [
-    ['fútbol', 'fb_upcoming'],
-    ['baloncesto', 'bb_upcoming'],
-    ['béisbol', 'bsb_upcoming'],
-    ['fútbol americano', 'naf_upcoming'],
-    ['tenis', 'upcoming_matches'],
+  const tables: [string, string, string][] = [
+    ['fútbol', 'fb_upcoming', 'fb_odds_refreshed_at'],
+    ['baloncesto', 'bb_upcoming', 'bb_odds_refreshed_at'],
+    ['béisbol', 'bsb_upcoming', 'bsb_odds_refreshed_at'],
+    ['fútbol americano', 'naf_upcoming', 'naf_odds_refreshed_at'],
+    ['tenis', 'upcoming_matches', 'odds_refreshed_at'],
   ];
   let n = 0;
-  for (const [label, table] of tables) {
+  for (const [label, table, refreshedKey] of tables) {
     const row = db
       .prepare(`SELECT COUNT(*) AS total, MIN(commence_time) AS oldest FROM ${table}`)
       .get() as unknown as { total: number; oldest: string | null };
@@ -661,11 +681,29 @@ function auditWindow(): void {
       continue;
     }
     n++;
+    const stale = !!row.oldest && row.oldest < since;
+    if (!stale) {
+      check(`${label}: nada anterior a la ventana en la tabla`, true);
+      continue;
+    }
+    // Hay filas fuera de la ventana. ¿Sobrevivieron a un refresco, o es que no ha
+    // habido ninguno desde que caducaron?
+    const refreshed = getMeta(refreshedKey);
+    const survivedARefresh = !!refreshed && refreshed > since;
     check(
-      `${label}: nada anterior a la ventana en la tabla`,
-      !row.oldest || row.oldest >= since,
-      `más antiguo ${row.oldest}, ventana desde ${since}`,
+      `${label}: nada anterior a la ventana sobrevive a un refresco`,
+      !survivedARefresh,
+      `más antiguo ${row.oldest}, ventana desde ${since}, último refresco ${refreshed ?? 'nunca'}`,
     );
+    if (!survivedARefresh) {
+      console.log(
+        `  ${label}: hay filas anteriores a la ventana (la más vieja ${row.oldest}), pero`,
+      );
+      console.log(
+        `    el último refresco fue ${refreshed ?? 'nunca'}, anterior a la ventana: se limpiarán`,
+      );
+      console.log('    en el próximo. La app ya no las muestra. No es un defecto.');
+    }
   }
   console.log(`  ${n} tablas comprobadas contra la ventana (desde ${since})`);
 }

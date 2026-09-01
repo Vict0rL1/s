@@ -803,6 +803,27 @@ ves, en vez de fallar en silencio.
 | `npm run doctor` | Diagnostica por qué la app muestra **cuotas de demostración**: `.env`, clave, cuota y qué hay guardado |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
+| `npm run lint` | Lint real (oxlint, solo la categoría **correctness**) |
+
+### Por qué `npm run lint` solo mira una categoría
+
+Porque antes no miraba **ninguna**: el script del raíz delegaba en los workspaces con
+`--if-present` y ninguno de los dos tenía script de lint, así que `npm run lint` salía
+en verde sin abrir un solo fichero. Eso es peor que no tener linter, porque el proyecto
+lo anunciaba como si comprobase algo.
+
+Ahora es oxlint de verdad, con `correctness` como error — la categoría de los fallos
+que son bugs y no gustos. Las categorías de estilo (`suspicious`, `perf`) están fuera
+a propósito: activándolas salen **172 avisos** de cosas como `Array#sort()` en vez de
+`toSorted()` sobre arrays recién creados, o `await` dentro de bucles que están
+secuenciados a posta para no reventar una API con límite de peticiones. Un lint que
+imprime 172 líneas cada vez es un lint que nadie lee, y eso lo devuelve al punto de
+partida: verde que no significa nada.
+
+Una regla apagada, `unicorn/no-new-array`, y con motivo: existe porque `new Array(5)`
+es ambiguo entre «cinco huecos» y «un elemento que vale 5», y los dos usos del proyecto
+son `new Array<number>(n).fill(0)` en la distribución de margen y total de la NFL,
+donde el parámetro de tipo y el `.fill` no dejan ninguna ambigüedad.
 
 ### Comprobar que la información es correcta
 

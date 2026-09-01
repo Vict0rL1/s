@@ -221,6 +221,7 @@ async function main() {
     const odds = await refreshFootballOdds();
     console.log(
       `  ${odds.count} partidos (${odds.source === 'live' ? 'cuotas reales' : 'demo, sin API key'})` +
+        `${odds.promoted ? ` · ${odds.promoted} recién ascendidos con Elo trasladado` : ''}` +
         `${odds.leagues.length ? ` · ligas: ${odds.leagues.join(', ')}` : ''}`,
     );
   }
