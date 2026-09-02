@@ -59,6 +59,31 @@ def test_zscore_sin_dispersion_es_cero():
     assert all(v == 0.0 for v in result.values())
 
 
+def test_valores_identicos_no_producen_zscores_por_ruido_de_coma_flotante():
+    """El caso que `std == 0` no cubría, y que sí ocurre con datos reales.
+
+    Con 5.0 la suma en coma flotante es exacta y la comparación con cero
+    funciona por casualidad. Con un valor que no se representa exacto —el CAGR
+    de un sector donde todas las empresas declaran lo mismo, por ejemplo— la
+    media difiere del valor en 7e-17, la desviación sale de 7e-17 en vez de
+    cero, y la división convierte ruido de redondeo en un z-score de −0,99.
+
+    Un factor que no distingue a nadie movía el compuesto casi una desviación
+    entera, con la misma pinta que un número informativo.
+    """
+    x = 0.07214502590085092
+    result = zscores({f"S{i}": x for i in range(40)})
+    assert all(v == 0.0 for v in result.values()), sorted(set(result.values()))
+
+
+def test_una_dispersion_real_aunque_diminuta_no_se_suprime():
+    """El guardián es para el ruido de coma flotante, no para señal pequeña:
+    valores de magnitud 1e-20 pero genuinamente distintos siguen puntuando."""
+    result = zscores({f"S{i}": 1e-20 * (1 + i) for i in range(10)})
+    assert max(result.values()) > 1.0
+    assert min(result.values()) < -1.0
+
+
 def test_winsorize_recorta_extremos():
     values = [1.0] + [5.0] * 18 + [1000.0]
     clipped = winsorize(values, limit=0.05)

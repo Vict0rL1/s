@@ -20,6 +20,8 @@ import type {
   SignalExplanation,
   SignalResponse,
   ScreenResult,
+  MultifactorMeta,
+  MultifactorResult,
   ThesisRecord,
   TodayResponse,
   TrackRecord,
@@ -177,6 +179,14 @@ export const api = {
     postJson<{ id: number; name: string }>('/api/screener/presets', body),
   runScreen: (body: { symbols: string[]; filters: Record<string, FilterSpec> }) =>
     postJson<ScreenResult>('/api/screener/run', body),
+  multifactorMeta: () =>
+    fetchJson<MultifactorMeta>('/api/screener/multifactor/meta'),
+  runMultifactor: (body: {
+    market: string
+    weights?: Record<string, number>
+    con_historia?: number
+    budget?: number
+  }) => postJson<MultifactorResult>('/api/screener/multifactor', body),
   // Fase 5
   watchlist: () => fetchJson<{ name: string; items: WatchlistItem[] }>('/api/watchlist'),
   addToWatchlist: (body: { symbol: string; notes: string | null }) =>

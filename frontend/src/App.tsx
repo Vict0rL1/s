@@ -3,6 +3,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { Layout } from './components/Layout'
 import { DashboardPage } from './pages/DashboardPage'
 import { EtfsPage } from './pages/EtfsPage'
+import { MultifactorPage } from './pages/MultifactorPage'
 import { NewsPage } from './pages/NewsPage'
 import { PortfolioPage } from './pages/PortfolioPage'
 import { ScreenerPage } from './pages/ScreenerPage'
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/noticias" element={<NewsPage />} />
           <Route path="/etfs" element={<EtfsPage />} />
           <Route path="/screener" element={<ScreenerPage />} />
+          <Route path="/multifactor" element={<MultifactorPage />} />
           <Route path="/senales" element={<SignalsPage />} />
           <Route path="/portafolio" element={<PortfolioPage />} />
           <Route path="/tesis" element={<ThesesPage />} />

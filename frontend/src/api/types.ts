@@ -1005,3 +1005,99 @@ export interface RiskBudget {
   margen_pct: number
   nota: string
 }
+
+// ---------------------------------------------------------------------------
+// Screener multifactor
+// ---------------------------------------------------------------------------
+
+export type Familia =
+  | 'value'
+  | 'quality'
+  | 'momentum'
+  | 'growth'
+  | 'low_volatility'
+  | 'size'
+
+/** Dónde cae el valor de hoy dentro de la propia historia de la empresa.
+ *  `percentil` es la posición cruda; `percentil_favorable` la traduce a «qué
+ *  tan bueno es para esta métrica», que es lo único que se puede colorear sin
+ *  equivocarse: el percentil 90 de deuda es la peor lectura, no la mejor. */
+export interface PercentilHistorico {
+  disponible: boolean
+  n: number
+  actual: number | null
+  motivo?: string
+  percentil?: number | null
+  percentil_favorable?: number | null
+  orientacion?: 'alto_mejor' | 'bajo_mejor'
+  mediana?: number
+  min?: number
+  max?: number
+  vs_mediana_pct?: number | null
+  lectura?: string
+}
+
+export interface AvisoHistorico {
+  tipo: 'deterioro' | 'maximo'
+  metricas: string[]
+  advertencia: string
+}
+
+export interface HistoriaEmpresa {
+  metricas: Record<string, PercentilHistorico>
+  ejercicios?: number
+  desde?: number
+  hasta?: number
+  medidas: number
+  deteriorandose?: string[]
+  en_maximos?: string[]
+  /** En piezas, no como frase montada: así la UI rotula cada métrica en su
+   *  idioma en vez de enseñar `asset_turnover` junto a una tabla que la llama
+   *  «Rotación de activos». */
+  avisos?: AvisoHistorico[]
+  nota?: string
+}
+
+export interface FilaMultifactor {
+  symbol: string
+  name: string | null
+  sector: string
+  price: number | null
+  puesto: number
+  score: number
+  cobertura: number
+  familias: Record<Familia, number | null>
+  aportaciones: Partial<Record<Familia, number>>
+  crudos: Record<string, number>
+  historia?: HistoriaEmpresa
+}
+
+export interface MultifactorResult {
+  ranking: FilaMultifactor[]
+  sin_puntuar: { symbol: string; sector: string; motivo: string }[]
+  pesos: Record<string, number>
+  correlacion_familias: {
+    pares: Record<string, number>
+    solapamientos: string[]
+    nota: string
+  }
+  sectores: Record<string, number>
+  sectores_sin_muestra: string[]
+  aviso_sectores: string | null
+  market_key: string
+  market_name: string
+  evaluadas: number
+  sin_datos: { symbol: string; motivo: string }[]
+  pendientes: string[]
+  completo: boolean
+  nota_cobertura: string
+  nota_coste: string
+  nota: string
+  advertencia: string
+}
+
+export interface MultifactorMeta {
+  familias: Record<Familia, string[]>
+  pesos_por_defecto: Record<Familia, number>
+  markets: MarketInfo[]
+}

@@ -105,8 +105,17 @@ def zscores(values_by_symbol: dict[str, float | None]) -> dict[str, float | None
     std = math.sqrt(variance)
 
     out: dict[str, float | None] = {s: None for s in values_by_symbol}
-    if std == 0:
-        # Todos iguales: nadie destaca, z=0 para los presentes.
+    # Sin dispersión, nadie destaca: z=0 para los presentes.
+    #
+    # La comparación es RELATIVA a la escala del dato, no `std == 0`, y la
+    # diferencia no es cosmética. Con cuarenta empresas que declaran exactamente
+    # el mismo valor, la suma en coma flotante deja una media que difiere del
+    # valor en 7e-17: la desviación sale de 7e-17 —distinta de cero— y la
+    # división convierte ruido de redondeo puro en un z-score de −0,99. Un factor
+    # que no distingue a nadie acababa moviendo el compuesto casi una desviación
+    # entera, y el número tenía exactamente la misma pinta que uno bueno.
+    escala = max((abs(v) for v in clipped), default=0.0)
+    if std <= escala * 1e-9:
         for symbol in symbols:
             out[symbol] = 0.0
         return out

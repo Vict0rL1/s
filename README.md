@@ -667,6 +667,87 @@ llamaba ningún endpoint**. Hoy `/api/portfolio` las sirve y el portafolio las
 enseña — la caída va pegada a la rentabilidad en la misma tarjeta, no en otra
 pantalla.
 
+## Screener multifactor: `multifactor.py`
+
+Seis exposiciones estándar, normalizadas dentro de cada sector, con los pesos en
+manos de quien mira. Es una herramienta distinta del compuesto de la lista
+diaria: aquella tiene cuatro familias con pesos fijos y está backtesteada; esta
+tiene seis y sirve para explorar.
+
+| Familia | Se construye con | Evidencia |
+|---|---|---|
+| **value** | E/P, B/P, FCF yield | Sólida y muy replicada. Se paga con rachas malas largas |
+| **quality** | ROE, ROIC, margen operativo, cobertura de intereses, apalancamiento invertido | Sólida, la más estable |
+| **momentum** | 12-1 (saltándose el último mes) | Sólida. Se desploma en los giros de mercado |
+| **growth** | CAGR de ingresos, EPS y FCF | **Débil como factor de retorno.** Pagar por crecimiento pasado tiende a restar; lo que funciona en la literatura es rentabilidad + inversión, no ventas pasadas |
+| **low volatility** | Volatilidad anualizada, invertida | Real pero discutida: buena parte se explica por calidad, y aquí se solapa con el dimensionador |
+| **size** | −log(capitalización) | **La más erosionada.** En un universo de grandes cotizadas «pequeña» significa 30.000 millones: no es el factor académico |
+
+Cada advertencia de la tabla va escrita **debajo de su control deslizante**, no
+enterrada en la documentación. Seis controles idénticos sugieren seis factores
+igual de sólidos, y no lo son.
+
+**Y no son seis apuestas independientes.** Value y growth tiran en direcciones
+opuestas casi por definición; quality y low-vol suelen cargar sobre los mismos
+nombres. El resultado incluye la correlación entre las familias **medida en ese
+universo concreto**, no copiada de un paper: subir los seis pesos al máximo no
+diversifica, concentra en lo que tengan en común.
+
+**Normalización sectorial, y se nota.** Un P/E de 9 es caro en banca y barato en
+software. Un corte absoluto llenaría la lista de bancos y utilities en cualquier
+mercado y cualquier año; un test lo fija comprobando que ningún sector se lleva
+el podio entero. Los sectores con menos de 5 empresas en el universo no se
+puntúan y se dice cuáles: puntuar contra dos comparables es ruido con formato de
+número.
+
+**Coste: cero llamadas adicionales.** Momentum, precio y volatilidad salen de la
+descarga masiva por sector; los fundamentales, de EDGAR, que es gratis. Un
+screener de seis factores sobre 500 empresas suele ser imposible con tiers
+gratuitos — aquí sale gratis porque reaprovecha lo que ya está cacheado.
+
+### El percentil histórico: lo que el corte transversal no puede ver
+
+La parte que casi ningún screener enseña, y la que cambia lecturas.
+
+Un z-score dice quién va mejor **ahora mismo**: una empresa con ROE del 18 %
+puntúa bien contra su sector. Lo que no dice es que ese mismo negocio venía del
+30 % y lleva tres años cayendo. El z-score la sigue premiando mientras se
+deteriora, porque compara hacia los lados y no hacia atrás. Y al revés: un margen
+en su máximo de diez años puntúa como excelencia cuando puede ser un pico del
+ciclo a punto de revertir.
+
+Por eso cada empresa del ranking trae sus métricas situadas **frente a sus
+propios ejercicios**: valor de hoy, mediana, rango y percentil, calculados desde
+los estados que la empresa presentó a la SEC. Sale gratis, porque esos estados ya
+están descargados para puntuar los factores.
+
+Dos detalles que evitan leerlo al revés:
+
+- **El valor actual no entra en la serie contra la que se compara.** Compararse
+  consigo mismo arrastra el percentil hacia el centro.
+- **Cada métrica lleva su orientación.** Estar en el percentil 90 de deuda es la
+  peor lectura posible, no la mejor, y `percentil_favorable` es lo único que se
+  puede colorear sin equivocarse.
+
+### Un bug que este trabajo destapó en el motor de la lista diaria
+
+Al construir el screener, la familia `growth` salía en −0,66 para todas las
+empresas de una prueba en la que **todas tenían exactamente el mismo
+crecimiento**. Debía salir 0,00.
+
+`zscores()` protegía el caso «sin dispersión» con `std == 0`, que es una
+comparación exacta para una condición aproximada. Con cuarenta valores idénticos,
+la suma en coma flotante deja una media que difiere del valor en 7e-17: la
+desviación sale de 7e-17 —distinta de cero— y la división convierte ruido de
+redondeo puro en un z-score de **−0,99**. Un factor que no distinguía a nadie
+movía el compuesto casi una desviación entera, y el número tenía exactamente la
+misma pinta que uno informativo.
+
+El test que existía usaba `5.0`, cuya suma en coma flotante es exacta, así que
+pasaba por casualidad. La comparación ahora es relativa a la escala del dato, y
+la función vive en `factors.py` — o sea que **el fallo estaba también en la lista
+diaria**, no solo en el screener nuevo.
+
 ## Contra los baselines: ¿bate esto a lo simple?
 
 La pregunta que ordena todo lo demás, y la única cuya respuesta puede hacer que

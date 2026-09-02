@@ -16,6 +16,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.analysis.backtest import metrics_from_period
+from app.analysis.fundamentals import derive_ratio_series, growth_summary
+from app.analysis.markets import DEFAULT_MARKET, list_markets, load_market
+from app.analysis.multifactor import (
+    FAMILIAS,
+    PESOS_POR_DEFECTO,
+    historia_de_la_empresa,
+    rankear,
+    resumen_historico,
+)
 from app.analysis.screener import DEFAULT_PRESETS, evaluate_filters
 from app.cache.cache import MarketDataService
 from app.db.engine import get_session
@@ -28,6 +38,7 @@ router = APIRouter(prefix="/api/screener", tags=["screener"])
 
 _SYMBOL_RE = re.compile(r"^[A-Za-z0-9.\-]{1,12}$")
 MAX_UNIVERSE = 25  # tope de seguridad: 25 símbolos = máx. 25 llamadas nuevas
+SESIONES_ANO = 252
 
 
 class FilterSpec(BaseModel):
@@ -136,5 +147,219 @@ def run_screen(
             "El screener evalúa el universo que le das, no todo el mercado: los "
             "tiers gratuitos no permiten barridos masivos. Un dato ausente nunca "
             "aprueba su filtro."
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Screener multifactor
+# ---------------------------------------------------------------------------
+#
+# Coste de API: CERO llamadas adicionales sobre lo que la lista diaria ya
+# descarga. El momentum, el precio y la volatilidad vienen de la descarga masiva
+# (una por sector, cacheada 6 h) y los fundamentales de EDGAR, que es gratis y
+# está cacheado 24 h. Un screener de seis factores sobre 500 empresas suele ser
+# imposible con tiers gratuitos; aquí sale gratis porque reaprovecha lo que ya
+# está en la caché.
+
+
+class MultifactorRequest(BaseModel):
+    market: str = Field(DEFAULT_MARKET, max_length=32)
+    # Pesos en cualquier escala: lo que importa es la proporción entre ellos.
+    weights: dict[str, float] = Field(default_factory=dict)
+    # Cuántas empresas del ranking traen su historia frente a sí mismas.
+    con_historia: int = Field(15, ge=0, le=50)
+    budget: int = Field(60, ge=1, le=500)
+
+
+def _fetch(service: MarketDataService, data_type: str, **kwargs):
+    try:
+        return service.get(data_type, **kwargs)
+    except (DataNotFoundError, AllProvidersFailedError):
+        return None
+
+
+def _vol_anual_pct(precio: dict | None) -> float | None:
+    """Volatilidad anualizada desde la diaria que ya trae la descarga masiva."""
+    diaria = (precio or {}).get("daily_vol_pct")
+    return round(diaria * (SESIONES_ANO**0.5), 2) if diaria else None
+
+
+def _reunir(
+    service: MarketDataService, market_data: dict, budget: int
+) -> tuple[list[dict], list[dict], list[str], dict]:
+    """Todo lo que necesitan los seis factores, sin gastar una llamada de más.
+
+    Devuelve (empresas, sin_datos, pendientes, series_anuales). `series_anuales`
+    guarda los ratios ejercicio a ejercicio de cada empresa: es lo que alimenta
+    el percentil histórico, y sale del mismo `financials` que ya se descargó
+    para los factores.
+    """
+    empresas: list[dict] = []
+    sin_datos: list[dict] = []
+    pendientes: list[str] = []
+    series: dict[str, list[dict]] = {}
+    restante = budget
+
+    for sector, companies in market_data["sectors"].items():
+        symbols = [c["symbol"] for c in companies]
+        nombres = {c["symbol"]: c["name"] for c in companies}
+        bulk = _fetch(service, "bulk_momentum", symbols=symbols) or {}
+        momentum = bulk.get("momentum") or {}
+        precios = bulk.get("prices") or {}
+
+        for symbol in symbols:
+            precio = precios.get(symbol) or {}
+            ultimo = precio.get("last")
+
+            # EDGAR es gratis, pero una primera pasada sobre 500 empresas son
+            # 500 descargas: lo cacheado no cuesta y lo nuevo va con
+            # presupuesto, igual que en la lista diaria. Lo que no entra queda
+            # en `pendientes` y la siguiente petición sigue por donde iba.
+            financials = service.cache.get("financials", {"symbol": symbol})
+            if financials is None:
+                if restante <= 0:
+                    pendientes.append(symbol)
+                    continue
+                restante -= 1
+                financials = _fetch(service, "financials", symbol=symbol)
+
+            metrics: dict = {}
+            crecimiento: dict = {}
+            market_cap = None
+            periodos = (financials or {}).get("periods") or []
+            if periodos and ultimo:
+                periodo = periodos[-1]
+                acciones = periodo.get("shares_outstanding")
+                metrics = metrics_from_period(periodo, ultimo, acciones)
+                ratios = derive_ratio_series(periodos)
+                series[symbol] = ratios
+                # ROIC no sale de `metrics_from_period` y es de los mejores
+                # indicadores de calidad que hay: se toma de la serie anual,
+                # que ya está calculada.
+                if ratios:
+                    metrics["roic"] = ratios[-1].get("roic")
+                crecimiento = growth_summary(periodos)
+                if acciones:
+                    market_cap = ultimo * acciones
+
+            tiene_algo = (
+                any(v is not None for v in metrics.values())
+                or momentum.get(symbol) is not None
+                or precio.get("daily_vol_pct") is not None
+            )
+            if not tiene_algo:
+                sin_datos.append({"symbol": symbol, "motivo": "sin fundamentales ni precio"})
+                continue
+
+            empresas.append(
+                {
+                    "symbol": symbol,
+                    "name": nombres.get(symbol),
+                    "sector": sector,
+                    "metrics": metrics,
+                    "momentum": momentum.get(symbol),
+                    "vol_anual_pct": _vol_anual_pct(precio),
+                    "market_cap": market_cap,
+                    "crecimiento": crecimiento,
+                    "price": ultimo,
+                }
+            )
+
+    return empresas, sin_datos, pendientes, series
+
+
+@router.get("/multifactor/meta")
+def multifactor_meta():
+    """Las familias, sus pesos de partida y los mercados disponibles."""
+    return {
+        "familias": {f: FAMILIAS[f] for f in FAMILIAS},
+        "pesos_por_defecto": PESOS_POR_DEFECTO,
+        "markets": list_markets(),
+    }
+
+
+@router.post("/multifactor")
+def run_multifactor(
+    request: MultifactorRequest = Body(...),
+    service: MarketDataService = Depends(get_service),
+):
+    """Ranking multifactor sobre un mercado, con los pesos que tú decidas.
+
+    Dos cosas que lo separan de un screener normal:
+
+    1. **Todo se normaliza dentro del sector.** Un P/E de 9 es caro en banca y
+       barato en software, y un corte absoluto llenaría cualquier lista de
+       bancos y utilities todos los años.
+    2. **Cada métrica trae su percentil frente a la propia historia de la
+       empresa.** El corte transversal dice quién va mejor hoy; solo la serie
+       temporal dice si eso es normal en ellos o un extremo del que se vuelve.
+    """
+    try:
+        market_data = load_market(request.market)
+    except KeyError:
+        raise HTTPException(
+            status_code=404, detail=f"Mercado desconocido: {request.market}"
+        ) from None
+
+    empresas, sin_datos, pendientes, series = _reunir(
+        service, market_data, request.budget
+    )
+    if not empresas:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "No se pudo reunir datos de ninguna empresa. Vuelve a intentarlo: "
+                "la primera pasada descarga los estados financieros de EDGAR y "
+                "se cachean 24 h."
+            ),
+        )
+
+    try:
+        resultado = rankear(empresas, request.weights or None)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+    nombres = {e["symbol"]: e.get("name") for e in empresas}
+    precios = {e["symbol"]: e.get("price") for e in empresas}
+    for fila in resultado["ranking"]:
+        fila["name"] = nombres.get(fila["symbol"])
+        fila["price"] = precios.get(fila["symbol"])
+
+    # La historia solo para las primeras: no por coste —ya está descargada— sino
+    # porque una tabla de percentiles de 500 empresas no la lee nadie.
+    for fila in resultado["ranking"][: request.con_historia]:
+        anual = series.get(fila["symbol"]) or []
+        if not anual:
+            fila["historia"] = {"medidas": 0, "metricas": {}}
+            continue
+        historia = historia_de_la_empresa(anual, anual[-1])
+        fila["historia"] = {
+            "metricas": historia,
+            "ejercicios": len(anual),
+            "desde": anual[0].get("fiscal_year"),
+            "hasta": anual[-1].get("fiscal_year"),
+            **resumen_historico(historia),
+        }
+
+    return {
+        **resultado,
+        "market_key": request.market,
+        "market_name": market_data["name"],
+        "evaluadas": len(empresas),
+        "sin_datos": sin_datos,
+        "pendientes": pendientes,
+        "completo": not pendientes,
+        "nota_cobertura": (
+            f"Faltan {len(pendientes)} empresas por descargar. Los estados "
+            "financieros se traen de EDGAR (gratis) y se cachean 24 h: vuelve a "
+            "lanzarlo y seguirá por donde iba hasta completar el mercado."
+            if pendientes
+            else f"Universo completo: {len(empresas)} empresas evaluadas."
+        ),
+        "nota_coste": (
+            "Este screener no gasta ni una llamada más que la lista diaria: "
+            "momentum, precio y volatilidad salen de la descarga masiva por "
+            "sector, y los fundamentales de EDGAR, que es gratis."
         ),
     }
