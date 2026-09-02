@@ -22,6 +22,10 @@ import type {
   ScreenResult,
   MultifactorMeta,
   MultifactorResult,
+  AnalisisResponse,
+  CosteEstimado,
+  EarningsDisponibles,
+  EarningsHistorial,
   ThesisRecord,
   TodayResponse,
   TrackRecord,
@@ -187,6 +191,17 @@ export const api = {
     con_historia?: number
     budget?: number
   }) => postJson<MultifactorResult>('/api/screener/multifactor', body),
+  earningsDisponibles: (symbol: string) =>
+    fetchJson<EarningsDisponibles>(`/api/earnings/${encodeURIComponent(symbol)}/disponibles`),
+  earningsCoste: (symbol: string, accession?: string) =>
+    fetchJson<CosteEstimado>(
+      `/api/earnings/${encodeURIComponent(symbol)}/coste` +
+        (accession ? `?accession_no=${encodeURIComponent(accession)}` : ''),
+    ),
+  analizarEarnings: (symbol: string, body: { accession_no?: string; comparar?: boolean }) =>
+    postJson<AnalisisResponse>(`/api/earnings/${encodeURIComponent(symbol)}/analizar`, body),
+  earningsHistorial: (symbol: string) =>
+    fetchJson<EarningsHistorial>(`/api/earnings/${encodeURIComponent(symbol)}`),
   // Fase 5
   watchlist: () => fetchJson<{ name: string; items: WatchlistItem[] }>('/api/watchlist'),
   addToWatchlist: (body: { symbol: string; notes: string | null }) =>

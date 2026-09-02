@@ -183,11 +183,39 @@ def parse_companyfacts(facts_json: dict) -> list[dict]:
 
 class EdgarProvider(DataProvider):
     name = "edgar"
-    capabilities = frozenset({"financials", "filings"})
+    capabilities = frozenset({"financials", "filings", "filing_document"})
 
     def __init__(self, user_agent: str, timeout: float = 30.0):
         self.user_agent = user_agent
         self.timeout = timeout
+
+    def get_filing_document(self, url: str) -> dict:
+        """El TEXTO de un filing concreto, no su metadato.
+
+        `get_filings` devuelve la lista con sus URLs; esto trae el documento en
+        sí, que es lo que hace falta para leer el MD&A o los factores de riesgo.
+        Se restringe a sec.gov a propósito: la URL viaja desde la respuesta de
+        otro endpoint y un fetch sin restringir sería una puerta abierta a que
+        un dato de terceros dirija peticiones desde el servidor.
+        """
+        if not url.startswith("https://www.sec.gov/Archives/"):
+            raise DataNotFoundError(
+                "edgar: solo se descargan documentos de https://www.sec.gov/Archives/"
+            )
+        try:
+            resp = httpx.get(
+                url,
+                headers={"User-Agent": self.user_agent},
+                timeout=self.timeout,
+                follow_redirects=False,
+            )
+        except httpx.HTTPError as exc:
+            raise ProviderError(f"edgar: error de red: {exc}") from exc
+        if resp.status_code == 404:
+            raise DataNotFoundError(f"edgar: documento no encontrado: {url}")
+        if resp.status_code != 200:
+            raise ProviderError(f"edgar: HTTP {resp.status_code} al leer el documento")
+        return {"url": url, "html": resp.text, "as_of": iso_utc()}
 
     def _get(self, url: str) -> dict:
         try:

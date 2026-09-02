@@ -34,6 +34,7 @@ DEFAULT_SOURCE_ORDER: dict[str, list[str]] = {
     "fundamentals": ["finnhub", "yfinance"],
     "financials": ["edgar"],
     "filings": ["edgar"],
+    "filing_document": ["edgar"],
     "macro": ["fred"],
     "news": ["finnhub"],
     "earnings_calendar": ["finnhub"],

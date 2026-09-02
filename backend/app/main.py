@@ -9,6 +9,7 @@ from app.config import settings
 from app.db.engine import init_db
 from app.routers import (
     deep_dive,
+    earnings,
     etfs,
     market,
     meta,
@@ -53,4 +54,5 @@ app.include_router(portfolio.watchlist_router)
 app.include_router(theses.router)
 app.include_router(signals.router)
 app.include_router(deep_dive.router)
+app.include_router(earnings.router)
 app.include_router(meta.router)

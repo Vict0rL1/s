@@ -25,3 +25,22 @@ class LLMProvider(ABC):
     def interpret(self, system: str, prompt: str) -> dict:
         """-> {content: str (markdown), model: str}"""
         ...
+
+    def extract(self, system: str, prompt: str, schema: type) -> dict:
+        """Extracción con forma FIJA -> {data: dict, model: str, usage: dict}.
+
+        `schema` es un modelo Pydantic. La diferencia con `interpret` no es de
+        formato sino de propósito: `interpret` produce prosa para leer, esto
+        produce campos para comparar en el tiempo. Un análisis de resultados solo
+        sirve si el de este trimestre tiene exactamente la misma forma que el del
+        anterior, y eso no se consigue pidiendo JSON por favor en el prompt.
+        """
+        raise LLMUnavailableError(f"{self.name} no ofrece extracción estructurada")
+
+    def contar_tokens(self, system: str, prompt: str) -> int | None:
+        """Tokens de entrada ANTES de llamar, para poder enseñar el coste.
+
+        Devuelve None si el proveedor no sabe contar: quien llama debe distinguir
+        «no se pudo estimar» de «sale gratis».
+        """
+        return None

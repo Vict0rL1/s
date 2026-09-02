@@ -91,6 +91,13 @@ class DataProvider(ABC):
         """-> {symbol, filings: [{type, filed_at, accession_no, url}]}"""
         raise NotSupportedError(f"{self.name} no ofrece filings")
 
+    def get_filing_document(self, url: str) -> dict:
+        """El texto de UN filing concreto -> {url, html}.
+
+        `get_filings` da la lista y sus URLs; esto trae el documento en sí.
+        """
+        raise NotSupportedError(f"{self.name} no descarga documentos de filings")
+
     def get_macro(self, series_id: str, start: str) -> dict:
         """-> {series_id, points: [{ts, value|None}]}"""
         raise NotSupportedError(f"{self.name} no ofrece series macro")
@@ -123,6 +130,7 @@ class DataProvider(ABC):
             "fundamentals": self.get_fundamentals,
             "financials": self.get_financials,
             "filings": self.get_filings,
+            "filing_document": self.get_filing_document,
             "macro": self.get_macro,
             "news": self.get_news,
             "earnings_calendar": self.get_earnings_calendar,

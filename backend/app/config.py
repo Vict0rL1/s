@@ -51,6 +51,10 @@ CACHE_TTL_SECONDS: dict[str, int] = {
     "fundamentals": 24 * 3600,   # fundamentales TTM: 24 h
     "financials": 24 * 3600,     # estados financieros EDGAR: 24 h
     "filings": 24 * 3600,        # lista de filings EDGAR: 24 h
+    # Un filing presentado NO cambia nunca: la SEC no reescribe documentos,
+    # publica enmiendas con su propio número de acceso. Cachearlo 30 días es
+    # conservador; podría ser para siempre.
+    "filing_document": 30 * 24 * 3600,
     "macro": 24 * 3600,          # FRED: 1 día
     "news": 15 * 60,             # noticias: 15 min
     "earnings_calendar": 12 * 3600,  # calendario de resultados: 12 h

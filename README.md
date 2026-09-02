@@ -667,6 +667,106 @@ llamaba ningún endpoint**. Hoy `/api/portfolio` las sirve y el portafolio las
 enseña — la caída va pegada a la rentabilidad en la misma tarjeta, no en otra
 pantalla.
 
+## Reportes trimestrales: extracción con el API de Claude
+
+### Lo que NO se puede analizar, dicho primero
+
+**Las transcripciones de earnings calls no están disponibles.** El endpoint de
+transcripciones de Finnhub es de pago y la SEC no las publica, porque la llamada
+es un acto voluntario de la empresa y no un documento registrado. No se analizan
+y la app lo dice en pantalla, en vez de sustituirlas en silencio por otra cosa y
+dejar que el rótulo sugiera algo que no ha pasado.
+
+Lo que sí llega, gratis y completo, desde EDGAR:
+
+- **10-Q y 10-K** — el MD&A es donde la dirección explica el trimestre con sus
+  propias palabras, y los factores de riesgo son la lista que sus abogados
+  consideran material. Es el mismo lenguaje de la dirección que se compara entre
+  trimestres.
+- **8-K** — el comunicado de resultados viaja como anexo y suele traer el
+  guidance con cifras, que en el 10-Q solo aparece en prosa.
+
+### Se extraen hechos. La garantía es el esquema, no el prompt
+
+El esquema de salida **no tiene ningún campo donde quepa una recomendación**. No
+hay `accion`, ni `valoracion`, ni `precio_objetivo`. Un modelo no puede
+recomendar comprar en un JSON que no tiene sitio para decirlo, y eso es más
+fuerte que pedirlo por favor en el system prompt (que también se pide, y hay un
+test que comprueba las dos cosas).
+
+Los campos son fijos —`resumen`, `guidance`, `riesgos`, `temas`— y se validan
+contra un esquema Pydantic con `messages.parse()`, así que la restricción se
+aplica **en la generación**: no hay JSON mal formado que parchear ni campos que
+aparezcan un trimestre y falten al siguiente. Para un análisis que existe para
+compararse consigo mismo en el tiempo, esa garantía es el requisito.
+
+### Cada dato lleva su cita, y la cita se verifica
+
+Es la defensa concreta contra la alucinación. Si el modelo dice que la empresa
+elevó su previsión de ingresos, tiene que copiar la frase donde lo dice, y esa
+frase **se busca en el texto que se le mandó**.
+
+Lo que no aparece **se marca, no se borra**: que el modelo se inventara una cita
+es información sobre la fiabilidad de ese análisis, y borrarla dejaría un
+resultado más limpio y menos veraz. En pantalla sale en rojo, con el aviso de
+que el dato que sostiene no está respaldado.
+
+La comparación normaliza comillas curvas, espacios duros y guiones tipográficos
+antes de buscar: cambian según la herramienta que generó el filing, y si eso
+marcara como inventadas citas correctas, nadie se creería los avisos y el
+verificador entero sobraría.
+
+### Dos llamadas, y la aritmética en Python
+
+La primera lee el documento. La segunda —la comparación— recibe **los dos JSON,
+no los dos documentos**: cuesta una fracción y, sobre todo, es auditable, porque
+sus entradas están guardadas y se pueden volver a leer.
+
+Al modelo se le pide lo que sabe hacer: alinear lenguaje, para que «presiones en
+la cadena de suministro» y «restricciones de suministro» cuenten como el mismo
+tema en vez de como uno que desaparece y otro que aparece. **La resta la hace
+Python**, sobre los puntos medios de los rangos, y solo cuando los dos trimestres
+dan cifras. Sin números no hay variación que calcular, y estimarla sería inventar
+la parte más citable del análisis.
+
+### El LLM no se llama solo, y el coste se ve antes
+
+`GET /api/earnings/{symbol}/coste` cuenta los tokens con `count_tokens` y da el
+coste estimado **sin llamar al modelo**. Un 10-Q largo cuesta bastante más que
+uno corto, y eso hay que saberlo antes, no en la factura.
+
+Un documento que no cabe en el presupuesto **se declara y no se recorta**: un
+análisis sobre media sección parece completo, no lo es, y no lo dice en ninguna
+parte. La app propone el 8-K del mismo trimestre, que es mucho más corto.
+
+### Localizar las secciones: tres intentos hasta dar con la señal buena
+
+Un 10-Q son entre 300 KB y 1 MB de HTML y solo unas páginas se leen. Las
+secciones se localizan por su rótulo oficial de la SEC, pero distinguir el
+encabezado de verdad de la fila del índice costó tres intentos:
+
+1. **Por el largo de la sección.** Falló en silencio y caro: la fila del índice
+   de «Item 2» tenía por detrás toda la sección de riesgos antes del marcador de
+   cierre, superaba el mínimo, y el MD&A salía con los factores de riesgo pegados
+   dentro sin que nada lo dijera.
+2. **Por si hay otro «Item» justo detrás.** Falló al revés: los MD&A reales
+   empiezan citando «see Item 1A. Risk Factors» en el primer párrafo, y eso
+   descartaba el encabezado bueno.
+3. **Por la maquetación**, que es lo que de verdad los distingue: el encabezado
+   ocupa su propia línea y no arrastra número de página; la fila del índice sí lo
+   arrastra; la referencia cruzada va a mitad de frase.
+
+Una sección que no se encuentra **se declara ausente**. Devolver «lo que había
+alrededor de donde debería estar» sería inventar la estructura del documento.
+
+### Todo enlaza a su fuente
+
+Cada análisis se guarda por el **número de acceso** de la SEC —el identificador
+que no se reutiliza jamás— y lleva la URL del documento. Un análisis de
+resultados sin su documento es una opinión anónima sobre una empresa; con él,
+cualquiera puede ir a comprobarlo. Un filing se analiza una vez: la SEC no
+reescribe documentos, publica enmiendas con su propio número.
+
 ## Screener multifactor: `multifactor.py`
 
 Seis exposiciones estándar, normalizadas dentro de cada sector, con los pesos en

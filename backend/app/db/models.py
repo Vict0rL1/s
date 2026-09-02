@@ -305,6 +305,39 @@ class LlmOutput(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class EarningsAnalysis(Base):
+    """Un reporte trimestral extraído, con su fuente y su verificación.
+
+    Se guarda por `accession_no` —el identificador que la SEC da a cada filing y
+    que no se reutiliza jamás— para que el análisis quede atado al documento
+    exacto del que salió. Un análisis de resultados sin su documento es una
+    opinión anónima; con él, cualquiera puede ir a comprobarlo.
+
+    `datos` guarda la extracción completa con la MISMA forma cada trimestre: es
+    lo que permite comparar en el tiempo en vez de leer prosa distinta cada vez.
+    """
+
+    __tablename__ = "earnings_analyses"
+    __table_args__ = (
+        UniqueConstraint("accession_no", "kind", name="uq_earnings_filing"),
+        Index("ix_earnings_symbol_date", "symbol", "filed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    kind: Mapped[str] = mapped_column(String(16), default="extraccion")  # extraccion | comparacion
+    form_type: Mapped[str] = mapped_column(String(16))  # 10-Q | 10-K | 8-K
+    accession_no: Mapped[str] = mapped_column(String(32))
+    source_url: Mapped[str] = mapped_column(String(512))
+    filed_at: Mapped[str] = mapped_column(String(16))  # ISO date tal como la da EDGAR
+    doc_hash: Mapped[str] = mapped_column(String(32))  # versión exacta del texto analizado
+    datos: Mapped[dict] = mapped_column(JSON)
+    verificacion: Mapped[dict | None] = mapped_column(JSON)
+    model: Mapped[str] = mapped_column(String(64))
+    usage: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Experiment(Base):
     """Cada estrategia probada, con su hipótesis y su resultado.
 

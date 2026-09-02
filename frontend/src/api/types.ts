@@ -1101,3 +1101,165 @@ export interface MultifactorMeta {
   pesos_por_defecto: Record<Familia, number>
   markets: MarketInfo[]
 }
+
+// ---------------------------------------------------------------------------
+// Análisis de reportes trimestrales
+// ---------------------------------------------------------------------------
+
+export interface FilingRef {
+  type: string
+  filed_at: string
+  accession_no: string
+  url: string
+  analizado?: boolean
+}
+
+/** Cada dato extraído lleva la frase del documento que lo respalda, y si esa
+ *  frase se encontró de verdad en el original. Un `cita_verificada: false` es
+ *  información sobre la fiabilidad del análisis, no basura que ocultar. */
+export interface ConCita {
+  texto_literal: string
+  cita_verificada?: boolean
+}
+
+export interface GuidanceItem extends ConCita {
+  metrica: string
+  periodo: string
+  valor_bajo: number | null
+  valor_alto: number | null
+  unidad: string | null
+}
+
+export interface RiesgoItem extends ConCita {
+  tema: string
+  descripcion: string
+}
+
+export interface TemaItem extends ConCita {
+  tema: string
+  prominencia: 'alta' | 'media' | 'baja'
+}
+
+export interface DatosTrimestre {
+  resumen: string
+  menciona_guidance: boolean
+  guidance: GuidanceItem[]
+  riesgos: RiesgoItem[]
+  temas: TemaItem[]
+}
+
+export interface Verificacion {
+  citas: number
+  verificadas: number
+  fallidas: number
+  tasa: number | null
+  nota: string
+  fallos: { campo: string; cita: string }[]
+}
+
+export interface Extraccion {
+  id: number
+  symbol: string
+  kind: string
+  form_type: string
+  accession_no: string
+  source_url: string
+  filed_at: string
+  datos: DatosTrimestre
+  verificacion: Verificacion | null
+  model: string
+  usage: { entrada?: number; salida?: number } | null
+  created_at: string
+  generado_por: 'ia'
+}
+
+export interface VariacionCalculada {
+  metrica: string
+  periodo: string
+  unidad: string | null
+  antes_bajo: number | null
+  antes_alto: number | null
+  ahora_bajo: number | null
+  ahora_alto: number | null
+  variacion_pct: number | null
+  direccion: 'sube' | 'baja' | 'se_mantiene' | null
+  motivo_sin_variacion?: string
+}
+
+export interface DatosComparacion {
+  cambios_de_guidance: {
+    metrica: string
+    periodo: string
+    direccion: 'sube' | 'baja' | 'se_mantiene' | 'nueva' | 'retirada'
+    antes: string | null
+    ahora: string | null
+  }[]
+  cambios_de_tema: {
+    tema: string
+    estado: 'aparece' | 'desaparece' | 'se_mantiene'
+    texto_literal_nuevo: string | null
+    texto_literal_anterior: string | null
+  }[]
+  riesgos_nuevos: string[]
+  riesgos_que_desaparecen: string[]
+  resumen_del_cambio: string
+  variaciones_calculadas: VariacionCalculada[]
+}
+
+export interface Comparacion extends Omit<Extraccion, 'datos'> {
+  disponible: true
+  datos: DatosComparacion
+  contra: FilingRef
+  nota: string
+}
+
+export type ComparacionResult =
+  | Comparacion
+  | { disponible: false; nota: string }
+
+export interface AnalisisResponse {
+  extraccion: Extraccion
+  secciones_analizadas: string[]
+  secciones_ausentes: string[]
+  comparacion: ComparacionResult | null
+  disclaimer: string
+}
+
+export interface CosteEstimado {
+  symbol: string
+  filing: FilingRef
+  secciones: Record<string, { etiqueta: string; caracteres: number }>
+  secciones_ausentes: string[]
+  presupuesto: { cabe: boolean; tokens_estimados: number; nota: string | null }
+  coste: { tokens_entrada: number | null; usd_estimado: number | null; nota: string }
+}
+
+export interface EarningsDisponibles {
+  symbol: string
+  filings: FilingRef[]
+  limitacion_transcripciones: string
+}
+
+export interface SerieGuidance {
+  metrica: string
+  periodo: string
+  puntos: {
+    filed_at: string
+    form_type: string
+    source_url: string
+    valor_bajo: number | null
+    valor_alto: number | null
+    unidad: string | null
+    texto_literal: string
+    cita_verificada?: boolean
+  }[]
+}
+
+export interface EarningsHistorial {
+  symbol: string
+  extracciones: Extraccion[]
+  comparaciones: Extraccion[]
+  trimestres: number
+  serie_guidance: SerieGuidance[]
+  nota: string
+}
