@@ -4,6 +4,29 @@
 // uses, hooking its per-match callback, so the numbers describe the shipped model
 // rather than a copy that drifted.
 //
+// ===========================================================================
+// QUÉ MODELO MIDE (`--model dc` por defecto)
+// ===========================================================================
+// Desde que producción predice con el Dixon-Coles jerárquico, medir solo el camino de
+// Elo sería publicar el número de un código que ya no corre. Así que el backtest hace
+// lo MISMO que `predict.ts`: si el ajuste conoce a los dos equipos, λ sale del
+// Dixon-Coles; si no —un recién ascendido, por ejemplo— cae al camino de Elo, que es
+// el que sabe del salto de división.
+//
+// El reajuste periódico usa `DcWalkForward`, el mismo objeto que usa `study:dc`: ningún
+// partido se puntúa con parámetros que lo hayan visto. Con `--model elo` se mide el
+// camino viejo, que es lo que hace falta para comparar los dos.
+//
+// ===========================================================================
+// EL HOLDOUT NO SE PUNTÚA
+// ===========================================================================
+// Este script llevaba sumando las temporadas reservadas al total —3.691 partidos de
+// 24.223— y ese total es el que se cita en la ficha de honestidad de la app. Un holdout
+// que entra en el número que publicas no es un holdout. Ahora se excluye de la
+// PUNTUACIÓN; los partidos siguen alimentando la reproducción de ratings, que va en
+// orden cronológico y por tanto nunca deja que un partido influya en otro anterior.
+// Para abrirlo de verdad: `--unlock "motivo"`, que queda escrito en el registro.
+//
 // THE METRIC IS RPS, NOT ACCURACY.
 // "Accuracy" is close to meaningless in football: a model that never predicts a
 // draw can still look respectable, while being useless for the outcome that
@@ -40,7 +63,10 @@ import {
 } from './model.ts';
 import { STRENGTH_ALPHA, STRENGTH_SHRINK_MATCHES } from './strength.ts';
 import { CONGESTION_ELO, MOMENTUM_ELO } from './momentum.ts';
-import { firstSeasonGoalAverage, loadMatches, replayMatches } from './ratings.ts';
+import { DC_HYPER, firstSeasonGoalAverage, loadMatches, replayMatches } from './ratings.ts';
+import { expectedGoalsDc, type DcMatch } from './bayes/dixonColes.ts';
+import { DcWalkForward } from './bayes/walkforward.ts';
+import { splitOf, unlockFinalHoldout, FINAL_HOLDOUT_FROM } from '../experiments/holdout.ts';
 
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
@@ -83,13 +109,18 @@ function main() {
     args.shrink !== undefined ? Number(args.shrink) : STRENGTH_SHRINK_MATCHES;
   const momentumWeight = args.momentum !== undefined ? Number(args.momentum) : MOMENTUM_ELO;
   const restWeight = args.rest !== undefined ? Number(args.rest) : CONGESTION_ELO;
+  const useDc = args.model !== 'elo';
+  if (typeof args.unlock === 'string') unlockFinalHoldout(args.unlock);
+  const holdoutOpen = typeof args.unlock === 'string';
 
   console.log(
     `Ventaja de campo: ${homeAdvantage} · sensibilidad Elo→goles: ${goalSensitivity} · ` +
       `rho (Dixon-Coles): ${rho}\nCuota de goles del local: ${homeGoalShare} · K: ${k} · ` +
       `arrastre: ${carryover} · peso de la diferencia de goles: ${goalWeight}\n` +
       `Ataque/defensa: α=${strengthAlpha} (shrink ${strengthShrink}) · ` +
-      `momento: ${momentumWeight} Elo · congestión: ${restWeight} Elo`,
+      `momento: ${momentumWeight} Elo · congestión: ${restWeight} Elo\n` +
+      `Modelo: ${useDc ? 'Dixon-Coles jerárquico (el que publica la app)' : 'solo Elo → λ'} · ` +
+      `holdout ${holdoutOpen ? 'ABIERTO' : `cerrado (${FINAL_HOLDOUT_FROM.football}+ no se puntúa)`}`,
   );
 
   const leagues = footballConfig.leagues
@@ -112,6 +143,11 @@ function main() {
   let mkMarketRps = 0;
   let mkModelCorrect = 0;
   let mkMarketCorrect = 0;
+  // Cuántos partidos puntuó cada camino. Sin esto, «medido con el Dixon-Coles» puede
+  // querer decir que el 90 % de los partidos los resolvió el Elo de respaldo.
+  let viaDc = 0;
+  let viaElo = 0;
+  let skippedHoldout = 0;
   const drawBands = new Map<string, { n: number; pred: number; obs: number }>();
 
   for (const league of leagues) {
@@ -122,6 +158,19 @@ function main() {
     // come from the future: the league's average over the earliest season
     // present, which is information available at the start.
     const anchor = firstSeasonGoalAverage(matches);
+
+    // El mismo reajuste periódico que usa `study:dc`. Se construye por liga porque los
+    // parámetros son por liga: la Bundesliga marca 1,38 goles de base y la Segunda
+    // española 0,98, y un ajuste común los mediaría a un número que no describe a
+    // ninguna de las dos.
+    const dcRows: DcMatch[] = matches.map((m) => ({
+      date: m.match_date,
+      homeId: m.home_id,
+      awayId: m.away_id,
+      homeGoals: m.home_goals,
+      awayGoals: m.away_goals,
+    }));
+    const wf = useDc ? new DcWalkForward(dcRows, DC_HYPER) : null;
 
     let scored = 0;
     let rps = 0;
@@ -146,8 +195,26 @@ function main() {
       // the backtest must score the arithmetic the app runs, not a copy of it.
       onMatch: ({ match, home, away, lambda }) => {
         if (home.matches < warmup || away.matches < warmup) return;
+        // El holdout alimenta los ratings —la reproducción es cronológica, así que un
+        // partido nunca influye en otro anterior— pero no entra en el número.
+        if (!holdoutOpen && splitOf('football', Number(match.season)) === 'holdout') {
+          skippedHoldout++;
+          return;
+        }
 
-        const dist = scoreDistribution(lambda.home, lambda.away, rho);
+        // Lo mismo que hace `predict.ts`: Dixon-Coles cuando conoce a los dos, y si no,
+        // el camino de Elo, que es el que tiene medido el salto de división.
+        const dc = wf?.paramsFor(match.match_date) ?? null;
+        const dcUsable = !!dc && dc.attack.has(match.home_id) && dc.attack.has(match.away_id);
+        let lam = lambda;
+        let useRho = rho;
+        if (dc && dcUsable) {
+          lam = expectedGoalsDc(dc, match.home_id, match.away_id);
+          useRho = dc.rho;
+          viaDc++;
+        } else viaElo++;
+
+        const dist = scoreDistribution(lam.home, lam.away, useRho);
         const probs = outcomeProbabilities(dist);
         const actual = match.result as 'H' | 'D' | 'A';
 
@@ -179,9 +246,7 @@ function main() {
         const wasOver = match.home_goals + match.away_goals > 2.5;
         allOverScored++;
         if (pOver > 0.5 === wasOver) allOverCorrect++;
-        allGoalErr += Math.abs(
-          lambda.home + lambda.away - (match.home_goals + match.away_goals),
-        );
+        allGoalErr += Math.abs(lam.home + lam.away - (match.home_goals + match.away_goals));
 
         if (match.odds_home && match.odds_draw && match.odds_away) {
           const implied = impliedFrom1X2(match.odds_home, match.odds_draw, match.odds_away);
@@ -223,6 +288,19 @@ function main() {
 
   console.log(`\n=== FÚTBOL — backtest walk-forward ===`);
   console.log(`Partidos evaluados: ${allScored}`);
+  if (useDc) {
+    const pct = ((viaDc / Math.max(1, viaDc + viaElo)) * 100).toFixed(1);
+    console.log(
+      `  ${viaDc} con Dixon-Coles (${pct} %) · ${viaElo} con el respaldo de Elo ` +
+        '(equipos que el ajuste no conocía)',
+    );
+  }
+  if (skippedHoldout > 0) {
+    console.log(
+      `  ${skippedHoldout} partidos de ${FINAL_HOLDOUT_FROM.football}+ NO se han ` +
+        'puntuado: son el holdout final y el candado está cerrado.',
+    );
+  }
   console.log(`\nRPS (Ranked Probability Score): ${(allRps / allScored).toFixed(4)}`);
   console.log(`  referencia: predecir siempre la media de la liga ≈ 0.2230`);
   console.log(`Log loss: ${(allLogLoss / allScored).toFixed(4)}   (1.0986 = decir siempre 1/3)`);

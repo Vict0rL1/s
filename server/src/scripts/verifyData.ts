@@ -35,6 +35,8 @@ import { fullKelly, fractionalKelly, expectedLogGrowth, expectedValue } from '..
 import { decideStake, decideEvent, DEFAULT_CONFIG } from '../staking/policy.ts';
 import { calibrationMultiplier } from '../staking/calibration.ts';
 import { simulate } from '../staking/drawdown.ts';
+import { fitDixonColes, expectedGoalsDc } from '../football/bayes/dixonColes.ts';
+import { getDcParams } from '../football/bayes/repo.ts';
 import { FINAL_HOLDOUT_FROM } from '../experiments/holdout.ts';
 import { normalCdf, MARGIN_SIGMA as NFL_MARGIN_SIGMA } from '../nfl/model.ts';
 import { recomputeBaseballRatings } from '../baseball/ratings.ts';
@@ -1183,6 +1185,144 @@ function auditStaking(): void {
   );
 }
 
+// ===========================================================================
+// EL DIXON-COLES JERÁRQUICO
+// ===========================================================================
+// Un ajuste que converge a algo puede converger a cualquier cosa, así que se comprueba
+// contra propiedades que tienen que cumplirse por construcción — y contra datos
+// SINTÉTICOS, donde la respuesta correcta se conoce porque la puso uno mismo.
+//
+// La comprobación de los datos sintéticos es la que de verdad cierra el asunto: se
+// genera una liga con ataques y defensas conocidos, se ajusta, y se mira si el modelo
+// los recupera. Si no los recupera con datos limpios, no los va a recuperar nunca.
+function auditDixonColes(): void {
+  console.log('\n▸ Fútbol: el Dixon-Coles jerárquico');
+
+  // --- Recuperación de parámetros sobre datos sintéticos ---
+  // Cuatro equipos con ataques y defensas puestos a mano, una temporada larga de
+  // partidos generados con esos parámetros, y a ver si el ajuste vuelve a ellos.
+  const truth = {
+    mu: Math.log(1.3),
+    gamma: 0.25,
+    attack: { a: 0.4, b: 0.15, c: -0.15, d: -0.4 },
+    defence: { a: -0.3, b: -0.1, c: 0.1, d: 0.3 },
+  };
+  let seed = 20260101;
+  const rnd = (): number => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const poissonDraw = (lambda: number): number => {
+    // Knuth. Con λ < 5 las iteraciones son pocas y no hace falta nada más fino.
+    const limit = Math.exp(-lambda);
+    let k = 0;
+    let prod = rnd();
+    while (prod > limit) {
+      k++;
+      prod *= rnd();
+    }
+    return k;
+  };
+  const teams = ['a', 'b', 'c', 'd'] as const;
+  const synth: { date: string; homeId: string; awayId: string; homeGoals: number; awayGoals: number }[] = [];
+  for (let rep = 0; rep < 120; rep++) {
+    for (const h of teams) {
+      for (const a of teams) {
+        if (h === a) continue;
+        const lh = Math.exp(truth.mu + truth.attack[h] + truth.defence[a] + truth.gamma);
+        const la = Math.exp(truth.mu + truth.attack[a] + truth.defence[h]);
+        const day = String(rep * 3 + 1).padStart(2, '0');
+        synth.push({
+          // Fechas repartidas por 2020-2024 para que el decay tenga algo que hacer.
+          date: `${2020 + Math.floor(rep / 30)}${String((rep % 12) + 1).padStart(2, '0')}${day}`,
+          homeId: h,
+          awayId: a,
+          homeGoals: poissonDraw(lh),
+          awayGoals: poissonDraw(la),
+        });
+      }
+    }
+  }
+  // Sin decay y con prior flojo: la pregunta es si el estimador es insesgado, no si
+  // el encogimiento funciona (eso se prueba aparte, abajo).
+  const fit = fitDixonColes(synth, '20250101', { xi: 0, sigmaAttack: 5, sigmaDefence: 5 });
+  check('DC sintético: el ajuste converge', fit !== null, 'devolvió null');
+  if (fit) {
+    const errAttack = teams.map((t) => Math.abs((fit.attack.get(t) ?? 0) - truth.attack[t]));
+    const errDefence = teams.map((t) => Math.abs((fit.defence.get(t) ?? 0) - truth.defence[t]));
+    const worst = Math.max(...errAttack, ...errDefence);
+    check(
+      'DC sintético: recupera ataque y defensa (error < 0.10 en log)',
+      worst < 0.1,
+      `peor error ${worst.toFixed(4)}`,
+    );
+    check(
+      'DC sintético: recupera la ventaja de campo',
+      Math.abs(fit.gamma - truth.gamma) < 0.08,
+      `${fit.gamma.toFixed(4)} frente a ${truth.gamma}`,
+    );
+    check(
+      'DC sintético: recupera el nivel de goles de la liga',
+      Math.abs(Math.exp(fit.mu) - Math.exp(truth.mu)) < 0.12,
+      `${Math.exp(fit.mu).toFixed(3)} frente a ${Math.exp(truth.mu).toFixed(3)}`,
+    );
+    // Identificabilidad: ataque y defensa solo están determinados hasta una constante,
+    // y el recentrado es lo que impide que deriven. Si esto falla, los priors estarían
+    // penalizando una posición arbitraria en vez de la distancia a la media.
+    const sumA = teams.reduce((s, t) => s + (fit.attack.get(t) ?? 0), 0);
+    const sumD = teams.reduce((s, t) => s + (fit.defence.get(t) ?? 0), 0);
+    check(
+      'DC: ataque y defensa suman cero (identificabilidad)',
+      Math.abs(sumA) < 1e-6 && Math.abs(sumD) < 1e-6,
+      `Σataque ${sumA.toExponential(2)} · Σdefensa ${sumD.toExponential(2)}`,
+    );
+  }
+
+  // --- El encogimiento jerárquico hace lo que dice ---
+  // Un equipo con MUY pocos partidos y un ataque extremo: con prior fuerte tiene que
+  // quedar más cerca de la media de la liga que con prior flojo. Es la razón entera de
+  // que los priors existan, así que conviene verla ocurrir y no suponerla.
+  const few = synth.filter((m) => m.homeId !== 'e' && m.awayId !== 'e').slice(0, 400);
+  for (let i = 0; i < 4; i++) {
+    // Cuatro partidos de un equipo nuevo que marca muchísimo.
+    few.push({ date: `2024030${i + 1}`, homeId: 'e', awayId: 'd', homeGoals: 5, awayGoals: 0 });
+  }
+  const loose = fitDixonColes(few, '20250101', { xi: 0, sigmaAttack: 5, sigmaDefence: 5 });
+  const tight = fitDixonColes(few, '20250101', { xi: 0, sigmaAttack: 0.15, sigmaDefence: 0.15 });
+  const aLoose = loose?.attack.get('e') ?? 0;
+  const aTight = tight?.attack.get('e') ?? 0;
+  check(
+    'DC: el prior encoge al equipo de pocos partidos hacia la media',
+    aTight < aLoose && aTight > 0,
+    `prior flojo ${aLoose.toFixed(3)} · prior fuerte ${aTight.toFixed(3)}`,
+  );
+
+  // --- Y los parámetros que hay guardados son usables ---
+  const live = getDcParams('laliga');
+  if (!live) {
+    console.log('  sin ajuste guardado para laliga, saltado');
+    return;
+  }
+  const g = expectedGoalsDc(live, [...live.attack.keys()][0], [...live.attack.keys()][1]);
+  check(
+    'DC guardado: produce λ en un rango posible',
+    g.home > 0.1 && g.home < 6 && g.away > 0.1 && g.away < 6,
+    `${g.home.toFixed(2)} / ${g.away.toFixed(2)}`,
+  );
+  check(
+    'DC guardado: la ventaja de campo es positiva',
+    live.gamma > 0,
+    `gamma ${live.gamma.toFixed(4)}`,
+  );
+  console.log(
+    `  laliga: ${live.attack.size} equipos · ${Math.exp(live.mu).toFixed(2)} goles base · ` +
+      `casa ×${Math.exp(live.gamma).toFixed(3)} · rho ${live.rho.toFixed(3)}`,
+  );
+}
+
 /**
  * Huecos que la FUENTE no tiene, con el motivo, no huecos que toleramos.
  *
@@ -1413,6 +1553,7 @@ function main(): void {
   auditFootballTxtParser();
   auditExperimentRegistry();
   auditStaking();
+  auditDixonColes();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

@@ -47,6 +47,8 @@ import {
   MOMENTUM_ELO,
   type MomentumState,
 } from './momentum.ts';
+import { fitDixonColes, type DcMatch, type DcParams } from './bayes/dixonColes.ts';
+import { storeDcParams } from './bayes/repo.ts';
 import type { LeagueId } from './types.ts';
 
 /**
@@ -425,7 +427,47 @@ export function recomputeFootballRatings(): Record<string, number> {
       storePromotionGap(league as LeagueId, measurePromotionGap(league as LeagueId));
     }
   }
+
+  // El Dixon-Coles jerárquico, que es de donde salen las λ de las predicciones. Se
+  // ajusta aquí y no al predecir: un ajuste son cientos de milisegundos y una pantalla
+  // pide sesenta predicciones, así que ajustar por petición multiplicaría por sesenta
+  // un trabajo que solo cambia cuando entran resultados nuevos.
+  for (const league of leagues) {
+    storeDcParams(league, fitLeagueDc(league as LeagueId));
+  }
   return out;
+}
+
+/**
+ * Los hiperparámetros del ajuste, elegidos midiendo (`npm run study:dc`).
+ *
+ * Semivida de un año y σ = 0.30, elegidos puntuando las temporadas de ENTRENAMIENTO
+ * (2023-2024) sobre una rejilla de cuatro decays × tres encogimientos. La validación
+ * no participó en la elección; ver la nota en predict.ts para lo que dio después.
+ */
+export const DC_HYPER = {
+  xi: Math.LN2 / 365,
+  sigmaAttack: 0.3,
+  sigmaDefence: 0.3,
+};
+
+/**
+ * Ajustar el Dixon-Coles de una liga con todo su histórico.
+ *
+ * `asOf` es la fecha del último partido y no «hoy»: los pesos del decay se cuentan
+ * desde el final de los datos, así que un archivo que lleva parado tres meses no ve
+ * cómo se le evapora el peso de sus partidos más recientes.
+ */
+export function fitLeagueDc(league: LeagueId): DcParams | null {
+  const rows = getDb()
+    .prepare(
+      `SELECT match_date date, home_id homeId, away_id awayId,
+              home_goals homeGoals, away_goals awayGoals
+       FROM fb_matches WHERE league = ? ORDER BY match_date`,
+    )
+    .all(league) as unknown as DcMatch[];
+  if (rows.length < 100) return null;
+  return fitDixonColes(rows, rows[rows.length - 1].date, DC_HYPER);
 }
 
 /**

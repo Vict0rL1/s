@@ -14,10 +14,12 @@ Código: `server/src/football/`.
 La cadena es:
 
 ```
-brecha de Elo + ventaja de campo  →  goles esperados de cada equipo
-       + bajas conocidas (Premier)   →  distribución de Poisson sobre marcadores exactos
-                                     →  1X2, over/under, ambos marcan, rejilla completa
-                                        de marcadores, diferencia de goles
+ataque y defensa del equipo (Dixon-Coles jerárquico)  →  goles esperados de cada equipo
+       + ventaja de campo de esa liga                    →  distribución bivariante sobre
+       + bajas conocidas (Premier)                          marcadores exactos
+                                                        →  1X2, over/under, ambos marcan,
+   (equipo sin ajuste → respaldo: brecha de Elo)            hándicaps, rejilla completa,
+                                                            diferencia de goles
 ```
 
 Que **todo** salga de la misma distribución no es solo elegante: hace **imposible** que las cifras se
@@ -25,7 +27,49 @@ contradigan. Si cotizaras el 1X2 desde una curva Elo y el over/under desde una m
 aparte, podrías acabar diciendo que un partido tiene 70% de victoria local y a la vez 60% de acabar
 0-0. Aquí no puede pasar: cada número es una suma sobre la misma rejilla.
 
-### Elo → goles
+### El modelo: Dixon-Coles jerárquico
+
+Cada equipo tiene **dos** números, no uno: cuánto marca y cuánto encaja.
+
+```
+λ_local     = exp( μ + ataque_local + defensa_visitante + γ )
+λ_visitante = exp( μ + ataque_visitante + defensa_local )
+```
+
+`μ` es el nivel de goles de la liga, `γ` la ventaja de campo **de esa liga** (sale del ajuste, no de
+una constante: va de ×1,13 a ×1,36 según la competición), y `ataque`/`defensa` son las desviaciones
+de cada equipo respecto a la media. Están en escala logarítmica, así que 0 significa exactamente
+«equipo medio de esta liga».
+
+Un Elo resume la calidad en **un** número, y por eso no distingue al equipo que gana 3-2 del que
+gana 1-0. Los mercados de goles —que son la mitad de la pantalla— dependen justo de esa diferencia.
+
+**Decay temporal.** Cada partido pesa `exp(−ξ · días)` con ξ de **un año de semivida**: lo de hace
+doce meses vale la mitad que lo de ayer. El valor no está puesto a mano, se eligió puntuando cuatro
+opciones (sin decay, 2 años, 1 año, 6 meses) sobre las temporadas de **entrenamiento**, sin mirar la
+validación.
+
+**Priors jerárquicos.** Un equipo con cuatro partidos jugados y tres goleadas a favor no es el mejor
+ataque de la liga: es un equipo del que no se sabe casi nada. Los parámetros llevan un prior normal
+centrado en la media de la liga con σ = 0,3, así que un equipo con poca historia queda **encogido**
+hacia el promedio y solo se separa cuando acumula partidos que lo justifiquen. Es lo que arregla al
+recién llegado sin tener que tratarlo aparte.
+
+**Identificabilidad.** Sumar una constante a todos los ataques y restarla de `μ` da exactamente las
+mismas predicciones, así que el ajuste recentra ataque y defensa a media cero después de cada paso.
+Sin eso los parámetros derivan sin límite y dejan de ser comparables entre equipos.
+
+**Cómo se ajusta.** Máximo a posteriori por ascenso de gradiente (Adam) con gradientes analíticos —
+400 iteraciones en frío, 60 partiendo del ajuste anterior. Las 14 ligas enteras tardan ~1 s, así que
+se reajusta en `update-data:fb` y se guarda; predecir solo lee.
+
+**Cuándo NO se usa.** Si el ajuste no conoce a alguno de los dos equipos, se cae al camino de Elo. Y
+es deliberado: un equipo ausente tendría ataque 0 y defensa 0, o sea «exactamente la media de su
+nueva liga», que para un recién ascendido es demasiado generoso. Ese caso lo resuelve mejor el Elo
+trasladado con el salto de división medido (§6.5). En el backtest, el 90,1 % de los partidos los
+resuelve el Dixon-Coles y el 9,9 % restante el respaldo.
+
+### Elo → goles (el camino de respaldo)
 
 ```
 tilt   = 10^(brecha · 0.32 / 400)
@@ -50,7 +94,11 @@ frena a los dos a la vez). Dixon & Coles (1997) corrigen exactamente esas cuatro
 parámetro, `rho`.
 
 **El signo importa y es fácil equivocarse:** el rho que *sube* los 0-0 y 1-1 es **negativo**. Con rho
-positivo se hunden precisamente las casillas que ya escaseaban. Aquí `rho = −0.10`.
+positivo se hunden precisamente las casillas que ya escaseaban.
+
+`rho` **también sale del ajuste, por liga**, en vez de ser el −0,10 constante de antes. Y el
+resultado tiene interés: en varias ligas sale *positivo*, o sea que la corrección que hacía falta no
+era la misma en todas partes. El camino de respaldo sigue usando −0,10.
 
 ---
 
@@ -67,21 +115,57 @@ estándar para pronósticos 1X2. Menor es mejor.
 
 ## 3. Resultados medidos
 
-Backtest *walk-forward* sobre **17.200 partidos reales** de Premier League, LaLiga, Bundesliga y
-Championship (datos de footballcsv). El backtest **no reimplementa** las reglas: conduce el mismo
-`replayMatches` que usa la app — y desde esta versión recibe de él el propio λ, en vez de volver a
-calcularlo por su cuenta, así que no puede ni siquiera divergir por accidente.
+Backtest *walk-forward* (`npm run backtest:fb`) sobre **20.824 partidos reales** de 14 ligas. El
+backtest **no reimplementa** las reglas: conduce el mismo `replayMatches` que usa la app, recibe de
+él el propio λ, y reajusta el Dixon-Coles con el mismo `DcWalkForward` que el estudio — así que no
+puede divergir por accidente de lo que corre en producción.
 
-| Métrica | Valor | Referencia |
-|---|---|---|
-| **RPS** | **0.2063** | predecir siempre la media de la liga ≈ 0.2230 |
-| **Log loss** | **1.0075** | 1.0986 = decir siempre 1/3 |
-| Acierto del resultado más probable | 49.9% | — |
-| Over/under 2.5 acertado | 53.1% | — |
-| Error absoluto del total de goles | 1.32 goles | — |
+**Las temporadas del holdout final (2026+) no se puntúan.** Entraban en el total —3.399 partidos de
+20.824— y ese total es el que cita la ficha de honestidad de la app. Un holdout que entra en el
+número que publicas no es un holdout, así que ahora el script lo excluye y lo dice en su salida.
+Siguen alimentando la reproducción de ratings, que va en orden cronológico y por tanto nunca deja
+que un partido influya en otro anterior.
 
-Por liga: LaLiga 0.1960 · Premier 0.1963 · Bundesliga 0.2090 · Championship 0.2173. La segunda
-división inglesa es la más impredecible de las cuatro, lo cual es exactamente lo que dice su fama.
+| Métrica | Dixon-Coles | Elo → λ (anterior) | Referencia |
+|---|---|---|---|
+| **RPS** | **0,2077** | 0,2089 | predecir siempre la media de la liga ≈ 0,2230 |
+| **Log loss** | **1,0147** | 1,0183 | 1,0986 = decir siempre 1/3 |
+| Acierto del resultado más probable | 49,5 % | 49,2 % | — |
+| Over/under 2.5 acertado | **56,9 %** | 55,9 % | — |
+| Error absoluto del total de goles | **1,28** | 1,30 | — |
+
+Los mismos 20.824 partidos en las dos columnas, así que es una comparación pareada.
+
+Por escalón: **primeras divisiones 0,2007** · **segundas 0,2177**. La diferencia es composición, no
+regresión — las segundas son más difíciles. Por liga: Primeira 0,1911 · Eredivisie 0,1912 ·
+Serie A 0,1959 · LaLiga 0,1982 · Premier 0,2041 · Bundesliga 0,2067 · Ligue 1 0,2094 ·
+Championship 0,2224.
+
+### Dónde gana el Dixon-Coles, y dónde no
+
+Esto es lo importante y conviene no adornarlo. `npm run study:dc` lo mide sobre la temporada de
+validación (4.479 partidos), con los hiperparámetros elegidos **solo** con temporadas de
+entrenamiento:
+
+| Salida | Elo → λ | Dixon-Coles | Diferencia | p |
+|---|---|---|---|---|
+| 1X2 | 1,01351 | 1,00925 | −0,00426 | 0,0540 |
+| **Marcador exacto** | 2,88894 | **2,87171** | **−0,01722** | **0,0005** |
+| Más de 2,5 goles | 0,68855 | **0,68241** | −0,00615 | 0,0195 |
+| Ambos marcan | 0,69081 | 0,69014 | −0,00067 | 0,7288 |
+| **Hándicap −1 local** | 0,48410 | **0,47505** | **−0,00906** | **0,0005** |
+
+Con 16 comparaciones registradas sobre este mismo conjunto, el listón de Bonferroni está en
+α = 0,0031. **Lo pasan el marcador exacto y el hándicap.** El 1X2 **no**: cambiar el modelo de
+predicción entero NO ha mejorado de forma medible el número que más mira la gente. Y en «ambos
+marcan» no cambia nada en absoluto.
+
+La lectura honesta es que la mejora está **en la forma de la distribución de goles**, que es
+exactamente donde debía estar: modelar ataque y defensa por separado sirve para los mercados que
+dependen de cuántos goles hay, no para acertar quién gana. Los cinco resultados están en
+`experiments/registry.jsonl` marcados como `shipped` —incluidos los dos que no convencen— porque
+producción usa la misma rejilla para las cinco salidas y esconderlos bajaría el denominador de la
+corrección por comparaciones múltiples.
 
 ### Calibración del empate
 
@@ -481,6 +565,11 @@ difíciles de predecir. Por liga:
 
 Y las primeras quedan igual o mejor que antes de todo esto: LaLiga 0,1996 → 0,1994,
 Bundesliga 0,2071 → 0,2065.
+
+> Esas cifras son **del modelo de Elo y con el holdout dentro**, que es como se midió
+> entonces. Las vigentes están en §3: con el Dixon-Coles y sin puntuar 2026+, 0,2007 en
+> primeras y 0,2177 en segundas sobre 20.824 partidos. Se dejan porque son el registro de
+> por qué se ingirieron las segundas divisiones, no una medida del modelo de hoy.
 
 **Ligas sin fuente de resultados** (Champions League): sus equipos vienen de ligas distintas y su Elo
 vive en cada tabla doméstica, así que un rating compartido necesitaría una calibración entre ligas

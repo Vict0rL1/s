@@ -67,12 +67,20 @@ necesitarías** para que la apuesta valga la pena según el modelo. Ver
   alineación —se publica una hora antes— la marcas tú y **se recalcula la distribución entera**.
   Medido sobre tres temporadas de alineaciones reales: es la única señal probada en este proyecto
   que el Elo no contenía ya.
-- **Modelo verificado sobre 17.200 partidos reales** (Premier, LaLiga, Bundesliga, Championship):
-  **RPS 0.2063** frente a 0.2230 de la referencia, y una calibración del empate que pasó de errar
-  5–8 pp a **±1 pp**.
-- **Tres señales que se probaron y se descartaron** —ataque/defensa por equipo, racha y congestión
-  de calendario— siguen en el código, apagadas y con su interruptor, para que el resultado negativo
-  se pueda reproducir en vez de tener que creérselo.
+- **Dixon-Coles jerárquico:** ataque y defensa por equipo, ventaja de campo *por liga*, decay
+  temporal de un año de semivida y priors que encogen hacia la media a los equipos con pocos
+  partidos. La salida es la **distribución completa de marcadores**, y de ahí se derivan el 1X2, el
+  over/under, el «ambos marcan» y los hándicaps — no hay un modelo por mercado.
+- **Modelo verificado sobre 20.824 partidos reales** de 14 ligas, sin puntuar el holdout:
+  **RPS 0.2077** frente a 0.2230 de la referencia, y una calibración del empate que pasó de errar
+  5–8 pp a **±1,4 pp**. Contra el Elo anterior gana en el marcador exacto (p = 0,0005) y en el
+  hándicap, pero **no de forma medible en el 1X2** (p = 0,054): la mejora está en la forma de la
+  distribución de goles, no en acertar quién gana. Está escrito así en la ficha de la app.
+- **Tres señales que se probaron y se descartaron** —ataque/defensa *encima del Elo*, racha y
+  congestión de calendario— siguen en el código, apagadas y con su interruptor, para que el
+  resultado negativo se pueda reproducir en vez de tener que creérselo. Que el ataque/defensa sí
+  funcione dentro del Dixon-Coles y no como corrección del Elo no es una contradicción: allí son los
+  parámetros que se ajustan, aquí eran un parche multiplicativo sobre un número que ya los resumía.
 - **Información de todos los equipos**: clasificación por Elo con goles a favor y en contra, y ficha
   por equipo (balance global / casa / fuera, puntos, últimos partidos).
 - **Ligas sin fuente de resultados** (Champions) muestran partidos y probabilidades del mercado,
@@ -793,7 +801,7 @@ ves, en vez de fallar en silencio.
 | `npm run verify:bsb` | **Béisbol**: recuenta una temporada y la compara con el registro oficial |
 | `npm run update-data:naf` | **Fútbol americano**: equipos, resultados, líneas de cierre y calendario |
 | `npm run backtest:naf` | **Fútbol americano**: mide el modelo **contra la línea de cierre real** |
-| `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate |
+| `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate (`--model elo` mide el camino de respaldo) |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
 | `npm run staking` | **La capa de decisión**: Kelly fraccional, topes, límites de pérdida y drawdown esperado |
@@ -803,6 +811,7 @@ ves, en vez de fallar en silencio.
 | `npm run study:devig` | Compara **multiplicativo vs. Shin vs. potencia** para quitar el margen de la casa, sobre 5.281 moneylines reales de la NFL |
 | `npm run study:features` | Mide cada feature del modelo de fútbol por **log loss fuera de muestra**: lo que no se gana el sitio, fuera |
 | `npm run study:sigma` | **Fútbol**: mide la escala del error del Elo (`ELO_SIGMA_C`), que fija el «± pp» de todas las tarjetas |
+| `npm run study:dc` | **Fútbol**: el Dixon-Coles jerárquico contra el modelo de Elo, con walk-forward, y los mercados que salen de la rejilla (over/under, ambos marcan, hándicap) |
 | `npm run doctor` | Diagnostica por qué la app muestra **cuotas de demostración**: `.env`, clave, cuota y qué hay guardado |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |

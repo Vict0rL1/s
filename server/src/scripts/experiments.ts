@@ -59,6 +59,21 @@ for (const e of experiments) {
   families.set(k, [...(families.get(k) ?? []), e]);
 }
 
+/**
+ * Recorta por el MEDIO, no por el final.
+ *
+ * Las hipótesis de una misma familia comparten el principio y se distinguen por el
+ * final: «...mejora el log loss del 1X2» y «...mejora el log loss del MARCADOR EXACTO»
+ * se cortaban las dos en «el Dixon-Coles jerárquico mejora el log loss» y la tabla
+ * enseñaba dos filas idénticas con números distintos. Con la elipsis en medio se
+ * conservan las dos puntas, que es donde está la diferencia.
+ */
+function short(s: string, width: number): string {
+  if (s.length <= width) return s;
+  const head = Math.ceil((width - 1) / 2);
+  return `${s.slice(0, head)}…${s.slice(s.length - (width - 1 - head))}`;
+}
+
 console.log('\nEXPERIMENTOS POR CONJUNTO DE DATOS');
 console.log('  conjunto              nº   α de Bonferroni   (α nominal 0.05)');
 for (const [key, fam] of [...families].sort()) {
@@ -80,7 +95,7 @@ for (const [key, fam] of [...families].sort()) {
   console.log(`${key} — ${k} experimentos`);
   console.log('='.repeat(96));
   console.log(
-    '  hipótesis                                       métrica    delta     dirección     p   nominal Bonf.  BH   veredicto',
+    '  hipótesis                                                   métrica    delta     dirección     p   nominal Bonf.  BH   veredicto',
   );
   fam.forEach((e, i) => {
     const nominal = e.result.p < 0.05 ? ' sí ' : ' no ';
@@ -102,7 +117,7 @@ for (const [key, fam] of [...families].sort()) {
         ? (e.result.delta >= 0 ? '+' : '') + e.result.delta.toFixed(1)
         : (e.result.delta >= 0 ? '+' : '') + e.result.delta.toFixed(5);
     console.log(
-      `  ${e.hypothesis.slice(0, 45).padEnd(46)} ${e.metric.padEnd(8)} ${delta.padStart(9)} ` +
+      `  ${short(e.hypothesis, 57).padEnd(58)} ${e.metric.padEnd(8)} ${delta.padStart(9)} ` +
         `${dir} ${e.result.p.toFixed(4)}  ${nominal}  ${bonf}  ${bhOk}  ${e.verdict}` +
         // Repetir una medición hasta que salga bonita es p-hacking. Se enseña.
         (e.times > 1 ? `  (medido ${e.times}×, p de ${e.pSpread[0].toFixed(4)} a ${e.pSpread[1].toFixed(4)})` : ''),

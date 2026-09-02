@@ -19,6 +19,7 @@ import {
   topScorelines,
   GOAL_SENSITIVITY,
   HOME_ADVANTAGE,
+  DIXON_COLES_RHO,
   type GoalMargin,
   type MarketProbabilities1X2,
   type ScoreLine,
@@ -41,6 +42,8 @@ import {
 } from './repo.ts';
 import { getLeagueGoalsPerMatch } from './ratings.ts';
 import { getPromotionGap } from './promotion.ts';
+import { expectedGoalsDc } from './bayes/dixonColes.ts';
+import { getDcParams, dcKnowsTeam } from './bayes/repo.ts';
 import type { FbRecord, LeagueId } from './types.ts';
 
 export const DISCLAIMER =
@@ -51,6 +54,16 @@ export const DISCLAIMER =
   'No es una certeza ni una recomendación para apostar.';
 
 export type ReliabilityLevel = 'high' | 'medium' | 'low';
+
+/**
+ * Mismo recorte que aplica el camino del Elo, por la misma razón.
+ *
+ * Una media de Poisson por debajo de 0.15 o por encima de 5 produce distribuciones de
+ * marcador que ningún partido de liga ha tenido nunca. Con el Dixon-Coles pasa menos
+ * —los priors ya encogen— pero puede pasar con un equipo de muy pocos partidos, y el
+ * recorte cuesta una línea.
+ */
+const clampLambda = (x: number): number => Math.min(5, Math.max(0.15, x));
 
 /**
  * Escala del error de estimación del Elo: σ(n) = C / √(n + 1), en puntos Elo.
@@ -303,15 +316,67 @@ export function buildFootballPrediction(
   const homeSquad = squadsKnown ? squadAvailability(league, homeId, opts.outHome ?? []) : null;
   const awaySquad = squadsKnown ? squadAvailability(league, awayId, opts.outAway ?? []) : null;
 
-  const lambda = expectedGoals(home.elo, away.elo, leagueGoals, {
-    neutral,
-    homeAvailability: homeSquad ?? NEUTRAL_AVAILABILITY,
-    awayAvailability: awaySquad ?? NEUTRAL_AVAILABILITY,
-  });
+  // ===========================================================================
+  // DE DÓNDE SALEN LAS DOS λ
+  // ===========================================================================
+  // Del Dixon-Coles jerárquico (bayes/dixonColes.ts) siempre que el ajuste conozca a
+  // los dos equipos. Ataque y defensa estimados por separado sobre los goles, con
+  // decay temporal y encogimiento hacia la media de la liga.
+  //
+  // Medido en la temporada de validación, 4.479 partidos, contra el camino anterior
+  // (Elo → λ con un reparto fijo entre ataque y defensa):
+  //
+  //     marcador exacto   2.88894 → 2.87171   −0.01722  p = 0.0005
+  //     hándicap −1       0.48410 → 0.47505   −0.00906  p = 0.0005
+  //     más de 2.5 goles  0.68855 → 0.68241   −0.00615  p = 0.0195
+  //     ambos marcan      0.69081 → 0.69014   −0.00067  p = 0.73
+  //     1X2               1.01351 → 1.00925   −0.00426  p = 0.054
+  //
+  // El patrón dice exactamente qué se ganó: NADA en el 1X2 y bastante en la FORMA de
+  // la distribución. Tiene sentido — el signo de la diferencia de goles ya lo capturaba
+  // el Elo; lo que no podía capturar es que dos equipos con el mismo rating repartan
+  // sus goles de formas distintas, y de esa forma dependen el over, el hándicap y el
+  // marcador exacto. Los dos primeros pasan el listón de Bonferroni de la familia.
+  //
+  // EL CAMINO ANTIGUO SIGUE VIVO Y NO ES PEREZA. Un equipo que el ajuste no conoce
+  // —el recién ascendido, que no ha jugado ni un partido en esta división— recibiría
+  // ataque 0 y defensa 0, que aquí significa «exactamente la media de la liga». Y un
+  // recién ascendido no es un equipo medio de su nueva categoría. Eso lo resuelve el
+  // Elo con el salto de división medido en promotion.ts, así que para esos partidos se
+  // usa aquel camino, que es el que tiene la respuesta buena.
+  const dc = getDcParams(league);
+  const useDc = dcKnowsTeam(dc, homeId) && dcKnowsTeam(dc, awayId);
+  const availability = (a: SquadAvailability | null): { attack: number; defence: number } =>
+    a ? { attack: a.attack, defence: a.defence } : { attack: 1, defence: 1 };
+
+  let lambda: { home: number; away: number };
+  let rho = DIXON_COLES_RHO;
+  if (useDc && dc) {
+    const base = expectedGoalsDc(dc, homeId, awayId, { neutral });
+    // Las bajas siguen aplicándose igual y por fuera del ajuste: son información de
+    // HOY que el histórico no puede contener, y mezclarlas con el ataque aprendido
+    // haría imposible decir en la tarjeta qué parte del número es el equipo y qué
+    // parte es que le falta el delantero.
+    const ha = availability(homeSquad);
+    const aa = availability(awaySquad);
+    lambda = {
+      home: clampLambda(base.home * ha.attack * aa.defence),
+      away: clampLambda(base.away * aa.attack * ha.defence),
+    };
+    // ρ también sale del ajuste: es un parámetro más, estimado sobre esta liga en vez
+    // de la constante −0.1 que valía para todas.
+    rho = dc.rho;
+  } else {
+    lambda = expectedGoals(home.elo, away.elo, leagueGoals, {
+      neutral,
+      homeAvailability: homeSquad ?? NEUTRAL_AVAILABILITY,
+      awayAvailability: awaySquad ?? NEUTRAL_AVAILABILITY,
+    });
+  }
   home.expectedGoals = round2(lambda.home);
   away.expectedGoals = round2(lambda.away);
 
-  const dist = scoreDistribution(lambda.home, lambda.away);
+  const dist = scoreDistribution(lambda.home, lambda.away, rho);
   const probs = outcomeProbabilities(dist);
   const over25 = overProbability(dist, 2.5);
   const bts = bothTeamsScoreProbability(dist);

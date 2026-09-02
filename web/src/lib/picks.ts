@@ -109,11 +109,17 @@ export const MAX_PICKS = 10;
  */
 export const CAVEATS: Record<string, string> = {
   football:
-    'Medido sobre 24.129 partidos de 14 ligas: RPS 0.2019 en las primeras divisiones y 0.2184 en ' +
-    'las segundas, frente a 0.2230 de la referencia, con el empate calibrado a ±1 pp. Un equipo ' +
-    'recién ascendido se predice con su Elo de Segunda más el salto de división medido en su país; ' +
-    'la tarjeta lo dice y su banda es más ancha. Nunca se ha medido contra las cuotas de cierre, ' +
-    'así que una diferencia con el mercado es una diferencia, no una ganancia demostrada.',
+    'Dixon-Coles jerárquico: ataque y defensa por equipo, ventaja de campo, decay de un año de ' +
+    'semivida y priors que encogen a los equipos con pocos partidos hacia la media de su liga. ' +
+    'Medido sobre 20.824 partidos de 14 ligas sin tocar el holdout: RPS 0.2007 en las primeras ' +
+    'divisiones y 0.2177 en las segundas, frente a 0.2230 de la referencia, con el empate ' +
+    'calibrado a ±1,4 pp. Contra el modelo de Elo anterior gana claramente en el MARCADOR EXACTO ' +
+    '(p = 0,0005) y en el hándicap, pero NO de forma medible en el 1X2 (p = 0,054): la mejora está ' +
+    'en la forma de la distribución de goles, no en acertar quién gana. En «ambos marcan» no ' +
+    'cambia nada. Un equipo recién ascendido se predice con su Elo de Segunda más el salto de ' +
+    'división medido en su país; la tarjeta lo dice y su banda es más ancha. Nunca se ha medido ' +
+    'contra las cuotas de cierre, así que una diferencia con el mercado es una diferencia, no una ' +
+    'ganancia demostrada.',
   baseball:
     'Medido sobre 36.235 partidos: Brier 0.2431 y over/under acertado el 54,9 %. El modelo no ' +
     'conoce el bullpen ni la alineación del día, que es justo lo que mueve una cuota a última hora.',
