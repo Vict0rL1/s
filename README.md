@@ -812,10 +812,65 @@ ves, en vez de fallar en silencio.
 | `npm run study:features` | Mide cada feature del modelo de fútbol por **log loss fuera de muestra**: lo que no se gana el sitio, fuera |
 | `npm run study:sigma` | **Fútbol**: mide la escala del error del Elo (`ELO_SIGMA_C`), que fija el «± pp» de todas las tarjetas |
 | `npm run study:dc` | **Fútbol**: el Dixon-Coles jerárquico contra el modelo de Elo, con walk-forward, y los mercados que salen de la rejilla (over/under, ambos marcan, hándicap) |
+| `npm run study:postprocess` | **La capa entre el modelo y la pantalla**: ajusta la calibración (Platt vs. isotónica), el peso de la mezcla con el mercado y el encogimiento, y escribe `experiments/postprocess.json` |
 | `npm run doctor` | Diagnostica por qué la app muestra **cuotas de demostración**: `.env`, clave, cuota y qué hay guardado |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 | `npm run lint` | Lint real (oxlint, solo la categoría **correctness**) |
+
+## La capa entre el modelo y la pantalla (`npm run study:postprocess`)
+
+Lo que sale del modelo no es lo que se publica. En medio hay tres pasos, cada uno
+ajustado sobre predicciones históricas fuera de muestra, y **la tarjeta enseña las dos
+probabilidades** — la cruda y la final — con lo que se le hizo entre una y otra.
+
+```
+cruda  →  [1] calibrar  →  [2] mezclar con el mercado  →  [3] encoger  →  publicada
+```
+
+**[1] Calibración.** Se ajustan Platt y una regresión isotónica, y gana el que le gane a
+*no calibrar* fuera de muestra. Los tramos son tres, no dos: se AJUSTA con lo más
+antiguo, se ELIGE con la última temporada de entrenamiento y solo entonces se mide en
+validación. Elegir entre tres mirando validación y publicar el número de validación del
+ganador es exactamente el sesgo que el registro de experimentos existe para evitar.
+
+**[2] Mezcla.** En escala logarítmica, no aritmética: con 2 % y 20 % a partes iguales la
+aritmética da 11 % y la logarítmica 6,7 %, que respeta que la distancia entre 2 % y 20 %
+es la misma que entre 20 % y 75 %. El peso sale de una rejilla sobre el backtest, nunca a
+ojo.
+
+**[3] Encogimiento.** `w_efectivo = w / (1 + κ·d)`, con `d` = KL(modelo ‖ mercado). Cuando
+el modelo se aleja mucho del precio, la explicación más frecuente no es que haya visto
+algo, sino que le falta algo que el mercado sí tiene. Y son justo las tarjetas que más
+«valor» enseñan.
+
+### Lo que salió
+
+| | fútbol | NFL |
+|---|---|---|
+| calibrador elegido | **Platt** (a = 1,10) | **ninguno** |
+| log loss cruda → calibrada | 1,00785 → 1,00697 | 0,65216 (sin cambio) |
+| peso del modelo en la mezcla | — | **0,10** |
+| encogimiento κ | — | 4 |
+| log loss final | 1,00697 | **0,62807** |
+
+**El peso del modelo de la NFL es 0,10.** Dicho sin adornos: el backtest dice que la
+mejor forma de usar ese modelo es casi ignorarlo y copiar el precio. Y ni así mejora al
+mercado — la mezcla queda en 0,6294 frente a 0,6270 de la línea sola, una diferencia que
+cabe dentro del azar (IC [−0,0006, +0,0029]). La mezcla se aplica igualmente porque
+publicar el modelo crudo sería peor.
+
+**En el fútbol la mezcla está APAGADA**, y no por olvido: ajustar un peso exige cuotas de
+partidos ya jugados, y este archivo tiene cero. Poner el 0,10 de la NFL ahí sería
+inventarlo. Se enciende sola: cada predicción queda en `fb_prediction_log` con el precio
+del día, y en cuanto haya unos cientos resueltos, `npm run study:postprocess` la ajusta
+con tus datos.
+
+La mejora de Platt en el fútbol es de 0,0009 de log loss, con p = 0,0495 — pasa el listón
+nominal y **no** el de Bonferroni con 17 comparaciones sobre el mismo conjunto. El script
+lo escribe en su salida en vez de dejarlo en un decimal.
+
+---
 
 ## Modelo y decisión son dos cosas
 

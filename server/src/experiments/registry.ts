@@ -243,3 +243,51 @@ export function bootstrapP(resampledDiffs: number[]): number {
   // es «menor que ~1/400», y escribir 0 prometería una precisión que no se tiene.
   return Math.min(1, (2 * (Math.min(le, ge) + 1)) / (n + 1));
 }
+
+/**
+ * Bootstrap EMPAREJADO de la diferencia entre dos series medidas sobre los mismos casos.
+ *
+ * Emparejado y no independiente: los dos modelos ven los mismos partidos, y un partido
+ * raro los despista a los dos a la vez. Remuestrear cada serie por su lado trataría ese
+ * ruido común como si fuera desacuerdo entre ellos e inflaría el intervalo hasta hacerlo
+ * inútil. Aquí se remuestrean las DIFERENCIAS, que es donde vive la pregunta.
+ *
+ * `a` es la referencia y `b` el candidato, así que una media negativa significa que el
+ * candidato mejora — la misma convención que `ExperimentResult.delta`.
+ */
+export function pairedBootstrap(
+  a: number[],
+  b: number[],
+  iters = 4000,
+): { mean: number; lo: number; hi: number; p: number } {
+  const d = a.map((x, i) => b[i] - x);
+  const m = d.reduce((s, x) => s + x, 0) / Math.max(1, d.length);
+  // mulberry32: la primera versión usaba `seed * 1103515245 & 0x7fffffff`, que se sale
+  // del rango de enteros exactos de JS — el generador perdía bits y devolvía intervalos
+  // que no contenían ni su propia estimación puntual. `Math.imul` multiplica en 32 bits
+  // de verdad.
+  let seed = 13371337;
+  const rnd = (): number => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  // 4.000 remuestreos y no 500. Con 500 el p más pequeño que se puede expresar es
+  // 2/501 = 0.004, y ese es justo el orden del umbral de Bonferroni contra el que se
+  // compara: medir con una regla cuya última marca es el umbral no decide nada.
+  const means: number[] = [];
+  for (let i = 0; i < iters; i++) {
+    let s = 0;
+    for (let k = 0; k < d.length; k++) s += d[(rnd() * d.length) | 0];
+    means.push(s / d.length);
+  }
+  const sorted = [...means].sort((x, y) => x - y);
+  return {
+    mean: m,
+    lo: sorted[Math.floor(iters * 0.025)],
+    hi: sorted[Math.floor(iters * 0.975)],
+    p: bootstrapP(means),
+  };
+}

@@ -47,7 +47,8 @@
     "seed:experiments": "npm run seed:experiments --workspace server --",
     "study:calibration": "npm run study:calibration --workspace server --",
     "staking": "npm run staking --workspace server --",
-    "study:dc": "npm run study:dc --workspace server --"
+    "study:dc": "npm run study:dc --workspace server --",
+    "study:postprocess": "npm run study:postprocess --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

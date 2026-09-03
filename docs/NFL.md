@@ -190,6 +190,47 @@ resultados en vez de fiarse: el favorito de la línea gana el 66,2 % y el Brier 
 línea es 0,2127; con el signo invertido sube a 0,347 y la comprobación falla.
 
 
+## 3bis. La consecuencia: lo que se publica ya no es el modelo
+
+La sección anterior mide que el modelo no le gana a la línea. Durante mucho tiempo eso
+vivía solo en un aviso: la tarjeta seguía enseñando la probabilidad del modelo y el
+lector tenía que acordarse del párrafo. Ahora la conclusión está **dentro del número**.
+
+Entre el modelo y la pantalla hay una capa (`npm run study:postprocess`) que calibra,
+mezcla con el mercado y encoge hacia él cuando la discrepancia crece:
+
+```
+w_efectivo = w / (1 + κ · KL(modelo ‖ mercado))
+```
+
+Ajustado por rejilla sobre 4.427 partidos de entrenamiento, sin tocar la validación:
+
+| | valor | qué significa |
+|---|---|---|
+| calibrador | **ninguno** | Platt e isotónica se probaron; ninguno le ganó a no calibrar en el tramo de elección |
+| `w` | **0,10** | el peso que el backtest le da al MODELO. El 0,90 restante es el precio |
+| `κ` | 4 | el peso del modelo se parte por la mitad al discrepar 0,25 nats |
+
+Sobre los 285 partidos de validación:
+
+| | log loss |
+|---|---|
+| solo el mercado | **0,62697** |
+| solo el modelo | 0,65216 |
+| la mezcla | 0,62807 |
+
+**La mezcla sigue sin mejorar al mercado** (+0,0011, IC [−0,0006, +0,0029], p = 0,21). No
+es un triunfo: es dejar de empeorarlo. El modelo aporta lo justo para que la diferencia
+con la línea sea indistinguible del azar, en vez de los 0,025 de log loss que perdía solo.
+
+Qué se ve en la práctica: en un partido donde el modelo daba 40,2 % al local y el precio
+64,3 %, la tarjeta publicaba una ventaja de **−24,1 pp** — una discrepancia enorme, del
+tipo que invita a apostar. Con la capa, el peso efectivo baja a 0,068 por lo lejos que
+está, y la ventaja publicada queda en **−1,5 pp**. Las dos probabilidades salen en la
+tarjeta, una al lado de la otra, con lo que se aplicó escrito debajo.
+
+---
+
 ## 4. Quién juega de quarterback
 
 Era la mayor omisión del modelo, y estaba en el fichero que ya descargábamos. nflverse

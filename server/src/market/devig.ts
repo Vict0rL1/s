@@ -197,3 +197,19 @@ export function devigPower(odds: number[]): DevigResult {
 // `npm run study:devig` sobre ellas y esta línea se decide con datos del sitio
 // correcto. Hasta entonces, el que no hay que justificar es el que se queda.
 export const devig = devigMultiplicative;
+
+/**
+ * Cuota americana → decimal.
+ *
+ * Vive aquí y no en cada script porque la NFL guarda el moneyline en formato americano
+ * (−316, +286) y TODO lo que quita margen espera decimales. Pasar un −316 a `devig` no
+ * falla: devuelve números que parecen probabilidades y no lo son, y el error solo se ve
+ * varias métricas después, cuando el mercado sale con un log loss de 14 — que fue
+ * exactamente lo que pasó al ajustar la mezcla la primera vez.
+ *
+ *   +150  →  ganas 150 por cada 100  →  2,50
+ *   −150  →  apuestas 150 para ganar 100  →  1,667
+ */
+export function americanToDecimal(a: number): number {
+  return a > 0 ? 1 + a / 100 : 1 + 100 / -a;
+}

@@ -90,6 +90,18 @@ export function dcKnowsTeam(p: DcParams | null, teamId: string): boolean {
   return !!p && p.attack.has(teamId);
 }
 
+/**
+ * ¿Se puede predecir ESTE partido con el ajuste? La regla, escrita una sola vez.
+ *
+ * La usan producción (`predict.ts`), el backtest y los estudios. Tres copias de «si el
+ * ajuste conoce a los dos» son tres sitios donde la condición puede acabar siendo
+ * distinta — y si el backtest usa el Dixon-Coles en un partido donde producción cae al
+ * Elo, el número medido deja de describir lo que ve el usuario.
+ */
+export function dcUsableFor(p: DcParams | null, homeId: string, awayId: string): boolean {
+  return dcKnowsTeam(p, homeId) && dcKnowsTeam(p, awayId);
+}
+
 /** Cuántos equipos de la liga cubre el ajuste. Para diagnósticos. */
 export function dcCoverage(league: string): { teams: number; through: string } | null {
   const p = getDcParams(league);

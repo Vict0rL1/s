@@ -60,11 +60,28 @@ export interface FbSquad {
 
 export interface FbGoalMargin { margin: number; probability: number }
 
+/** Qué le hizo la capa de post-proceso a la probabilidad. */
+export interface FbPostprocess {
+  calibrator: 'platt' | 'isotonic' | 'ninguno';
+  /** Peso efectivo del modelo tras encoger hacia el mercado. null = no se mezcló. */
+  weight: number | null;
+  /** Discrepancia con el mercado, en nats. */
+  disagreement: number | null;
+  note?: string;
+}
+
 export interface FbPrediction {
   league: string;
   neutral: boolean;
   teams: { home: FbSide; away: FbSide };
+  /**
+   * La probabilidad CRUDA del modelo, coherente con la rejilla de marcadores.
+   * Lo que se publica es `final`; las dos se enseñan.
+   */
   model: Fb1X2;
+  /** La publicada: calibrada, y mezclada con el mercado donde hay peso ajustado. */
+  final: Fb1X2;
+  postprocess: FbPostprocess;
   goals: {
     expectedHome: number; expectedAway: number; expectedTotal: number;
     over25: number; under25: number; bothScore: number;

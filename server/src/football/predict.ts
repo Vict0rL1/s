@@ -43,7 +43,8 @@ import {
 import { getLeagueGoalsPerMatch } from './ratings.ts';
 import { getPromotionGap } from './promotion.ts';
 import { expectedGoalsDc } from './bayes/dixonColes.ts';
-import { getDcParams, dcKnowsTeam } from './bayes/repo.ts';
+import { getDcParams, dcUsableFor } from './bayes/repo.ts';
+import { postprocess } from '../postprocess/apply.ts';
 import type { FbRecord, LeagueId } from './types.ts';
 
 export const DISCLAIMER =
@@ -169,12 +170,46 @@ export interface FbMarketComparison {
 /** Flagged when the model rates an outcome this much higher than the market. */
 export const VALUE_THRESHOLD = 0.05;
 
+/**
+ * Lo que la capa de post-proceso le hizo a la probabilidad, para poder enseñarlo.
+ *
+ * Va en la respuesta y no en un log porque el usuario tiene derecho a saber que el
+ * número que está leyendo no es el que salió del modelo. Un post-proceso invisible es
+ * indistinguible de un modelo que miente.
+ */
+export interface FbPostprocess {
+  /** Qué calibrador se aplicó. 'ninguno' = ninguno mejoró fuera de muestra. */
+  calibrator: 'platt' | 'isotonic' | 'ninguno';
+  /** Peso efectivo del modelo tras encoger hacia el mercado. `null` si no se mezcló. */
+  weight: number | null;
+  /** Discrepancia con el mercado en nats. `null` si no había precio. */
+  disagreement: number | null;
+  /** Por qué no se mezcló, cuando no se mezcló. */
+  note?: string;
+}
+
 export interface FbPrediction {
   league: LeagueId;
   neutral: boolean;
   teams: { home: FbSide; away: FbSide };
-  /** The three-way outcome probabilities. Always sum to 1. */
+  /**
+   * La probabilidad CRUDA del modelo, la que sale de la rejilla de marcadores.
+   *
+   * Se queda cruda a propósito: la rejilla, el over/under y el «ambos marcan» salen de
+   * esta misma distribución, y la app promete que no se contradicen. El calibrador se
+   * ajustó SOBRE EL 1X2 y solo sabe corregir el 1X2, así que aplicarlo aquí rompería esa
+   * coherencia sin poder arreglar el resto. Lo que se publica es `final`.
+   */
   model: MarketProbabilities1X2;
+  /**
+   * La probabilidad que la app publica: calibrada, y mezclada con el mercado donde hay
+   * peso ajustado para hacerlo. Es la que se compara con la cuota.
+   *
+   * Sin parámetros ajustados es idéntica a `model`, y entonces `postprocess.calibrator`
+   * lo dice.
+   */
+  final: MarketProbabilities1X2;
+  postprocess: FbPostprocess;
   goals: {
     expectedHome: number;
     expectedAway: number;
@@ -345,7 +380,7 @@ export function buildFootballPrediction(
   // Elo con el salto de división medido en promotion.ts, así que para esos partidos se
   // usa aquel camino, que es el que tiene la respuesta buena.
   const dc = getDcParams(league);
-  const useDc = dcKnowsTeam(dc, homeId) && dcKnowsTeam(dc, awayId);
+  const useDc = dcUsableFor(dc, homeId, awayId);
   const availability = (a: SquadAvailability | null): { attack: number; defence: number } =>
     a ? { attack: a.attack, defence: a.defence } : { attack: 1, defence: 1 };
 
@@ -385,15 +420,35 @@ export function buildFootballPrediction(
     label: `${s.home}-${s.away}`,
   }));
 
-  // ---- market ----
+  // ---- mercado y post-proceso ----
+  // El orden importa: el mercado se lee ANTES de post-procesar, porque la mezcla lo
+  // necesita como entrada. Y la ventaja se calcula DESPUÉS, contra la probabilidad
+  // final: comparar la cruda con la cuota diría que hay valor donde la capa acaba de
+  // decidir que había exceso de confianza, que es justo lo que la capa existe para
+  // evitar.
+  const implied =
+    market.oddsHome && market.oddsDraw && market.oddsAway
+      ? impliedFrom1X2(market.oddsHome, market.oddsDraw, market.oddsAway)
+      : null;
+
+  const pp = postprocess(
+    'football',
+    [probs.home, probs.draw, probs.away],
+    implied ? [implied.home, implied.draw, implied.away] : null,
+  );
+  const finalProbs: MarketProbabilities1X2 = {
+    home: pp.final[0],
+    draw: pp.final[1],
+    away: pp.final[2],
+  };
+
   let marketComparison: FbMarketComparison = { market: null, edge: null, verdict: 'no_market' };
   if (market.oddsHome && market.oddsDraw && market.oddsAway) {
-    const implied = impliedFrom1X2(market.oddsHome, market.oddsDraw, market.oddsAway);
     if (implied) {
       const edge = {
-        home: probs.home - implied.home,
-        draw: probs.draw - implied.draw,
-        away: probs.away - implied.away,
+        home: finalProbs.home - implied.home,
+        draw: finalProbs.draw - implied.draw,
+        away: finalProbs.away - implied.away,
       };
       const best = (['home', 'draw', 'away'] as const).reduce((a, b) =>
         edge[a] >= edge[b] ? a : b,
@@ -703,6 +758,12 @@ export function buildFootballPrediction(
       draw: Math.round(probs.draw * 100000) / 100000,
       away: Math.round(probs.away * 100000) / 100000,
     },
+    final: {
+      home: Math.round(finalProbs.home * 100000) / 100000,
+      draw: Math.round(finalProbs.draw * 100000) / 100000,
+      away: Math.round(finalProbs.away * 100000) / 100000,
+    },
+    postprocess: pp.applied,
     goals: {
       expectedHome: home.expectedGoals,
       expectedAway: away.expectedGoals,

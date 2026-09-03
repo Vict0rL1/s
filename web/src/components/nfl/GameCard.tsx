@@ -1,5 +1,15 @@
 import type { NflGameWithPrediction, NflPrediction, NflSpreadQuote } from '../../lib/nfl';
 import { AWAY_COLOR, HOME_COLOR, NEUTRAL_COLOR, pct } from '../../lib/theme';
+import { PostprocessPanel } from '../PostprocessPanel';
+
+/**
+ * El moneyline es a dos bandas: el empate anula la apuesta. La cruda del modelo viene a
+ * tres, así que para compararla con la publicada hay que ponerla en la misma escala.
+ */
+const twoWay = (m: { home: number; away: number }): { home: number; away: number } => ({
+  home: m.home / (m.home + m.away),
+  away: m.away / (m.home + m.away),
+});
 import {
   Badge,
   BarRow,
@@ -548,6 +558,17 @@ function Detail({ prediction }: { prediction: NflPrediction }) {
             ))}
           </ul>
         )}
+      </Panel>
+
+      <Panel>
+        <SectionTitle>De dónde sale este número</SectionTitle>
+        <PostprocessPanel
+          postprocess={prediction.postprocess}
+          rows={[
+            { label: 'Local', raw: twoWay(prediction.model).home, final: prediction.final.home },
+            { label: 'Visitante', raw: twoWay(prediction.model).away, final: prediction.final.away },
+          ]}
+        />
       </Panel>
 
       {market.market && (

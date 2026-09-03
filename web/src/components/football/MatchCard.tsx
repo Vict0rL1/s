@@ -23,6 +23,7 @@ import {
   TeamCrest,
 } from '../ui';
 import ScoreMatrix from './ScoreMatrix';
+import { PostprocessPanel } from '../PostprocessPanel';
 import SquadPanel from './SquadPanel';
 import { realMarket } from '../../lib/picks';
 
@@ -75,7 +76,9 @@ export default function MatchCard({
   }, [fixture.id, outHome, outAway, dirty]);
 
   const prediction = adjusted ?? item.prediction;
-  const probs = prediction?.model ?? marketOnly ?? null;
+  // La cabecera enseña la probabilidad PUBLICADA (post-procesada). La cruda no
+  // desaparece: sale en su propio panel dentro del detalle, para que se puedan comparar.
+  const probs = prediction?.final ?? marketOnly ?? null;
   const fromModel = !!prediction;
 
   const homeName = prediction?.teams.home.name ?? fixture.home_name;
@@ -501,6 +504,18 @@ function Detail({
             ))}
           </ul>
         )}
+      </Panel>
+
+      <Panel>
+        <SectionTitle>De dónde sale este número</SectionTitle>
+        <PostprocessPanel
+          postprocess={prediction.postprocess}
+          rows={[
+            { label: '1 · Local', raw: prediction.model.home, final: prediction.final.home },
+            { label: 'X · Empate', raw: prediction.model.draw, final: prediction.final.draw },
+            { label: '2 · Visitante', raw: prediction.model.away, final: prediction.final.away },
+          ]}
+        />
       </Panel>
 
       {market.market && (

@@ -40,6 +40,11 @@ import { getDcParams } from '../football/bayes/repo.ts';
 import { FINAL_HOLDOUT_FROM } from '../experiments/holdout.ts';
 import { normalCdf, MARGIN_SIGMA as NFL_MARGIN_SIGMA } from '../nfl/model.ts';
 import { recomputeBaseballRatings } from '../baseball/ratings.ts';
+import { applyPlatt, fitPlatt } from '../postprocess/platt.ts';
+import { applyIsotonic, fitIsotonic } from '../postprocess/isotonic.ts';
+import { blend, disagreement } from '../postprocess/blend.ts';
+import { readPostprocess } from '../postprocess/params.ts';
+import { postprocess } from '../postprocess/apply.ts';
 
 let checks = 0;
 let failures = 0;
@@ -1195,6 +1200,191 @@ function auditStaking(): void {
 // La comprobación de los datos sintéticos es la que de verdad cierra el asunto: se
 // genera una liga con ataques y defensas conocidos, se ajusta, y se mira si el modelo
 // los recupera. Si no los recupera con datos limpios, no los va a recuperar nunca.
+/**
+ * La capa de post-proceso, contra propiedades que se pueden comprobar sin datos.
+ *
+ * Un calibrador es difícil de verificar mirando su salida: los números salen distintos y
+ * «distintos» no dice si están bien. Lo que sí se puede comprobar es que cumpla las
+ * promesas que hace — la identidad cuando no debe tocar nada, la monotonía, los extremos
+ * de la mezcla — y que RECUPERE una distorsión conocida que se le mete a propósito.
+ */
+function auditPostprocess(): void {
+  console.log('\n▸ La capa de post-proceso');
+
+  // --- Platt: la identidad es identidad ---
+  // a = 1 y sesgos a cero tiene que devolver exactamente lo que entra. Si esto falla,
+  // cualquier otra cosa que diga el módulo da igual.
+  const id = applyPlatt({ a: 1, b: [0, 0, 0], n: 0 }, [0.5, 0.3, 0.2]);
+  check(
+    'post-proceso: Platt con a=1 y sesgos 0 no toca nada',
+    id.every((v, i) => Math.abs(v - [0.5, 0.3, 0.2][i]) < 1e-9),
+    id.map((v) => v.toFixed(4)).join('/'),
+  );
+
+  // --- Platt: a < 1 acerca al centro, a > 1 separa ---
+  const flat = applyPlatt({ a: 0.5, b: [0, 0], n: 0 }, [0.9, 0.1]);
+  const sharp = applyPlatt({ a: 2, b: [0, 0], n: 0 }, [0.9, 0.1]);
+  check('post-proceso: a<1 acerca al centro', flat[0] < 0.9 && flat[0] > 0.5, `${flat[0].toFixed(4)}`);
+  check('post-proceso: a>1 separa', sharp[0] > 0.9, `${sharp[0].toFixed(4)}`);
+
+  // --- Platt recupera una distorsión conocida ---
+  // Se generan casos con probabilidad verdadera conocida y se PUBLICA una versión
+  // deformada (elevada a 1/T). El ajuste debería encontrar una `a` que deshaga la
+  // deformación, o sea a ≈ T. Es la prueba de que el ajuste hace lo que dice.
+  let s2 = 987654321;
+  const rnd2 = (): number => {
+    s2 = (s2 + 0x6d2b79f5) | 0;
+    let t = s2;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const T = 1.6;
+  const samples: { p: number[]; outcome: number }[] = [];
+  for (let i = 0; i < 20000; i++) {
+    const pTrue = 0.05 + rnd2() * 0.9;
+    // Lo que el modelo «publica»: demasiado tajante, por elevar a 1/T y renormalizar.
+    const a = pTrue ** (1 / T);
+    const b = (1 - pTrue) ** (1 / T);
+    const shown = a / (a + b);
+    samples.push({ p: [shown, 1 - shown], outcome: rnd2() < pTrue ? 0 : 1 });
+  }
+  const recovered = fitPlatt(samples, 1500);
+  check(
+    'post-proceso: Platt recupera una temperatura conocida',
+    !!recovered && Math.abs(recovered.a - T) < 0.2,
+    `a = ${recovered?.a.toFixed(3)} contra ${T}`,
+  );
+
+  // --- Isotónica: monótona, dentro de [0,1] y sin ceros exactos ---
+  const isoPts: { x: number; y: number }[] = [];
+  for (let i = 0; i < 6000; i++) {
+    const x = rnd2();
+    // Verdad: la mitad de lo que dice el modelo. Una curva monótona clarísima.
+    isoPts.push({ x, y: rnd2() < x * 0.5 ? 1 : 0 });
+  }
+  const iso = fitIsotonic(isoPts);
+  check('post-proceso: la isotónica ajusta con datos suficientes', !!iso);
+  if (iso) {
+    let monotone = true;
+    for (let i = 1; i < iso.y.length; i++) if (iso.y[i] < iso.y[i - 1]) monotone = false;
+    check('post-proceso: la curva isotónica no baja nunca', monotone);
+    check(
+      'post-proceso: la isotónica nunca dice 0 ni 1 exactos',
+      iso.y.every((v) => v > 0 && v < 1),
+      `${Math.min(...iso.y).toFixed(5)} … ${Math.max(...iso.y).toFixed(5)}`,
+    );
+    // Con datos «fáciles» ningún tramo se queda vacío y la comprobación de arriba pasa
+    // aunque se quite el suelo — se probó quitándolo y no se enteró. El caso que de
+    // verdad lo ejercita es el de siempre en este proyecto: un extremo donde el suceso
+    // casi nunca pasa. Aquí, por debajo de 0,25 no ocurre NUNCA, así que los primeros
+    // tramos tienen cero casos y sin suelo valdrían 0 exacto — que en log loss es
+    // infinito la primera vez que ocurra lo que se declaró imposible.
+    const extremePts: { x: number; y: number }[] = [];
+    for (let i = 0; i < 6000; i++) {
+      const x = rnd2();
+      extremePts.push({ x, y: x > 0.25 && rnd2() < (x - 0.25) * 0.8 ? 1 : 0 });
+    }
+    const isoExtreme = fitIsotonic(extremePts);
+    check(
+      'post-proceso: un tramo sin un solo caso no dice «imposible»',
+      !!isoExtreme && isoExtreme.y.every((v) => v > 0),
+      `mínimo ${isoExtreme ? Math.min(...isoExtreme.y).toExponential(2) : 'sin ajuste'}`,
+    );
+    check(
+      'post-proceso: y ese suelo es pequeño, no una invención',
+      !!isoExtreme && Math.min(...isoExtreme.y) < 0.02,
+      `mínimo ${isoExtreme ? Math.min(...isoExtreme.y).toFixed(5) : '—'}`,
+    );
+    // Y que de verdad corrija: donde el modelo dice 0,8 la frecuencia real es 0,4.
+    const at08 = applyIsotonic(iso, 0.8);
+    check(
+      'post-proceso: la isotónica encuentra la distorsión que se le metió',
+      Math.abs(at08 - 0.4) < 0.06,
+      `dice ${at08.toFixed(3)} donde la verdad es 0.400`,
+    );
+  }
+
+  // --- Mezcla: los extremos son exactos ---
+  const model = [0.6, 0.25, 0.15];
+  const mkt = [0.4, 0.3, 0.3];
+  const w1 = blend(model, mkt, { w: 1, kappa: 0 });
+  const w0 = blend(model, mkt, { w: 0, kappa: 0 });
+  check(
+    'post-proceso: mezcla con w=1 devuelve el modelo',
+    w1.probs.every((v, i) => Math.abs(v - model[i]) < 1e-9),
+  );
+  check(
+    'post-proceso: mezcla con w=0 devuelve el mercado',
+    w0.probs.every((v, i) => Math.abs(v - mkt[i]) < 1e-9),
+  );
+  const mid = blend(model, mkt, { w: 0.5, kappa: 0 });
+  check(
+    'post-proceso: la mezcla suma 1',
+    Math.abs(mid.probs.reduce((a, b) => a + b, 0) - 1) < 1e-9,
+  );
+  check(
+    'post-proceso: la mezcla queda entre los dos',
+    mid.probs[0] > mkt[0] && mid.probs[0] < model[0],
+    `${mid.probs[0].toFixed(4)} entre ${mkt[0]} y ${model[0]}`,
+  );
+
+  // --- Encogimiento: más discrepancia, menos peso ---
+  // Es LA propiedad que se pidió, así que se comprueba directamente y no de refilón.
+  const near = blend([0.42, 0.29, 0.29], mkt, { w: 0.8, kappa: 4 });
+  const far = blend([0.95, 0.03, 0.02], mkt, { w: 0.8, kappa: 4 });
+  check(
+    'post-proceso: discrepar más baja el peso del modelo',
+    far.weight < near.weight,
+    `lejos ${far.weight.toFixed(3)} vs. cerca ${near.weight.toFixed(3)}`,
+  );
+  check(
+    'post-proceso: al discrepar mucho, la final se acerca más al mercado que la cruda',
+    Math.abs(far.probs[0] - mkt[0]) < Math.abs(0.95 - mkt[0]),
+    `${far.probs[0].toFixed(3)} vs cruda 0.950, mercado ${mkt[0]}`,
+  );
+  check(
+    'post-proceso: κ=0 deja el peso intacto',
+    Math.abs(blend([0.95, 0.03, 0.02], mkt, { w: 0.8, kappa: 0 }).weight - 0.8) < 1e-9,
+  );
+  check(
+    'post-proceso: la discrepancia de un modelo igual al mercado es cero',
+    Math.abs(disagreement(mkt, mkt)) < 1e-12,
+  );
+
+  // --- La tubería completa, contra los parámetros que de verdad se publican ---
+  const file = readPostprocess();
+  for (const [sport, pp] of Object.entries(file)) {
+    const K = sport === 'football' ? 3 : 2;
+    const raw = K === 3 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
+    const r = postprocess(sport, raw, null);
+    check(
+      `post-proceso ${sport}: la final suma 1 sin mercado`,
+      Math.abs(r.final.reduce((a, b) => a + b, 0) - 1) < 1e-9,
+    );
+    check(
+      `post-proceso ${sport}: sin precio no se mezcla`,
+      r.applied.weight === null,
+    );
+    if (pp.blend) {
+      const withMkt = postprocess(sport, raw, K === 3 ? [0.4, 0.3, 0.3] : [0.5, 0.5]);
+      check(
+        `post-proceso ${sport}: con precio el peso está entre 0 y el ajustado`,
+        withMkt.applied.weight !== null &&
+          withMkt.applied.weight > 0 &&
+          withMkt.applied.weight <= pp.blend.w + 1e-9,
+        `${withMkt.applied.weight}`,
+      );
+    }
+    console.log(
+      `  ${sport}: calibrador ${pp.calibrator} · ` +
+        `mezcla ${pp.blend ? `w ${pp.blend.w} κ ${pp.blend.kappa}` : 'apagada'} · ` +
+        `log loss ${pp.measured.rawLogLoss.toFixed(5)} → ${pp.measured.calibratedLogLoss.toFixed(5)}` +
+        (pp.measured.finalLogLoss !== null ? ` → ${pp.measured.finalLogLoss.toFixed(5)}` : ''),
+    );
+  }
+}
+
 function auditDixonColes(): void {
   console.log('\n▸ Fútbol: el Dixon-Coles jerárquico');
 
@@ -1554,6 +1744,7 @@ function main(): void {
   auditExperimentRegistry();
   auditStaking();
   auditDixonColes();
+  auditPostprocess();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

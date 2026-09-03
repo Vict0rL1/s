@@ -30,12 +30,7 @@
 // proporcional».
 
 import { getDb } from '../db.ts';
-import { devigMultiplicative, devigShin, devigPower } from '../market/devig.ts';
-
-/** American odds → decimal, como en el backtest de la NFL. */
-function americanToDecimal(a: number): number {
-  return a > 0 ? 1 + a / 100 : 1 + 100 / -a;
-}
+import { devigMultiplicative, devigShin, devigPower, americanToDecimal } from '../market/devig.ts';
 
 interface Game {
   oddsHome: number;

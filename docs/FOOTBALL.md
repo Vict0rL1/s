@@ -102,6 +102,29 @@ era la misma en todas partes. El camino de respaldo sigue usando −0,10.
 
 ---
 
+### La capa de post-proceso
+
+Lo que la tarjeta publica no es exactamente lo que sale de la rejilla. En medio hay una
+calibración de **Platt** ajustada sobre predicciones históricas fuera de muestra
+(`npm run study:postprocess`), que corrige que el modelo sea un pelín demasiado tajante:
+`a = 1,10`, más un sesgo de +0,047 al empate y +0,037 al visitante.
+
+Mejora el log loss de 1,00785 a 1,00697. Es poco, pasa el listón nominal del 5 %
+(p = 0,0495) y **no** el de Bonferroni con 17 comparaciones sobre el mismo conjunto — y
+el script lo dice en su salida en lugar de dejarlo caer.
+
+**La mezcla con el mercado está apagada aquí**, y es deliberado: ajustar ese peso exige
+cuotas de partidos ya jugados y este archivo tiene cero. El encargo era optimizar el peso
+por backtest, así que se deja sin poner en vez de copiar el 0,10 medido en la NFL. Se
+enciende sola en cuanto `fb_prediction_log` acumule partidos resueltos con precio.
+
+Importante: la calibración se aplica **solo al 1X2**, que es sobre lo que se ajustó. La
+rejilla, el over/under y el «ambos marcan» siguen saliendo crudos de la distribución, que
+es lo que mantiene la promesa de que no se contradicen entre sí. La tarjeta enseña las dos
+probabilidades del 1X2 con la diferencia en puntos.
+
+---
+
 ## 2. La métrica correcta: RPS, no «accuracy»
 
 El *acierto* es casi inútil en fútbol: un modelo que **nunca** prediga empate puede lucir un

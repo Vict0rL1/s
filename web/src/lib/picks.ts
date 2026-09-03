@@ -117,9 +117,13 @@ export const CAVEATS: Record<string, string> = {
     '(p = 0,0005) y en el hándicap, pero NO de forma medible en el 1X2 (p = 0,054): la mejora está ' +
     'en la forma de la distribución de goles, no en acertar quién gana. En «ambos marcan» no ' +
     'cambia nada. Un equipo recién ascendido se predice con su Elo de Segunda más el salto de ' +
-    'división medido en su país; la tarjeta lo dice y su banda es más ancha. Nunca se ha medido ' +
-    'contra las cuotas de cierre, así que una diferencia con el mercado es una diferencia, no una ' +
-    'ganancia demostrada.',
+    'división medido en su país; la tarjeta lo dice y su banda es más ancha. La probabilidad que se ' +
+    'publica pasa además por una calibración de Platt ajustada sobre predicciones históricas fuera ' +
+    'de muestra (mejora el log loss en 0,0009, que es poco y no sobrevive a la corrección por ' +
+    'comparaciones múltiples). NO se mezcla con el mercado: para ajustar ese peso hacen falta ' +
+    'cuotas de partidos ya jugados y este archivo no las tiene, así que se deja apagado en vez de ' +
+    'poner un número a ojo. Nunca se ha medido contra las cuotas de cierre, así que una diferencia ' +
+    'con el mercado es una diferencia, no una ganancia demostrada.',
   baseball:
     'Medido sobre 36.235 partidos: Brier 0.2431 y over/under acertado el 54,9 %. El modelo no ' +
     'conoce el bullpen ni la alineación del día, que es justo lo que mueve una cuota a última hora.',
@@ -130,9 +134,12 @@ export const CAVEATS: Record<string, string> = {
   nfl:
     'Este modelo NO le gana a la línea de cierre: 50,6 % contra el hándicap donde el punto de ' +
     'equilibrio está en 52,4 %, y la línea acierta más que él (Brier 0.2115 frente a 0.2180 en ' +
-    '7.276 partidos). Se probó mezclar los dos y el peso ajustado sale en 0,08: el modelo no ' +
-    'añade nada encima del mercado, tampoco en las primeras jornadas. Cuando discrepen, la ' +
-    'apuesta razonable es que se equivoque el modelo.',
+    '7.276 partidos). Así que la probabilidad que se publica aquí NO es la del modelo: es una ' +
+    'mezcla en la que el backtest le da al modelo un peso de 0,10 y al precio el resto, y ese peso ' +
+    'baja aún más cuando el modelo se aleja del precio. Con eso la mezcla queda en 0,6294 de log ' +
+    'loss frente a 0,6270 del mercado solo — o sea, sigue sin mejorar la línea, solo deja de ' +
+    'empeorarla. La tarjeta enseña las dos probabilidades para que se vea cuánto se ha movido. ' +
+    'Cuando el modelo y el precio discrepen, la apuesta razonable es que se equivoque el modelo.',
   tennis:
     'Medido sobre 46.166 partidos ATP: acierto 67,0 % frente al 64,8 % de fiarse del ranking, y ' +
     'cuando discrepa del ranking acierta el 55,4 %. Las bajas de última hora y las retiradas —que ' +
@@ -391,6 +398,7 @@ export function footballPicks(
     };
     prediction: {
       model: { home: number; draw: number; away: number };
+      final: { home: number; draw: number; away: number };
       goals: { over25: number; under25: number; bothScore: number };
     } | null;
   }[],
@@ -399,7 +407,12 @@ export function footballPicks(
   for (const r of rows) {
     if (!r.prediction) continue;
     const f = r.fixture;
-    const m = r.prediction.model;
+    // El 1X2 usa la probabilidad PUBLICADA (calibrada, y mezclada con el mercado donde
+    // hay peso ajustado): es la creencia de la app y es contra la que hay que medir una
+    // cuota. Los mercados de goles siguen saliendo de la rejilla cruda, porque el
+    // calibrador se ajustó sobre el 1X2 y solo sabe corregir el 1X2 — aplicarlo a la
+    // rejilla sería usarlo fuera de donde se midió.
+    const m = r.prediction.final;
     const g = r.prediction.goals;
     const match = `${f.home_name} vs ${f.away_name}`;
     const has =
@@ -560,6 +573,7 @@ export function nflPicks(
     };
     prediction: {
       model: { home: number; away: number; tie: number };
+      final: { home: number; away: number };
       spread: { line: number; home: { cover: number }; away: { cover: number } };
       total: { line: number; over: number; under: number };
       // Derived from the closing handicap when there is no moneyline, which is the
@@ -585,8 +599,12 @@ export function nflPicks(
         ? [spreadMkt.home, spreadMkt.away]
         : [null, null];
     const c: Candidate[] = [
-      { market: 'Ganador', selection: g.home_name, modelProb: p.model.home, marketProb: mh, odds: g.odds_home },
-      { market: 'Ganador', selection: g.away_name, modelProb: p.model.away, marketProb: ma, odds: g.odds_away },
+      // El ganador usa la probabilidad PUBLICADA, que en este deporte es la que más
+      // cambia: el peso ajustado del modelo es 0,10 y el encogimiento se lleva incluso
+      // eso cuando discrepa mucho del precio. Es justamente lo que hay que hacer con un
+      // modelo que, medido, no le gana a la línea de cierre.
+      { market: 'Ganador', selection: g.home_name, modelProb: p.final.home, marketProb: mh, odds: g.odds_home },
+      { market: 'Ganador', selection: g.away_name, modelProb: p.final.away, marketProb: ma, odds: g.odds_away },
       {
         market: 'Hándicap',
         selection: `${g.home_name} ${p.spread.line > 0 ? '+' : ''}${p.spread.line}`,

@@ -81,7 +81,16 @@ export interface NflPrediction {
    */
   quarterbacks: { home: NflQb | null; away: NflQb | null };
   conditions: { roof: string | null; totalAdjustment: number } | null;
+  /** Probabilidades crudas del modelo, coherentes con la distribución de margen. */
   model: { home: number; away: number; tie: number };
+  /** La publicada, a dos bandas: calibrada y mezclada con el mercado. */
+  final: { home: number; away: number };
+  postprocess: {
+    calibrator: 'platt' | 'isotonic' | 'ninguno';
+    weight: number | null;
+    disagreement: number | null;
+    note?: string;
+  };
   spread: {
     expectedMargin: number;
     label: string;

@@ -39,6 +39,7 @@ import {
   getTeamInfo,
 } from './repo.ts';
 import { carryOver, SCORING_CARRYOVER, SEASON_CARRYOVER } from './model.ts';
+import { postprocess } from '../postprocess/apply.ts';
 import type { LeagueId, NafRecord } from './types.ts';
 
 export const DISCLAIMER =
@@ -221,8 +222,24 @@ export interface NafPrediction {
   quarterbacks: { home: NafQbInfo | null; away: NafQbInfo | null };
   /** How the roof moved the expected total, in points. Null when unknown. */
   conditions: { roof: string | null; totalAdjustment: number } | null;
-  /** Moneyline probabilities. `tie` is small but real, and never folded away. */
+  /**
+   * Probabilidades CRUDAS del modelo. `tie` es pequeño pero real, y nunca se esconde.
+   *
+   * Crudas a propósito: son las coherentes con la distribución de margen que muestra la
+   * tarjeta, y la capa de post-proceso se ajustó sobre el mercado a DOS bandas.
+   */
   model: { home: number; away: number; tie: number };
+  /**
+   * La probabilidad publicada, a dos bandas (el empate anula el moneyline), después de
+   * calibrar y mezclar con el mercado. Es la que se compara con el precio.
+   */
+  final: { home: number; away: number };
+  postprocess: {
+    calibrator: 'platt' | 'isotonic' | 'ninguno';
+    weight: number | null;
+    disagreement: number | null;
+    note?: string;
+  };
   spread: {
     /** The model's own number: how much the home team is expected to win by. */
     expectedMargin: number;
@@ -560,7 +577,25 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
   // are renormalised onto the same two outcomes before being compared. Without
   // that the model looks 0.2pp short against every book it is measured on.
   const twoWayHome = outcome.home / (outcome.home + outcome.away);
-  const edgeHome = market ? twoWayHome - market.home : null;
+
+  // ===========================================================================
+  // POST-PROCESO: aquí es donde de verdad muerde
+  // ===========================================================================
+  // De todos los deportes de la app, este es el único con precios históricos, y lo que
+  // dicen es que el modelo NO le gana a la línea de cierre. El peso ajustado por
+  // backtest es 0,10 — o sea, la mezcla es el precio con una pizca de modelo. Y el
+  // encogimiento (κ = 4) se lleva incluso esa pizca cuando el modelo se aleja mucho, que
+  // es precisamente cuando la tarjeta enseñaría más «valor».
+  //
+  // Es un resultado incómodo y por eso se aplica: la capa está para que el número
+  // publicado obedezca a lo medido, no a lo que gustaría que fuese verdad.
+  const pp = postprocess(
+    'nfl',
+    [twoWayHome, 1 - twoWayHome],
+    market ? [market.home, 1 - market.home] : null,
+  );
+  const finalHome = pp.final[0];
+  const edgeHome = market ? finalHome - market.home : null;
   const comparison: NafMarketComparison = {
     market,
     edge: market ? { home: edgeHome as number, away: -(edgeHome as number) } : null,
@@ -721,6 +756,11 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
       ? { roof: input.roof, totalAdjustment: Number(conditionsAdj.toFixed(2)) }
       : null,
     model: { home: outcome.home, away: outcome.away, tie: outcome.tie },
+    // Dos salidas y las dos a la vista: la cruda a tres bandas (que es la coherente con
+    // la distribución de margen) y la publicada a dos, que es la que se compara con el
+    // moneyline y la que ha pasado por la capa.
+    final: { home: finalHome, away: 1 - finalHome },
+    postprocess: pp.applied,
     spread: {
       expectedMargin: Number(expectedMargin.toFixed(1)),
       // Short enough for a stat tile: "SEA −5.2", not "Seattle Seahawks −5.2",

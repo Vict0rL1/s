@@ -36,7 +36,7 @@
 // columnas de cuotas vacías, así que su tabla lleva tres huecos y los lleva marcados.
 
 import { getDb } from '../db.ts';
-import { devig } from '../market/devig.ts';
+import { devig, americanToDecimal } from '../market/devig.ts';
 import { listGamesWithMarket } from '../nfl/repo.ts';
 import { replayGames } from '../nfl/ratings.ts';
 import { buildDistribution, outcomeProbabilities as nflOutcomes } from '../nfl/model.ts';
@@ -49,9 +49,6 @@ import {
 } from '../football/model.ts';
 import { loadMatches, replayMatches } from '../football/ratings.ts';
 import { footballConfig } from '../config.ts';
-
-/** American odds → decimal. */
-const americanToDecimal = (a: number): number => (a > 0 ? 1 + a / 100 : 1 + 100 / -a);
 
 // ===========================================================================
 // La maquinaria de puntuar
