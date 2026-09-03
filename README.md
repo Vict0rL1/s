@@ -667,6 +667,96 @@ llamaba ningún endpoint**. Hoy `/api/portfolio` las sirve y el portafolio las
 enseña — la caída va pegada a la rentabilidad en la misma tarjeta, no en otra
 pantalla.
 
+## Seguimiento de tesis: la app se acuerda de mirar
+
+Escribir «qué me haría cambiar de opinión» es la mitad fácil. La difícil es
+acordarse de mirarlo dentro de ocho meses, cuando la empresa lleva un año
+subiendo y la tesis se ha convertido en identidad. Esta parte hace esa mitad.
+
+### Texto libre y umbrales ejecutables, los dos
+
+`Thesis.invalidation_criteria` ya existía y es texto libre: sirve para pensar,
+pero **nadie lo vigila** — «si los márgenes se deterioran» no es comprobable. Los
+`ThesisTrigger` son la versión ejecutable: métrica, operador y umbral.
+
+Las dos formas conviven a propósito. El texto captura el matiz que ningún umbral
+recoge; el disparador captura lo automatizable. Obligar a que todo fuera numérico
+dejaría fuera la mitad de las razones por las que uno cambia de opinión.
+
+### Tres tipos, y el tercero es mucho peor que los otros dos
+
+| Tipo | Fuente | Solidez |
+|---|---|---|
+| **`metrica`** | Un ratio del último ejercicio (EDGAR) | Sólido: sale de lo que la empresa presentó a la SEC |
+| **`crecimiento`** | Un CAGR contra un umbral | Igual de sólido, más lento en reaccionar |
+| **`noticia`** | Palabras clave en titulares | **Busca palabras, no entiende** |
+
+El tercero se declara en cada resultado, en la API y en pantalla: dará falsos
+positivos (la palabra puede referirse a otra empresa del titular) y se perderá lo
+que venga dicho de otra forma — «revisión voluntaria del producto» no contiene
+«recall». Es una red de arrastre gruesa, no vigilancia, y la diferencia con un
+umbral de margen es enorme y no se ve.
+
+**Solo se vigilan métricas del NEGOCIO.** No hay múltiplos en el catálogo:
+vigilar el P/E sería vigilar la cotización, y para eso están las alertas de
+precio. Un punto de invalidación habla de la empresa.
+
+### Que un punto salte NO es una señal de venta
+
+Es que tú, en un momento en que pensabas con más calma que ahora, dijiste que
+esto importaba. Lo que toca al verlo es **releer la tesis**, no vender. Va escrito
+en la respuesta y en la pantalla, porque un aviso rojo invita a actuar y la app no
+opina sobre qué hacer: solo se acuerda de mirar.
+
+Y **«no se pudo medir» nunca se cuenta como «está bien»**. Van en contadores
+separados: confundirlos convertiría un fallo de datos en tranquilidad, justo
+cuando falta información.
+
+### El registro de decisiones: lo que sabías, no lo que recuerdas
+
+Cada decisión guarda el razonamiento **de entonces** —obligatorio, sin él no es un
+registro sino una fila— y una **instantánea del contexto**: precio, tesis vigente
+y qué disparadores estaban saltando en ese momento.
+
+Esa última parte es la que hace útil el registro. Reconstruir seis meses después
+por qué compraste algo es imposible: la memoria reescribe el pasado para que
+encaje con lo que pasó, y uno acaba recordando que «siempre tuvo dudas» sobre lo
+que salió mal. La instantánea congela lo que la app tenía delante.
+
+El diario enseña el precio de entonces y el de ahora juntos, a propósito: releer
+el razonamiento con el resultado delante es incómodo y por eso sirve. Lo que **no**
+se hace es puntuar el razonamiento por el resultado — una decisión correcta puede
+salir mal y una temeraria puede salir bien.
+
+También se cuenta lo que no cuadra, aunque incomode: decisiones sin tesis
+enlazada, y compras hechas con puntos de invalidación ya saltando (que puede estar
+perfectamente justificado —los escribiste tú— pero es justo el caso que después
+cuesta explicar).
+
+### Al añadir una posición, no al día siguiente
+
+`POST /api/portfolio/positions` y `POST /api/watchlist` aceptan una tesis en
+línea, porque el único momento en que uno tiene clara la razón es cuando decide;
+una semana después, «me pareció barata» es todo lo que queda.
+
+No se obliga: alguien puede estar anotando una posición que ya tenía, y estorbar
+solo conseguiría que dejara de anotar. Lo que sí se hace es contarlo y decirlo en
+`/api/theses/sin-tesis`, que informa sin bloquear.
+
+### Un bug de tema que este trabajo destapó
+
+La insignia «CRUZADO» salía como un rectángulo amarillo **sin letras**. El tema
+oscuro invierte la paleta por `@theme`, pero solo los tonos 50, 100, 800 y 900 de
+cada familia — el 200 se queda claro. Así que `bg-amber-200 text-amber-900` pinta
+texto claro sobre fondo claro.
+
+Había **otra instancia previa**: la insignia «Cumplida» de las alertas de precio,
+o sea que la alerta que salta era justo la que no se podía leer. Las dos usan
+ahora el par 100/800, y la restricción está escrita en `index.css`, que es donde
+alguien la va a buscar. Lo que no se hizo fue rellenar el hueco del 200 en la
+paleta: `border-amber-200` se usa en catorce sitios como borde visible de las
+cajas de aviso, y oscurecerlo habría roto los catorce para arreglar dos.
+
 ## Módulo de valoración: rangos, no precios objetivo
 
 Cuatro piezas que contestan preguntas distintas, y ninguna basta sola.

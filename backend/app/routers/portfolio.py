@@ -22,7 +22,14 @@ from app.analysis.portfolio import (
 )
 from app.cache.cache import MarketDataService
 from app.db.engine import get_session
-from app.db.models import Alert, Instrument, Position, Watchlist, WatchlistItem
+from app.db.models import (
+    Alert,
+    Instrument,
+    Position,
+    Thesis,
+    Watchlist,
+    WatchlistItem,
+)
 from app.deps import get_service
 from app.providers.base import DataNotFoundError
 from app.providers.router import AllProvidersFailedError
@@ -134,9 +141,48 @@ def _price_of(service: MarketDataService, symbol: str) -> float | None:
 # ---------------------------------------------------------------------------
 
 
+class TesisEnLinea(BaseModel):
+    """La tesis que se escribe EN EL MOMENTO de añadir algo al libro.
+
+    Va aquí y no en un formulario aparte porque el único momento en que uno tiene
+    clara la razón es justo cuando decide. Una semana después, «me pareció
+    barata» es todo lo que queda.
+    """
+
+    title: str = Field(min_length=1, max_length=256)
+    body_md: str = Field(min_length=1, description="Por qué")
+    invalidation_criteria: str | None = Field(
+        None, description="Qué tendría que pasar para cambiar de opinión"
+    )
+
+
 class WatchlistAdd(BaseModel):
     symbol: str = Field(min_length=1, max_length=12)
     notes: str | None = None
+    tesis: TesisEnLinea | None = None
+
+
+def _guardar_tesis(
+    session: Session, instrument_id: int, tesis: "TesisEnLinea | None"
+) -> int | None:
+    """Guarda la tesis escrita al añadir algo al libro.
+
+    No se obliga: alguien puede estar anotando una posición que ya tenía, y
+    bloquearla por no escribir un párrafo solo conseguiría que dejara de anotar.
+    Lo que sí se hace es CONTAR las que no la tienen y decirlo en voz alta
+    (`/api/theses/sin-tesis`), que informa sin estorbar.
+    """
+    if tesis is None:
+        return None
+    record = Thesis(
+        instrument_id=instrument_id,
+        title=tesis.title,
+        body_md=tesis.body_md,
+        invalidation_criteria=tesis.invalidation_criteria,
+    )
+    session.add(record)
+    session.flush()
+    return record.id
 
 
 def _default_watchlist(session: Session) -> Watchlist:
@@ -202,8 +248,9 @@ def add_to_watchlist(
         watchlist_id=watchlist.id, instrument_id=instrument.id, notes=body.notes
     )
     session.add(item)
+    thesis_id = _guardar_tesis(session, instrument.id, body.tesis)
     session.commit()
-    return {"id": item.id, "symbol": instrument.symbol}
+    return {"id": item.id, "symbol": instrument.symbol, "thesis_id": thesis_id}
 
 
 @watchlist_router.delete("/{item_id}")
@@ -226,6 +273,7 @@ class PositionCreate(BaseModel):
     quantity: float = Field(gt=0)
     cost_basis: float = Field(ge=0, description="Coste por acción")
     opened_at: str | None = None
+    tesis: TesisEnLinea | None = None
 
 
 class PositionClose(BaseModel):
@@ -251,8 +299,9 @@ def create_position(
         opened_at=opened_at,
     )
     session.add(position)
+    thesis_id = _guardar_tesis(session, instrument.id, body.tesis)
     session.commit()
-    return {"id": position.id, "symbol": instrument.symbol}
+    return {"id": position.id, "symbol": instrument.symbol, "thesis_id": thesis_id}
 
 
 @router.post("/positions/{position_id}/close")

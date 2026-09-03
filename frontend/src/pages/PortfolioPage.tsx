@@ -553,7 +553,7 @@ function AlertsTab() {
                   {a.condition.op === 'lt' ? 'baja de' : 'sube de'} {fmtNumber(a.condition.price)}
                 </span>
                 {a.triggered && (
-                  <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-xs text-amber-900">
+                  <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
                     Cumplida
                   </span>
                 )}

@@ -268,6 +268,63 @@ class Scenario(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ThesisTrigger(Base):
+    """Un punto de invalidación que la app PUEDE vigilar sola.
+
+    `Thesis.invalidation_criteria` es texto libre y sirve para pensar, pero nadie
+    lo vigila: «si los márgenes se deterioran» no es comprobable. Esto es la
+    versión ejecutable — métrica, operador y umbral— para que el sistema pueda
+    mirarla cada vez que hay datos nuevos.
+
+    Las dos formas conviven a propósito. El texto captura el matiz que ningún
+    umbral recoge; el disparador captura lo que se puede automatizar. Obligar a
+    que todo fuera numérico dejaría fuera la mitad de las razones por las que uno
+    cambia de opinión.
+    """
+
+    __tablename__ = "thesis_triggers"
+    __table_args__ = (Index("ix_trigger_thesis", "thesis_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    thesis_id: Mapped[int] = mapped_column(ForeignKey("theses.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # metrica | crecimiento | noticia
+    descripcion: Mapped[str] = mapped_column(Text)  # por qué esto invalida la tesis
+    # metrica/crecimiento: {"metrica": "operating_margin", "op": "lt", "umbral": 0.18}
+    # noticia:            {"palabras": ["recall", "investigación"]}
+    config: Mapped[dict] = mapped_column(JSON)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Cuándo saltó por última vez, para no repetir el mismo aviso cada carga.
+    last_fired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Decision(Base):
+    """Una decisión tomada, con el razonamiento DE ENTONCES.
+
+    El valor entero de esto está en la última parte. Reconstruir seis meses
+    después por qué compraste algo es imposible: la memoria reescribe el pasado
+    para que encaje con lo que pasó después, y uno acaba recordando que «siempre
+    tuvo dudas» sobre lo que salió mal.
+
+    Por eso se guarda también `contexto`: el precio, los disparadores que estaban
+    saltando y la tesis vigente en ese momento. No es lo que recuerdas que sabías
+    — es lo que la app te estaba enseñando cuando decidiste.
+    """
+
+    __tablename__ = "decisions"
+    __table_args__ = (Index("ix_decision_symbol_date", "symbol", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    thesis_id: Mapped[int | None] = mapped_column(ForeignKey("theses.id"))
+    accion: Mapped[str] = mapped_column(String(16))  # comprar|vender|reforzar|reducir|mantener|descartar
+    razonamiento: Mapped[str] = mapped_column(Text)  # obligatorio: sin porqué no hay registro
+    price_at_decision: Mapped[float | None] = mapped_column(Float)
+    quantity: Mapped[float | None] = mapped_column(Float)
+    contexto: Mapped[dict | None] = mapped_column(JSON)  # lo que la app enseñaba entonces
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Evaluation(Base):
     """Registro de aciertos: compara periódicamente escenario vs. realidad."""
 

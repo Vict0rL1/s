@@ -43,6 +43,12 @@
   --color-sky-200: #14395f;
   --color-red-50: #2c1015;
   --color-red-100: #3d151c;
+  /* Solo se invierten estos tonos por familia. Un fondo con un tono NO
+     invertido (200-600) junto a un texto con uno invertido (800/900) da texto
+     claro sobre fondo claro: la insignia sale como un rectángulo de color sin
+     letras. Para chips usa siempre el par 100 (fondo) + 800 (texto), que son
+     los dos invertidos. Los tonos medios sí valen para barras y puntos, donde
+     no hay texto encima. */
   --color-amber-50: #2b1f06;
   --color-amber-100: #3a2a08;
   --color-orange-100: #3a2308;

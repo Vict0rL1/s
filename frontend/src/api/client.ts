@@ -28,6 +28,11 @@ import type {
   EarningsHistorial,
   Valoracion,
   SupuestosEscenario,
+  VigilanciaResponse,
+  MetricasVigilables,
+  DecisionesResponse,
+  DecisionRegistrada,
+  SinTesisResponse,
   ThesisRecord,
   TodayResponse,
   TrackRecord,
@@ -208,6 +213,27 @@ export const api = {
     symbol: string,
     body: { escenarios?: Record<string, SupuestosEscenario>; years?: number } = {},
   ) => postJson<Valoracion>(`/api/valuation/${encodeURIComponent(symbol)}`, body),
+  vigilancia: () => fetchJson<VigilanciaResponse>('/api/theses/vigilancia'),
+  metricasVigilables: () =>
+    fetchJson<MetricasVigilables>('/api/theses/vigilancia/metricas'),
+  addTrigger: (
+    thesisId: number,
+    body: { kind: string; descripcion: string; config: Record<string, unknown> },
+  ) => postJson<{ id: number }>(`/api/theses/${thesisId}/triggers`, body),
+  deleteTrigger: (id: number) =>
+    deleteJson<{ deleted: number }>(`/api/theses/triggers/${id}`),
+  decisiones: (symbol?: string) =>
+    fetchJson<DecisionesResponse>(
+      '/api/theses/decisiones' + (symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''),
+    ),
+  registrarDecision: (body: {
+    symbol: string
+    accion: string
+    razonamiento: string
+    thesis_id?: number | null
+    quantity?: number | null
+  }) => postJson<DecisionRegistrada>('/api/theses/decisiones', body),
+  sinTesis: () => fetchJson<SinTesisResponse>('/api/theses/sin-tesis'),
   // Fase 5
   watchlist: () => fetchJson<{ name: string; items: WatchlistItem[] }>('/api/watchlist'),
   addToWatchlist: (body: { symbol: string; notes: string | null }) =>

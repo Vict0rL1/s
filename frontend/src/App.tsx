@@ -11,6 +11,7 @@ import { ScreenerPage } from './pages/ScreenerPage'
 import { SignalsPage } from './pages/SignalsPage'
 import { ThesesPage } from './pages/ThesesPage'
 import { ValuationPage } from './pages/ValuationPage'
+import { VigilanciaPage } from './pages/VigilanciaPage'
 import { TickerPage } from './pages/TickerPage'
 import { TodayPage } from './pages/TodayPage'
 
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/senales" element={<SignalsPage />} />
           <Route path="/portafolio" element={<PortfolioPage />} />
           <Route path="/tesis" element={<ThesesPage />} />
+          <Route path="/vigilancia" element={<VigilanciaPage />} />
           <Route path="*" element={<Navigate to="/hoy" replace />} />
         </Route>
         </Routes>

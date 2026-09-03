@@ -1407,3 +1407,112 @@ export interface Valoracion {
   disclaimer: string
   computed_by: string
 }
+
+// ---------------------------------------------------------------------------
+// Vigilancia de tesis y registro de decisiones
+// ---------------------------------------------------------------------------
+
+export interface DisparadorVigilado {
+  id: number
+  thesis_id: number
+  kind: 'metrica' | 'crecimiento' | 'noticia'
+  descripcion: string
+  config: Record<string, unknown>
+  activo: boolean
+  created_at: string
+  last_fired_at: string | null
+  /** Si el umbral se cruzó. NO es una señal de venta: es que tú dijiste que
+   *  esto importaba cuando pensabas con más calma. */
+  salta: boolean
+  /** «No se pudo medir» nunca es lo mismo que «está bien». */
+  medible: boolean
+  motivo?: string
+  detalle?: string
+  valor?: number
+  umbral?: number
+  ejercicio?: number | string
+  serie?: number[]
+  tendencia?: 'bajando' | 'subiendo' | 'plana'
+  coincidencias?: {
+    headline: string
+    url: string
+    published_at: string
+    source: string
+    palabras: string[]
+  }[]
+  titulares_revisados?: number
+  aviso?: string
+}
+
+export interface VigilanciaTesis {
+  thesis_id: number
+  symbol: string
+  title: string
+  invalidation_criteria: string | null
+  days_elapsed?: number
+  vigilancia: {
+    disparadores: DisparadorVigilado[]
+    saltan: number
+    sin_medir: number
+    total: number
+    nota: string
+  }
+}
+
+export interface VigilanciaResponse {
+  tesis: VigilanciaTesis[]
+  total_saltan: number
+  sin_disparadores: string[]
+  nota: string
+  aviso_sin_disparadores: string | null
+}
+
+export interface MetricasVigilables {
+  metricas: { clave: string; etiqueta: string; alto_mejor: boolean }[]
+  crecimientos: { clave: string; etiqueta: string }[]
+  operadores: { clave: string; etiqueta: string }[]
+  nota: string
+}
+
+export interface DecisionRegistrada {
+  id: number
+  symbol: string
+  thesis_id: number | null
+  accion: string
+  razonamiento: string
+  price_at_decision: number | null
+  quantity: number | null
+  created_at: string
+  days_elapsed: number
+  precio_actual: number | null
+  cambio_pct: number | null
+  /** Lo que la app enseñaba al decidir, no lo que recuerdas que sabías. */
+  contexto: {
+    precio: number | null
+    tesis: { id: number; titulo: string; creada: string } | null
+    disparadores_saltando: { descripcion: string; detalle?: string }[]
+    disparadores_totales: number
+    capturado_en: string
+  } | null
+}
+
+export interface DecisionesResponse {
+  decisiones: DecisionRegistrada[]
+  coherencia: {
+    decisiones: number
+    sin_tesis?: number
+    compras?: number
+    con_disparadores_activos?: number
+    avisos?: string[]
+    nota: string
+  }
+  nota: string
+}
+
+export interface SinTesisResponse {
+  posiciones_sin_tesis: string[]
+  watchlist_sin_tesis: string[]
+  posiciones_totales: number
+  watchlist_total: number
+  nota: string
+}
