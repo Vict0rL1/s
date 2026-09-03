@@ -1,0 +1,127 @@
+{
+  "$comment": "Tournaments the app surfaces. To add one, append an entry — the UI and odds ingestion read this list, nothing is hardcoded. `oddsSportKeys` map to The Odds API sport keys (https://the-odds-api.com/sports/tennis-odds.html). `sackmannMatch` are substrings matched against the historical `tourney_name` column so results/Elo can be attributed to the event. `surface` is the default surface used when a match's own surface is unknown.",
+  "categories": {
+    "grand_slam": "Grand Slam",
+    "masters_1000": "Masters 1000 / WTA 1000",
+    "atp_500": "ATP 500 / WTA 500",
+    "other": "Other"
+  },
+  "surfaceHintsComment": "For live-discovered tournaments not in the list, guess surface by matching these keywords against the event key/title. If none match, the model predicts on overall Elo instead of assuming a surface.",
+  "surfaceHints": {
+    "estoril": "Clay",
+    "kitzbuhel": "Clay",
+    "hamburg": "Clay",
+    "prague": "Clay",
+    "bastad": "Clay",
+    "gstaad": "Clay",
+    "umag": "Clay",
+    "kitzbuehel": "Clay",
+    "bucharest": "Clay",
+    "monte_carlo": "Clay",
+    "barcelona": "Clay",
+    "munich": "Clay",
+    "geneva": "Clay",
+    "lyon": "Clay",
+    "newport": "Grass",
+    "halle": "Grass",
+    "queens": "Grass",
+    "eastbourne": "Grass",
+    "mallorca": "Grass",
+    "stuttgart": "Grass",
+    "hertogenbosch": "Grass",
+    "washington": "Hard",
+    "montreal": "Hard",
+    "toronto": "Hard",
+    "dubai": "Hard",
+    "doha": "Hard",
+    "acapulco": "Hard",
+    "tokyo": "Hard",
+    "beijing": "Hard",
+    "vienna": "Hard",
+    "basel": "Hard",
+    "paris": "Hard"
+  },
+  "tournaments": [
+    {
+      "id": "australian_open",
+      "name": "Australian Open",
+      "category": "grand_slam",
+      "surface": "Hard",
+      "tours": ["atp", "wta"],
+      "oddsSportKeys": { "atp": "tennis_atp_aus_open", "wta": "tennis_wta_aus_open" },
+      "sackmannMatch": ["Australian Open"]
+    },
+    {
+      "id": "roland_garros",
+      "name": "Roland Garros",
+      "category": "grand_slam",
+      "surface": "Clay",
+      "tours": ["atp", "wta"],
+      "oddsSportKeys": { "atp": "tennis_atp_french_open", "wta": "tennis_wta_french_open" },
+      "sackmannMatch": ["Roland Garros", "French Open"]
+    },
+    {
+      "id": "wimbledon",
+      "name": "Wimbledon",
+      "category": "grand_slam",
+      "surface": "Grass",
+      "tours": ["atp", "wta"],
+      "oddsSportKeys": { "atp": "tennis_atp_wimbledon", "wta": "tennis_wta_wimbledon" },
+      "sackmannMatch": ["Wimbledon"]
+    },
+    {
+      "id": "us_open",
+      "name": "US Open",
+      "category": "grand_slam",
+      "surface": "Hard",
+      "tours": ["atp", "wta"],
+      "oddsSportKeys": { "atp": "tennis_atp_us_open", "wta": "tennis_wta_us_open" },
+      "sackmannMatch": ["Us Open", "US Open"]
+    },
+    {
+      "id": "indian_wells",
+      "name": "Indian Wells Masters",
+      "category": "masters_1000",
+      "surface": "Hard",
+      "tours": ["atp", "wta"],
+      "oddsSportKeys": { "atp": "tennis_atp_indian_wells", "wta": "tennis_wta_indian_wells" },
+      "sackmannMatch": ["Indian Wells"]
+    },
+    {
+      "id": "miami",
+      "name": "Miami Open",
+      "category": "masters_1000",
+      "surface": "Hard",
+      "tours": ["atp", "wta"],
+      "oddsSportKeys": { "atp": "tennis_atp_miami_open", "wta": "tennis_wta_miami_open" },
+      "sackmannMatch": ["Miami"]
+    },
+    {
+      "id": "madrid",
+      "name": "Madrid Open",
+      "category": "masters_1000",
+      "surface": "Clay",
+      "tours": ["atp", "wta"],
+      "oddsSportKeys": { "atp": "tennis_atp_madrid_open", "wta": "tennis_wta_madrid_open" },
+      "sackmannMatch": ["Madrid"]
+    },
+    {
+      "id": "rome",
+      "name": "Italian Open (Rome)",
+      "category": "masters_1000",
+      "surface": "Clay",
+      "tours": ["atp", "wta"],
+      "oddsSportKeys": { "atp": "tennis_atp_italian_open", "wta": "tennis_wta_italian_open" },
+      "sackmannMatch": ["Rome"]
+    },
+    {
+      "id": "cincinnati",
+      "name": "Cincinnati Open",
+      "category": "masters_1000",
+      "surface": "Hard",
+      "tours": ["atp", "wta"],
+      "oddsSportKeys": { "atp": "tennis_atp_cincinnati_open", "wta": "tennis_wta_cincinnati_open" },
+      "sackmannMatch": ["Cincinnati"]
+    }
+  ]
+}

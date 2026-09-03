@@ -1,0 +1,537 @@
+import { useEffect, useMemo, useState } from 'react';
+import {
+  pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
+  EmptySlate,
+} from '../ui';
+import { staleLabel, staleness } from '../../lib/staleness';
+import { CAVEATS, rankPicks, baseballPicks } from '../../lib/picks';
+import { useStake } from '../../lib/useStake';
+import {
+  bsbApi,
+  type BsbGameWithPrediction,
+  type BsbLeague,
+  type BsbMeta,
+  type BsbPowerTeam,
+  type BsbTeamInfo,
+  type BsbTrackRecord,
+} from '../../lib/baseball';
+import GameCard from './GameCard';
+import { formatDate, formatDateTime, countryFlag, dayChipLabel, groupByDay } from '../../lib/format';
+
+/**
+ * The whole baseball tab. Holds its own state and talks only to /api/baseball/*,
+ * so switching sports never mixes the four — the other three are untouched while
+ * this one is mounted.
+ */
+export default function BaseballDashboard() {
+  const [meta, setMeta] = useState<BsbMeta | null>(null);
+  const [leagues, setLeagues] = useState<BsbLeague[]>([]);
+  const [league, setLeague] = useState<string | null>(null);
+  const [games, setGames] = useState<BsbGameWithPrediction[]>([]);
+  const [power, setPower] = useState<BsbPowerTeam[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [team, setTeam] = useState<{ league: string; id: string } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  // null = every day, which is the default: someone who has not asked to filter
+  // should see the whole schedule.
+  const [day, setDay] = useState<string | null>(null);
+  const [showTeams, setShowTeams] = useState(false);
+
+  useEffect(() => {
+    Promise.all([bsbApi.meta(), bsbApi.leagues()])
+      .then(([m, l]) => {
+        setMeta(m);
+        setLeagues(l);
+      })
+      .catch((e) =>
+        setError(`No se pudo cargar el béisbol. ¿Ejecutaste "npm run update-data:bsb"? (${e})`),
+      );
+  }, []);
+
+  const selectable = useMemo(
+    () => leagues.filter((l) => l.hasUpcoming || l.games > 0),
+    [leagues],
+  );
+  useEffect(() => {
+    if (league && selectable.some((l) => l.id === league)) return;
+    const withGames = selectable.find((l) => l.hasUpcoming) ?? selectable[0];
+    setLeague(withGames?.id ?? null);
+  }, [selectable, league]);
+
+  useEffect(() => {
+    if (!league) {
+      setGames([]);
+      setPower([]);
+      return;
+    }
+    setLoading(true);
+    Promise.all([bsbApi.upcoming(league), bsbApi.power(league, 40)])
+      .then(([g, p]) => {
+        setGames(g);
+        setPower(p.teams);
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, [league]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    setError(null);
+    try {
+      await bsbApi.refresh();
+      const [m, l, g] = await Promise.all([
+        bsbApi.meta(),
+        bsbApi.leagues(),
+        league ? bsbApi.upcoming(league) : Promise.resolve([]),
+      ]);
+      setMeta(m);
+      setLeagues(l);
+      setGames(g);
+    } catch (e) {
+      setError(`No se pudo actualizar: ${e}`);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  // Grouped by the reader's own local day, and filtered to one of them if asked.
+  const dayGroups = useMemo(() => groupByDay(games, (g) => g.game.commence_time), [games]);
+  const dayChips = useMemo(
+    () => dayGroups.map((d) => ({ key: d.key, label: dayChipLabel(d.key), count: d.items.length })),
+    [dayGroups],
+  );
+  const shownGroups = day ? dayGroups.filter((d) => d.key === day) : dayGroups;
+
+  // Ranked markets, from the rows already fetched. Recomputed only when those
+  // change: it is pure arithmetic over what is on screen, no extra request.
+  const picks = useMemo(() => rankPicks(baseballPicks(games)), [games]);
+  const [stake, setStake] = useStake();
+  // Every price on screen invented by this app rather than fetched — see picks.ts.
+  const demoOdds = games.length > 0 && games.every((r) => r.game.source === 'fixture');
+  // A day that no longer exists after switching league would filter everything
+  // away and look like "no games", so the choice is dropped rather than kept.
+  useEffect(() => {
+    if (day && !dayGroups.some((d) => d.key === day)) setDay(null);
+  }, [dayGroups, day]);
+
+  const activeLeague = leagues.find((l) => l.id === league) ?? null;
+  const leagueMeta = meta?.leagues.find((l) => l.id === league) ?? null;
+  // Computed here rather than inline: the collapsed header needs the short
+  // version of this and the expanded one needs the full paragraph, and they must
+  // be the same judgement.
+  const stale = staleness('baseball', leagueMeta?.historyThrough, meta?.dataSource === 'seed');
+
+  return (
+    <div>
+      <DashboardHeader
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        refreshTitle="Vuelve a consultar los partidos próximos, sus cuotas y los abridores anunciados"
+        chips={
+          meta && (
+            <>
+              {meta.counts.games.toLocaleString('es')} partidos · {meta.counts.teams} equipos
+            </>
+          )
+        }
+        alert={staleLabel(stale)}
+      >
+        <p className="max-w-prose text-[15px] leading-relaxed text-[#9aa1ac]">
+          Predicción con Elo por equipo, ventaja de campo, el <strong>lanzador abridor</strong>, el
+          factor del estadio y una distribución de carreras que produce ganador, total y línea de una
+          sola vez.
+        </p>
+        {meta && <DataLine meta={meta} />}
+        <StaleHistoryWarning
+          info={stale}
+          what="Los Elo y la distribución de carreras"
+          fix="npm run update-data:bsb"
+        />
+        {league && <TrackRecordPanel league={league} />}
+      </DashboardHeader>
+
+      {/* The ranked-markets panel. Built from the SAME rows the cards below
+          render, so the two can never disagree about a number. */}
+      <PicksPanel {...picks} caveat={CAVEATS.baseball} demoOdds={demoOdds} stake={stake} onStakeChange={setStake} />
+
+      {error && (
+        <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[15px] text-rose-200">
+          {error}
+        </div>
+      )}
+
+      {selectable.length > 0 ? (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {selectable.map((l) => (
+            <button
+              key={l.id}
+              onClick={() => setLeague(l.id)}
+              title={l.label}
+              className={pillClass(league === l.id)}
+            >
+              {countryFlag(l.country) && (
+                <span aria-hidden className="mr-1.5">{countryFlag(l.country)}</span>
+              )}
+              {l.name}
+              {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
+              {!l.hasModel && <span className="ml-1.5 text-amber-400" title="Sin modelo Elo">◦</span>}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="mb-6 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-5 text-[15px] text-rose-200">
+          <p className="font-medium">No hay datos de béisbol todavía.</p>
+          <p className="mt-1 text-rose-300/90">
+            Ejecuta <code className="rounded bg-rose-900/40 px-1">npm run update-data:bsb</code> para
+            descargar equipos, resultados, lanzadores y partidos próximos.
+          </p>
+        </div>
+      )}
+
+      {activeLeague && !activeLeague.hasModel && (
+        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[15px] leading-relaxed text-amber-200/90">
+          <strong>{activeLeague.name} sin modelo propio.</strong> No existe un archivo abierto,
+          partido a partido, para esta liga —y menos aún con el abridor de cada encuentro, que es lo
+          que de verdad hace falta en béisbol—, así que se muestran los partidos y las
+          probabilidades <em>implícitas del mercado</em>.
+        </div>
+      )}
+
+      {loading ? (
+        <SkeletonList />
+      ) : games.length === 0 ? (
+        <EmptySlate what={activeLeague?.name ?? 'esta liga'} reason="sin-partidos" />
+      ) : (
+        <>
+          <DayFilter days={dayChips} selected={day} onSelect={setDay} />
+          {shownGroups.map((group) => (
+            <section key={group.key} className="mb-6">
+              <DayHeading label={group.label} count={group.items.length} />
+              {/* Two-up from 1280px. The shell got wider (see SHELL_WIDTH in
+                  App.tsx) and a card does not want to BE wider — it wants a
+                  neighbour. `items-start` so a card with its breakdown open does
+                  not stretch the one beside it.
+
+                  minmax(0,1fr) and NOT grid-cols-1/2: a grid track is `minmax(auto,
+                  1fr)` by default, and `auto` means "at least the widest thing that
+                  cannot shrink". One nowrap badge inside a card was enough to push
+                  the track past the viewport — 5px of horizontal page scroll on a
+                  390px phone. Block flow (the `space-y-4` this replaced) clamped the
+                  card and let the content overflow internally instead, so the bug
+                  arrived with the grid. */}
+              <div className="grid gap-4 grid-cols-[minmax(0,1fr)] xl:grid-cols-[repeat(2,minmax(0,1fr))] xl:items-start">
+                {group.items.map((g) => (
+                  <GameCard key={g.game.id} item={g} onOpenTeam={(lg, id) => setTeam({ league: lg, id })} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </>
+      )}
+
+      {power.length > 0 && (
+        <div className="mt-8 rounded-xl border border-white/[0.07] bg-[#14161b] p-4">
+          <button
+            onClick={() => setShowTeams((s) => !s)}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <span>
+              <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
+                Todos los equipos · {activeLeague?.name}
+              </span>
+              <br />
+              <span className="text-[16px] text-[#d5d9df]">{power.length} equipos ordenados por Elo</span>
+            </span>
+            <span className="text-[14px] text-[#5c636c]">{showTeams ? '▲' : '▼'}</span>
+          </button>
+          {showTeams && (
+            <div className="mt-3 overflow-x-auto border-t border-white/[0.07] pt-3">
+              <table className="w-full text-left text-[14px] tabular-nums">
+                <thead className="text-[#7b828d]">
+                  <tr>
+                    <th className="py-1 pr-2">#</th>
+                    <th className="py-1 pr-2">Equipo</th>
+                    <th className="py-1 pr-2 text-right">Elo</th>
+                    <th className="py-1 pr-2 text-right">CF/p</th>
+                    <th className="py-1 pr-2 text-right">CC/p</th>
+                    <th className="py-1 text-right">Partidos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {power.map((t, i) => (
+                    <tr key={t.id} className="border-t border-white/[0.07]">
+                      <td className="py-1 pr-2 text-[#7b828d]">{i + 1}</td>
+                      <td className="py-1 pr-2">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <TeamCrest league={league!} name={t.name ?? t.id} code={t.id} size={16} />
+                          <button
+                            className="truncate text-[#d5d9df] hover:underline"
+                            onClick={() => setTeam({ league: league!, id: t.id })}
+                          >
+                            {t.name ?? t.id}
+                          </button>
+                        </span>
+                      </td>
+                      <td className="py-1 pr-2 text-right text-[#d5d9df]">{Math.round(t.elo)}</td>
+                      <td className="py-1 pr-2 text-right text-[#9aa1ac]">{t.rs ?? '—'}</td>
+                      <td className="py-1 pr-2 text-right text-[#9aa1ac]">{t.ra ?? '—'}</td>
+                      <td className="py-1 text-right text-[#7b828d]">{t.games}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {team && <TeamProfile league={team.league} id={team.id} onClose={() => setTeam(null)} />}
+    </div>
+  );
+}
+
+/**
+ * The origin badge.
+ *
+ * THREE states, not two. `dataSource` is only written by `update-data`, so a
+ * database populated some other way — restored from a copy, or by an older version
+ * — leaves it unset. The old version treated anything that was not "retrosheet" as
+ * "sin datos", which printed the badge SIN DATOS immediately to the left of
+ * "37.262 partidos · 32 equipos". Two claims on one line, one of them false.
+ *
+ * The game count is the fact that settles whether there is data; the meta key only
+ * says where it came from. So an unlabelled but populated database says so, rather
+ * than being called empty. (The tennis tab already got this right — this is the
+ * check it had and baseball did not.)
+ */
+function originBadge(meta: BsbMeta): { text: string; className: string; title: string } {
+  if (meta.counts.games === 0) {
+    return {
+      text: 'sin datos',
+      className: 'bg-rose-900/40 text-rose-300',
+      title: 'La base está vacía. Ejecuta npm run update-data:bsb.',
+    };
+  }
+  if (meta.dataSource === 'retrosheet') {
+    return {
+      text: 'datos reales (Retrosheet)',
+      className: 'bg-emerald-900/40 text-emerald-300',
+      title: 'Jugada a jugada desde los ficheros de eventos de Retrosheet.',
+    };
+  }
+  if (meta.dataSource === 'seed') {
+    return {
+      text: 'datos demo',
+      className: 'bg-amber-900/40 text-amber-300',
+      title: 'Partidos sintéticos. Ejecuta npm run update-data:bsb para datos reales.',
+    };
+  }
+  return {
+    text: 'origen sin registrar',
+    className: 'bg-white/[0.06] text-[#9aa1ac]',
+    title:
+      'Hay partidos en la base, pero nada anotó de dónde salieron. Ejecuta ' +
+      'npm run update-data:bsb para dejarlo registrado.',
+  };
+}
+
+function DataLine({ meta }: { meta: BsbMeta }) {
+  const origin = originBadge(meta);
+  return (
+    <div className="mt-2 space-y-1 text-[14px] text-[#7b828d]">
+      <p>
+        <span className={`rounded px-1.5 py-0.5 ${origin.className}`} title={origin.title}>
+          {origin.text}
+        </span>{' '}
+        · {meta.counts.games.toLocaleString('es')} partidos · {meta.counts.teams} equipos
+        {meta.updatedAt && <> · actualizado {formatDate(meta.updatedAt.slice(0, 10).replace(/-/g, ''))}</>}
+      </p>
+      <p>
+        {meta.oddsRefreshedAt && <>Cuotas: {formatDateTime(meta.oddsRefreshedAt)} · </>}
+        {meta.probables > 0 ? (
+          <>abridores anunciados para {meta.probables} partidos</>
+        ) : (
+          <>
+            sin feed de abridores: se usa el número uno de cada rotación y la tarjeta lo indica
+          </>
+        )}
+        {!meta.hasOddsKey && <> · configura ODDS_API_KEY para cuotas reales</>}
+      </p>
+    </div>
+  );
+}
+
+function TrackRecordPanel({ league }: { league: string }) {
+  const [rec, setRec] = useState<BsbTrackRecord | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    bsbApi.trackRecord(league).then(setRec).catch(() => setRec(null));
+  }, [league]);
+  if (!rec || (rec.resolved === 0 && rec.pending === 0)) return null;
+
+  return (
+    <div className="mt-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 text-[14px]">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between">
+        <span className="text-[#c3c9d1]">
+          <span className="uppercase tracking-wide text-[#7b828d]">Cómo va acertando</span>{' '}
+          {rec.resolved > 0 ? (
+            <>
+              — {rec.resolved} predicciones resueltas
+              {rec.accuracy != null && <>, {(rec.accuracy * 100).toFixed(1)}% de acierto</>}
+              {rec.brier != null && <> · Brier {rec.brier.toFixed(4)}</>}
+            </>
+          ) : (
+            <>— {rec.pending} pendientes de jugarse</>
+          )}
+        </span>
+        <span className="text-[#5c636c]">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && rec.resolved > 0 && (
+        <div className="mt-2 space-y-2 border-t border-white/[0.07] pt-2 text-[#c3c9d1]">
+          {rec.totalMae != null && (
+            <p>
+              Error del total de carreras: {rec.totalMae.toFixed(2)}
+              {rec.totalBias != null && (
+                <> · sesgo {rec.totalBias >= 0 ? '+' : ''}{rec.totalBias.toFixed(2)}</>
+              )}
+            </p>
+          )}
+          {rec.byStarterKnown.length > 0 && (
+            <div>
+              <div className="text-[#7b828d]">Según se supieran los abridores:</div>
+              {rec.byStarterKnown.map((b) => (
+                <div key={String(b.known)} className="flex justify-between">
+                  <span>{b.known ? 'anunciados' : 'estimados'} ({b.n})</span>
+                  <span className="tabular-nums">
+                    {b.accuracy != null ? `${(b.accuracy * 100).toFixed(1)}%` : '—'}
+                    {b.brier != null && ` · Brier ${b.brier.toFixed(4)}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {rec.vsMarket && (
+            <p>
+              Contra el mercado ({rec.vsMarket.n}): modelo Brier{' '}
+              {rec.vsMarket.modelBrier?.toFixed(4) ?? '—'} vs mercado{' '}
+              {rec.vsMarket.marketBrier?.toFixed(4) ?? '—'}
+            </p>
+          )}
+          <p className="text-[#7b828d]">
+            Solo cuenta lo que la app dijo ANTES de cada partido y nunca se reescribe.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TeamProfile({ league, id, onClose }: { league: string; id: string; onClose: () => void }) {
+  const [info, setInfo] = useState<BsbTeamInfo | null>(null);
+  useEffect(() => {
+    bsbApi.team(league, id).then(setInfo).catch(() => setInfo(null));
+  }, [league, id]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="mt-8 w-full max-w-lg rounded-xl border border-white/[0.07] bg-[#14161b] p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between">
+          <h3 className="text-[20px] font-semibold text-[#e8eaed]">{info?.name ?? 'Cargando…'}</h3>
+          <button onClick={onClose} className="text-[#9aa1ac] hover:text-[#d5d9df]">✕</button>
+        </div>
+        {!info ? (
+          <p className="text-[16px] text-[#7b828d]">Cargando ficha…</p>
+        ) : (
+          <div className="space-y-4 text-[16px]">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-white/[0.07] py-3 text-[14px]">
+              <Stat label="Elo" value={`${Math.round(info.elo)} (#${info.eloRank})`} />
+              <Stat label="Balance" value={`${info.record.wins}-${info.record.losses}`} />
+              <Stat label="En casa" value={`${info.homeRecord.wins}-${info.homeRecord.losses}`} />
+              <Stat label="Fuera" value={`${info.awayRecord.wins}-${info.awayRecord.losses}`} />
+              <Stat label="Carreras a favor / partido" value={info.rs ?? '—'} />
+              <Stat label="Carreras en contra / partido" value={info.ra ?? '—'} />
+              <Stat
+                label="Pitagórico"
+                value={info.pythagorean != null ? `${(info.pythagorean * 100).toFixed(1)}%` : '—'}
+                hint="Lo que sus carreras dicen que debería ser su balance. La diferencia con el real es la parte de suerte."
+              />
+              <Stat label="Partidos en el historial" value={info.gamesInDb} />
+            </div>
+
+            {info.rotation.length > 0 && (
+              <div>
+                <div className="mb-1 text-[14px] uppercase tracking-wide text-[#7b828d]">Rotación</div>
+                <table className="w-full text-left text-[14px] tabular-nums">
+                  <thead className="text-[#7b828d]">
+                    <tr>
+                      <th className="py-1 pr-2">Lanzador</th>
+                      <th className="py-1 pr-2 text-right">Aperturas</th>
+                      <th className="py-1 pr-2 text-right">C/apertura</th>
+                      <th className="py-1 text-right" title="Carreras permitidas frente a lo esperado; por debajo de 0% es mejor que la media">
+                        vs esperado
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {info.rotation.map((p) => (
+                      <tr key={p.id} className="border-t border-white/[0.07]">
+                        <td className="py-1 pr-2 text-[#d5d9df]">{p.name}</td>
+                        <td className="py-1 pr-2 text-right text-[#9aa1ac]">{p.starts}</td>
+                        <td className="py-1 pr-2 text-right text-[#9aa1ac]">{p.runsPer9 ?? '—'}</td>
+                        <td
+                          className="py-1 text-right"
+                          style={{ color: (p.rating ?? 1) <= 1 ? '#34d399' : '#fb7185' }}
+                        >
+                          {p.rating != null
+                            ? `${p.rating <= 1 ? '−' : '+'}${Math.abs(Math.round((p.rating - 1) * 100))}%`
+                            : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {info.form.length > 0 && (
+              <div>
+                <div className="mb-1 text-[14px] uppercase tracking-wide text-[#7b828d]">
+                  Últimos partidos
+                </div>
+                <ul className="space-y-1 text-[14px]">
+                  {info.form.map((f, i) => (
+                    <li key={i} className="flex justify-between text-[#c3c9d1]">
+                      <span className="text-[#7b828d]">{formatDate(f.date)}</span>
+                      <span>
+                        {f.home ? 'vs' : '@'} {f.opponentName ?? f.opponentId}{' '}
+                        <span className={f.result === 'W' ? 'text-emerald-400' : 'text-rose-400'}>
+                          {f.result} {f.runsFor}-{f.runsAgainst}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+  return (
+    <div className="min-w-0" title={hint}>
+      <div className="text-[11px] uppercase tracking-wide text-[#7b828d]">{label}</div>
+      <div className="font-semibold text-[#e8eaed]">{value}</div>
+    </div>
+  );
+}

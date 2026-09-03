@@ -1,0 +1,345 @@
+{
+  "$comment": "Football (soccer) leagues, one per tab inside the ⚽ tab. Add one by appending an entry — nothing in the model or API hardcodes these ids. `openfootball` is the primary results source (JSON, current through the latest season, and it carries HALF-TIME scores); `footballData` supplies historical 1X2 closing odds, which is what lets the model be measured against the market; `footballcsv` is the older mirror kept as a fallback for seasons openfootball does not have; `oddsSportKeys` are The Odds API keys for upcoming fixtures. `tier` 2 marks a second division: it is ingested so PROMOTED clubs have a rating (a fixture against one otherwise gets no model at all), and the cross-division offset is measured per country — see docs/FOOTBALL.md.",
+  "history": {
+    "$comment": "Seasons of history to ingest by default. Football squads change less abruptly than basketball rosters, but promotion/relegation means a league's membership turns over every year, so deep history mostly helps the big clubs. `openfootballBase` is the PRIMARY source and the only one that reaches the current season — footballcsv, its own mirror, was abandoned after 2020-21. `openfootballTxtBase` son los repos de TEXTO por país: el mirror JSON tiene huecos (a es.2 e it.2 les faltan 2021-22, 2022-23 y 2023-24) y el texto sí los trae.",
+    "seasons": 8,
+    "footballDataBase": "https://www.football-data.co.uk/mmz4281",
+    "footballDataExtraBase": "https://www.football-data.co.uk/new",
+    "footballCsvBase": "https://raw.githubusercontent.com/footballcsv",
+    "openfootballBase": "https://raw.githubusercontent.com/openfootball/football.json/master",
+    "openfootballTxtBase": "https://raw.githubusercontent.com/openfootball"
+  },
+  "leagues": [
+    {
+      "id": "epl",
+      "name": "Premier League",
+      "label": "Premier League · Inglaterra",
+      "country": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Inglaterra",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_epl"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "E0"
+      },
+      "footballcsv": {
+        "repo": "england",
+        "div": "eng.1"
+      },
+      "openfootball": {
+        "key": "en.1"
+      }
+    },
+    {
+      "id": "laliga",
+      "name": "LaLiga",
+      "label": "LaLiga · España",
+      "country": "🇪🇸 España",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_spain_la_liga"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "SP1"
+      },
+      "footballcsv": {
+        "repo": "espana",
+        "div": "es.1"
+      },
+      "openfootball": {
+        "key": "es.1",
+        "txt": {
+          "repo": "espana",
+          "file": "1-liga"
+        }
+      }
+    },
+    {
+      "id": "bundesliga",
+      "name": "Bundesliga",
+      "label": "Bundesliga · Alemania",
+      "country": "🇩🇪 Alemania",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_germany_bundesliga"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "D1"
+      },
+      "footballcsv": {
+        "repo": "deutschland",
+        "div": "de.1"
+      },
+      "openfootball": {
+        "key": "de.1",
+        "txt": {
+          "repo": "deutschland",
+          "file": "1-bundesliga"
+        }
+      }
+    },
+    {
+      "id": "seriea",
+      "name": "Serie A",
+      "label": "Serie A · Italia",
+      "country": "🇮🇹 Italia",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_italy_serie_a"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "I1"
+      },
+      "footballcsv": null,
+      "openfootball": {
+        "key": "it.1",
+        "txt": {
+          "repo": "italy",
+          "file": "1-seriea"
+        }
+      }
+    },
+    {
+      "id": "ligue1",
+      "name": "Ligue 1",
+      "label": "Ligue 1 · Francia",
+      "country": "🇫🇷 Francia",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_france_ligue_one"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "F1"
+      },
+      "footballcsv": null,
+      "openfootball": {
+        "key": "fr.1"
+      }
+    },
+    {
+      "id": "eredivisie",
+      "name": "Eredivisie",
+      "label": "Eredivisie · Países Bajos",
+      "country": "🇳🇱 Países Bajos",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_netherlands_eredivisie"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "N1"
+      },
+      "footballcsv": null,
+      "openfootball": {
+        "key": "nl.1"
+      }
+    },
+    {
+      "id": "primeira",
+      "name": "Primeira Liga",
+      "label": "Primeira Liga · Portugal",
+      "country": "🇵🇹 Portugal",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_portugal_primeira_liga"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "P1"
+      },
+      "footballcsv": null,
+      "openfootball": {
+        "key": "pt.1"
+      }
+    },
+    {
+      "id": "championship",
+      "name": "Championship",
+      "label": "EFL Championship · Inglaterra (2ª)",
+      "country": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Inglaterra",
+      "tier": 2,
+      "oddsSportKeys": [
+        "soccer_efl_champ"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "E1"
+      },
+      "footballcsv": {
+        "repo": "england",
+        "div": "eng.2"
+      },
+      "openfootball": {
+        "key": "en.2"
+      }
+    },
+    {
+      "id": "mls",
+      "name": "MLS",
+      "label": "Major League Soccer · EEUU y Canadá",
+      "country": "🇺🇸 EEUU",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_usa_mls"
+      ],
+      "footballData": {
+        "kind": "extra",
+        "file": "USA.csv",
+        "league": "MLS"
+      },
+      "footballcsv": null
+    },
+    {
+      "id": "ligamx",
+      "name": "Liga MX",
+      "label": "Liga MX · México",
+      "country": "🇲🇽 México",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_mexico_ligamx"
+      ],
+      "footballData": {
+        "kind": "extra",
+        "file": "MEX.csv",
+        "league": "Liga MX"
+      },
+      "footballcsv": null,
+      "openfootball": {
+        "key": "mx.1"
+      }
+    },
+    {
+      "id": "brasileirao",
+      "name": "Brasileirão",
+      "label": "Brasileirão Série A · Brasil",
+      "country": "🇧🇷 Brasil",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_brazil_campeonato"
+      ],
+      "footballData": {
+        "kind": "extra",
+        "file": "BRA.csv",
+        "league": "Serie A"
+      },
+      "footballcsv": null
+    },
+    {
+      "id": "argentina",
+      "name": "Liga Profesional",
+      "label": "Liga Profesional · Argentina",
+      "country": "🇦🇷 Argentina",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_argentina_primera_division"
+      ],
+      "footballData": {
+        "kind": "extra",
+        "file": "ARG.csv",
+        "league": "Primera División"
+      },
+      "footballcsv": null,
+      "openfootball": {
+        "key": "ar.1"
+      }
+    },
+    {
+      "id": "ucl",
+      "name": "Champions",
+      "label": "UEFA Champions League",
+      "country": "🇪🇺 Europa",
+      "tier": 1,
+      "oddsSportKeys": [
+        "soccer_uefa_champs_league"
+      ],
+      "$comment_ucl": "No results feed: clubs come from many leagues and their Elo lives in each domestic table, so a shared rating would need cross-league calibration this app does not do. Fixtures and market prices are shown, clearly labelled as market-only.",
+      "footballData": null,
+      "footballcsv": null
+    },
+    {
+      "id": "laliga2",
+      "name": "LaLiga Hypermotion",
+      "label": "LaLiga Hypermotion · España (2ª)",
+      "country": "🇪🇸 España",
+      "tier": 2,
+      "oddsSportKeys": [
+        "soccer_spain_segunda_division"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "SP2"
+      },
+      "openfootball": {
+        "key": "es.2",
+        "txt": {
+          "repo": "espana",
+          "file": "2-liga2"
+        }
+      }
+    },
+    {
+      "id": "bundesliga2",
+      "name": "2. Bundesliga",
+      "label": "2. Bundesliga · Alemania (2ª)",
+      "country": "🇩🇪 Alemania",
+      "tier": 2,
+      "oddsSportKeys": [
+        "soccer_germany_bundesliga2"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "D2"
+      },
+      "openfootball": {
+        "key": "de.2",
+        "txt": {
+          "repo": "deutschland",
+          "file": "2-bundesliga2"
+        }
+      }
+    },
+    {
+      "id": "serieb",
+      "name": "Serie B",
+      "label": "Serie B · Italia (2ª)",
+      "country": "🇮🇹 Italia",
+      "tier": 2,
+      "oddsSportKeys": [
+        "soccer_italy_serie_b"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "I2"
+      },
+      "openfootball": {
+        "key": "it.2",
+        "txt": {
+          "repo": "italy",
+          "file": "2-serieb"
+        }
+      }
+    },
+    {
+      "id": "ligue2",
+      "name": "Ligue 2",
+      "label": "Ligue 2 · Francia (2ª)",
+      "country": "🇫🇷 Francia",
+      "tier": 2,
+      "oddsSportKeys": [
+        "soccer_france_ligue_two"
+      ],
+      "footballData": {
+        "kind": "main",
+        "div": "F2"
+      },
+      "openfootball": {
+        "key": "fr.2"
+      }
+    }
+  ]
+}
