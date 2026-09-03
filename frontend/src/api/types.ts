@@ -1263,3 +1263,147 @@ export interface EarningsHistorial {
   serie_guidance: SerieGuidance[]
   nota: string
 }
+
+// ---------------------------------------------------------------------------
+// Módulo de valoración
+// ---------------------------------------------------------------------------
+//
+// Ningún tipo de este bloque tiene un campo de precio objetivo. No es un olvido:
+// los escenarios llevan rango, los comparables un intervalo y el DCF inverso una
+// curva. Añadir un `precio_objetivo: number` aquí sería una decisión visible.
+
+export interface SupuestosEscenario {
+  growth_rate: number
+  discount_rate: number
+  terminal_growth: number
+}
+
+export interface RangoValor {
+  disponible: boolean
+  nota: string
+  bajo?: number
+  centro?: number
+  alto?: number
+  amplitud_pct?: number
+  peso_terminal?: number | null
+  banda?: { crecimiento_pp: number; descuento_pp: number }
+}
+
+export interface EscenarioValoracion {
+  supuestos: SupuestosEscenario
+  rango: RangoValor
+}
+
+export interface RangoGlobal {
+  bajo: number
+  alto: number
+  factor: number | null
+  nota: string
+  precio_actual: number | null
+  posicion?: 'dentro' | 'por encima' | 'por debajo'
+}
+
+export interface FilaSensibilidad {
+  supuesto: string
+  etiqueta: string
+  valor_actual: number
+  perturbacion: number
+  valor_abajo: number | null
+  valor_arriba: number | null
+  recorrido: number
+  recorrido_pct: number
+  asimetrico: boolean | null
+}
+
+export interface Sensibilidad {
+  disponible: boolean
+  centro?: number
+  supuestos?: FilaSensibilidad[]
+  dominante?: string | null
+  nota: string
+}
+
+export interface DcfInverso {
+  disponible: boolean
+  nota?: string
+  market_cap?: number
+  curva?: {
+    disponible: boolean
+    puntos: {
+      discount_rate: number
+      crecimiento_implicito: number | null
+      motivo: string | null
+    }[]
+    rango?: { bajo: number; alto: number }
+    nota: string
+  }
+  contraste?: {
+    disponible: boolean
+    referencias?: Record<string, number>
+    mejor_historico?: number
+    rango_implicito?: { bajo: number; alto: number }
+    wacc_de_cruce?: number | null
+    nota: string
+  }
+  margen?: {
+    disponible: boolean
+    motivo?: string
+    margen_actual?: number
+    margen_implicito?: number
+    expansion_necesaria_pp?: number
+    nota?: string
+  }
+  resumen?: string
+}
+
+export interface Comparables {
+  disponible: boolean
+  fiable?: boolean
+  nota: string
+  etiqueta_multiplo?: string
+  pares_usables?: number
+  grados_libertad?: number
+  r2?: number | null
+  error_estandar?: number | null
+  indice_condicion?: number
+  multiplo_objetivo?: number
+  multiplo_sugerido?: number
+  intervalo?: { bajo: number; alto: number } | null
+  dentro_del_intervalo?: boolean
+  crudo?: { p25: number; mediana: number; p75: number; min: number; max: number } | null
+  pares?: { symbol: string; multiplo: number; crecimiento: number; calidad: number; residuo: number }[]
+  precio_implicito?: {
+    disponible: boolean
+    precio_bajo?: number
+    precio_alto?: number
+    precio_actual?: number | null
+    posicion?: string
+    nota?: string
+    ajustado?: boolean
+    aviso?: string
+  }
+}
+
+export interface Valoracion {
+  symbol: string
+  entradas: {
+    base_fcf: number
+    net_debt: number
+    shares_outstanding: number | null
+    revenue: number | null
+    eps: number | null
+    precio_actual: number | null
+    fiscal_year: number | string | null
+    crecimiento_historico: { years: number; revenue_cagr: number | null; eps_cagr: number | null; fcf_cagr: number | null }
+    years: number
+    source: string
+  }
+  escenarios: Record<string, EscenarioValoracion>
+  rango_global: RangoGlobal | null
+  sensibilidad: Sensibilidad
+  dcf_inverso: DcfInverso
+  comparables: Comparables
+  nota_supuestos: string
+  disclaimer: string
+  computed_by: string
+}

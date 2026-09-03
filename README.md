@@ -667,6 +667,107 @@ llamaba ningún endpoint**. Hoy `/api/portfolio` las sirve y el portafolio las
 enseña — la caída va pegada a la rentabilidad en la misma tarjeta, no en otra
 pantalla.
 
+## Módulo de valoración: rangos, no precios objetivo
+
+Cuatro piezas que contestan preguntas distintas, y ninguna basta sola.
+
+### La regla, y cómo se impone
+
+**No existe en el código ningún campo que contenga un precio objetivo.** No es
+una convención de presentación: los escenarios devuelven `bajo/centro/alto`, los
+comparables un intervalo de predicción y el DCF inverso una curva. Hay un test
+que recorre la respuesta entera comprobando que no aparece ninguno — una regla
+que solo vive en el docstring dura hasta el siguiente que añada un campo con
+buena intención.
+
+El módulo anterior decía en su docstring que «nunca devuelve el precio objetivo,
+devuelve un valor por escenario». Eso era hacer trampa con las palabras: **tres
+escenarios con un valor puntual cada uno son tres precios objetivo.** Ahora cada
+escenario produce un rango, perturbando sus propios supuestos dentro de una banda
+declarada.
+
+Y los números se redondean a **tres cifras significativas**. Un DCF que imprime
+«147,32 $» finge una precisión de céntimos sobre un método donde mover el WACC un
+cuarto de punto cambia el resultado en varios euros.
+
+### DCF inverso: la pieza más útil
+
+Un DCF normal pregunta «¿cuánto vale?» y la respuesta depende de supuestos que
+nadie sabe. El inverso le da la vuelta: toma el precio como dado —el precio sí se
+conoce— y despeja **qué tendría que pasar para que ese precio fuera correcto**.
+La pregunta pasa de «¿cuánto vale?» a «¿me creo esto?», que sí se puede contestar
+mirando el negocio.
+
+**El crecimiento implícito no es una propiedad de la empresa: es función del WACC
+que elijas.** Sobre la misma empresa y el mismo precio, el modelo descuenta un
+−0,45 % anual con un WACC del 7 % y un 18 % con uno del 12 %. Publicar «el mercado
+descuenta un 14 %» como si fuera un hecho medido sería exactamente la falsa
+precisión que esta app existe para evitar, así que lo que se devuelve es la curva
+entera.
+
+El margen implícito, en cambio, tiene **solución cerrada**: el valor de empresa es
+proporcional al margen de FCF, así que despejarlo es una división, no una
+búsqueda numérica. Separa las dos palancas — un precio se justifica creciendo
+mucho con el margen de hoy, o creciendo poco y expandiendo el margen.
+
+Verificación que sostiene todo lo demás: si el precio *es* el valor que da un DCF
+al 8 %, el inverso devuelve 8,000000 %.
+
+### Comparables ajustados: por qué el intervalo es ancho
+
+Comparar el P/E con la mediana del sector no es un hallazgo, es no haber mirado:
+una empresa que crece al 15 % con un ROE del 30 % debe cotizar más cara que una
+que crece al 3 % con un ROE del 8 %. Aquí el múltiplo se explica con una regresión
+sobre crecimiento y calidad, **excluyendo al objetivo del ajuste** para que su
+múltiplo predicho sea una predicción fuera de muestra.
+
+Con seis pares y dos regresores quedan **tres grados de libertad**, así que
+cualquier predicción puntual sería una ficción estadística. Se devuelve el
+intervalo de predicción, que es lo matemáticamente correcto y además ancho, que
+es lo honesto. Tres guardianes lo protegen:
+
+- **Muy pocos pares** (< 5) → no se regresa, se cae a los cuartiles crudos y se
+  declara que NO están ajustados.
+- **R² bajo** (< 0,30) → el ajuste no sostiene una conclusión y se dice.
+- **Colinealidad** → el que más falta hacía. En un sector real las empresas buenas
+  suelen crecer, así que crecimiento y calidad van de la mano; `inv()` no falla en
+  ese caso, **devuelve basura**. Se comprueba el índice de condición de Belsley
+  sobre las columnas escaladas, y por encima de 30 se rehúsa a ajustar.
+
+La t crítica va tabulada en vez de traer scipy: con tres grados de libertad usar
+1,96 estrecharía el intervalo casi a la mitad — justo el error que el módulo
+existe para no cometer.
+
+### Sensibilidad: qué supuesto decide
+
+La matriz clásica cruza WACC × crecimiento y deja fuera al resto, entre ellos el
+crecimiento a perpetuidad, que en muchas empresas es el que más manda porque el
+valor terminal se lleva tres cuartas partes del total. Aquí se perturban los
+cuatro de uno en uno, **con magnitudes comparables entre sí** (un punto de WACC
+contra un punto de crecimiento), y se ordenan. Perturbar cada uno un 10 % de su
+valor daría un orden distinto y engañoso: un 10 % de un WACC del 9 % es 0,9 pp y
+un 10 % de un terminal del 2,5 % es 0,25 pp.
+
+También se reporta la **asimetría**: si bajar el crecimiento un punto quita 30 $ y
+subirlo solo añade 18 $, el riesgo no es simétrico y el escenario central está más
+cerca del techo que del suelo.
+
+### Dos bugs que salieron al mirar la pantalla
+
+**El precio implícito se contradecía con el múltiplo.** En el mismo panel, el P/E
+salía FUERA del intervalo y el precio implícito, DENTRO. Los P/E de los pares
+vienen del proveedor de fundamentales (TTM, ajustado) y el BPA venía de EDGAR
+(anual, GAAP): cada número era correcto y juntos no querían decir nada, porque
+vivían en espacios de múltiplos distintos. Ahora el BPA se despeja del propio
+múltiplo del objetivo y las dos lecturas coinciden por construcción.
+
+**El veredicto del DCF inverso resumía el centro de un rango de dieciocho
+puntos.** Con una curva de −0,5 % a 18 % —que es lo normal— concluía «descuenta
+más o menos lo que la empresa ya hace, ni exige un cambio»: tranquilizador y sin
+sentido. Ahora razona sobre el rango entero, y cuando el histórico cae dentro dice
+lo único informativo que hay que decir — que no decide la empresa, decide tu tasa
+de descuento, y dónde está la frontera.
+
 ## Reportes trimestrales: extracción con el API de Claude
 
 ### Lo que NO se puede analizar, dicho primero

@@ -26,6 +26,8 @@ import type {
   CosteEstimado,
   EarningsDisponibles,
   EarningsHistorial,
+  Valoracion,
+  SupuestosEscenario,
   ThesisRecord,
   TodayResponse,
   TrackRecord,
@@ -202,6 +204,10 @@ export const api = {
     postJson<AnalisisResponse>(`/api/earnings/${encodeURIComponent(symbol)}/analizar`, body),
   earningsHistorial: (symbol: string) =>
     fetchJson<EarningsHistorial>(`/api/earnings/${encodeURIComponent(symbol)}`),
+  valorar: (
+    symbol: string,
+    body: { escenarios?: Record<string, SupuestosEscenario>; years?: number } = {},
+  ) => postJson<Valoracion>(`/api/valuation/${encodeURIComponent(symbol)}`, body),
   // Fase 5
   watchlist: () => fetchJson<{ name: string; items: WatchlistItem[] }>('/api/watchlist'),
   addToWatchlist: (body: { symbol: string; notes: string | null }) =>

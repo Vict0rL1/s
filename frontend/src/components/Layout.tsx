@@ -19,6 +19,7 @@ const NAV_GROUPS: { title: string | null; items: { to: string; label: string }[]
       { to: '/screener', label: 'Screener' },
       { to: '/multifactor', label: 'Multifactor' },
       { to: '/resultados', label: 'Resultados' },
+      { to: '/valoracion', label: 'Valoración' },
       { to: '/senales', label: 'Señales' },
       { to: '/etfs', label: 'ETFs' },
       { to: '/noticias', label: 'Noticias' },

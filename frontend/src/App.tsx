@@ -10,6 +10,7 @@ import { PortfolioPage } from './pages/PortfolioPage'
 import { ScreenerPage } from './pages/ScreenerPage'
 import { SignalsPage } from './pages/SignalsPage'
 import { ThesesPage } from './pages/ThesesPage'
+import { ValuationPage } from './pages/ValuationPage'
 import { TickerPage } from './pages/TickerPage'
 import { TodayPage } from './pages/TodayPage'
 
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/screener" element={<ScreenerPage />} />
           <Route path="/multifactor" element={<MultifactorPage />} />
           <Route path="/resultados" element={<EarningsPage />} />
+          <Route path="/valoracion" element={<ValuationPage />} />
           <Route path="/senales" element={<SignalsPage />} />
           <Route path="/portafolio" element={<PortfolioPage />} />
           <Route path="/tesis" element={<ThesesPage />} />
