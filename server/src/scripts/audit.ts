@@ -79,7 +79,84 @@ function auditFootball(): void {
       sampled++;
 
       near(`${tag}: 1X2 suma 1`, p.model.home + p.model.draw + p.model.away, 1);
+      near(`${tag}: la publicada suma 1`, p.final.home + p.final.draw + p.final.away, 1);
       near(`${tag}: over + under = 1`, p.goals.over25 + p.goals.under25, 1);
+
+      // ---- los mercados de menos liquidez ----
+      // Se comprueban con el mismo rigor que los principales aunque estén peor
+      // calibrados: «peor calibrado» es una propiedad del modelo, «no suma 1» es un bug.
+      const h = p.thin.halves;
+      if (h) {
+        near(`${tag}: 1X2 al descanso suma 1`, h.htHome + h.htDraw + h.htAway, 1);
+        near(
+          `${tag}: la matriz descanso/final suma 1`,
+          h.htFt.flat().reduce((a, b) => a + b, 0),
+          1,
+          2e-3,
+        );
+        // Las columnas de la matriz descanso/final SON el 1X2 al descanso: sumar sobre
+        // el resultado final tiene que devolver de dónde se partía.
+        for (const [idx, label] of [[0, '1'], [1, 'X'], [2, '2']] as [number, string][]) {
+          near(
+            `${tag}: descanso ${label} = su fila de la matriz`,
+            h.htFt[idx].reduce((a, b) => a + b, 0),
+            idx === 0 ? h.htHome : idx === 1 ? h.htDraw : h.htAway,
+            2e-3,
+          );
+        }
+        check(
+          `${tag}: ganar alguna mitad contiene ganar la primera`,
+          h.homeWinsAHalf >= h.htHome - 1e-9 && h.awayWinsAHalf >= h.htAway - 1e-9,
+          `${h.homeWinsAHalf.toFixed(4)} vs ${h.htHome.toFixed(4)}`,
+        );
+        check(
+          `${tag}: más de 0,5 al descanso ≥ más de 1,5`,
+          h.htOver05 >= h.htOver15 - 1e-12,
+          `${h.htOver05.toFixed(4)} vs ${h.htOver15.toFixed(4)}`,
+        );
+        check(
+          `${tag}: el empate al descanso es más probable que al final`,
+          h.htDraw > p.model.draw,
+          `descanso ${h.htDraw.toFixed(3)} vs final ${p.model.draw.toFixed(3)}`,
+        );
+      }
+      for (const c of [p.thin.corners, p.thin.cards]) {
+        if (!c) continue;
+        check(`${tag}: ${c.market} total = local + visitante`, Math.abs(c.total - (c.home + c.away)) < 1e-9);
+        // Las líneas de un mismo conteo tienen que ser monótonas: «más de 9,5» no puede
+        // ser más probable que «más de 8,5».
+        for (let k = 1; k < c.lines.length; k++) {
+          check(
+            `${tag}: ${c.market} línea ${c.lines[k].line} ≤ ${c.lines[k - 1].line}`,
+            c.lines[k].over <= c.lines[k - 1].over + 1e-12,
+          );
+        }
+      }
+      for (const pl of p.thin.players) {
+        near(
+          `${tag}: minutos de ${pl.name} suman 1`,
+          pl.minutes.points.reduce((a, x) => a + x.probability, 0),
+          1,
+        );
+        check(
+          `${tag}: ${pl.name} 2+ goles ≤ 1+ gol`,
+          pl.goals.atLeastTwo <= pl.goals.atLeastOne + 1e-12,
+        );
+        // Marcar o asistir contiene marcar. Es la comprobación que caza que se hayan
+        // combinado los dos sucesos sobre distribuciones de minutos distintas.
+        check(
+          `${tag}: ${pl.name} gol-o-asistencia contiene marcar`,
+          pl.goalOrAssist >= pl.goals.atLeastOne - 1e-9,
+          `${pl.goalOrAssist.toFixed(4)} vs ${pl.goals.atLeastOne.toFixed(4)}`,
+        );
+      }
+      for (const l of p.thin.liquidity) {
+        check(
+          `${tag}: el umbral de ${l.label} es al menos el del 1X2`,
+          l.minEdge >= 0.04 - 1e-12,
+          `${l.minEdge}`,
+        );
+      }
 
       const gridSum = p.goals.grid.cells.flat().reduce((a, b) => a + b, 0) + p.goals.grid.tail;
       near(`${tag}: la rejilla suma 1`, gridSum, 1, 2e-3);

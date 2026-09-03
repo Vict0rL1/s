@@ -49,6 +49,9 @@ import {
 } from './momentum.ts';
 import { fitDixonColes, type DcMatch, type DcParams } from './bayes/dixonColes.ts';
 import { storeDcParams } from './bayes/repo.ts';
+import { fitHalves, type HalfParams } from './halves.ts';
+import { storeHalfParams } from './halvesRepo.ts';
+import { fitTeamCounts, storeTeamCounts } from './teamCounts.ts';
 import type { LeagueId } from './types.ts';
 
 /**
@@ -434,6 +437,13 @@ export function recomputeFootballRatings(): Record<string, number> {
   // un trabajo que solo cambia cuando entran resultados nuevos.
   for (const league of leagues) {
     storeDcParams(league, fitLeagueDc(league as LeagueId));
+    // Las dos mitades, cada una con su propio Dixon-Coles. Mismo motivo para ajustarlo
+    // aquí: son dos ajustes más por liga y solo cambian cuando entran resultados.
+    storeHalfParams(league, fitLeagueHalves(league as LeagueId));
+    // Córners y tarjetas. Devuelven null mientras las columnas estén vacías, que es lo
+    // que pasa con las fuentes alcanzables desde GitHub — ver teamCounts.ts.
+    storeTeamCounts(league, 'corners', fitTeamCounts(league, 'corners'));
+    storeTeamCounts(league, 'cards', fitTeamCounts(league, 'cards'));
   }
   return out;
 }
@@ -458,6 +468,20 @@ export const DC_HYPER = {
  * desde el final de los datos, así que un archivo que lleva parado tres meses no ve
  * cómo se le evapora el peso de sus partidos más recientes.
  */
+/** Ajustar los modelos de las dos mitades de una liga, con el marcador al descanso. */
+export function fitLeagueHalves(league: LeagueId): HalfParams | null {
+  const rows = getDb()
+    .prepare(
+      `SELECT match_date date, home_id homeId, away_id awayId,
+              ht_home_goals hh, ht_away_goals ha, home_goals fh, away_goals fa
+       FROM fb_matches
+       WHERE league = ? AND ht_home_goals IS NOT NULL AND ht_away_goals IS NOT NULL
+       ORDER BY match_date`,
+    )
+    .all(league) as unknown as Parameters<typeof fitHalves>[0];
+  return fitHalves(rows, DC_HYPER);
+}
+
 export function fitLeagueDc(league: LeagueId): DcParams | null {
   const rows = getDb()
     .prepare(

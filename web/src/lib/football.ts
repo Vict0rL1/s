@@ -60,6 +60,78 @@ export interface FbSquad {
 
 export interface FbGoalMargin { margin: number; probability: number }
 
+export interface FbPropDistribution {
+  pmf: number[];
+  atLeastOne: number;
+  atLeastTwo: number;
+  expected: number;
+}
+
+export interface FbPlayerProp {
+  playerId: string;
+  name: string;
+  position: string;
+  teamId: string;
+  minutes: {
+    points: { minutes: number; probability: number }[];
+    expected: number;
+    pDidNotPlay: number;
+  };
+  minutesPlayed: number;
+  priorWeight: number;
+  starterShare: number;
+  teamMatches: number;
+  goals: FbPropDistribution;
+  assists: FbPropDistribution;
+  cards: FbPropDistribution;
+  goalOrAssist: number;
+}
+
+export interface FbCountForecast {
+  market: 'corners' | 'cards';
+  home: number;
+  away: number;
+  total: number;
+  lines: { line: number; over: number }[];
+  distribution: 'poisson' | 'negbin';
+  dispersion: number;
+}
+
+export interface FbMarketLiquidity {
+  key: string;
+  label: string;
+  depth: 'profundo' | 'medio' | 'fino' | 'muy-fino';
+  /** null = no consultado. NO es lo mismo que cero casas. */
+  books: number | null;
+  minEdge: number;
+  note: string;
+}
+
+export interface FbThinMarkets {
+  halves:
+    | {
+        htHome: number;
+        htDraw: number;
+        htAway: number;
+        htOver05: number;
+        htOver15: number;
+        homeWinsAHalf: number;
+        awayWinsAHalf: number;
+        homeScoresBoth: number;
+        awayScoresBoth: number;
+        htFt: number[][];
+        expected: { first: number; second: number };
+        /** Error de calibración medido de cada mercado, en pp. */
+        calibration: Record<string, number>;
+        calibrationMatches: number;
+      }
+    | null;
+  corners: FbCountForecast | null;
+  cards: FbCountForecast | null;
+  players: FbPlayerProp[];
+  liquidity: FbMarketLiquidity[];
+}
+
 /** Qué le hizo la capa de post-proceso a la probabilidad. */
 export interface FbPostprocess {
   calibrator: 'platt' | 'isotonic' | 'ninguno';
@@ -82,6 +154,8 @@ export interface FbPrediction {
   /** La publicada: calibrada, y mezclada con el mercado donde hay peso ajustado. */
   final: Fb1X2;
   postprocess: FbPostprocess;
+  /** Mercados de menos liquidez. `null` en ligas sin ningún ajuste para ellos. */
+  thin: FbThinMarkets | null;
   goals: {
     expectedHome: number; expectedAway: number; expectedTotal: number;
     over25: number; under25: number; bothScore: number;

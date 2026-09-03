@@ -48,6 +48,17 @@ export interface ParsedFdMatch {
   oddsHome: number | null;
   oddsDraw: number | null;
   oddsAway: number | null;
+  /**
+   * Córners y tarjetas del partido. Solo existen en el diseño «main» (una liga
+   * europea por temporada); el «extra» de fuera de Europa no los trae, y ahí quedan
+   * null en vez de en cero — que es otra cosa: cero córners es un dato, no un hueco.
+   */
+  homeCorners: number | null;
+  awayCorners: number | null;
+  homeYellows: number | null;
+  awayYellows: number | null;
+  homeReds: number | null;
+  awayReds: number | null;
 }
 
 function pick(headers: string[], aliases: string[]): string | null {
@@ -104,6 +115,15 @@ export function parseFootballData(
   const od = pick(headers, ['avgd', 'avgcd', 'psd', 'pcd', 'b365d', 'b365cd']);
   const oa = pick(headers, ['avga', 'avgca', 'psa', 'pca', 'b365a', 'b365ca']);
   const leagueCol = pick(headers, ['league']);
+  // Córners y tarjetas. Se leen por nombre de cabecera como todo lo demás, y su
+  // ausencia NO es un error: la mitad de los ficheros del sitio no las trae y un
+  // partido sin ellas sigue siendo un partido válido para el modelo de goles.
+  const hcCol = pick(headers, ['hc']);
+  const acCol = pick(headers, ['ac']);
+  const hyCol = pick(headers, ['hy']);
+  const ayCol = pick(headers, ['ay']);
+  const hrCol = pick(headers, ['hr']);
+  const arCol = pick(headers, ['ar']);
 
   const out: ParsedFdMatch[] = [];
   for (const r of rows) {
@@ -123,6 +143,12 @@ export function parseFootballData(
       oddsHome: validOdds(oh ? num(r[oh]) : null),
       oddsDraw: validOdds(od ? num(r[od]) : null),
       oddsAway: validOdds(oa ? num(r[oa]) : null),
+      homeCorners: hcCol ? num(r[hcCol]) : null,
+      awayCorners: acCol ? num(r[acCol]) : null,
+      homeYellows: hyCol ? num(r[hyCol]) : null,
+      awayYellows: ayCol ? num(r[ayCol]) : null,
+      homeReds: hrCol ? num(r[hrCol]) : null,
+      awayReds: arCol ? num(r[arCol]) : null,
     });
   }
   return out;
@@ -179,12 +205,22 @@ export async function ingestFootballData(
   const insertMatch = db.prepare(
     `INSERT INTO fb_matches
        (league, season, match_date, home_id, away_id, home_goals, away_goals, result,
-        odds_home, odds_draw, odds_away)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        odds_home, odds_draw, odds_away,
+        home_corners, away_corners, home_yellows, away_yellows, home_reds, away_reds)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(league, match_date, home_id, away_id) DO UPDATE SET
        odds_home = COALESCE(excluded.odds_home, fb_matches.odds_home),
        odds_draw = COALESCE(excluded.odds_draw, fb_matches.odds_draw),
-       odds_away = COALESCE(excluded.odds_away, fb_matches.odds_away)`,
+       odds_away = COALESCE(excluded.odds_away, fb_matches.odds_away),
+       -- COALESCE y no sobrescritura: openfootball ya insertó el partido con sus
+       -- goles y su descanso, y esta fuente solo añade lo que aquella no tiene. Un
+       -- null de aquí no debe borrar un dato que ya estaba.
+       home_corners = COALESCE(excluded.home_corners, fb_matches.home_corners),
+       away_corners = COALESCE(excluded.away_corners, fb_matches.away_corners),
+       home_yellows = COALESCE(excluded.home_yellows, fb_matches.home_yellows),
+       away_yellows = COALESCE(excluded.away_yellows, fb_matches.away_yellows),
+       home_reds = COALESCE(excluded.home_reds, fb_matches.home_reds),
+       away_reds = COALESCE(excluded.away_reds, fb_matches.away_reds)`,
   );
 
   let matches = 0;
@@ -241,6 +277,12 @@ export async function ingestFootballData(
           m.oddsHome,
           m.oddsDraw,
           m.oddsAway,
+          m.homeCorners,
+          m.awayCorners,
+          m.homeYellows,
+          m.awayYellows,
+          m.homeReds,
+          m.awayReds,
         );
         matches++;
         if (m.oddsHome && m.oddsDraw && m.oddsAway) withOdds++;

@@ -813,10 +813,131 @@ ves, en vez de fallar en silencio.
 | `npm run study:sigma` | **Fútbol**: mide la escala del error del Elo (`ELO_SIGMA_C`), que fija el «± pp» de todas las tarjetas |
 | `npm run study:dc` | **Fútbol**: el Dixon-Coles jerárquico contra el modelo de Elo, con walk-forward, y los mercados que salen de la rejilla (over/under, ambos marcan, hándicap) |
 | `npm run study:postprocess` | **La capa entre el modelo y la pantalla**: ajusta la calibración (Platt vs. isotónica), el peso de la mezcla con el mercado y el encogimiento, y escribe `experiments/postprocess.json` |
+| `npm run study:thin` | **Mercados de menos liquidez**: mide la dispersión de cada conteo, ajusta la ν de la COM-Poisson y puntúa los mercados de mitades contra el modelo anterior |
 | `npm run doctor` | Diagnostica por qué la app muestra **cuotas de demostración**: `.env`, clave, cuota y qué hay guardado |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 | `npm run lint` | Lint real (oxlint, solo la categoría **correctness**) |
+
+## Mercados de menos liquidez (`npm run study:thin`)
+
+Cuatro familias de mercados que la app no tocaba, cada una con **su propia distribución**
+en vez de reciclar la del partido.
+
+### Las dos mitades — de 8,35 pp de error a 2,08
+
+El marcador al descanso llevaba ingerido desde el principio y había un modelo escrito,
+medido y **deliberadamente apagado**, con el motivo al lado: tomaba la λ del partido y la
+multiplicaba por la cuota de goles de la primera parte. Su diagnóstico era correcto —«la
+media es correcta por construcción; la FAMILIA de la distribución es la equivocada»— y
+pedía un trabajo que no se había hecho. Ahora está hecho, en tres partes:
+
+1. **Un Dixon-Coles propio por mitad.** Uno ajustado sobre los goles de la primera parte
+   y otro sobre los de la segunda, cada uno con su ataque, su defensa, su ventaja de campo
+   y su ρ. Un equipo que sale fuerte y se apaga no se describe con un solo par de números.
+2. **COM-Poisson en vez de Poisson.** Los goles de un equipo en una mitad están
+   **INFRA**dispersos: menos ceros y más unos de los que admite una Poisson con la misma
+   media. Medido sobre 24.778 partidos, un equipo se queda a cero en la primera parte el
+   47,93 % de las veces y la Poisson dice 51,98 %. La ν ajustada por máxima verosimilitud
+   sobre 40.828 muestras de entrenamiento sale **1,20** (>1 = infradispersa).
+3. **ρ ajustada, y sale positiva.** En el partido entero ρ es negativa; en una mitad sale
+   **+0,014 a +0,117** según la liga. No es un error de signo: lo que sobra en una mitad
+   respecto a la independencia no son los 0-0, son los 1-1.
+
+La ν ajustada sale **1,30**. Una medición anterior hecha a mano daba 1,20, porque usaba la
+λ del partido × la cuota de la primera parte en vez de la λ del ajuste de la mitad — que
+es exactamente el error que este módulo existe para no cometer. El número que se publica
+es el del script.
+
+Sobre 3.634 partidos de validación que el ajuste no vio, con las dos columnas medidas
+sobre los **mismos** partidos:
+
+| mercado | antes | ahora |
+|---|---|---|
+| descanso 1 | +3,81 | **+1,67** |
+| descanso X | −5,00 | **−1,72** |
+| descanso 2 | +1,19 | **+0,05** |
+| descanso +0,5 goles | +4,87 | **+2,26** |
+| descanso +1,5 goles | −1,75 | +1,01 |
+| el local gana una mitad | +6,70 | **+3,23** |
+| el visitante gana una mitad | +4,67 | **+1,78** |
+
+El peor mercado pasa de **6,70 pp a 3,23**, y cinco de los siete mejoran. (Ese «antes» ya
+es el mejor «antes» posible: usa λ del Dixon-Coles. La nota vieja del código llegaba a
+8,35 pp porque las suyas venían del Elo.)
+
+**Sigue siendo peor que el partido entero**, que está dentro de 1,5 pp en todo lo que
+publica. Así que se publica con el error medido **al lado de cada línea** en la tarjeta:
+un «+2,3 pp» quiere decir que en realidad pasa más de lo que dice el número.
+
+**Y lo que no mejora:** el log loss del 1X2 al descanso no se mueve — 1,06780 → 1,06693,
+IC 95 % [−0,0051, +0,0032], p = 0,67. Indistinguible. No es una contradicción: el log loss
+mide sobre todo **discriminar** (separar los partidos que acaban 1 de los que acaban X) y
+lo que ha mejorado es **calibrar** (que cuando dice 73 % pase el 73 %). Para estos
+mercados manda la segunda, porque el sesgo va siempre en la misma dirección y se paga en
+cada apuesta; pero el modelo nuevo no distingue mejor los partidos que el viejo, y eso
+también está escrito.
+
+### Props de jugador — la distribución de minutos, no su media
+
+«Marca 0,45 por 90 y juega unos 70 minutos, o sea 0,35 goles» da la media correcta y la
+probabilidad equivocada. Los 70 minutos no son 70: son 90 si es titular y aguanta, 25 si
+entra del banquillo y **0 si no juega**. Así que:
+
+```
+P(marca) = Σ_m  P(minutos = m) · [1 − e^(−tasa·m)]
+```
+
+La masa en «no juega» aporta exactamente cero, y aplastarla a un promedio infla todas las
+probabilidades. Las tasas van encogidas hacia el promedio de la posición (10 partidos de
+prior) y **la titularidad también** (5 partidos): sin eso, en la jornada 1 todo el que
+jugó tiene una titularidad del 100 % y las props salían con 79,9 minutos esperados y un
+0 % de no jugar **para toda la plantilla** — el suplente con la misma seguridad que el
+capitán.
+
+Solo la Premier League tiene datos de jugadores. Salen goles, asistencias, gol-o-asistencia
+y tarjetas; las tarjetas por jugador son una columna que la fuente publicaba y que nada
+leía hasta ahora.
+
+### Córners y tarjetas — el modelo está, los datos no
+
+El esqueleto es el mismo (nivel de liga × lo que genera este equipo × lo que concede el
+rival × localía) y la **familia se mide, no se elige**: `fitCounts` contrasta la
+dispersión y devuelve Poisson o binomial negativa según lo que salga. Que los córners y
+las tarjetas estén sobredispersos es razonable de esperar —el árbitro es un factor común
+a todo el partido— pero «razonable de esperar» no es una medición.
+
+**No hay datos.** Los publica football-data.co.uk (columnas HC/AC/HY/AY/HR/AR), la ingesta
+ya las lee y hay columnas y migración para ellas, pero ese sitio no es alcanzable desde
+donde se generaron estos datos, y las dos fuentes que sí lo son solo traen marcadores
+(el CSV de footballcsv tiene cinco columnas: `Round,Date,Team 1,FT,Team 2`). El modelo se
+queda **apagado y diciéndolo**, en vez de rellenar el hueco con una media inventada. En una
+máquina que alcance esa fuente, `npm run update-data:fb` las llena y se enciende solo.
+
+### Y por qué a estos mercados hay que exigirles más
+
+Toda la app se apoya en que discrepar del precio es interesante. En el 1X2 de la Premier
+eso es defendible: decenas de casas, margen del 4 %. En «córners del Betis por encima de
+5,5» puede haber dos casas, un margen del 15 % y un límite de veinte euros — y ahí se
+rompen las dos mitades a la vez, porque **la línea informa menos** (no ha pasado dinero
+informado por ella) y **el margen se come la ventaja**. Las dos apuntan igual: exigir más,
+no menos.
+
+| profundidad | umbral | ejemplos |
+|---|---|---|
+| profundo | 4 pp | 1X2, total de goles, ambos marcan |
+| medio | 6 pp | hándicap, marcador exacto, 1X2 al descanso, marca un gol |
+| fino | 10 pp | gana alguna mitad, descanso/final, córners, tarjetas, asistencia |
+| muy fino | 14 pp | ve tarjeta, marca 2 o más |
+
+Esos multiplicadores son **estructurales, no medidos**, y se declara así: traducen el
+margen típico de cada tipo de mercado, de forma que exigir el triple en un mercado de
+nicho es aproximadamente exigir la misma ventaja *neta*. Cuántas casas cotizan cada
+mercado **no se consulta**: el proveedor lo sirve por un endpoint por evento que se cobra
+aparte, y pedirlo para sesenta partidos gastaría la cuota de quien use la app sin
+preguntárselo. Por eso `books` es `null` —«no consultado»— y no `0`, que sería «ninguna».
+
+---
 
 ## La capa entre el modelo y la pantalla (`npm run study:postprocess`)
 

@@ -334,6 +334,11 @@ function createSchema(d: DatabaseSync): void {
       xgi90         REAL,
       goals         INTEGER NOT NULL DEFAULT 0,
       assists       INTEGER NOT NULL DEFAULT 0,
+      -- Tarjetas de la temporada. La fuente las publica y nada las leía; son la base
+      -- del mercado de tarjetas del jugador y, sumadas, del total del equipo — que es
+      -- la única vía a un modelo de tarjetas sin cuotas ni CSV de football-data.
+      yellow_cards  INTEGER NOT NULL DEFAULT 0,
+      red_cards     INTEGER NOT NULL DEFAULT 0,
       -- Availability as the source reports it right now.
       status        TEXT,              -- a | d | i | s | u
       chance_next   INTEGER,           -- 0..100, NULL when the source says nothing
@@ -782,6 +787,21 @@ function migrateSchema(d: DatabaseSync): void {
       // Arrived with the openfootball source — see the note on the schema above.
       ht_home_goals: 'INTEGER',
       ht_away_goals: 'INTEGER',
+      // Córners y tarjetas por partido. Las publica football-data.co.uk (columnas
+      // HC/AC/HY/AY/HR/AR) y la ingesta las lee desde que existe el modelo de conteos.
+      // Quedan NULL con las otras fuentes —openfootball y footballcsv solo traen
+      // marcadores— y el modelo de córners y tarjetas se apaga solo cuando no hay nada
+      // que ajustar, en vez de inventarse una media.
+      home_corners: 'INTEGER',
+      away_corners: 'INTEGER',
+      home_yellows: 'INTEGER',
+      away_yellows: 'INTEGER',
+      home_reds: 'INTEGER',
+      away_reds: 'INTEGER',
+    },
+    fb_players: {
+      yellow_cards: 'INTEGER NOT NULL DEFAULT 0',
+      red_cards: 'INTEGER NOT NULL DEFAULT 0',
     },
   };
 

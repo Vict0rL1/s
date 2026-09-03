@@ -45,6 +45,22 @@ import { applyIsotonic, fitIsotonic } from '../postprocess/isotonic.ts';
 import { blend, disagreement } from '../postprocess/blend.ts';
 import { readPostprocess } from '../postprocess/params.ts';
 import { postprocess } from '../postprocess/apply.ts';
+import {
+  comPoissonForMean,
+  comPoissonMean,
+  comPoissonPmf,
+  comPoissonVariance,
+} from '../markets/comPoisson.ts';
+import { countPmf, fitCounts } from '../markets/counts.ts';
+import { liquidityOf } from '../markets/liquidity.ts';
+import { halfMarkets, HALF_NU } from '../football/halves.ts';
+import { getHalfParams } from '../football/halvesRepo.ts';
+import { getTeamCounts } from '../football/teamCounts.ts';
+import {
+  minutesDistribution,
+  propDistribution,
+  shrunkStarterShare,
+} from '../football/props.ts';
 
 let checks = 0;
 let failures = 0;
@@ -1208,6 +1224,254 @@ function auditStaking(): void {
  * promesas que hace — la identidad cuando no debe tocar nada, la monotonía, los extremos
  * de la mezcla — y que RECUPERE una distorsión conocida que se le mete a propósito.
  */
+/**
+ * Las distribuciones de los mercados finos, contra propiedades comprobables.
+ *
+ * Son tres familias nuevas y cada una tiene una promesa concreta que se puede verificar
+ * sin datos: la COM-Poisson con ν = 1 TIENE que ser una Poisson exacta, `comPoissonForMean`
+ * tiene que devolver la media que se le pide, y la binomial negativa tiene que recuperar
+ * una dispersión conocida. Si alguna de esas falla, todo lo que salga de ellas da igual.
+ */
+function auditThinMarkets(): void {
+  console.log('\n▸ Mercados de menos liquidez');
+
+  // --- COM-Poisson: con ν = 1 es una Poisson, exacta ---
+  const pois = (k: number, l: number): number => {
+    let p = Math.exp(-l);
+    for (let i = 0; i < k; i++) p = (p * l) / (i + 1);
+    return p;
+  };
+  const cp1 = comPoissonPmf({ lambda: 1.4, nu: 1 }, 12);
+  let maxDiff = 0;
+  for (let k = 0; k <= 12; k++) maxDiff = Math.max(maxDiff, Math.abs(cp1[k] - pois(k, 1.4)));
+  // No puede ser EXACTAMENTE igual y el motivo es sano: la COM-Poisson se normaliza
+  // sobre el soporte truncado, así que reparte entre las casillas la cola que queda
+  // fuera. Con λ = 1,4 y 12 casillas esa cola vale ~1e-9, y esa es la diferencia que
+  // aparece. La comprobación es «igual salvo el truncamiento», no «igual».
+  check(
+    'finos: COM-Poisson con ν=1 es una Poisson salvo el truncamiento',
+    maxDiff < 1e-7,
+    `mayor diferencia ${maxDiff.toExponential(2)}`,
+  );
+  check(
+    'finos: la COM-Poisson suma 1',
+    Math.abs(comPoissonPmf({ lambda: 2.1, nu: 1.35 }, 30).reduce((a, b) => a + b, 0) - 1) < 1e-9,
+  );
+
+  // --- λ no es la media: comPoissonForMean tiene que resolverlo ---
+  // Es el error más fácil de cometer con esta familia y el que cambiaría el pronóstico
+  // en vez de la forma, así que se comprueba en varias medias y varias dispersiones.
+  let worst = 0;
+  for (const mean of [0.35, 0.7, 1.3, 2.6]) {
+    for (const nu of [0.8, 1, 1.2, 1.6]) {
+      worst = Math.max(worst, Math.abs(comPoissonMean(comPoissonForMean(mean, nu)) - mean));
+    }
+  }
+  check(
+    'finos: comPoissonForMean acierta la media pedida',
+    worst < 1e-6,
+    `mayor error ${worst.toExponential(2)}`,
+  );
+
+  // --- ν manda sobre la dispersión, y en el sentido correcto ---
+  const vLow = comPoissonVariance(comPoissonForMean(1.3, 0.7));
+  const vPois = comPoissonVariance(comPoissonForMean(1.3, 1));
+  const vHigh = comPoissonVariance(comPoissonForMean(1.3, 1.5));
+  check(
+    'finos: ν>1 INFRAdispersa y ν<1 sobredispersa, con la misma media',
+    vHigh < vPois && vPois < vLow,
+    `ν=1.5 → ${vHigh.toFixed(4)} · ν=1 → ${vPois.toFixed(4)} · ν=0.7 → ${vLow.toFixed(4)}`,
+  );
+  check(
+    'finos: con ν=1 la varianza iguala a la media',
+    Math.abs(vPois - 1.3) < 1e-6,
+    `${vPois.toFixed(6)}`,
+  );
+  // Y la ν que se publica tiene que estar del lado que dice la medición.
+  check('finos: la ν de las mitades es INFRAdispersa', HALF_NU > 1, `${HALF_NU}`);
+
+  // --- La binomial negativa recupera una dispersión conocida ---
+  let seed = 4242424;
+  const rnd = (): number => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const poissonDraw = (lambda: number): number => {
+    const limit = Math.exp(-lambda);
+    let k = 0;
+    let prod = rnd();
+    while (prod > limit) {
+      k++;
+      prod *= rnd();
+    }
+    return k;
+  };
+  // Poisson-gamma: se sortea la media de cada caso de una gamma y luego una Poisson.
+  // Así los datos son binomiales negativas POR CONSTRUCCIÓN con una k conocida.
+  const gammaDraw = (shape: number): number => {
+    // Suma de exponenciales para shape entero, más un resto por aceptación. Con shape
+    // pequeño y entero basta lo primero, que es lo que se usa aquí.
+    let s = 0;
+    for (let i = 0; i < Math.round(shape); i++) s -= Math.log(Math.max(1e-12, rnd()));
+    return s / Math.round(shape);
+  };
+  const K_TRUE = 4;
+  const MEAN = 10;
+  const nb: number[] = [];
+  for (let i = 0; i < 20000; i++) nb.push(poissonDraw(MEAN * gammaDraw(K_TRUE)));
+  const fitNb = fitCounts(nb);
+  check(
+    'finos: fitCounts detecta la SOBREdispersión que se le construyó',
+    !!fitNb && fitNb.kind === 'negbin',
+    `salió ${fitNb?.kind} con z = ${fitNb?.z.toFixed(1)}`,
+  );
+  check(
+    'finos: y recupera la k con la que se generó',
+    !!fitNb && fitNb.k != null && Math.abs(fitNb.k - K_TRUE) < 1.2,
+    `k = ${fitNb?.k?.toFixed(2)} contra ${K_TRUE}`,
+  );
+
+  // El otro lado: datos Poisson de verdad NO deben salir binomiales negativas. Es la
+  // comprobación que impide que el selector diga «sobredisperso» por costumbre.
+  const pure: number[] = [];
+  for (let i = 0; i < 20000; i++) pure.push(poissonDraw(10));
+  const fitP = fitCounts(pure);
+  check(
+    'finos: con datos Poisson de verdad, elige Poisson',
+    !!fitP && fitP.kind === 'poisson',
+    `salió ${fitP?.kind} con z = ${fitP?.z.toFixed(2)} y var/media ${fitP?.dispersion.toFixed(4)}`,
+  );
+  if (fitNb && fitNb.kind === 'negbin') {
+    // `countPmf` NO renormaliza, a diferencia de la COM-Poisson, y es deliberado: con
+    // una binomial negativa de media 10 y k ≈ 4 la cola es larga de verdad, y repartirla
+    // entre las casillas visibles inflaría justo las líneas altas —«más de 12,5
+    // córners»— que es donde esa cola es el mercado. Así que la pmf suma un poco menos
+    // de 1, la que falta es cola, y lo que se comprueba es que sea PEQUEÑA y que esté
+    // del lado correcto: nunca por encima de 1.
+    const pmf = countPmf(fitNb, 60);
+    const mass = pmf.reduce((a, b) => a + b, 0);
+    check(
+      'finos: a la binomial negativa solo le falta cola, y poca',
+      mass <= 1 + 1e-12 && mass > 0.99999,
+      `masa ${mass.toFixed(8)}, cola fuera ${(1 - mass).toExponential(2)}`,
+    );
+    let m = 0;
+    let m2 = 0;
+    for (let i = 0; i < pmf.length; i++) {
+      m += i * pmf[i];
+      m2 += i * i * pmf[i];
+    }
+    const expectedVar = fitNb.mean + (fitNb.mean * fitNb.mean) / (fitNb.k as number);
+    check(
+      'finos: y su varianza es media + media²/k',
+      Math.abs(m2 - m * m - expectedVar) / expectedVar < 0.02,
+      `${(m2 - m * m).toFixed(3)} contra ${expectedVar.toFixed(3)}`,
+    );
+  }
+
+  // --- Props: los minutos son una distribución, no un número ---
+  const md = minutesDistribution(0.7, 1);
+  check(
+    'finos: la distribución de minutos suma 1',
+    Math.abs(md.points.reduce((a, b) => a + b.probability, 0) - 1) < 1e-9,
+  );
+  const out = minutesDistribution(0.9, 0);
+  check(
+    'finos: un jugador no disponible no juega ni un minuto',
+    out.expected === 0 && Math.abs(out.pDidNotPlay - 1) < 1e-9,
+    `esperados ${out.expected}`,
+  );
+  const propOut = propDistribution(0.005, out);
+  check(
+    'finos: y por tanto todas sus props son cero',
+    propOut.atLeastOne === 0 && propOut.expected === 0,
+    `${propOut.atLeastOne}`,
+  );
+  // Más minutos, más probabilidad. Y NO proporcional: es lo que distingue la mezcla de
+  // una multiplicación, que es el motivo de que este módulo exista.
+  const few = propDistribution(0.005, minutesDistribution(0.1, 1));
+  const many = propDistribution(0.005, minutesDistribution(1, 1));
+  check(
+    'finos: más minutos esperados, más probabilidad de marcar',
+    many.atLeastOne > few.atLeastOne,
+    `${(few.atLeastOne * 100).toFixed(1)}% vs ${(many.atLeastOne * 100).toFixed(1)}%`,
+  );
+  // La comparación que justifica todo el módulo: aplastar los minutos a su media da
+  // OTRA probabilidad, no la misma con más decimales.
+  const naive = 1 - Math.exp(-0.005 * many.expected);
+  check(
+    'finos: la mezcla NO es lo mismo que multiplicar la media',
+    Math.abs(many.atLeastOne - naive) > 1e-4,
+    `mezcla ${(many.atLeastOne * 100).toFixed(2)}% vs media aplastada ${(naive * 100).toFixed(2)}%`,
+  );
+  check(
+    'finos: la titularidad de 1 sobre 1 partido no da el 100 %',
+    shrunkStarterShare(1, 1, 25) < 0.7,
+    `${(shrunkStarterShare(1, 1, 25) * 100).toFixed(0)} %`,
+  );
+  check(
+    'finos: pero con media temporada sí manda el jugador',
+    shrunkStarterShare(19, 20, 25) > 0.8,
+    `${(shrunkStarterShare(19, 20, 25) * 100).toFixed(0)} %`,
+  );
+
+  // --- Liquidez: a un mercado más fino se le exige más ---
+  check(
+    'finos: un mercado fino exige más ventaja que el principal',
+    liquidityOf('prop-tarjeta').minEdge > liquidityOf('1x2').minEdge,
+    `${liquidityOf('prop-tarjeta').minEdge.toFixed(3)} vs ${liquidityOf('1x2').minEdge.toFixed(3)}`,
+  );
+  check(
+    'finos: «no consultado» no es «ninguna casa»',
+    liquidityOf('corners').books === null,
+  );
+
+  // --- Las mitades, sobre los ajustes que de verdad se publican ---
+  for (const league of ['epl', 'laliga', 'seriea'] as const) {
+    const hp = getHalfParams(league);
+    if (!hp) continue;
+    const teams = [...hp.first.attack.keys()].slice(0, 2);
+    if (teams.length < 2) continue;
+    const m = halfMarkets(hp, teams[0], teams[1]);
+    if (!m) continue;
+    check(
+      `finos ${league}: el 1X2 al descanso suma 1`,
+      Math.abs(m.htHome + m.htDraw + m.htAway - 1) < 1e-9,
+    );
+    check(
+      `finos ${league}: la matriz descanso/final suma 1`,
+      Math.abs(m.htFt.flat().reduce((a, b) => a + b, 0) - 1) < 1e-6,
+    );
+    // Ganar ALGUNA mitad tiene que ser al menos tan probable como ganar la primera:
+    // el suceso contiene al otro. Es la comprobación que caza un signo cambiado en el
+    // recorrido de las dos mitades, que es el trozo más fácil de equivocar.
+    check(
+      `finos ${league}: ganar alguna mitad ⊇ ganar la primera`,
+      m.homeWinsAHalf >= m.htHome - 1e-9 && m.awayWinsAHalf >= m.htAway - 1e-9,
+      `${m.homeWinsAHalf.toFixed(4)} ≥ ${m.htHome.toFixed(4)}`,
+    );
+    check(
+      `finos ${league}: se marcan más goles en la 2ª parte`,
+      m.expected.second > m.expected.first,
+      `1ª ${m.expected.first.toFixed(2)} · 2ª ${m.expected.second.toFixed(2)}`,
+    );
+    console.log(
+      `  ${league}: descanso ${(m.htHome * 100).toFixed(1)}/${(m.htDraw * 100).toFixed(1)}/` +
+        `${(m.htAway * 100).toFixed(1)} · goles 1ª ${m.expected.first.toFixed(2)} ` +
+        `2ª ${m.expected.second.toFixed(2)} · ν ${HALF_NU}`,
+    );
+  }
+  for (const market of ['corners', 'cards'] as const) {
+    const m = getTeamCounts('epl', market);
+    console.log(
+      `  ${market}: ${m ? `${m.distribution.kind}, var/media ${m.distribution.dispersion.toFixed(3)}, ${m.matches} partidos` : 'sin datos — la fuente que los trae no es alcanzable desde aquí'}`,
+    );
+  }
+}
+
 function auditPostprocess(): void {
   console.log('\n▸ La capa de post-proceso');
 
@@ -1745,6 +2009,7 @@ function main(): void {
   auditStaking();
   auditDixonColes();
   auditPostprocess();
+  auditThinMarkets();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

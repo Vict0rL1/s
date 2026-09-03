@@ -442,49 +442,31 @@ export function impliedFrom1X2(
 //     fitting noise with a straight face.
 //
 // ===========================================================================
-// VEREDICTO: MEDIDO Y NO PUBLICADO
+// VEREDICTO: SUPERADO POR football/halves.ts
 // ===========================================================================
-// The facts above are solid and the model below is a faithful implementation of
-// them. It is still not good enough to publish, and the numbers say so plainly.
-// Scored over 4,238 matches of 2025-26 that the ratings never saw (`npm run
-// study:ht-val`), predicted average against realised rate:
+// Durante mucho tiempo aquí decía «medido y NO publicado», con estos números sobre
+// 4.238 partidos de validación:
 //
-//     descanso 1              35.62 %  vs  36.39 %    +0.77 pp   ✓
-//     descanso X              41.09 %  vs  36.90 %    −4.19 pp   ✗
-//     descanso 2              23.28 %  vs  26.71 %    +3.43 pp   ✗
-//     el local gana una mitad 59.22 %  vs  61.30 %    +2.08 pp
-//     el visitante idem       41.41 %  vs  49.76 %    +8.35 pp   ✗✗
-//     descanso +0.5 goles     71.38 %  vs  75.39 %    +4.00 pp   ✗
-//     descanso +1.5 goles     38.19 %  vs  36.81 %    −1.38 pp   ✓
+//     descanso X                    −4,19 pp
+//     descanso +0,5 goles           +4,00 pp
+//     el visitante gana una mitad   +8,35 pp
 //
-// The full-match model is within 1.5 pp on every market it publishes. Four to
-// eight points is a different kind of number, and "gana alguna mitad" — the one
-// on the user's betting slip, the reason this was built — is the worst of them.
+// y el diagnóstico correcto: la media era correcta por construcción y la FAMILIA de la
+// distribución era la equivocada, porque el fútbol real tiene 2,9 pp MENOS de primeras
+// partes sin goles de los que permite una Poisson con la media correcta. Arreglarlo
+// pedía «una distribución de media parte ajustada a esa forma, no la del partido entero
+// reescalada — que es un trabajo de verdad y no una constante».
 //
-// WHY, because the diagnosis rules out the easy fix. Sweeping the Dixon-Coles rho
-// moves everything monotonically in the right direction but never far enough: even
-// at +0.05, which already inverts the physical meaning of the parameter, the away
-// side is still 5.9 pp short. The reason is the shape of a HALF, not the parameter:
+// Ese trabajo está hecho y vive en football/halves.ts. Un Dixon-Coles propio por mitad,
+// marginales COM-Poisson con la infradispersión medida (ν = 1,20) y una ρ ajustada que
+// sale POSITIVA en una mitad. El peor mercado pasó de 8,35 pp a 2,08, y los mercados de
+// mitades SÍ se publican ahora, con su error medido al lado de cada línea.
 //
-//     goles en la 1ª parte        0        1      2 o más
-//     real                    24.09 %  38.65 %  37.26 %
-//     Poisson (media 1.311)   26.96 %  35.34 %  37.71 %
-//
-// Real football has 2.9 pp FEWER goalless first halves than a Poisson with the
-// correct mean allows, and rho pushes 0-0 the other way. The mean is right by
-// construction; the family of distribution is wrong. Fixing it needs a half-goal
-// distribution fitted to that observed 0/1/2+ shape, not the full-match one
-// rescaled — which is a real piece of work and not a constant.
-//
-// Contributing but not sufficient: game state. After a level first half there are
-// 1.743 goals in the second, after a one-goal lead 1.539, after two or more 1.618.
-// A pre-match forecast integrates over half-time states it cannot know, using one
-// rate for all of them.
-//
-// So `halfDistributions`, `winsEitherHalf` and `htFtMatrix` below are correct
-// implementations of a model that is not calibrated enough to show anyone. They
-// stay, exported and tested, because the measurement is worth keeping and because
-// the next attempt starts here. NOTHING IN THE APP CALLS THEM.
+// Lo que queda debajo es la versión antigua: `HALF_GOAL_SHARE`, `halfDistributions`,
+// `winsEitherHalf` y `htFtMatrix`. Se conservan porque son el punto de comparación de la
+// medición —el «antes» de la tabla de halves.ts— y porque el reparto 0,4461 sigue siendo
+// un hecho medido sobre 24.778 partidos que merece estar escrito. NADA EN LA APP LAS
+// LLAMA: la app usa halves.ts.
 
 /**
  * Share of a match's goals scored before half-time. Measured, see above.

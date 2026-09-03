@@ -74,6 +74,9 @@ export interface FbPlayerRow {
   chance_next: number | null;
   news: string | null;
   season: string | null;
+  /** Tarjetas de la temporada. Las publica la fuente; las lee el modelo de props. */
+  yellow_cards?: number;
+  red_cards?: number;
 }
 
 /**
@@ -166,10 +169,26 @@ function loadSquad(league: LeagueId, teamId: string): FbPlayerRow[] {
   return getDb()
     .prepare(
       `SELECT id, league, team_id, name, position, minutes, starts, xgi90, goals, assists,
-              status, chance_next, news, season
+              yellow_cards, red_cards, status, chance_next, news, season
        FROM fb_players WHERE league = ? AND team_id = ? ORDER BY minutes DESC`,
     )
     .all(league, teamId) as unknown as FbPlayerRow[];
+}
+
+/** Toda la plantilla de un equipo, en crudo. La usan las props de jugador. */
+export function listPlayers(league: LeagueId, teamId: string): FbPlayerRow[] {
+  return loadSquad(league, teamId);
+}
+
+/** Todos los jugadores de la liga. Para medir los priors por posición. */
+export function listLeaguePlayers(league: LeagueId): FbPlayerRow[] {
+  return getDb()
+    .prepare(
+      `SELECT id, league, team_id, name, position, minutes, starts, xgi90, goals, assists,
+              yellow_cards, red_cards, status, chance_next, news, season
+       FROM fb_players WHERE league = ?`,
+    )
+    .all(league) as unknown as FbPlayerRow[];
 }
 
 /**

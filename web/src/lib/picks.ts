@@ -123,7 +123,11 @@ export const CAVEATS: Record<string, string> = {
     'comparaciones múltiples). NO se mezcla con el mercado: para ajustar ese peso hacen falta ' +
     'cuotas de partidos ya jugados y este archivo no las tiene, así que se deja apagado en vez de ' +
     'poner un número a ojo. Nunca se ha medido contra las cuotas de cierre, así que una diferencia ' +
-    'con el mercado es una diferencia, no una ganancia demostrada.',
+    'con el mercado es una diferencia, no una ganancia demostrada. Los mercados de menos ' +
+    'liquidez —mitades, córners, tarjetas y props de jugador— van en su propio panel porque ' +
+    'NO están igual de calibrados: las mitades andan entre 0,05 y 3,2 pp de error medido ' +
+    'sobre 3.634 partidos, con el de cada línea escrito al lado, y a los que cotizan pocas ' +
+    'casas hay que exigirles dos o tres veces más ventaja porque el margen se la come antes.',
   baseball:
     'Medido sobre 36.235 partidos: Brier 0.2431 y over/under acertado el 54,9 %. El modelo no ' +
     'conoce el bullpen ni la alineación del día, que es justo lo que mueve una cuota a última hora.',

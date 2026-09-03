@@ -183,12 +183,14 @@ export async function ingestFplPlayers(
   const insert = db.prepare(
     `INSERT INTO fb_players
        (id, league, team_id, name, position, minutes, starts, xgi90, goals, assists,
-        status, chance_next, news, season, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        yellow_cards, red_cards, status, chance_next, news, season, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(league, id) DO UPDATE SET
        team_id = excluded.team_id, name = excluded.name, position = excluded.position,
        minutes = excluded.minutes, starts = excluded.starts, xgi90 = excluded.xgi90,
-       goals = excluded.goals, assists = excluded.assists, status = excluded.status,
+       goals = excluded.goals, assists = excluded.assists,
+       yellow_cards = excluded.yellow_cards, red_cards = excluded.red_cards,
+       status = excluded.status,
        chance_next = excluded.chance_next, news = excluded.news,
        season = excluded.season, updated_at = excluded.updated_at`,
   );
@@ -223,6 +225,8 @@ export async function ingestFplPlayers(
         xgi90 != null ? Math.round(xgi90 * 1000) / 1000 : null,
         Math.round(num(p.goals_scored)),
         Math.round(num(p.assists)),
+        Math.round(num(p.yellow_cards)),
+        Math.round(num(p.red_cards)),
         (p.status ?? 'a').trim() || 'a',
         optionalInt(p.chance_of_playing_next_round),
         (p.news ?? '').trim() || null,

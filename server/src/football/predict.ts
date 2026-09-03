@@ -27,6 +27,8 @@ import {
 import {
   describeAvailability,
   hasSquadData,
+  listLeaguePlayers,
+  listPlayers,
   squadAvailability,
   NEUTRAL_AVAILABILITY,
   type SquadAvailability,
@@ -45,6 +47,11 @@ import { getPromotionGap } from './promotion.ts';
 import { expectedGoalsDc } from './bayes/dixonColes.ts';
 import { getDcParams, dcUsableFor } from './bayes/repo.ts';
 import { postprocess } from '../postprocess/apply.ts';
+import { halfMarkets, HALF_CALIBRATION, HALF_CALIBRATION_N, type HalfMarkets } from './halves.ts';
+import { getHalfParams } from './halvesRepo.ts';
+import { forecastCounts, getTeamCounts, type CountForecast } from './teamCounts.ts';
+import { buildPlayerProp, measurePositionPriors, type PlayerProp } from './props.ts';
+import { liquidityOf, type MarketLiquidity } from '../markets/liquidity.ts';
 import type { FbRecord, LeagueId } from './types.ts';
 
 export const DISCLAIMER =
@@ -188,6 +195,21 @@ export interface FbPostprocess {
   note?: string;
 }
 
+/** Los mercados finos, cada uno con de dónde sale y cuánto se le puede exigir. */
+export interface FbThinMarkets {
+  halves: (HalfMarkets & {
+    /** Error de calibración medido de cada mercado, en pp. Ver halves.ts. */
+    calibration: Record<string, number>;
+    calibrationMatches: number;
+  }) | null;
+  corners: CountForecast | null;
+  cards: CountForecast | null;
+  /** Ordenadas por P(marca o asiste). Vacío en ligas sin datos de jugadores. */
+  players: PlayerProp[];
+  /** Profundidad y umbral de ventaja de cada mercado que se publica aquí. */
+  liquidity: MarketLiquidity[];
+}
+
 export interface FbPrediction {
   league: LeagueId;
   neutral: boolean;
@@ -210,6 +232,16 @@ export interface FbPrediction {
    */
   final: MarketProbabilities1X2;
   postprocess: FbPostprocess;
+  /**
+   * Mercados de menos liquidez: mitades, córners, tarjetas y props de jugador.
+   *
+   * Van juntos y aparte de los principales a propósito. Ninguno tiene la calibración del
+   * 1X2 —las mitades andan por 2-3 pp donde el partido entero está en 1,5— y varios no
+   * los cotiza casi nadie, así que la tarjeta los presenta con su error medido y su
+   * profundidad de mercado al lado. `null` cuando no hay ajuste para ese mercado, que es
+   * distinto de un cero.
+   */
+  thin: FbThinMarkets;
   goals: {
     expectedHome: number;
     expectedAway: number;
@@ -466,6 +498,76 @@ export function buildFootballPrediction(
       };
     }
   }
+
+  // ===========================================================================
+  // MERCADOS DE MENOS LIQUIDEZ
+  // ===========================================================================
+  // Se calculan aquí y no en un endpoint aparte porque salen de los mismos equipos y
+  // las mismas plantillas, y porque separarlos invitaría a que un día dejaran de cuadrar
+  // con la tarjeta principal. Cada bloque devuelve null si no hay ajuste — que es el
+  // caso normal de córners y tarjetas mientras no haya una fuente que los traiga.
+  const halves = (() => {
+    const hp = getHalfParams(league);
+    if (!hp) return null;
+    const m = halfMarkets(hp, homeId, awayId);
+    if (!m) return null;
+    return { ...m, calibration: HALF_CALIBRATION, calibrationMatches: HALF_CALIBRATION_N };
+  })();
+
+  const cornersModel = getTeamCounts(league, 'corners');
+  const cardsModel = getTeamCounts(league, 'cards');
+  const corners = cornersModel ? forecastCounts(cornersModel, homeId, awayId) : null;
+  const cards = cardsModel ? forecastCounts(cardsModel, homeId, awayId) : null;
+
+  const players = (() => {
+    if (!squadsKnown) return [];
+    // Los priors por posición se miden sobre la liga entera, no sobre el equipo: un
+    // equipo son 25 jugadores y con eso no se estima la tasa de una posición.
+    const priors = measurePositionPriors(listLeaguePlayers(league));
+    // Partidos de ESTA temporada, que es contra lo que se mide la titularidad. NO se
+    // usa el histórico de fb_matches: los minutos de la fuente de jugadores son de la
+    // temporada en curso, y dividir por 300 partidos históricos daría una cuota de
+    // titularidad cercana a cero para toda la plantilla. El titular más fijo del equipo
+    // ha empezado casi todos los partidos, así que su `starts` ES el contador de
+    // partidos jugados, y viene del mismo sitio que los minutos.
+    const teamMatches = (teamId: string): number =>
+      Math.max(1, ...listPlayers(league, teamId).map((r) => r.starts ?? 0));
+    const out: PlayerProp[] = [];
+    for (const [teamId, out2] of [
+      [homeId, opts.outHome ?? []],
+      [awayId, opts.outAway ?? []],
+    ] as [string, string[]][]) {
+      const marked = new Set(out2);
+      const squad = listPlayers(league, teamId);
+      for (const row of squad) {
+        // Un jugador que el usuario ha marcado como baja no juega: cero minutos, y por
+        // tanto cero en todas sus props. Es la misma información que ya mueve la λ.
+        const player = marked.has(row.id) ? { ...row, status: 'u', chance_next: 0 } : row;
+        const prop = buildPlayerProp(player, teamMatches(teamId), priors, squad.length);
+        if (prop.minutes.expected < 5) continue;
+        out.push(prop);
+      }
+    }
+    // Los que de verdad se cotizan: los diez más probables de hacer algo.
+    return out.sort((a, b) => b.goalOrAssist - a.goalOrAssist).slice(0, 10);
+  })();
+
+  const thin: FbThinMarkets = {
+    halves,
+    corners,
+    cards,
+    players,
+    liquidity: [
+      ...(halves
+        ? ['descanso-1x2', 'descanso-total', 'gana-una-mitad', 'descanso-final']
+        : []),
+      ...(corners ? ['corners'] : []),
+      ...(cards ? ['tarjetas'] : []),
+      ...(players.length
+        ? ['prop-goleador', 'prop-gol-o-asistencia', 'prop-asistencia', 'prop-tarjeta', 'prop-2-goles']
+        : []),
+    ].map((k) => liquidityOf(k)),
+  };
 
   // ---- head to head ----
   const meetings = getMeetings(league, homeId, awayId);
@@ -764,6 +866,7 @@ export function buildFootballPrediction(
       away: Math.round(finalProbs.away * 100000) / 100000,
     },
     postprocess: pp.applied,
+    thin,
     goals: {
       expectedHome: home.expectedGoals,
       expectedAway: away.expectedGoals,

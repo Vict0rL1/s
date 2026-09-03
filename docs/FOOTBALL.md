@@ -125,6 +125,33 @@ probabilidades del 1X2 con la diferencia en puntos.
 
 ---
 
+### Mercados de menos liquidez
+
+Cuatro familias que la app no tocaba, cada una con **su propia distribución** y no una
+copia reescalada de la del partido. Detalle completo en el README; lo esencial:
+
+**Las dos mitades.** Un Dixon-Coles ajustado sobre los goles de la primera parte y otro
+sobre los de la segunda, con marginales **COM-Poisson** (ν = 1,30, INFRAdispersa) y una ρ
+que en una mitad sale **positiva**. Esto cierra el trabajo que §1 dejaba pendiente:
+el peor mercado pasa de 6,70 pp de error a 3,23 sobre 3.634 partidos de validación.
+Sigue peor que el partido entero (≤1,5 pp), así que cada línea se publica con su error
+medido al lado.
+
+**Props de jugador.** Minutos esperados × tasa por minuto, integrando la *distribución*
+de minutos y no su media — la masa en «no juega» aporta cero. Tasas y titularidad
+encogidas hacia la posición y hacia la media de la plantilla. Solo Premier League.
+
+**Córners y tarjetas.** El modelo está montado, la familia se **mide** (Poisson vs.
+binomial negativa, según la dispersión que salga) y la ingesta lee las columnas
+HC/AC/HY/AY/HR/AR. No hay datos: la fuente que los publica no es alcanzable desde el
+entorno de desarrollo, así que el modelo queda apagado y lo dice.
+
+**Por qué se les exige más.** El umbral de ventaja del 1X2 son 4 pp; en un mercado de
+nicho el margen es del 12-18 % en vez del 4-5 %, así que se exige de 6 a 14 pp según la
+profundidad. Son multiplicadores estructurales, declarados como tales, no medidos.
+
+---
+
 ## 2. La métrica correcta: RPS, no «accuracy»
 
 El *acierto* es casi inútil en fútbol: un modelo que **nunca** prediga empate puede lucir un

@@ -24,6 +24,7 @@ import {
 } from '../ui';
 import ScoreMatrix from './ScoreMatrix';
 import { PostprocessPanel } from '../PostprocessPanel';
+import ThinMarkets from './ThinMarkets';
 import SquadPanel from './SquadPanel';
 import { realMarket } from '../../lib/picks';
 
@@ -505,6 +506,8 @@ function Detail({
           </ul>
         )}
       </Panel>
+
+      <ThinMarkets prediction={prediction} />
 
       <Panel>
         <SectionTitle>De dónde sale este número</SectionTitle>
