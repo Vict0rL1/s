@@ -1,0 +1,319 @@
+import type {
+  DcfResponse,
+  EarningsEvent,
+  EtfComparison,
+  EtfData,
+  EtfRecommendation,
+  FilterSpec,
+  Interpretation,
+  NewsFeed,
+  BacktestResponse,
+  DeepDiveNarrative,
+  DeepDiveReport,
+  Portfolio,
+  PriceAlert,
+  QuantSignal,
+  RuleBacktestResponse,
+  ScanResponse,
+  ScreenerPreset,
+  UniverseInfo,
+  SignalExplanation,
+  SignalResponse,
+  ScreenResult,
+  MultifactorMeta,
+  MultifactorResult,
+  AnalisisResponse,
+  CosteEstimado,
+  EarningsDisponibles,
+  EarningsHistorial,
+  Valoracion,
+  SupuestosEscenario,
+  VigilanciaResponse,
+  MetricasVigilables,
+  DecisionesResponse,
+  DecisionRegistrada,
+  SinTesisResponse,
+  ThesisRecord,
+  TodayResponse,
+  TrackRecord,
+  UniversesMeta,
+  WatchlistItem,
+  FilingsResponse,
+  Financials,
+  Fundamentals,
+  Health,
+  History,
+  HistoryRange,
+  IndexEntry,
+  MacroIndicator,
+  MarketInfo,
+  PeersResponse,
+  Profile,
+  LlmStatus,
+  ProviderUsage,
+  Quote,
+  RiskResponse,
+  ScenarioAssumptions,
+  SectorEntry,
+  ValuationDefaults,
+  YieldCurve,
+} from './types'
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message)
+  }
+}
+
+// Sin límite, una petición que se queda colgada deja la vista cargando para
+// siempre y parece que la app no arranca. Con límite, al menos se puede decir
+// qué pasó. La lista diaria pide un margen mucho mayor: su primera pasada
+// descarga fundamentales de verdad y tarda.
+const DEFAULT_TIMEOUT_MS = 30_000
+export const SCAN_TIMEOUT_MS = 300_000
+
+async function fetchJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let resp: Response
+  try {
+    resp = await fetch(path, { signal: controller.signal })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new ApiError(
+        408,
+        `La petición superó ${Math.round(timeoutMs / 1000)} s sin responder. ` +
+          'Si es la primera carga del día puede seguir trabajando en segundo ' +
+          'plano: espera un poco y vuelve a intentarlo.',
+      )
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+  if (!resp.ok) {
+    let detail = `Error HTTP ${resp.status}`
+    try {
+      const body = await resp.json()
+      if (typeof body.detail === 'string') detail = body.detail
+    } catch {
+      // cuerpo no-JSON: nos quedamos con el mensaje genérico
+    }
+    throw new ApiError(resp.status, detail)
+  }
+  return resp.json() as Promise<T>
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const resp = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!resp.ok) {
+    let detail = `Error HTTP ${resp.status}`
+    try {
+      const data = await resp.json()
+      if (typeof data.detail === 'string') detail = data.detail
+    } catch {
+      // sin cuerpo JSON
+    }
+    throw new ApiError(resp.status, detail)
+  }
+  return resp.json() as Promise<T>
+}
+
+async function deleteJson<T>(path: string): Promise<T> {
+  const resp = await fetch(path, { method: 'DELETE' })
+  if (!resp.ok) {
+    let detail = `Error HTTP ${resp.status}`
+    try {
+      const data = await resp.json()
+      if (typeof data.detail === 'string') detail = data.detail
+    } catch {
+      // sin cuerpo JSON
+    }
+    throw new ApiError(resp.status, detail)
+  }
+  return resp.json() as Promise<T>
+}
+
+export const api = {
+  quote: (symbol: string) => fetchJson<Quote>(`/api/stocks/${symbol}/quote`),
+  profile: (symbol: string) => fetchJson<Profile>(`/api/stocks/${symbol}/profile`),
+  fundamentals: (symbol: string) =>
+    fetchJson<Fundamentals>(`/api/stocks/${symbol}/fundamentals`),
+  history: (symbol: string, range: HistoryRange) =>
+    fetchJson<History>(`/api/stocks/${symbol}/history?range=${range}`),
+  usage: () => fetchJson<ProviderUsage[]>('/api/meta/usage'),
+  llmStatus: () => fetchJson<LlmStatus>('/api/meta/llm'),
+  // Fase 2
+  financials: (symbol: string) => fetchJson<Financials>(`/api/stocks/${symbol}/financials`),
+  health: (symbol: string) => fetchJson<Health>(`/api/stocks/${symbol}/health`),
+  valuationDefaults: (symbol: string) =>
+    fetchJson<ValuationDefaults>(`/api/stocks/${symbol}/valuation/defaults`),
+  dcf: (
+    symbol: string,
+    body: {
+      base_fcf: number
+      years: number
+      net_debt: number
+      shares_outstanding: number | null
+      scenarios: Record<string, ScenarioAssumptions>
+    },
+  ) => postJson<DcfResponse>(`/api/stocks/${symbol}/valuation/dcf`, body),
+  peers: (symbol: string) => fetchJson<PeersResponse>(`/api/stocks/${symbol}/peers`),
+  risk: (symbol: string) => fetchJson<RiskResponse>(`/api/stocks/${symbol}/risk`),
+  filings: (symbol: string) => fetchJson<FilingsResponse>(`/api/stocks/${symbol}/filings`),
+  news: (symbol: string | null, days = 7) =>
+    fetchJson<NewsFeed>(
+      `/api/news?days=${days}${symbol ? `&symbol=${symbol}` : ''}`,
+    ),
+  interpretNews: (body: { headline: string; summary: string | null; symbol: string | null }) =>
+    postJson<Interpretation>('/api/news/interpret', body),
+  // Fase 4
+  etf: (symbol: string) => fetchJson<EtfData>(`/api/etfs/${symbol}`),
+  recomendarEtfs: (symbols: string[]) =>
+    fetchJson<EtfRecommendation>(
+      `/api/etfs/recomendar?symbols=${encodeURIComponent(symbols.join(','))}`,
+    ),
+  compareEtfs: (symbols: string[]) =>
+    fetchJson<EtfComparison>(
+      `/api/etfs/compare/side-by-side?symbols=${encodeURIComponent(symbols.join(','))}`,
+    ),
+  screenerPresets: () =>
+    fetchJson<{ builtin: ScreenerPreset[]; saved: ScreenerPreset[] }>('/api/screener/presets'),
+  savePreset: (body: { name: string; logic_md: string | null; filters: Record<string, FilterSpec> }) =>
+    postJson<{ id: number; name: string }>('/api/screener/presets', body),
+  runScreen: (body: { symbols: string[]; filters: Record<string, FilterSpec> }) =>
+    postJson<ScreenResult>('/api/screener/run', body),
+  multifactorMeta: () =>
+    fetchJson<MultifactorMeta>('/api/screener/multifactor/meta'),
+  runMultifactor: (body: {
+    market: string
+    weights?: Record<string, number>
+    con_historia?: number
+    budget?: number
+  }) => postJson<MultifactorResult>('/api/screener/multifactor', body),
+  earningsDisponibles: (symbol: string) =>
+    fetchJson<EarningsDisponibles>(`/api/earnings/${encodeURIComponent(symbol)}/disponibles`),
+  earningsCoste: (symbol: string, accession?: string) =>
+    fetchJson<CosteEstimado>(
+      `/api/earnings/${encodeURIComponent(symbol)}/coste` +
+        (accession ? `?accession_no=${encodeURIComponent(accession)}` : ''),
+    ),
+  analizarEarnings: (symbol: string, body: { accession_no?: string; comparar?: boolean }) =>
+    postJson<AnalisisResponse>(`/api/earnings/${encodeURIComponent(symbol)}/analizar`, body),
+  earningsHistorial: (symbol: string) =>
+    fetchJson<EarningsHistorial>(`/api/earnings/${encodeURIComponent(symbol)}`),
+  valorar: (
+    symbol: string,
+    body: { escenarios?: Record<string, SupuestosEscenario>; years?: number } = {},
+  ) => postJson<Valoracion>(`/api/valuation/${encodeURIComponent(symbol)}`, body),
+  vigilancia: () => fetchJson<VigilanciaResponse>('/api/theses/vigilancia'),
+  metricasVigilables: () =>
+    fetchJson<MetricasVigilables>('/api/theses/vigilancia/metricas'),
+  addTrigger: (
+    thesisId: number,
+    body: { kind: string; descripcion: string; config: Record<string, unknown> },
+  ) => postJson<{ id: number }>(`/api/theses/${thesisId}/triggers`, body),
+  deleteTrigger: (id: number) =>
+    deleteJson<{ deleted: number }>(`/api/theses/triggers/${id}`),
+  decisiones: (symbol?: string) =>
+    fetchJson<DecisionesResponse>(
+      '/api/theses/decisiones' + (symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''),
+    ),
+  registrarDecision: (body: {
+    symbol: string
+    accion: string
+    razonamiento: string
+    thesis_id?: number | null
+    quantity?: number | null
+  }) => postJson<DecisionRegistrada>('/api/theses/decisiones', body),
+  sinTesis: () => fetchJson<SinTesisResponse>('/api/theses/sin-tesis'),
+  // Fase 5
+  watchlist: () => fetchJson<{ name: string; items: WatchlistItem[] }>('/api/watchlist'),
+  addToWatchlist: (body: { symbol: string; notes: string | null }) =>
+    postJson<{ id: number; symbol: string }>('/api/watchlist', body),
+  removeFromWatchlist: (id: number) => deleteJson<{ deleted: number }>(`/api/watchlist/${id}`),
+  portfolio: () => fetchJson<Portfolio>('/api/portfolio'),
+  addPosition: (body: { symbol: string; quantity: number; cost_basis: number }) =>
+    postJson<{ id: number; symbol: string }>('/api/portfolio/positions', body),
+  closePosition: (id: number, exitPrice: number) =>
+    postJson<{ id: number; realized_pnl: number }>(`/api/portfolio/positions/${id}/close`, {
+      exit_price: exitPrice,
+    }),
+  deletePosition: (id: number) =>
+    deleteJson<{ deleted: number }>(`/api/portfolio/positions/${id}`),
+  alerts: () => fetchJson<{ alerts: PriceAlert[] }>('/api/portfolio/alerts'),
+  addAlert: (body: { symbol: string; op: 'lt' | 'gt'; price: number }) =>
+    postJson<{ id: number }>('/api/portfolio/alerts', body),
+  deleteAlert: (id: number) => deleteJson<{ deleted: number }>(`/api/portfolio/alerts/${id}`),
+  theses: () => fetchJson<{ theses: ThesisRecord[] }>('/api/theses'),
+  createThesis: (body: {
+    symbol: string
+    title: string
+    body_md: string
+    invalidation_criteria: string | null
+  }) => postJson<{ id: number }>('/api/theses', body),
+  deleteThesis: (id: number) => deleteJson<{ deleted: number }>(`/api/theses/${id}`),
+  addScenario: (
+    thesisId: number,
+    body: {
+      kind: 'bear' | 'base' | 'bull'
+      assumptions: Record<string, number>
+      value_mid: number | null
+    },
+  ) =>
+    postJson<{ id: number; price_at_creation: number | null; warning: string | null }>(
+      `/api/theses/${thesisId}/scenarios`,
+      body,
+    ),
+  trackRecord: () => fetchJson<TrackRecord>('/api/theses/track-record'),
+  // Informe de analista
+  deepDive: (symbol: string, years = 10) =>
+    fetchJson<DeepDiveReport>(`/api/deep-dive/${symbol}?history_years=${years}`),
+  deepDiveNarrative: (symbol: string, report: DeepDiveReport) =>
+    postJson<DeepDiveNarrative>(`/api/deep-dive/${symbol}/narrative`, report),
+  // Motor de señales cuantitativas
+  markets: () =>
+    fetchJson<{ markets: MarketInfo[]; meta: UniversesMeta }>('/api/signals/markets'),
+  today: (market: string, refresh = false) =>
+    fetchJson<TodayResponse>(
+      `/api/signals/today?market=${encodeURIComponent(market)}${
+        refresh ? '&refresh=true' : ''
+      }`,
+      SCAN_TIMEOUT_MS,
+    ),
+  universes: () =>
+    fetchJson<{ universes: UniverseInfo[]; note: string }>('/api/signals/universes'),
+  scanUniverse: (universe: string, topN: number) =>
+    postJson<ScanResponse>('/api/signals/scan', { universe, top_n: topN }),
+  scoreSignals: (symbols: string[], useNews: boolean) =>
+    postJson<SignalResponse>('/api/signals/score', { symbols, use_news: useNews }),
+  runBacktest: (symbols: string[], horizonMonths: number, years: number) =>
+    postJson<BacktestResponse>('/api/signals/backtest', {
+      symbols,
+      horizon_months: horizonMonths,
+      years,
+    }),
+  runRuleBacktest: (symbols: string[], years: number, conDivisa: boolean) =>
+    postJson<RuleBacktestResponse>('/api/signals/rule-backtest', {
+      symbols,
+      years,
+      con_divisa: conDivisa,
+    }),
+  explainSignal: (symbol: string, signal: QuantSignal) =>
+    postJson<SignalExplanation>(`/api/signals/${symbol}/explain`, {
+      signal,
+      context: signal.context,
+    }),
+  marketOverview: () => fetchJson<{ indices: IndexEntry[] }>('/api/market/overview'),
+  marketSectors: () => fetchJson<{ sectors: SectorEntry[]; note: string }>('/api/market/sectors'),
+  yieldCurve: () => fetchJson<YieldCurve>('/api/market/yield-curve'),
+  macro: () => fetchJson<{ indicators: MacroIndicator[] }>('/api/market/macro'),
+  calendar: () => fetchJson<{ events: EarningsEvent[] }>('/api/market/calendar'),
+}

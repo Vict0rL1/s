@@ -1,0 +1,311 @@
+symbol,name,sector
+AAPL,Apple Inc.,Information Technology
+ABNB,"Airbnb, Inc. Class A",Communication Services
+ACGL,Arch Capital Group Ltd.,Financials
+ACGLP,Arch Capital Group Ltd.,Financials
+ADBE,Adobe Inc.,Information Technology
+ADI,"Analog Devices, Inc.",Information Technology
+ADP,"Automatic Data Processing, Inc.",Industrials
+ADSK,"Autodesk, Inc.",Information Technology
+AEIS,"Advanced Energy Industries, Inc.",Industrials
+AEP,"American Electric Power Company, Inc.",Utilities
+AFRM,"Affirm Holdings, Inc.",Information Technology
+AGNC,AGNC Investment Corp.,Real Estate
+AGNCM,AGNC Investment Corp.,Real Estate
+AGNCN,AGNC Investment Corp.,Real Estate
+AGNCO,AGNC Investment Corp.,Real Estate
+AGNCP,AGNC Investment Corp.,Real Estate
+AKAM,"Akamai Technologies, Inc.",Information Technology
+ALAB,Astera Labs Inc. Common Stock,Information Technology
+ALGN,"Align Technology, Inc.",Health Care
+ALNY,"Alnylam Pharmaceuticals, Inc.",Health Care
+AMAT,"Applied Materials, Inc.",Information Technology
+AMD,"Advanced Micro Devices, Inc.",Information Technology
+AMGN,Amgen Inc.,Health Care
+AMKR,"Amkor Technology, Inc.",Information Technology
+AMZN,"Amazon.com, Inc.",Consumer Discretionary
+APA,APA Corporation,Energy
+APP,AppLovin Corp. Class A,Information Technology
+ARCC,Ares Capital Corporation,Financials
+ARGX,argenx SE,Health Care
+ARM,Arm Holdings plc American Depositary Shares,Information Technology
+ARVLW,Arrival,Consumer Discretionary
+ARXS,Arxis Inc. Class A Common Stock,Industrials
+ASML,ASML Holding N.V.,Information Technology
+ASND,Ascendis Pharma A/S,Health Care
+ASTS,"AST SpaceMobile, Inc.",Communication Services
+AVAV,"AeroVironment, Inc.",Industrials
+AVGO,Broadcom Inc.,Information Technology
+AXON,Axon Enterprise Inc,Industrials
+AZN,AstraZeneca PLC,Health Care
+BBIO,"BridgeBio Pharma, Inc.",Health Care
+BIDU,"Baidu, Inc.",Communication Services
+BIIB,Biogen Inc.,Health Care
+BILI,Bilibili Inc. Class Z,Communication Services
+BKNG,Booking Holdings Inc.,Consumer Discretionary
+BLDR,"Builders FirstSource, Inc.",Industrials
+BMRN,BioMarin Pharmaceutical Inc.,Health Care
+BNTX,BioNTech SE,Health Care
+BPYPN,Brookfield Property Partners L.P.,Real Estate
+BPYPO,Brookfield Property Partners L.P.,Real Estate
+BPYPP,Brookfield Property Partners L.P.,Real Estate
+BSP,Bending Spoons S.p.A. Ordinary Shares,Communication Services
+BSY,"Bentley Systems, Incorporated Class B",Information Technology
+BTSGU,BrightSpring Health Services Inc. Tangible Equity Unit,Health Care
+CASY,"Casey's General Stores, Inc.",Consumer Staples
+CBRS,Cerebras Systems Inc. Class A Common Stock,Information Technology
+CDNS,"Cadence Design Systems, Inc.",Information Technology
+CDW,CDW Corporation,Information Technology
+CEG,Constellation Energy Corporation Common Stock,Utilities
+CELH,"Celsius Holdings, Inc.",Consumer Staples
+CERN,Cerner Corporation,Health Care
+CG,The Carlyle Group Inc.,Financials
+CHKP,Check Point Software Technologies Ltd.,Information Technology
+CHRW,"C.H. Robinson Worldwide, Inc.",Industrials
+CHTR,"Charter Communications, Inc. Class A",Communication Services
+CINF,Cincinnati Financial Corporation,Financials
+CMCSA,Comcast Corporation,Communication Services
+CME,CME Group Inc.,Financials
+COHR,"Coherent, Inc.",Information Technology
+COIN,"Coinbase Global, Inc. Class A",Information Technology
+COKE,"Coca-Cola Consolidated, Inc.",Consumer Staples
+COST,Costco Wholesale Corporation,Consumer Staples
+CPRT,"Copart, Inc.",Industrials
+CRDO,Credo Technology Group Holding Ltd Ordinary Shares,Information Technology
+CRWD,"CrowdStrike Holdings, Inc. Class A",Information Technology
+CRWV,CoreWeave Inc. Class A Common Stock,Information Technology
+CSCO,"Cisco Systems, Inc.",Information Technology
+CSGP,"CoStar Group, Inc.",Real Estate
+CSX,CSX Corporation,Industrials
+CTAS,Cintas Corporation,Industrials
+CTSH,Cognizant Technology Solutions Corporation Class A,Information Technology
+DDOG,"Datadog, Inc. Class A",Information Technology
+DISCB,"Discovery, Inc.",Communication Services
+DISCK,"Discovery, Inc.",Communication Services
+DKNG,DraftKings Inc.,Consumer Discretionary
+DLTR,"Dollar Tree, Inc.",Consumer Staples
+DRS,Leonardo DRS Inc. Common Stock,Industrials
+DXCM,"DexCom, Inc.",Health Care
+EA,Electronic Arts Inc.,Communication Services
+EBAY,eBay Inc.,Consumer Discretionary
+ELVR,Elevra Lithium Limited,Materials
+ENSG,"The Ensign Group, Inc.",Health Care
+ENTG,"Entegris, Inc.",Information Technology
+EQIX,"Equinix, Inc.",Real Estate
+ERIC,Telefonaktiebolaget LM Ericsson (publ),Information Technology
+ERIE,Erie Indemnity Company,Financials
+ESLT,Elbit Systems Ltd,Industrials
+ETHA,iShares Ethereum Trust ETF,Financials
+EWBC,"East West Bancorp, Inc.",Financials
+EXC,Exelon Corporation,Utilities
+EXE,Expand Energy Corporation Common Stock,Energy
+EXEL,"Exelixis, Inc.",Health Care
+EXPD,"Expeditors International of Washington, Inc.",Industrials
+EXPE,"Expedia Group, Inc.",Consumer Discretionary
+FANG,"Diamondback Energy, Inc.",Energy
+FAST,Fastenal Company,Industrials
+FCNCA,"First Citizens BancShares, Inc.",Financials
+FER,Ferrovial SE Ordinary Shares,Information Technology
+FFIV,"F5, Inc.",Financials
+FISV,Fiserv Inc. Common Stock,Real Estate
+FITB,Fifth Third Bancorp,Financials
+FITBI,Fifth Third Bancorp,Financials
+FITBO,Fifth Third Bancorp,Financials
+FITBP,Fifth Third Bancorp,Financials
+FIVE,"Five Below, Inc.",Consumer Discretionary
+FLEX,Flex Ltd.,Information Technology
+FOX,Fox Corporation Class A,Communication Services
+FOXA,Fox Corporation Class A,Communication Services
+FRVO,Fervo Energy Company Class A common stock,Utilities
+FSLR,"First Solar, Inc.",Information Technology
+FTNT,"Fortinet, Inc.",Information Technology
+FUTU,Futu Holdings Limited,Financials
+GEHC,GE HealthCare Technologies Inc. Common Stock,Information Technology
+GEN,Gen Digital Inc. Common Stock,Information Technology
+GFS,GlobalFoundries Inc. Ordinary Shares,Information Technology
+GH,"Guardant Health, Inc.",Health Care
+GILD,"Gilead Sciences, Inc.",Health Care
+GLPI,"Gaming and Leisure Properties, Inc.",Real Estate
+GMAB,Genmab A/S,Health Care
+GOOG,Alphabet Inc.,Communication Services
+GOOGL,Alphabet Inc.,Communication Services
+GRAB,Grab Holdings Limited Class A Ordinary Shares,Industrials
+GRMN,Garmin Ltd.,Information Technology
+HAS,"Hasbro, Inc.",Consumer Discretionary
+HBAN,Huntington Bancshares Incorporated,Financials
+HBANP,Huntington Bancshares Incorporated,Financials
+HONA,Honeywell Aerospace Inc. Common Stock,Industrials
+HONAV,Honeywell Aerospace Inc. Common Stock When Issued,Industrials
+HOOD,Robinhood Markets Inc. Class A Common Stock,Financials
+HST,"Host Hotels & Resorts, Inc.",Real Estate
+HTHT,H World Group Limited,Consumer Discretionary
+HZNP,Horizon Therapeutics Public Limited Company,Health Care
+IBKR,"Interactive Brokers Group, Inc. Class A",Financials
+IBRX,ImmunityBio Inc,Health Care
+IDXX,"IDEXX Laboratories, Inc.",Health Care
+ILMN,"Illumina, Inc.",Health Care
+INCY,Incyte Corporation,Health Care
+INSM,Insmed Incorporated,Health Care
+INTC,Intel Corporation,Information Technology
+INTU,Intuit Inc.,Information Technology
+IONS,"Ionis Pharmaceuticals, Inc.",Health Care
+IREN,IREN Limited,Information Technology
+ISRG,"Intuitive Surgical, Inc.",Health Care
+JAZZ,Jazz Pharmaceuticals plc,Health Care
+JBHT,"J.B. Hunt Transport Services, Inc.",Industrials
+JD,"JD.com, Inc. Class A",Consumer Discretionary
+JKHY,"Jack Henry & Associates, Inc.",Information Technology
+KDP,Keurig Dr Pepper Inc.,Consumer Staples
+KHC,Kraft Heinz Company,Consumer Staples
+KLAC,KLA Corporation,Information Technology
+KSPI,Joint Stock Company Kaspi.kz American Depository Shares,Financials
+KTOS,"Kratos Defense & Security Solutions, Inc.",Industrials
+LAMR,Lamar Advertising Company,Real Estate
+LECO,"Lincoln Electric Holdings, Inc.",Industrials
+LI,Li Auto Inc.,Consumer Discretionary
+LITE,Lumentum Holdings Inc.,Information Technology
+LNT,Alliant Energy Corporation,Utilities
+LOGI,Logitech International S.A. - Registered Shares,Information Technology
+LPLA,LPL Financial Holdings Inc.,Financials
+LRCX,Lam Research Corporation,Information Technology
+LSCC,Lattice Semiconductor Corporation,Information Technology
+LULU,Lululemon Athletica Inc.,Consumer Discretionary
+MAR,"Marriott International, Inc. Class A",Consumer Discretionary
+MCHP,Microchip Technology Incorporated,Information Technology
+MDB,"MongoDB, Inc. Class A",Information Technology
+MDLN,Medline Inc. Class A Common Stock,Health Care
+MDLZ,"Mondelez International, Inc. Class A",Consumer Staples
+MEDP,"Medpace Holdings, Inc.",Health Care
+MELI,"MercadoLibre, Inc.",Consumer Discretionary
+META,Meta Platforms Inc Class A,Communication Services
+MKSI,"MKS Instruments, Inc.",Information Technology
+MNST,Monster Beverage Corporation,Consumer Staples
+MPWR,"Monolithic Power Systems, Inc.",Information Technology
+MRNA,"Moderna, Inc.",Health Care
+MRVL,"Marvell Technology, Inc.",Information Technology
+MSFT,Microsoft Corporation,Information Technology
+MSTR,Strategy Inc,Information Technology
+MTSI,"MACOM Technology Solutions Holdings, Inc.",Information Technology
+MU,"Micron Technology, Inc.",Information Technology
+NBIS,Nebius Group N.V. Class A Ordinary Shares,Communication Services
+NBIX,"Neurocrine Biosciences, Inc.",Health Care
+NDAQ,"Nasdaq, Inc.",Financials
+NDSN,Nordson Corporation,Industrials
+NFLX,"Netflix, Inc.",Communication Services
+NLOK,NortonLifeLock Inc.,Information Technology
+NTAP,"NetApp, Inc.",Information Technology
+NTES,Netease Inc,Communication Services
+NTNX,"Nutanix, Inc. Class A",Information Technology
+NTRA,"Natera, Inc.",Health Care
+NTRS,Northern Trust Corporation,Financials
+NVDA,NVIDIA Corporation,Information Technology
+NVMI,Nova Measuring Instruments Ltd.,Information Technology
+NWS,News Corporation,Communication Services
+NWSA,News Corporation,Communication Services
+NXPI,NXP Semiconductors NV,Information Technology
+NXT,Nextpower Inc.,Information Technology
+ODFL,"Old Dominion Freight Line, Inc.",Industrials
+OKTA,"Okta, Inc. Class A",Information Technology
+ON,ON Semiconductor Corporation,Information Technology
+ONC,BeOne Medicines AG,Health Care
+ORLY,"O'Reilly Automotive, Inc.",Consumer Discretionary
+PAA,"Plains All American Pipeline, L.P.",Energy
+PAAS,PAN AMERICAN SILVER CORP,Materials
+PAYP,PayPay Corporation American Depository Shares,Real Estate
+PAYX,"Paychex, Inc.",Industrials
+PCAR,PACCAR Inc,Industrials
+PDD,PDD Holdings Inc.,Consumer Discretionary
+PEP,"PepsiCo, Inc.",Consumer Staples
+PFG,"Principal Financial Group, Inc.",Financials
+PNFP,"Pinnacle Financial Partners, Inc.",Financials
+PODD,Insulet Corporation,Health Care
+PPC,Pilgrim's Pride Corporation,Consumer Staples
+PPD,"PPD, Inc.",Health Care
+PRAH,"PRA Health Sciences, Inc.",Health Care
+PSKY,Paramount Skydance Corporation Class B Common Stock,Communication Services
+PTC,PTC Inc.,Information Technology
+PYPL,"PayPal Holdings, Inc.",Financials
+QCOM,QUALCOMM Incorporated,Information Technology
+QXO,QXO Inc. Common Stock,Information Technology
+REG,Regency Centers Corporation,Real Estate
+REGN,"Regeneron Pharmaceuticals, Inc.",Health Care
+RGC,Regencell Bioscience Holdings Limited Ordinary Shares,Health Care
+RGLD,"Royal Gold, Inc.",Materials
+RIVN,Rivian Automotive Inc. Class A Common Stock,Consumer Discretionary
+RKLB,Rocket Lab USA Inc. Common Stock,Industrials
+RMBS,Rambus Inc.,Information Technology
+ROIV,Roivant Sciences Ltd. Common Shares,Health Care
+ROKU,"Roku, Inc. Class A",Communication Services
+ROST,"Ross Stores, Inc.",Consumer Discretionary
+RPRX,Royalty Pharma Plc Class A,Health Care
+RVMD,"Revolution Medicines, Inc.",Health Care
+RYAAY,Ryanair Holdings plc,Industrials
+SAIA,"Saia, Inc.",Industrials
+SATS,EchoStar Corporation,Information Technology
+SBAC,SBA Communications Corporation,Real Estate
+SBNYP,Signature Bank,Financials
+SBUX,Starbucks Corporation,Consumer Discretionary
+SITM,SiTime Corporation,Information Technology
+SKHY,SK hynix Inc. American Depositary Shares,Information Technology
+SLMBP,SLM Corporation,Financials
+SMCI,"Super Micro Computer, Inc.",Information Technology
+SMMT,Summit Therapeutics Inc.,Health Care
+SNDK,Sandisk Corporation Common Stock,Information Technology
+SNPS,"Synopsys, Inc.",Information Technology
+SNY,Sanofi,Health Care
+SOFI,"SoFi Technologies, Inc.",Financials
+SOFIW,"SoFi Technologies, Inc.",Financials
+SPCX,Space Exploration Technologies Corp. Class A Common Stock,Industrials
+SSNC,"SS&C Technologies Holdings, Inc.",Industrials
+STLD,"Steel Dynamics, Inc.",Materials
+STRD,Strategy Inc,Information Technology
+STRK,Strategy Inc,Information Technology
+STRL,"Sterling Construction Company, Inc.",Industrials
+STX,Seagate Technology Holdings PLC,Information Technology
+SWAV,"SHOCKWAVE MEDICAL, INC.",Health Care
+SYM,Symbotic Inc. Class A Common Stock,Financials
+TCOM,Trip.com Group Limited,Consumer Discretionary
+TEAM,Atlassian Corporation Plc,Information Technology
+TER,"Teradyne, Inc.",Information Technology
+TIGO,Millicom International Cellular S.A.,Communication Services
+TLN,Talen Energy Corporation Common Stock,Utilities
+TMUS,"T-Mobile US, Inc.",Communication Services
+TPG,TPG Inc. Class A Common Stock,Financials
+TRMB,Trimble Inc.,Information Technology
+TROW,"T. Rowe Price Group, Inc.",Financials
+TSCO,Tractor Supply Company,Consumer Discretionary
+TSEM,Tower Semiconductor Ltd,Information Technology
+TSLA,"Tesla, Inc.",Consumer Discretionary
+TTMI,"TTM Technologies, Inc.",Information Technology
+TTWO,"Take-Two Interactive Software, Inc.",Financials
+TW,"Tradeweb Markets, Inc. Class A",Financials
+TXN,Texas Instruments Incorporated,Information Technology
+TXRH,"Texas Roadhouse, Inc.",Consumer Discretionary
+UAL,"United Airlines Holdings, Inc.",Industrials
+ULTA,Ulta Beauty Inc.,Consumer Discretionary
+UTHR,United Therapeutics Corporation,Health Care
+VLYPO,Valley National Bancorp,Financials
+VLYPP,Valley National Bancorp,Financials
+VNOM,Viper Energy Partners LP,Energy
+VRSK,"Verisk Analytics, Inc.",Industrials
+VRSN,"VeriSign, Inc.",Information Technology
+VRTX,Vertex Pharmaceuticals Incorporated,Health Care
+VTRS,"Viatris, Inc.",Health Care
+WBD,Warner Bros. Discovery Inc. Series A Common Stock,Communication Services
+WDAY,"Workday, Inc. Class A",Information Technology
+WDC,Western Digital Corporation,Information Technology
+WLTW,Willis Towers Watson Public Limited Company,Financials
+WMG,Warner Music Group Corp. Class A,Communication Services
+WSE,Wise Group plc Class A Ordinary Shares,Real Estate
+WTW,Willis Towers Watson Public Limited Company Ordinary Shares,Financials
+WWD,"Woodward, Inc.",Industrials
+WYNN,"Wynn Resorts, Limited",Consumer Discretionary
+XEL,Xcel Energy Inc.,Utilities
+XLNX,"Xilinx, Inc.",Information Technology
+XP,XP Inc. Class A,Financials
+Z,"Zillow Group, Inc.",Communication Services
+ZBRA,Zebra Technologies Corporation Class A,Information Technology
+ZG,"Zillow Group, Inc.",Communication Services
+ZM,"Zoom Video Communications, Inc.",Communication Services
+ZNGA,Zynga Inc.,Communication Services
+ZS,"Zscaler, Inc.",Information Technology
