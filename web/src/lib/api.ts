@@ -1,0 +1,365 @@
+// Typed client for the Tennis Predictor REST API. Types mirror the server's
+// response shapes (server/src/types.ts + model/predict.ts).
+
+import type { TennisOutcome } from './outcome';
+
+export interface Tour {
+  id: string;
+  name: string;
+  label: string;
+  players: number;
+  matches: number;
+}
+
+export interface Rating {
+  player_id: number;
+  tour: string;
+  overall: number;
+  hard: number;
+  clay: number;
+  grass: number;
+  matches_played: number;
+  last_date: string | null;
+}
+
+export interface RecentMatch {
+  date: string;
+  tourney_name: string | null;
+  surface: string | null;
+  round: string | null;
+  score: string | null;
+  won: boolean;
+  opponent_id: number;
+  opponent_name: string | null;
+}
+
+export interface Player {
+  id: number;
+  tour: string;
+  name: string;
+  hand: string | null;
+  country: string | null;
+  birthdate: string | null;
+}
+
+export interface ServeStats {
+  matches: number;
+  acePct: number | null;
+  dfPct: number | null;
+  firstInPct: number | null;
+  firstWonPct: number | null;
+  secondWonPct: number | null;
+  bpSavedPct: number | null;
+  acesPerMatch: number | null;
+}
+
+export interface SurfaceRecord {
+  wins: number;
+  losses: number;
+}
+
+export interface Profile extends Player {
+  rating: Rating;
+  eloRank: number;
+  ranking: OfficialRanking | null;
+  age: number | null;
+  serve: ServeStats;
+  recent: RecentMatch[];
+}
+
+export interface FormSignal {
+  sampleSize: number;
+  winRate: number;
+  weightedWinRate: number;
+  streak: number;
+  delta: number;
+}
+
+export interface H2HMeeting {
+  date: string;
+  winnerId: number;
+  tourney_name: string | null;
+  surface: string | null;
+  round: string | null;
+  score: string | null;
+}
+
+export interface H2HSignal {
+  total: number;
+  p1Wins: number;
+  p2Wins: number;
+  delta: number;
+  recent: H2HMeeting[];
+}
+
+export interface EffectiveRating {
+  overall: number;
+  surface: number | null;
+  surfaceKey: string | null;
+  effective: number;
+}
+
+export interface MarketProbabilities {
+  odds1: number;
+  odds2: number;
+  implied1: number;
+  implied2: number;
+  overround: number;
+}
+
+export interface MarketComparison {
+  market: MarketProbabilities | null;
+  edge1: number | null;
+  verdict: 'value_p1' | 'value_p2' | 'agree' | 'no_market';
+}
+
+export interface PlayerLite {
+  id: number;
+  name: string;
+  country: string | null;
+}
+
+export interface ReasoningFactor {
+  key: 'rating' | 'form' | 'h2h' | 'layoff';
+  label: string;
+  pointsForP1: number;
+}
+
+export interface Reasoning {
+  factors: ReasoningFactor[];
+  topFactor: ReasoningFactor | null;
+  text: string;
+}
+
+export interface ExpectedScore {
+  favoredSide: 1 | 2 | null;
+  likelySets: string;
+  note: string;
+}
+
+export interface MatchSummary {
+  headline: string;
+  bullets: string[];
+}
+
+export interface ScorelineOutcome {
+  side: 1 | 2;
+  label: string;
+  probability: number;
+}
+
+export interface ScorelineDistribution {
+  bestOf: number;
+  setProb1: number;
+  outcomes: ScorelineOutcome[];
+  decidingSetProbability: number;
+  straightSetsProbability: number;
+}
+
+/** Physical-availability evidence from results (not a medical claim). */
+export interface FitnessSignals {
+  retirements: number;
+  walkovers: number;
+  lastIncidentDate: string | null;
+  daysSinceLastMatch: number | null;
+  matchesLast30Days: number;
+}
+
+export interface TournamentHistory {
+  played: number;
+  wins: number;
+  losses: number;
+  titles: number;
+  finals: number;
+  bestRound: string | null;
+}
+
+/**
+ * How much evidence backs one prediction. Two matches can show the same
+ * percentage while resting on wildly different amounts of data — this is what
+ * distinguishes them.
+ */
+export interface Reliability {
+  level: 'high' | 'medium' | 'low';
+  label: string;
+  /** ± band on the probability, in percentage points. */
+  marginPp: number;
+  range: { low: number; high: number };
+  reasons: string[];
+  effectiveMatches: { p1: number; p2: number };
+}
+
+export interface Prediction {
+  tour: string;
+  surface: string;
+  players: { p1: PlayerLite; p2: PlayerLite };
+  ratings: { p1: EffectiveRating; p2: EffectiveRating };
+  ranks: { p1: number; p2: number };
+  form: { p1: FormSignal; p2: FormSignal };
+  last5: { p1: boolean[]; p2: boolean[] };
+  surfaceRecord: { p1: SurfaceRecord; p2: SurfaceRecord };
+  serve: { p1: ServeStats; p2: ServeStats };
+  h2h: H2HSignal;
+  /** Layoff penalty in Elo points per player (<= 0). */
+  layoff: { p1: number; p2: number };
+  adjustedRatings: { p1: number; p2: number };
+  model: { prob1: number; prob2: number };
+  market: MarketComparison;
+  reasoning: Reasoning;
+  expectedScore: ExpectedScore;
+  scorelines: ScorelineDistribution;
+  fitness: { p1: FitnessSignals; p2: FitnessSignals };
+  tournamentHistory: { p1: TournamentHistory; p2: TournamentHistory } | null;
+  reliability: Reliability;
+  summary: MatchSummary;
+  verdict: {
+    favoredSide: 1 | 2 | null;
+    favoredName: string | null;
+    confidence: 'toss_up' | 'slight' | 'clear' | 'strong';
+    marginPct: number;
+  };
+  disclaimer: string;
+}
+
+export interface UpcomingMatch {
+  id: string;
+  tour: string;
+  tournament_id: string;
+  tournament_name: string;
+  surface: string;
+  commence_time: string;
+  p1_name: string;
+  p2_name: string;
+  p1_id: number | null;
+  p2_id: number | null;
+  p1_odds: number | null;
+  p2_odds: number | null;
+  books: number;
+  source: 'live' | 'fixture';
+}
+
+export interface OfficialRanking {
+  rank: number;
+  points: number | null;
+  date: string;
+}
+
+/** Player facts that don't depend on a complete match history. */
+export interface PlayerInfo {
+  id: number;
+  name: string;
+  country: string | null;
+  hand: string | null;
+  age: number | null;
+  ranking: OfficialRanking | null;
+  matchesInDb: number;
+}
+
+export interface UpcomingWithPrediction {
+  outcome: TennisOutcome;
+  match: UpcomingMatch;
+  prediction: Prediction | null;
+  /** Market-implied probabilities, present only when the model can't predict. */
+  marketOnly?: MarketProbabilities | null;
+  /** Ranking/country/age per player; either side may be null if unknown. */
+  players?: { p1: PlayerInfo | null; p2: PlayerInfo | null };
+}
+
+export interface TournamentInfo {
+  id: string;
+  name: string;
+  category: string;
+  surface: string;
+  tours: string[];
+  hasUpcoming: boolean;
+  upcomingCount: number;
+}
+
+export interface TournamentsResponse {
+  categories: Record<string, string>;
+  tournaments: TournamentInfo[];
+}
+
+export interface Meta {
+  dataSource: string;
+  seededAt: string | null;
+  updatedAt: string | null;
+  oddsSource: string | null;
+  oddsRefreshedAt: string | null;
+  autoRefreshMinutes: number;
+  hasOddsKey: boolean;
+  historyThrough: string | null;
+  counts: { players: number; matches: number; ratings: number; upcoming: number };
+  /** Per-circuit counts. The totals hide a circuit with nothing in it. */
+  byTour?: Record<string, { matches: number; ratings: number }>;
+}
+
+export interface RefreshResult {
+  ok: boolean;
+  source: 'live' | 'fixture';
+  count: number;
+}
+
+/**
+ * The app's measured performance on real matches it predicted BEFORE they were
+ * played — as opposed to the backtest, which measures it on history.
+ */
+export interface TrackRecord {
+  resolved: number;
+  pending: number;
+  accuracy: number | null;
+  brier: number | null;
+  logLoss: number | null;
+  calibration: { label: string; n: number; predicted: number; observed: number }[];
+  byReliability: { level: string; n: number; accuracy: number | null; brier: number | null }[];
+  vsMarket: {
+    n: number;
+    modelAccuracy: number | null;
+    marketAccuracy: number | null;
+    modelBrier: number | null;
+    marketBrier: number | null;
+    disagreements: number;
+    modelRightOnDisagreement: number | null;
+  } | null;
+  recent: {
+    tournament: string | null;
+    surface: string | null;
+    date: string | null;
+    p1: string | null;
+    p2: string | null;
+    prob1: number;
+    winnerIsP1: boolean;
+    hit: boolean;
+    reliability: string | null;
+  }[];
+}
+
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`/api${path}`);
+  if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string): Promise<T> {
+  const res = await fetch(`/api${path}`, { method: 'POST' });
+  if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  meta: () => get<Meta>('/meta'),
+  tours: () => get<Tour[]>('/tours'),
+  tournaments: (tour?: string) =>
+    get<TournamentsResponse>(`/tournaments${tour ? `?tour=${encodeURIComponent(tour)}` : ''}`),
+  upcoming: (tour?: string, tournament?: string) => {
+    const q = new URLSearchParams();
+    if (tour) q.set('tour', tour);
+    if (tournament) q.set('tournament', tournament);
+    return get<UpcomingWithPrediction[]>(`/matches/upcoming?${q.toString()}`);
+  },
+  prediction: (id: string) => get<UpcomingWithPrediction>(`/predictions/${encodeURIComponent(id)}`),
+  profile: (tour: string, id: number) => get<Profile>(`/players/${tour}/${id}`),
+  trackRecord: (tour?: string) =>
+    get<TrackRecord>(`/track-record${tour ? `?tour=${encodeURIComponent(tour)}` : ''}`),
+  refresh: () => post<RefreshResult>('/refresh'),
+};

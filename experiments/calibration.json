@@ -1,0 +1,16 @@
+{
+  "football": {
+    "ece": 0.007202943495946995,
+    "n": 71319,
+    "beatsMarket": null,
+    "vsMarketLogLoss": null,
+    "measuredAt": "2026-09-01T16:16:55.669Z"
+  },
+  "nfl": {
+    "ece": 0.018178692075637076,
+    "n": 6692,
+    "beatsMarket": false,
+    "vsMarketLogLoss": 0.01608971673725701,
+    "measuredAt": "2026-09-01T16:16:55.669Z"
+  }
+}
