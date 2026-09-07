@@ -814,10 +814,139 @@ ves, en vez de fallar en silencio.
 | `npm run study:dc` | **Fútbol**: el Dixon-Coles jerárquico contra el modelo de Elo, con walk-forward, y los mercados que salen de la rejilla (over/under, ambos marcan, hándicap) |
 | `npm run study:postprocess` | **La capa entre el modelo y la pantalla**: ajusta la calibración (Platt vs. isotónica), el peso de la mezcla con el mercado y el encogimiento, y escribe `experiments/postprocess.json` |
 | `npm run study:thin` | **Mercados de menos liquidez**: mide la dispersión de cada conteo, ajusta la ν de la COM-Poisson y puntúa los mercados de mitades contra el modelo anterior |
+| `npm run news` | **El pipeline de noticias**: extrae estructura del texto libre con la API de Anthropic, la empareja con jugadores y mete las ausencias en la λ. `--text "..."` para un texto pegado, `--show` para ver qué le hace a cada partido |
 | `npm run doctor` | Diagnostica por qué la app muestra **cuotas de demostración**: `.env`, clave, cuota y qué hay guardado |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 | `npm run lint` | Lint real (oxlint, solo la categoría **correctness**) |
+
+## El pipeline de noticias (`npm run news`)
+
+Un pipeline que **cambia** las predicciones, no que las decore. Las ausencias entran
+antes de calcular los goles esperados, así que mueven el 1X2, el over/under, la rejilla
+entera y las props del jugador — y la tarjeta enseña cuánto puso cada una, en goles.
+
+```
+texto libre → [Anthropic API] → JSON → emparejar jugador → λ → 1X2, goles, props
+```
+
+### Qué se le pide al modelo, y qué no
+
+El feed de plantillas ya da `status` y `chance_next`, y para el 80 % de las notas eso es
+toda la información que hay. **Esas no pasan por el modelo**: dos reglas resuelven
+«Knee injury - Unknown return date» y «75% chance of playing», y el script dice cuántas
+fueron de cada tipo y cuánto costaron las que sí. Un pipeline que manda todo a un LLM
+funciona igual y cuesta cincuenta veces más; la diferencia no se ve hasta la factura.
+
+El modelo se reserva para lo que ninguna regla lee: una rueda de prensa («no forzaremos
+con Pedri, aunque entrenó ayer»), un once publicado en un tuit, un parte médico escrito
+en prosa. Y para una distinción que el feed **no** hace y que importa mucho:
+
+| texto | feed | modelo |
+|---|---|---|
+| «Has joined Rangers on loan» | `status: u` | `salida`, permanente |
+| «Knee injury - Unknown return» | `status: i` | `lesion`, puede resolverse el jueves |
+
+Las dos son «no disponible» para el feed y son cosas muy distintas para el modelo.
+
+La salida va restringida por **structured outputs** (`output_config.format`), así que el
+JSON valida por construcción: no hay que limpiar vallas de markdown ni reintentar por
+formato. Cada campo del esquema existe porque **cambia una predicción** — no hay
+«titular» ni «resumen», porque enseñar un dato que no se usa hace creer que el modelo lo
+tiene en cuenta.
+
+```bash
+npm run news                                   # las notas del feed
+npm run news -- --text "Guardiola confirmó que Rodri no viaja"
+npm run news -- --show                         # qué le hacen a cada partido
+```
+
+### El emparejado se niega a adivinar
+
+El modelo recibe los nombres de la plantilla y suele acertar, pero «suele» no basta para
+algo que mueve una λ. El emparejado es determinista: exacto, luego apellido, y **si dos
+jugadores comparten apellido no elige** — la noticia se guarda sin jugador, no mueve nada
+y sale marcada. Equivocarse de jugador no da un error, da una predicción distinta que
+nadie puede explicar.
+
+### Cuánto vale una ausencia, en goles
+
+No es una opinión sobre el jugador. Es una cadena en la que cada eslabón está medido:
+
+1. La **cuota** del jugador en el once habitual — qué parte de la producción ofensiva y
+   de los minutos representa.
+2. Los **pesos** de `players.ts` — 0,31 sobre el ataque y 0,38 sobre lo encajado,
+   ajustados sobre tres temporadas de alineaciones reales de la Premier con el rival y el
+   campo controlados. Es la única señal de este proyecto que le ganó al Elo.
+3. La **λ del partido** — el 5 % de ataque no vale lo mismo en un partido de 3,2 goles
+   que en uno de 1,9.
+
+El contrafactual es «¿cuánto valdría esto si **sí** jugara?», no «añádelo a la lista de
+bajas». La primera versión hacía lo segundo y daba **cero para todos**, porque la
+disponibilidad base ya trae aplicadas las bajas que publica la fuente: meter a un
+lesionado en la lista de bajas no cambia nada, ya estaba fuera.
+
+Verificado de punta a punta: marcando de baja a un titular del Arsenal, λ pasa de 2,52 a
+2,44, el 1X2 local de 76,3 % a 74,5 % y el over 2.5 de 64,4 % a 63,5 %.
+
+### Un cero viene con su motivo
+
+En la instantánea de la primera jornada, Saliba y Timber están lesionados y su impacto
+sale **cero** — porque llevan cero minutos, no están en el once observado, y el modelo no
+puede saber que eran titulares. Eso se dice en la tarjeta con esas palabras. Un cero sin
+explicación se lee como «esto da igual», y aquí significa lo contrario.
+
+Ese diagnóstico destapó un bug de verdad: la cuota de ataque salía de `xgi90`, que es
+null por debajo de 270 minutos jugados, así que a principio de temporada el denominador
+era **cero** y toda la maquinaria de ausencias estaba apagada sin avisar. Ahora la cuota
+usa producción acumulada y se encoge hacia la cuota de minutos cuando aún no hay
+producción — el mismo encogimiento que el resto del proyecto.
+
+### Alineación confirmada contra esperada
+
+Hasta una hora antes, quién juega es una suposición. Cuando el club publica el once, la
+**diferencia** con lo esperado es la noticia: un titular fijo que no está en la lista es
+información que ningún parte médico da, porque los clubes no anuncian «hoy descansa».
+Precedencia: lo que marcas tú > el once publicado > los partes.
+
+### Rotación por calendario: avisa, no ajusta
+
+La congestión se midió a nivel de equipo en este proyecto y salió **cero** — jugar cada
+tres días no hace peor al equipo de forma medible, porque el entrenador rota y el equipo
+rotado sigue siendo bueno. Ese resultado se respeta. Lo que sí cambia con el calendario
+es **quién** juega, que es otra cosa: `rotationRisk` ensancha la incertidumbre y avisa,
+y **no toca la λ**. Convertirlo en un ajuste de fuerza sería resucitar por la puerta de
+atrás un efecto que ya se midió y se descartó.
+
+### El reloj: ¿llegaste antes o después que el mercado?
+
+Cada precio observado se guarda con su hora (`fb_odds_history`, solo cuando cambia), y
+cada noticia con la suya. Con las dos series se puede responder la única pregunta que
+importa sobre una noticia:
+
+| veredicto | qué significa |
+|---|---|
+| **noticia-primero** | la línea se movió después. Hubo ventana. |
+| **mercado-primero** | la línea ya se había movido. El mercado lo sabía y llegas tarde. |
+| **sin-movimiento** | el precio no se movió: no importaba, o nadie la vio. |
+
+El segundo caso es el normal y es incómodo, así que se mide y se enseña. Lo que **no** se
+afirma es causalidad: que el precio se mueva después de una noticia no demuestra que se
+moviera por ella, y la tarjeta lo dice.
+
+Umbral de 1,5 puntos de probabilidad para contar como movimiento: por debajo de eso el
+precio se mueve solo, por redondeo y por qué casas están en la muestra. Un umbral más
+bajo llenaría la lista de ruido y siempre habría «un movimiento» cerca de cualquier
+noticia — que es como se fabrica una correlación.
+
+### Sin clave, no hay respaldo silencioso
+
+Sin `ANTHROPIC_API_KEY` la extracción de texto libre no funciona y lo dice. No hay un
+camino de respaldo con expresiones regulares que rellene el hueco: sería peor y
+silencioso, y nadie se enteraría de que la pieza buena lleva un mes sin funcionar. Las
+reglas baratas siguen funcionando, porque esas nunca dependieron del modelo.
+
+---
 
 ## Mercados de menos liquidez (`npm run study:thin`)
 

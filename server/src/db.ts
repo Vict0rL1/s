@@ -349,6 +349,67 @@ function createSchema(d: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_fb_players_team ON fb_players (league, team_id, minutes DESC);
 
+    -- =====================================================================
+    -- NOTICIAS Y MOVIMIENTOS DE LÍNEA
+    -- =====================================================================
+    -- Dos tablas que existen para poder responder UNA pregunta: ¿se movió el precio
+    -- antes o después de que saliera la noticia? Si se mueve antes, el mercado ya lo
+    -- sabía y la noticia no es información para nadie; si se mueve después, hubo una
+    -- ventana. Sin las dos marcas de tiempo esa pregunta no se puede ni plantear.
+    CREATE TABLE IF NOT EXISTS fb_news (
+      id            TEXT PRIMARY KEY,
+      league        TEXT NOT NULL,
+      team_id       TEXT,
+      player_id     TEXT,              -- NULL si no se pudo emparejar con la plantilla
+      player_name   TEXT NOT NULL,     -- como venía en el texto, siempre
+      kind          TEXT NOT NULL,     -- lesion | sancion | rotacion | salida | ...
+      play_prob     REAL NOT NULL,     -- 0..1, probabilidad de que juegue
+      body_part     TEXT,
+      return_date   TEXT,
+      confidence    REAL NOT NULL,
+      quote         TEXT NOT NULL,
+      -- CUÁNDO SE PUBLICÓ la noticia, no cuándo la leímos. Son cosas distintas y la
+      -- segunda no sirve para medir nada: si el script corre cada seis horas, todo
+      -- parecería llegar seis horas tarde.
+      published_at  TEXT NOT NULL,
+      ingested_at   TEXT NOT NULL,
+      source        TEXT NOT NULL,     -- 'fpl' | 'manual' | 'modelo'
+      -- Cómo se extrajo: 'regla' (barato, determinista) o el id del modelo.
+      extractor     TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_fb_news_team ON fb_news (league, team_id, published_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_fb_news_player ON fb_news (league, player_id);
+
+    -- Un precio observado, con su marca de tiempo. Append-only: es una serie, y
+    -- sobrescribir la fila anterior destruiría justamente lo que se quiere medir.
+    CREATE TABLE IF NOT EXISTS fb_odds_history (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      fixture_id    TEXT NOT NULL,
+      league        TEXT NOT NULL,
+      odds_home     REAL,
+      odds_draw     REAL,
+      odds_away     REAL,
+      books         INTEGER,
+      observed_at   TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_fb_odds_hist ON fb_odds_history (fixture_id, observed_at);
+
+    -- Alineaciones: la esperada (la que supone el modelo) y la confirmada (la que
+    -- publica el club una hora antes). Se guardan las DOS, porque la diferencia entre
+    -- ellas es la noticia — y porque comparar la de hoy con lo que el modelo esperaba es
+    -- la única forma de saber si el modelo acierta al suponer quién juega.
+    CREATE TABLE IF NOT EXISTS fb_lineups (
+      fixture_id    TEXT NOT NULL,
+      league        TEXT NOT NULL,
+      team_id       TEXT NOT NULL,
+      player_id     TEXT NOT NULL,
+      -- 'esperada' = la supone el modelo · 'confirmada' = la publicó el club
+      kind          TEXT NOT NULL,
+      starting      INTEGER NOT NULL,  -- 1 titular, 0 suplente o fuera
+      recorded_at   TEXT NOT NULL,
+      PRIMARY KEY (fixture_id, team_id, player_id, kind)
+    );
+
     CREATE TABLE IF NOT EXISTS fb_upcoming (
       id            TEXT PRIMARY KEY,
       league        TEXT NOT NULL,

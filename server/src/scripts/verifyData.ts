@@ -45,6 +45,11 @@ import { applyIsotonic, fitIsotonic } from '../postprocess/isotonic.ts';
 import { blend, disagreement } from '../postprocess/blend.ts';
 import { readPostprocess } from '../postprocess/params.ts';
 import { postprocess } from '../postprocess/apply.ts';
+import { fromStructured, hasApiKey } from '../news/extract.ts';
+import { matchPlayer, recordOdds, lineMoves, newsTiming } from '../news/repo.ts';
+import { absenceImpacts } from '../news/impact.ts';
+import { getSquad } from '../football/players.ts';
+import { rotationRisk } from '../football/lineups.ts';
 import {
   comPoissonForMean,
   comPoissonMean,
@@ -1232,6 +1237,259 @@ function auditStaking(): void {
  * tiene que devolver la media que se le pide, y la binomial negativa tiene que recuperar
  * una dispersión conocida. Si alguna de esas falla, todo lo que salga de ellas da igual.
  */
+/**
+ * El pipeline de noticias, contra propiedades comprobables sin llamar a ningún modelo.
+ *
+ * La extracción con IA no se puede verificar aquí —haría falta una clave y costaría
+ * dinero en cada `verify:data`— así que lo que se comprueba es todo lo demás: el camino
+ * barato de reglas, el emparejado de nombres, la aritmética del impacto y el reloj de la
+ * línea. Que son, además, las piezas cuyo fallo sería silencioso.
+ */
+function auditNews(): void {
+  console.log('\n▸ El pipeline de noticias');
+
+  // --- El camino barato: las reglas leen los formatos reales de la fuente ---
+  const transfer = fromStructured({
+    name: 'Digne',
+    status: 'u',
+    chanceNext: 0,
+    news: 'Has joined Paris Saint-Germain permanently',
+  });
+  check(
+    'noticias: un traspaso se lee como salida, no como lesión',
+    transfer?.kind === 'salida' && transfer.playProbability === 0,
+    `${transfer?.kind}`,
+  );
+  const doubt = fromStructured({
+    name: 'Bruno G.',
+    status: 'd',
+    chanceNext: 75,
+    news: 'Thigh injury - 75% chance of playing',
+  });
+  check(
+    'noticias: un porcentaje del texto se usa tal cual',
+    doubt?.kind === 'lesion' && Math.abs((doubt.playProbability ?? 0) - 0.75) < 1e-9,
+    `${doubt?.playProbability}`,
+  );
+  check(
+    'noticias: y saca la parte del cuerpo',
+    doubt?.bodyPart === 'thigh',
+    `${doubt?.bodyPart}`,
+  );
+  // Lo que las reglas NO entienden tiene que devolver null, que es la señal de que ese
+  // texto sí merece el modelo. Si devolviera algo a medias, el gasto iría al sitio
+  // equivocado y nadie se enteraría.
+  check(
+    'noticias: un texto libre de verdad NO lo resuelve una regla',
+    fromStructured({
+      name: 'Pedri',
+      status: 'a',
+      chanceNext: null,
+      news: 'No forzaremos con él aunque entrenó ayer, dijo el técnico',
+    }) === null,
+  );
+
+  // --- El emparejado se niega a adivinar ---
+  const league = 'epl' as never;
+  const players = getDb()
+    .prepare('SELECT name, team_id FROM fb_players WHERE league = ? LIMIT 400')
+    .all(league) as unknown as { name: string; team_id: string }[];
+  if (players.length > 0) {
+    const one = players[0];
+    check(
+      'noticias: empareja un nombre exacto',
+      matchPlayer(league, one.name)?.name === one.name,
+      `${one.name}`,
+    );
+    check(
+      'noticias: un nombre inventado NO empareja con nadie',
+      matchPlayer(league, 'Jugador Que No Existe') === null,
+    );
+    // Un apellido que comparten dos jugadores es un empate, y un empate se resuelve NO
+    // eligiendo. Es la comprobación que impide que una noticia mueva la predicción del
+    // jugador equivocado, que sería un error invisible.
+    const lastOf = (x: string): string => x.toLowerCase().split(/[ .]/).filter(Boolean).pop() ?? '';
+    const counts = new Map<string, number>();
+    for (const p of players) counts.set(lastOf(p.name), (counts.get(lastOf(p.name)) ?? 0) + 1);
+    const dup = [...counts].find(([, n]) => n > 1);
+    if (dup) {
+      check(
+        'noticias: un apellido ambiguo no se resuelve a ciegas',
+        matchPlayer(league, dup[0]) === null,
+        `«${dup[0]}» lo llevan ${dup[1]} jugadores`,
+      );
+    }
+  }
+
+  // --- El impacto: aritmética, signos y el contrafactual ---
+  const teams = getDb()
+    .prepare('SELECT DISTINCT team_id id FROM fb_players WHERE league = ? LIMIT 1')
+    .all(league) as unknown as { id: string }[];
+  if (teams.length > 0) {
+    const teamId = teams[0].id;
+    const xi = getSquad(league, teamId).filter((p) => p.regular && p.attackShare > 0);
+    check(
+      'noticias: el once observado tiene cuotas de ataque distintas de cero',
+      xi.length > 0,
+      `${xi.length} jugadores con cuota`,
+    );
+    if (xi.length > 0) {
+      const star = [...xi].sort((a, b) => b.attackShare - a.attackShare)[0];
+      const imp = absenceImpacts(league, teamId, 1.5, 1.2, [
+        {
+          playerId: star.id,
+          playerName: star.name,
+          position: star.position,
+          missProbability: 1,
+          kind: 'lesion',
+          quote: 'prueba',
+        },
+      ]);
+      check(
+        'noticias: la ausencia de un titular cuesta goles',
+        imp.length === 1 && imp[0].goalsFor < 0,
+        `${imp[0]?.goalsFor}`,
+      );
+      // Los signos son la mitad del valor: si se invirtieran, una lesión MEJORARÍA al
+      // equipo y la tarjeta lo diría con total naturalidad.
+      check(
+        'noticias: faltar resta ataque y suma goles en contra',
+        imp[0].goalsFor < 0 && imp[0].goalsAgainst > 0 && imp[0].net < 0,
+        `a favor ${imp[0].goalsFor}, en contra ${imp[0].goalsAgainst}`,
+      );
+      // Una duda al 50 % vale la mitad que una baja segura. Es lo que impide que un
+      // «entrenó al margen» mueva lo mismo que una rotura de ligamentos.
+      const half = absenceImpacts(league, teamId, 1.5, 1.2, [
+        {
+          playerId: star.id,
+          playerName: star.name,
+          position: star.position,
+          missProbability: 0.5,
+          kind: 'lesion',
+          quote: 'prueba',
+        },
+      ]);
+      check(
+        'noticias: una duda pesa menos que una baja segura',
+        Math.abs(half[0].goalsFor) < Math.abs(imp[0].goalsFor) * 0.75,
+        `${half[0].goalsFor} contra ${imp[0].goalsFor}`,
+      );
+      // Y el impacto tiene que ESCALAR con la λ: la misma ausencia vale más en un
+      // partido de muchos goles. Sin esto, el número sería una constante disfrazada.
+      const big = absenceImpacts(league, teamId, 3, 1.2, [
+        {
+          playerId: star.id,
+          playerName: star.name,
+          position: star.position,
+          missProbability: 1,
+          kind: 'lesion',
+          quote: 'prueba',
+        },
+      ]);
+      check(
+        'noticias: la misma ausencia cuesta más en un partido de más goles',
+        Math.abs(big[0].goalsFor) > Math.abs(imp[0].goalsFor) * 1.5,
+        `λ 3.0 → ${big[0].goalsFor} · λ 1.5 → ${imp[0].goalsFor}`,
+      );
+      // Un jugador que no está en el once observado da cero, Y LO EXPLICA. El cero sin
+      // explicación se lee como «da igual», que casi nunca es lo que pasa.
+      const fringe = getSquad(league, teamId).find((p) => !p.regular);
+      if (fringe) {
+        const z = absenceImpacts(league, teamId, 1.5, 1.2, [
+          {
+            playerId: fringe.id,
+            playerName: fringe.name,
+            position: fringe.position,
+            missProbability: 1,
+            kind: 'lesion',
+            quote: 'prueba',
+          },
+        ]);
+        check(
+          'noticias: un cero viene con su motivo escrito',
+          z.length === 1 && z[0].net === 0 && !!z[0].zeroReason,
+          `${z[0]?.zeroReason ?? 'sin motivo'}`,
+        );
+      }
+    }
+  }
+
+  // --- El reloj: movimientos de línea y su orden respecto a la noticia ---
+  // Se monta una serie de precios a mano en un partido de prueba: es la única forma de
+  // comprobar el umbral y el orden sin esperar a que el mercado se mueva de verdad.
+  const FIX = '__prueba_reloj__';
+  getDb().prepare('DELETE FROM fb_odds_history WHERE fixture_id = ?').run(FIX);
+  recordOdds(FIX, 'epl', { home: 2.0, draw: 3.4, away: 3.8 }, '2026-01-01T10:00:00.000Z');
+  // Un cambio minúsculo: por debajo del umbral, no es un movimiento.
+  recordOdds(FIX, 'epl', { home: 2.01, draw: 3.4, away: 3.8 }, '2026-01-01T11:00:00.000Z');
+  // Un cambio grande: sí lo es.
+  recordOdds(FIX, 'epl', { home: 1.7, draw: 3.5, away: 4.6 }, '2026-01-01T15:00:00.000Z');
+  const moves = lineMoves(FIX);
+  check(
+    'noticias: el ruido por debajo del umbral no cuenta como movimiento',
+    moves.length === 1,
+    `${moves.length} movimientos`,
+  );
+  check(
+    'noticias: y el movimiento grande sí, con su hora',
+    moves[0]?.observedAt === '2026-01-01T15:00:00.000Z' && moves[0].deltaHome > 0,
+    `${moves[0]?.observedAt} Δ${moves[0]?.deltaHome}`,
+  );
+  const mk = (publishedAt: string) =>
+    ({
+      id: 'x',
+      league: 'epl',
+      teamId: null,
+      playerId: null,
+      playerName: 'Prueba',
+      kind: 'lesion',
+      playProbability: 0,
+      bodyPart: null,
+      returnDate: null,
+      confidence: 1,
+      quote: 'q',
+      publishedAt,
+      ingestedAt: publishedAt,
+      source: 'manual',
+      extractor: 'prueba',
+    }) as never;
+  // Noticia ANTES del movimiento: hubo ventana.
+  const after = newsTiming(FIX, [mk('2026-01-01T13:00:00.000Z')]);
+  check(
+    'noticias: si la noticia precede al movimiento, «noticia-primero»',
+    after[0].verdict === 'noticia-primero' && after[0].minutesToMove === 120,
+    `${after[0].verdict}, ${after[0].minutesToMove} min`,
+  );
+  // Noticia DESPUÉS del movimiento: el mercado ya lo sabía. Es el caso frecuente y el
+  // que hay que poder decir, porque significa llegar tarde.
+  const before = newsTiming(FIX, [mk('2026-01-01T16:00:00.000Z')]);
+  check(
+    'noticias: si el precio se movió antes, «mercado-primero»',
+    before[0].verdict === 'mercado-primero',
+    `${before[0].verdict}`,
+  );
+  getDb().prepare('DELETE FROM fb_odds_history WHERE fixture_id = ?').run(FIX);
+
+  // --- La rotación avisa, no ajusta ---
+  // El efecto del calendario sobre el RENDIMIENTO se midió en momentum.ts y salió cero.
+  // Lo que crece con la congestión es la duda sobre quién juega, no la debilidad del
+  // equipo, y esta comprobación existe para que nadie lo convierta en un ajuste de
+  // fuerza sin darse cuenta.
+  const rr = rotationRisk(league, teams[0]?.id ?? 'x', '20260901');
+  check(
+    'noticias: el riesgo de rotación está entre 0 y 1',
+    rr.risk >= 0 && rr.risk <= 1,
+    `${rr.risk}`,
+  );
+  check('noticias: y viene con su motivo en texto', rr.reason.length > 10);
+
+  console.log(
+    `  ${(getDb().prepare('SELECT COUNT(*) n FROM fb_news').get() as unknown as { n: number }).n} ` +
+      'noticias guardadas · extracción con IA ' +
+      (hasApiKey() ? 'disponible' : 'sin clave (no se prueba aquí)'),
+  );
+}
+
 function auditThinMarkets(): void {
   console.log('\n▸ Mercados de menos liquidez');
 
@@ -2010,6 +2268,7 @@ function main(): void {
   auditDixonColes();
   auditPostprocess();
   auditThinMarkets();
+  auditNews();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

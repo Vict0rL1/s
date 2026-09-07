@@ -52,6 +52,9 @@ import { getHalfParams } from './halvesRepo.ts';
 import { forecastCounts, getTeamCounts, type CountForecast } from './teamCounts.ts';
 import { buildPlayerProp, measurePositionPriors, type PlayerProp } from './props.ts';
 import { liquidityOf, type MarketLiquidity } from '../markets/liquidity.ts';
+import { newsForTeam, newsTiming, type NewsTiming, type StoredNews } from '../news/repo.ts';
+import { absenceImpacts, combinedImpact, type AbsenceImpact } from '../news/impact.ts';
+import { diffLineup, rotationRisk, type LineupDiff, type RotationRisk } from './lineups.ts';
 import type { FbRecord, LeagueId } from './types.ts';
 
 export const DISCLAIMER =
@@ -195,6 +198,31 @@ export interface FbPostprocess {
   note?: string;
 }
 
+/**
+ * Lo que las noticias le han hecho a esta predicción.
+ *
+ * Va con el impacto EN GOLES de cada ausencia, no con una etiqueta de «duda»: el número
+ * es lo que permite comprobar que la capa hace algo y cuánto. Si `applied` está vacío,
+ * la predicción es la misma que sin noticias, y eso también se dice.
+ */
+export interface FbNews {
+  /** Ausencias que YA están dentro de la λ, con su coste en goles. */
+  applied: { home: AbsenceImpact[]; away: AbsenceImpact[] };
+  /** El efecto conjunto. No es la suma de los individuales — ver impact.ts. */
+  combined: {
+    home: ReturnType<typeof combinedImpact>;
+    away: ReturnType<typeof combinedImpact>;
+  };
+  /** Dudas por debajo del umbral: NO mueven la λ, pero se enseñan. */
+  watching: { home: AbsenceImpact[]; away: AbsenceImpact[] };
+  /** Alineación confirmada contra la esperada. Null hasta que el club la publica. */
+  lineup: { home: LineupDiff | null; away: LineupDiff | null };
+  /** Riesgo de rotación por calendario. Ensancha la banda, no mueve la λ. */
+  rotation: { home: RotationRisk | null; away: RotationRisk | null };
+  /** La noticia contra el movimiento de la línea. Vacío sin histórico de cuotas. */
+  timing: NewsTiming[];
+}
+
 /** Los mercados finos, cada uno con de dónde sale y cuánto se le puede exigir. */
 export interface FbThinMarkets {
   halves: (HalfMarkets & {
@@ -208,6 +236,19 @@ export interface FbThinMarkets {
   players: PlayerProp[];
   /** Profundidad y umbral de ventaja de cada mercado que se publica aquí. */
   liquidity: MarketLiquidity[];
+}
+
+/** Convertir una noticia guardada en la forma que consume el cálculo de impacto. */
+function toAbsence(n: StoredNews, squad: { id: string; name: string; position: string }[]) {
+  const p = squad.find((x) => x.id === n.playerId);
+  return {
+    playerId: n.playerId as string,
+    playerName: p?.name ?? n.playerName,
+    position: p?.position ?? '—',
+    missProbability: Math.max(0, Math.min(1, 1 - n.playProbability)),
+    kind: n.kind,
+    quote: n.quote,
+  };
 }
 
 export interface FbPrediction {
@@ -242,6 +283,14 @@ export interface FbPrediction {
    * distinto de un cero.
    */
   thin: FbThinMarkets;
+  /**
+   * Lo que las noticias le han hecho a este número.
+   *
+   * Las ausencias de `news.applied` YA están dentro de `model`, `final`, la rejilla y
+   * las props: entran antes de calcular la λ. Esto es el desglose de cuánto puso cada
+   * una, no un panel aparte.
+   */
+  news: FbNews;
   goals: {
     expectedHome: number;
     expectedAway: number;
@@ -368,7 +417,15 @@ export function buildFootballPrediction(
     oddsDraw: null,
     oddsAway: null,
   },
-  opts: { neutral?: boolean; outHome?: string[]; outAway?: string[] } = {},
+  opts: {
+    neutral?: boolean;
+    outHome?: string[];
+    outAway?: string[];
+    /** Id del partido próximo. Sin él no hay alineación confirmada ni reloj de línea. */
+    fixtureId?: string;
+    /** Fecha del partido (YYYYMMDD), para el riesgo de rotación. */
+    matchDate?: string;
+  } = {},
 ): FbPrediction {
   const neutral = !!opts.neutral;
   const home = buildSide(league, homeId, true);
@@ -380,8 +437,45 @@ export function buildFootballPrediction(
   // outHome/outAway are what the caller adds on top, which is how the user tells
   // the model something it cannot know — the published lineup.
   const squadsKnown = hasSquadData(league);
-  const homeSquad = squadsKnown ? squadAvailability(league, homeId, opts.outHome ?? []) : null;
-  const awaySquad = squadsKnown ? squadAvailability(league, awayId, opts.outAway ?? []) : null;
+
+  // ===========================================================================
+  // LAS NOTICIAS ENTRAN AQUÍ, ANTES DE LA λ
+  // ===========================================================================
+  // Este es el punto que separa «un panel de noticias» de «un pipeline de noticias». Las
+  // ausencias que salen de los partes y las ruedas de prensa se convierten en bajas
+  // ANTES de calcular los goles esperados, así que mueven el 1X2, el over/under, la
+  // rejilla entera y las props del jugador — no solo un recuadro al lado.
+  //
+  // El orden de precedencia, de más fuerte a más débil:
+  //
+  //   1. Lo que marca el USUARIO (outHome/outAway). Si ha visto la alineación, sabe más
+  //      que cualquier fuente y que cualquier modelo.
+  //   2. La alineación CONFIRMADA, cuando el club ya la ha publicado. Un titular que no
+  //      está en ella es baja, lo diga o no un parte médico.
+  //   3. Las NOTICIAS con probabilidad de jugar por debajo del 50 %.
+  //
+  // Por debajo del 50 % y no de cualquier duda: `squadAvailability` trabaja con una
+  // lista binaria de bajas, y meter en ella a todo el que tenga un 20 % de duda
+  // convertiría cualquier parte médico en una catástrofe. Las dudas por debajo de ese
+  // umbral no desaparecen — salen en el desglose con su impacto ponderado.
+  const newsOut = (teamId: string, manual: string[]): { ids: string[]; fromNews: string[]; fromLineup: string[] } => {
+    if (!squadsKnown) return { ids: manual, fromNews: [], fromLineup: [] };
+    const fromNews = newsForTeam(league, teamId)
+      .filter((n) => n.playerId && n.playProbability < 0.5)
+      .map((n) => n.playerId as string);
+    const lineup = opts.fixtureId ? diffLineup(league, opts.fixtureId, teamId) : null;
+    const fromLineup = lineup ? lineup.unexpectedlyOut.map((p) => p.id) : [];
+    return {
+      ids: [...new Set([...manual, ...fromNews, ...fromLineup])],
+      fromNews,
+      fromLineup,
+    };
+  };
+  const homeOut = newsOut(homeId, opts.outHome ?? []);
+  const awayOut = newsOut(awayId, opts.outAway ?? []);
+
+  const homeSquad = squadsKnown ? squadAvailability(league, homeId, homeOut.ids) : null;
+  const awaySquad = squadsKnown ? squadAvailability(league, awayId, awayOut.ids) : null;
 
   // ===========================================================================
   // DE DÓNDE SALEN LAS DOS λ
@@ -550,6 +644,95 @@ export function buildFootballPrediction(
     }
     // Los que de verdad se cotizan: los diez más probables de hacer algo.
     return out.sort((a, b) => b.goalOrAssist - a.goalOrAssist).slice(0, 10);
+  })();
+
+  // ===========================================================================
+  // EL DESGLOSE DE LAS NOTICIAS
+  // ===========================================================================
+  // Se calcula DESPUÉS de la λ a propósito: el impacto de cada ausencia se mide contra
+  // los goles esperados de ESTE partido, así que necesita la λ ya calculada. Que la λ ya
+  // lleve las ausencias dentro no lo invalida — el impacto se calcula quitando y
+  // poniendo al jugador sobre el mismo modelo, así que es la diferencia que ese jugador
+  // representa, no un recuento de lo que ya se aplicó.
+  const news: FbNews = (() => {
+    const empty = { home: [] as AbsenceImpact[], away: [] as AbsenceImpact[] };
+    if (!squadsKnown) {
+      return {
+        applied: empty,
+        combined: {
+          home: { goalsFor: 0, goalsAgainst: 0, net: 0, players: 0 },
+          away: { goalsFor: 0, goalsAgainst: 0, net: 0, players: 0 },
+        },
+        watching: empty,
+        lineup: { home: null, away: null },
+        rotation: { home: null, away: null },
+        timing: [],
+      };
+    }
+    const build = (teamId: string, lamFor: number, lamAgainst: number, manual: string[], fromLineup: string[]) => {
+      const squad = listPlayers(league, teamId);
+      const all = newsForTeam(league, teamId).filter((n) => n.playerId);
+      const newsIds = new Set(all.map((n) => n.playerId as string));
+      const applied = all.filter((n) => n.playProbability < 0.5);
+      const watching = all.filter((n) => n.playProbability >= 0.5 && n.playProbability < 1);
+      // Lo que marca el usuario y lo que dice la alineación publicada TAMBIÉN entran en
+      // el desglose. Sin esto, marcar a alguien de baja movía la predicción y no salía
+      // en ninguna parte por qué: el número cambiaba sin explicación, que es el defecto
+      // que este módulo entero existe para no tener.
+      const extra = [
+        ...manual.filter((id) => !newsIds.has(id)).map((id) => ({ id, source: 'usuario' as const })),
+        ...fromLineup
+          .filter((id) => !newsIds.has(id) && !manual.includes(id))
+          .map((id) => ({ id, source: 'alineacion' as const })),
+      ].map(({ id, source }) => {
+        const p = squad.find((x) => x.id === id);
+        return {
+          playerId: id,
+          playerName: p?.name ?? id,
+          position: p?.position ?? '—',
+          missProbability: 1,
+          kind: source === 'usuario' ? 'marcado por ti' : 'fuera de la alineación publicada',
+          quote:
+            source === 'usuario'
+              ? 'Lo has marcado como baja.'
+              : 'Estaba en el once esperado y no está en el confirmado.',
+          source,
+        };
+      });
+      return {
+        applied: absenceImpacts(league, teamId, lamFor, lamAgainst, [
+          ...applied.map((n) => toAbsence(n, squad)),
+          ...extra,
+        ]),
+        watching: absenceImpacts(league, teamId, lamFor, lamAgainst, watching.map((n) => toAbsence(n, squad))),
+        combined: combinedImpact(
+          league,
+          teamId,
+          lamFor,
+          lamAgainst,
+          all.map((n) => ({ playerId: n.playerId as string, missProbability: 1 - n.playProbability })),
+        ),
+        all,
+      };
+    };
+    const h = build(homeId, lambda.home, lambda.away, opts.outHome ?? [], homeOut.fromLineup);
+    const a = build(awayId, lambda.away, lambda.home, opts.outAway ?? [], awayOut.fromLineup);
+    return {
+      applied: { home: h.applied, away: a.applied },
+      combined: { home: h.combined, away: a.combined },
+      watching: { home: h.watching, away: a.watching },
+      lineup: {
+        home: opts.fixtureId ? diffLineup(league, opts.fixtureId, homeId) : null,
+        away: opts.fixtureId ? diffLineup(league, opts.fixtureId, awayId) : null,
+      },
+      rotation: opts.matchDate
+        ? {
+            home: rotationRisk(league, homeId, opts.matchDate),
+            away: rotationRisk(league, awayId, opts.matchDate),
+          }
+        : { home: null, away: null },
+      timing: opts.fixtureId ? newsTiming(opts.fixtureId, [...h.all, ...a.all]) : [],
+    };
   })();
 
   const thin: FbThinMarkets = {
@@ -867,6 +1050,7 @@ export function buildFootballPrediction(
     },
     postprocess: pp.applied,
     thin,
+    news,
     goals: {
       expectedHome: home.expectedGoals,
       expectedAway: away.expectedGoals,

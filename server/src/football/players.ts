@@ -218,17 +218,42 @@ export function getSquad(league: LeagueId, teamId: string): SquadPlayer[] {
   }
 
   const xi = rows.filter((r) => chosen.has(r.id));
-  const totalAttack = xi.reduce((a, r) => a + Math.max(0, r.xgi90 ?? 0), 0);
   const totalMinutes = xi.reduce((a, r) => a + r.minutes, 0);
+  // Producción ACUMULADA, no por 90. La cuota de ataque es una cantidad relativa —«qué
+  // parte de lo que produce el once es este jugador»— y para eso el total es la respuesta
+  // directa. La tasa por 90 respondía a otra pregunta: alguien con 200 minutos a buen
+  // ritmo no es el 20 % de la producción del equipo.
+  const outputOf = (r: FbPlayerRow): number =>
+    r.xgi90 != null ? Math.max(0, r.xgi90) * (r.minutes / 90) : Math.max(0, r.goals + r.assists);
+  const totalOutput = xi.reduce((a, r) => a + outputOf(r), 0);
+
+  // ===========================================================================
+  // CON POCA PRODUCCIÓN OBSERVADA, LA CUOTA SE APOYA EN LOS MINUTOS
+  // ===========================================================================
+  // La versión anterior dividía por la suma de `xgi90`, que es null por debajo de 270
+  // minutos jugados. En una instantánea de la primera jornada eso hace que el
+  // denominador sea CERO y que la cuota de ataque salga 0,000 para toda la plantilla —
+  // y con ella, el impacto de cualquier ausencia. No era un cero pequeño: era el
+  // mecanismo entero apagado, y sin avisar.
+  //
+  // El arreglo es el mismo encogimiento que usa el resto del proyecto. Con producción
+  // observada suficiente manda ella; sin ninguna, la cuota es la de MINUTOS, que existe
+  // desde el primer partido y es un proxy razonable de la importancia de alguien. El
+  // prior son 8 goles+asistencias del once entero: alrededor de la jornada 4 la
+  // producción ya pesa la mitad.
+  const OUTPUT_PRIOR = 8;
+  const w = totalOutput / (totalOutput + OUTPUT_PRIOR);
 
   return rows.map((r) => {
     const regular = chosen.has(r.id);
     const flag = availabilityFlag(r);
+    const minutesShare = regular && totalMinutes > 0 ? r.minutes / totalMinutes : 0;
+    const outputShare = regular && totalOutput > 0 ? outputOf(r) / totalOutput : 0;
     return {
       ...r,
       regular,
-      attackShare: regular && totalAttack > 0 ? Math.max(0, r.xgi90 ?? 0) / totalAttack : 0,
-      minutesShare: regular && totalMinutes > 0 ? r.minutes / totalMinutes : 0,
+      attackShare: regular ? w * outputShare + (1 - w) * minutesShare : 0,
+      minutesShare,
       flaggedOut: flag.out,
       flagReason: flag.reason,
     };
@@ -264,14 +289,31 @@ export function squadAvailability(
   league: LeagueId,
   teamId: string,
   outIds: string[] = [],
-  opts: { useFlags?: boolean; attackWeight?: number; defenceWeight?: number } = {},
+  opts: {
+    useFlags?: boolean;
+    attackWeight?: number;
+    defenceWeight?: number;
+    /**
+     * Jugadores que se cuentan como DISPONIBLES aunque la fuente los marque fuera.
+     *
+     * Existe para poder preguntar el contrafactual, que es lo único que convierte una
+     * ausencia en un número: «¿cuánto cambiaría esto si ESTE jugador sí jugara?». Sin
+     * esto no se puede, porque la disponibilidad base ya trae aplicadas las bajas que
+     * publica la fuente — meter a un lesionado en `outIds` no cambia nada, ya estaba
+     * fuera, y el impacto salía cero para todo el mundo.
+     */
+    availableIds?: string[];
+  } = {},
 ): SquadAvailability {
   const squad = getSquad(league, teamId);
   if (squad.length === 0) return NEUTRAL_AVAILABILITY;
 
   const useFlags = opts.useFlags !== false;
   const explicit = new Set(outIds);
-  const out = squad.filter((p) => explicit.has(p.id) || (useFlags && p.flaggedOut));
+  const forced = new Set(opts.availableIds ?? []);
+  const out = squad.filter(
+    (p) => !forced.has(p.id) && (explicit.has(p.id) || (useFlags && p.flaggedOut)),
+  );
 
   // Only absences from the regular XI move the number. A fourth-choice full-back
   // being injured is true and irrelevant, and counting it would let a long

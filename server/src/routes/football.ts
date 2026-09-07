@@ -40,7 +40,14 @@ function predictRow(
     row.home_id,
     row.away_id,
     { oddsHome: row.odds_home, oddsDraw: row.odds_draw, oddsAway: row.odds_away },
-    { outHome: out.home, outAway: out.away },
+    {
+      outHome: out.home,
+      outAway: out.away,
+      // Sin el id del partido no hay alineación confirmada ni reloj de línea: las dos
+      // cosas se guardan por partido, no por pareja de equipos.
+      fixtureId: row.id,
+      matchDate: (row.commence_time ?? '').slice(0, 10).replace(/-/g, '') || undefined,
+    },
   );
 }
 

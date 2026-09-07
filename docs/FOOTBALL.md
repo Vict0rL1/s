@@ -152,6 +152,37 @@ profundidad. Son multiplicadores estructurales, declarados como tales, no medido
 
 ---
 
+### El pipeline de noticias
+
+Las ausencias que salen de partes médicos, ruedas de prensa y alineaciones publicadas
+entran **antes** de la λ, así que mueven el 1X2, el over/under, la rejilla y las props —
+no solo un recuadro. Detalle completo en el README; lo esencial:
+
+**La API de Anthropic solo donde aporta.** El feed ya da `status` y `chance_next`, y dos
+reglas resuelven el 80 % de las notas. El modelo se reserva para el texto libre de verdad
+y para una distinción que el feed no hace: «se fue cedido» y «lesionado» son las dos «no
+disponible» para la fuente y son cosas muy distintas para el modelo. Salida restringida
+por structured outputs, así que valida por construcción.
+
+**Cada ausencia vale goles.** Cuota del jugador × pesos medidos (0,31 ataque / 0,38
+defensa, de §4) × λ del partido. El contrafactual es «¿y si sí jugara?», no «añádelo a
+las bajas» — esto último da cero, porque la base ya trae las bajas de la fuente aplicadas.
+
+**Un cero se explica.** Un lesionado de larga duración lleva cero minutos, no está en el
+once observado y su impacto sale cero: la tarjeta lo dice con esas palabras en vez de
+dejar un cero mudo.
+
+**La rotación avisa, no ajusta.** El efecto del calendario sobre el rendimiento se midió
+en §«Tres cosas que se probaron y NO funcionaron» y salió cero. Lo que crece con la
+congestión es la duda sobre quién juega, así que ensancha la incertidumbre y deja la λ
+donde estaba.
+
+**El reloj.** Cada precio se guarda con su hora y cada noticia con la suya, así que se
+puede decir si la línea se movió antes o después de que la noticia fuera pública. Lo
+normal es antes — el mercado ya lo sabía — y eso se enseña en vez de suponerlo.
+
+---
+
 ## 2. La métrica correcta: RPS, no «accuracy»
 
 El *acierto* es casi inútil en fútbol: un modelo que **nunca** prediga empate puede lucir un

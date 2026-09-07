@@ -25,6 +25,7 @@ import {
 import ScoreMatrix from './ScoreMatrix';
 import { PostprocessPanel } from '../PostprocessPanel';
 import ThinMarkets from './ThinMarkets';
+import NewsPanel from './NewsPanel';
 import SquadPanel from './SquadPanel';
 import { realMarket } from '../../lib/picks';
 
@@ -409,6 +410,8 @@ function Detail({
           </div>
         </Panel>
       )}
+
+      <NewsPanel prediction={prediction} />
 
       <ScoreMatrix prediction={prediction} />
 

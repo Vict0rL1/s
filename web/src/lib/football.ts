@@ -107,6 +107,53 @@ export interface FbMarketLiquidity {
   note: string;
 }
 
+export interface FbAbsenceImpact {
+  playerId: string;
+  playerName: string;
+  position: string;
+  attackShare: number;
+  minutesShare: number;
+  missProbability: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  net: number;
+  kind: string;
+  quote: string;
+  source: 'noticia' | 'usuario' | 'alineacion';
+  /** Por qué el impacto es cero, cuando lo es. */
+  zeroReason: string | null;
+}
+
+export interface FbCombinedImpact {
+  goalsFor: number;
+  goalsAgainst: number;
+  net: number;
+  players: number;
+}
+
+export interface FbNewsTiming {
+  newsId: string;
+  playerName: string;
+  publishedAt: string;
+  minutesToMove: number | null;
+  verdict: 'mercado-primero' | 'noticia-primero' | 'sin-movimiento' | 'sin-datos';
+}
+
+export interface FbNews {
+  applied: { home: FbAbsenceImpact[]; away: FbAbsenceImpact[] };
+  combined: { home: FbCombinedImpact; away: FbCombinedImpact };
+  watching: { home: FbAbsenceImpact[]; away: FbAbsenceImpact[] };
+  lineup: {
+    home: { unexpectedlyOut: { id: string; name: string }[]; matched: number; confirmedAt: string } | null;
+    away: { unexpectedlyOut: { id: string; name: string }[]; matched: number; confirmedAt: string } | null;
+  };
+  rotation: {
+    home: { recentMatches: number; daysRest: number | null; risk: number; reason: string } | null;
+    away: { recentMatches: number; daysRest: number | null; risk: number; reason: string } | null;
+  };
+  timing: FbNewsTiming[];
+}
+
 export interface FbThinMarkets {
   halves:
     | {
@@ -156,6 +203,8 @@ export interface FbPrediction {
   postprocess: FbPostprocess;
   /** Mercados de menos liquidez. `null` en ligas sin ningún ajuste para ellos. */
   thin: FbThinMarkets | null;
+  /** Lo que las noticias le han hecho a este número. */
+  news: FbNews | null;
   goals: {
     expectedHome: number; expectedAway: number; expectedTotal: number;
     over25: number; under25: number; bothScore: number;

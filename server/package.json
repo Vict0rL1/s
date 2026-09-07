@@ -37,9 +37,11 @@
     "staking": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/staking.ts",
     "study:dc": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/_dc.ts",
     "study:postprocess": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/_postprocess.ts",
-    "study:thin": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/_thin.ts"
+    "study:thin": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/_thin.ts",
+    "news": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/news.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.123.0",
     "@fastify/cors": "^10.0.1",
     "csv-parse": "^5.6.0",
     "dotenv": "^16.4.7",

@@ -17,6 +17,7 @@ import { buildTeamIndex as buildNameIndex, resolveTeam as resolve } from './team
 import { secondDivisionOf } from '../promotion.ts';
 import { seedPromotedTeam } from '../ratings.ts';
 import type { LeagueId } from '../types.ts';
+import { recordOdds } from '../../news/repo.ts';
 
 const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
 
@@ -269,6 +270,20 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
           new Date().toISOString(),
           // Last arg feeds the CASE guard above: the row may only be re-timed
           // while its stored kick-off is still in the future.
+          nowIso,
+        );
+        // El histórico de precios: una fila por cada CAMBIO, con su hora. Es lo único
+        // que permite después preguntar si la línea se movió antes o después de que
+        // saliera una noticia — sin esta serie, esa pregunta no tiene datos.
+        recordOdds(
+          ev.id,
+          league,
+          {
+            home: ev.price[ev.home] ?? null,
+            draw: drawPrice,
+            away: ev.price[ev.away] ?? null,
+            books: ev.books,
+          },
           nowIso,
         );
         count++;

@@ -49,7 +49,8 @@
     "staking": "npm run staking --workspace server --",
     "study:dc": "npm run study:dc --workspace server --",
     "study:postprocess": "npm run study:postprocess --workspace server --",
-    "study:thin": "npm run study:thin --workspace server --"
+    "study:thin": "npm run study:thin --workspace server --",
+    "news": "npm run news --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
