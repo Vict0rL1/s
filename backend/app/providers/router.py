@@ -30,6 +30,9 @@ from app.providers.base import (
 DEFAULT_SOURCE_ORDER: dict[str, list[str]] = {
     "quote": ["finnhub", "twelvedata", "yfinance"],
     "price_history": ["twelvedata", "yfinance"],
+    # Solo yfinance: Twelve Data recorta a 5000 barras sin avisar, y un recorte
+    # silencioso aquí se leería como «esta posición no existía en 2008».
+    "price_history_long": ["yfinance"],
     "profile": ["finnhub", "yfinance"],
     "fundamentals": ["finnhub", "yfinance"],
     "financials": ["edgar"],

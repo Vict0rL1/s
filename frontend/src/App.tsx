@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { Layout } from './components/Layout'
+import { CarteraPage } from './pages/CarteraPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { EarningsPage } from './pages/EarningsPage'
 import { EtfsPage } from './pages/EtfsPage'
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/valoracion" element={<ValuationPage />} />
           <Route path="/senales" element={<SignalsPage />} />
           <Route path="/portafolio" element={<PortfolioPage />} />
+          <Route path="/cartera" element={<CarteraPage />} />
           <Route path="/tesis" element={<ThesesPage />} />
           <Route path="/vigilancia" element={<VigilanciaPage />} />
           <Route path="*" element={<Navigate to="/hoy" replace />} />

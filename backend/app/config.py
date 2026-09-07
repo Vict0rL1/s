@@ -47,6 +47,10 @@ CACHE_TTL_SECONDS: dict[str, int] = {
     # ir hasta 6 h desfasada intradía, y para un sistema que decide sobre
     # cierres eso no cambia ninguna decisión.
     "price_history": 6 * 3600,
+    # Histórico completo (décadas) para el estrés de cartera. Lo que pasó en
+    # 2008 no se revisa: solo cambia la cola. Refrescarlo cada 6 h como el
+    # corto sería descargar veinte años para enterarse del cierre de ayer.
+    "price_history_long": 7 * 24 * 3600,
     "profile": 24 * 3600,        # perfil de la empresa: 24 h
     "fundamentals": 24 * 3600,   # fundamentales TTM: 24 h
     "financials": 24 * 3600,     # estados financieros EDGAR: 24 h

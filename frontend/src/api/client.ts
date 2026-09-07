@@ -52,6 +52,7 @@ import type {
   LlmStatus,
   ProviderUsage,
   Quote,
+  RiesgoDeCartera,
   RiskResponse,
   ScenarioAssumptions,
   SectorEntry,
@@ -240,6 +241,10 @@ export const api = {
     postJson<{ id: number; symbol: string }>('/api/watchlist', body),
   removeFromWatchlist: (id: number) => deleteJson<{ deleted: number }>(`/api/watchlist/${id}`),
   portfolio: () => fetchJson<Portfolio>('/api/portfolio'),
+  // `descargar` distingue abrir la pantalla (que puede costar una llamada por
+  // posición, una vez por semana) de refrescarla (que no debería costar nada).
+  riesgoDeCartera: (descargar: boolean) =>
+    fetchJson<RiesgoDeCartera>(`/api/portfolio/riesgo?descargar=${descargar}`),
   addPosition: (body: { symbol: string; quantity: number; cost_basis: number }) =>
     postJson<{ id: number; symbol: string }>('/api/portfolio/positions', body),
   closePosition: (id: number, exitPrice: number) =>

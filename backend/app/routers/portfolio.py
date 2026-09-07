@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.analysis import portfolio_risk
 from app.analysis.decision import _stop_pct
 from app.analysis.risk_budget import presupuesto_de_riesgo
 from app.analysis.sizing import con_caida_esperada, peor_ventana
@@ -24,6 +25,7 @@ from app.cache.cache import MarketDataService
 from app.db.engine import get_session
 from app.db.models import (
     Alert,
+    ApiCache,
     Instrument,
     Position,
     Thesis,
@@ -424,6 +426,282 @@ class AlertCreate(BaseModel):
     symbol: str = Field(min_length=1, max_length=12)
     op: str = Field(pattern="^(lt|gt)$")
     price: float = Field(gt=0)
+
+
+def _historico_largo(
+    service: MarketDataService, symbols: list[str], descargar: bool
+) -> tuple[dict[str, list[tuple[date, float]]], dict[str, str]]:
+    """Décadas de cierres por posición, para estresar contra crisis reales.
+
+    Con `descargar=False` solo se lee la caché: la vista se abre al instante y
+    no gasta una llamada por posición. Con True se rellena lo que falte, que es
+    lo que hace falta la primera vez — sin histórico de 2008 el estrés de 2008
+    no existe, y decir «no hay datos» cuando nunca se pidieron sería mentir por
+    omisión.
+    """
+    cache = getattr(service, "cache", None)
+    series: dict[str, list[tuple[date, float]]] = {}
+    fallos: dict[str, str] = {}
+    for symbol in symbols:
+        payload = cache.get("price_history_long", {"symbol": symbol}) if cache else None
+        if payload is None and descargar:
+            try:
+                payload = service.get("price_history_long", symbol=symbol)
+            except (DataNotFoundError, AllProvidersFailedError) as exc:
+                fallos[symbol] = str(exc)[:200]
+                continue
+        if payload is None:
+            fallos[symbol] = "sin histórico largo en caché (pide una descarga)"
+            continue
+        puntos = []
+        for bar in payload.get("bars") or []:
+            cierre, ts = bar.get("close"), bar.get("ts")
+            if not cierre or not ts:
+                continue
+            try:
+                puntos.append((date.fromisoformat(str(ts)[:10]), float(cierre)))
+            except ValueError:
+                continue
+        if puntos:
+            series[symbol] = sorted(puntos)
+        else:
+            fallos[symbol] = "el histórico llegó vacío"
+    return series, fallos
+
+
+def _composicion_de_etfs(
+    service: MarketDataService, symbols: list[str], descargar: bool
+) -> dict[str, list[dict]]:
+    """Los ~10 mayores holdings de cada posición que resulte ser un ETF.
+
+    No hace falta saber de antemano cuáles lo son: el proveedor responde
+    `DataNotFoundError` para lo que no es un fondo, y eso ya es la respuesta.
+    """
+    cache = getattr(service, "cache", None)
+    salida: dict[str, list[dict]] = {}
+    for symbol in symbols:
+        payload = cache.get("etf_data", {"symbol": symbol}) if cache else None
+        if payload is None and descargar:
+            try:
+                payload = service.get("etf_data", symbol=symbol)
+            except (DataNotFoundError, AllProvidersFailedError):
+                continue  # no es un ETF, o no se pudo leer: ambas cosas son «nada»
+        if payload and payload.get("top_holdings"):
+            salida[symbol] = payload["top_holdings"]
+    return salida
+
+
+def _paises(
+    service: MarketDataService, symbols: list[str], descargar: bool
+) -> dict[str, str | None]:
+    """País de DOMICILIO de cada posición, que no es lo mismo que su geografía.
+
+    Es el dato que dan las fuentes gratuitas y hay que tomarlo por lo que es:
+    Apple está domiciliada en Estados Unidos y vende medio mundo. Sirve para ver
+    riesgo regulatorio y de divisa, no exposición económica.
+    """
+    cache = getattr(service, "cache", None)
+    salida: dict[str, str | None] = {}
+    for symbol in symbols:
+        payload = cache.get("profile", {"symbol": symbol}) if cache else None
+        if payload is None and descargar:
+            try:
+                payload = service.get("profile", symbol=symbol)
+            except (DataNotFoundError, AllProvidersFailedError):
+                payload = None
+        salida[symbol] = (payload or {}).get("country")
+    return salida
+
+
+def _caracteristicas(service: MarketDataService, symbols: list[str]) -> dict[str, dict]:
+    """Fundamentales YA cacheados. Nunca descarga: si no están, no están.
+
+    Estas medias son lo accesorio de esta pantalla —lo importante son la
+    correlación y el estrés— y no justifican una llamada por posición.
+    """
+    cache = getattr(service, "cache", None)
+    if cache is None:
+        return {}
+    salida = {}
+    for symbol in symbols:
+        payload = cache.get("fundamentals", {"symbol": symbol})
+        if payload and payload.get("metrics"):
+            salida[symbol] = payload["metrics"]
+    return salida
+
+
+MIN_UNIVERSO_REFERENCIA = 20
+
+
+def _referencia_del_universo(session: Session) -> tuple[dict | None, int]:
+    """Media de las empresas cuyos fundamentales están descargados y vigentes.
+
+    Es la única referencia honesta que hay a coste cero: las empresas que el
+    barrido de mercado ha mirado de verdad. No es «el mercado» —está sesgada
+    hacia lo que hayas escaneado— y por eso se devuelve también cuántas son:
+    compararse contra tres empresas no es compararse contra nada.
+
+    Se leen las filas de caché directamente porque `CacheStore.get` exige saber
+    los parámetros exactos, y aquí la pregunta es justo la contraria: qué hay.
+    """
+    filas = (
+        session.execute(
+            select(ApiCache.payload).where(
+                ApiCache.endpoint == "fundamentals",
+                ApiCache.expires_at > datetime.now(timezone.utc),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    acumulado: dict[str, list[float]] = {}
+    empresas = 0
+    for payload in filas:
+        metricas = (payload or {}).get("metrics") or {}
+        if not metricas:
+            continue
+        empresas += 1
+        for campo in ("pe_ttm", "roe", "revenue_growth_5y", "market_cap"):
+            valor = metricas.get(campo)
+            if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+                acumulado.setdefault(campo, []).append(float(valor))
+    if empresas < MIN_UNIVERSO_REFERENCIA:
+        return None, empresas
+    # Mediana y no media: un P/E de 900 de una empresa que casi no gana dinero
+    # arrastra la media del universo entero y deja la comparación sin sentido.
+    referencia = {}
+    for campo, valores in acumulado.items():
+        if len(valores) < MIN_UNIVERSO_REFERENCIA:
+            continue
+        ordenados = sorted(valores)
+        medio = len(ordenados) // 2
+        referencia[campo] = (
+            ordenados[medio]
+            if len(ordenados) % 2
+            else (ordenados[medio - 1] + ordenados[medio]) / 2
+        )
+    return (referencia or None), empresas
+
+
+@router.get("/riesgo")
+def riesgo_de_cartera(
+    descargar: bool = True,
+    session: Session = Depends(get_session),
+    service: MarketDataService = Depends(get_service),
+):
+    """La cartera como UNA cosa, no como ocho análisis de ocho empresas.
+
+    Cuatro preguntas que no se contestan mirando posición por posición: cuánto
+    se mueven juntas, dónde está concentrado el dinero de verdad, cuántas
+    apuestas independientes hay detrás de N tickers, y qué le habría pasado a
+    esta mezcla en 2008, 2020 y 2022.
+    """
+    rows = session.execute(
+        select(Position, Instrument)
+        .join(Instrument, Position.instrument_id == Instrument.id)
+        .where(Position.closed_at.is_(None))
+    ).all()
+    if not rows:
+        return {
+            "disponible": False,
+            "nota": "No hay posiciones abiertas que analizar como cartera.",
+        }
+
+    crudas = []
+    for position, instrument in rows:
+        price = _price_of(service, instrument.symbol)
+        crudas.append(
+            {
+                "symbol": instrument.symbol,
+                "name": instrument.name,
+                "sector": instrument.sector,
+                "market_value": price * position.quantity if price else None,
+            }
+        )
+
+    con_precio = [p for p in crudas if p["market_value"]]
+    total = sum(p["market_value"] for p in con_precio)
+    sin_precio = [p["symbol"] for p in crudas if not p["market_value"]]
+    if not con_precio or not total:
+        return {
+            "disponible": False,
+            "nota": (
+                "Ninguna posición tiene precio ahora mismo, así que no hay pesos "
+                "con los que ponderar nada."
+            ),
+        }
+
+    symbols = [p["symbol"] for p in con_precio]
+    paises = _paises(service, symbols, descargar)
+    fundamentales = _caracteristicas(service, symbols)
+    holdings = _composicion_de_etfs(service, symbols, descargar)
+
+    posiciones = []
+    for p in con_precio:
+        m = fundamentales.get(p["symbol"], {})
+        posiciones.append(
+            {
+                "symbol": p["symbol"],
+                "name": p["name"],
+                "peso_pct": p["market_value"] / total * 100,
+                "sector": p["sector"],
+                "pais": paises.get(p["symbol"]),
+                "es_etf": p["symbol"] in holdings,
+                "pe_ttm": m.get("pe_ttm"),
+                "roe": m.get("roe"),
+                "revenue_growth_5y": m.get("revenue_growth_5y"),
+                "market_cap": m.get("market_cap"),
+                "vol_anual_pct": None,  # se rellena abajo con el histórico largo
+            }
+        )
+
+    referencia, n_universo = _referencia_del_universo(session)
+    series, fallos = _historico_largo(service, symbols, descargar)
+
+    # La volatilidad sale del histórico que ya está descargado para el estrés.
+    # Sin esto la fila de low_volatility salía siempre vacía, teniendo el dato.
+    for p in posiciones:
+        puntos = series.get(p["symbol"])
+        if puntos:
+            p["vol_anual_pct"] = portfolio_risk.volatilidad_anualizada(puntos)
+
+    correlacion = portfolio_risk.matriz_correlacion(
+        portfolio_risk.ventana_reciente(series)
+    )
+    concentracion = (
+        portfolio_risk.numero_efectivo_de_apuestas(correlacion["matriz"])
+        if correlacion.get("disponible")
+        else {
+            "disponible": False,
+            "nota": "Sin matriz de correlación no se puede contar apuestas independientes.",
+        }
+    )
+
+    return {
+        "disponible": True,
+        "posiciones": posiciones,
+        "sin_precio": sin_precio,
+        "sin_historico": fallos,
+        "correlacion": correlacion,
+        "concentracion": concentracion,
+        "look_through": portfolio_risk.look_through_etf(posiciones, holdings),
+        "exposicion": {
+            "sector": portfolio_risk.exposicion(posiciones, "sector", "Sin sector"),
+            "geografia": portfolio_risk.exposicion(posiciones, "pais", "Sin país"),
+        },
+        "caracteristicas": {
+            **portfolio_risk.caracteristicas_ponderadas(posiciones, referencia),
+            "universo_empresas": n_universo,
+        },
+        "estres": portfolio_risk.estres_en_crisis(posiciones, series),
+        "nota_geografia": (
+            "La geografía es el país de DOMICILIO, que es el dato que dan las "
+            "fuentes gratuitas. Apple está domiciliada en Estados Unidos y vende "
+            "medio mundo: esto mide riesgo regulatorio y de divisa, no exposición "
+            "económica real."
+        ),
+    }
 
 
 @router.get("/alerts")

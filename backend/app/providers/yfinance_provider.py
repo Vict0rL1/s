@@ -125,7 +125,15 @@ def _clean(value):
 class YFinanceProvider(DataProvider):
     name = "yfinance"
     capabilities = frozenset(
-        {"quote", "price_history", "profile", "fundamentals", "etf_data", "bulk_momentum"}
+        {
+            "quote",
+            "price_history",
+            "price_history_long",
+            "profile",
+            "fundamentals",
+            "etf_data",
+            "bulk_momentum",
+        }
     )
 
     def _ticker(self, symbol: str):
@@ -184,6 +192,35 @@ class YFinanceProvider(DataProvider):
             "interval": interval,
             "currency": None,
             "bars": bars,
+            "as_of": iso_utc(),
+        }
+
+    def get_price_history_long(self, symbol: str) -> dict:
+        """Todo el histórico diario que exista, sin recortar.
+
+        `get_price_history` ya pide `period="max"` y luego recorta: aquí
+        simplemente no se recorta. Para una empresa cotizada desde los noventa
+        son ~8000 barras; para una salida a bolsa de 2021, unas 1000 — y esa
+        diferencia ES el dato que necesita el estrés de 2008.
+        """
+        try:
+            df = self._ticker(symbol).history(
+                period="max", interval="1d", auto_adjust=True
+            )
+        except Exception as exc:
+            raise ProviderError(f"yfinance: {exc}") from exc
+        if df is None or df.empty:
+            raise DataNotFoundError(f"yfinance: sin histórico para {symbol}")
+        bars = [
+            {"ts": ts.to_pydatetime().strftime("%Y-%m-%d"), "close": float(row["Close"])}
+            for ts, row in df.iterrows()
+        ]
+        return {
+            "symbol": symbol.upper(),
+            "interval": "1day",
+            "bars": bars,
+            "desde": bars[0]["ts"],
+            "hasta": bars[-1]["ts"],
             "as_of": iso_utc(),
         }
 

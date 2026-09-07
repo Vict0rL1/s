@@ -74,6 +74,19 @@ class DataProvider(ABC):
         con las barras en orden cronológico ascendente."""
         raise NotSupportedError(f"{self.name} no ofrece histórico de precios")
 
+    def get_price_history_long(self, symbol: str) -> dict:
+        """TODO el histórico diario disponible, sin recortar. Misma forma que
+        `get_price_history`.
+
+        Existe aparte y no como `get_price_history(outputsize=6000)` por dos
+        razones. Una: Twelve Data recorta a 5000 barras EN SILENCIO, y un
+        recorte silencioso en el estrés de 2008 se lee como «no hay datos de
+        2008» cuando la verdad es «pediste más de lo que da». Dos: los precios
+        de 2008 no cambian nunca, así que esto se cachea durante días mientras
+        el histórico corto sigue refrescándose cada seis horas.
+        """
+        raise NotSupportedError(f"{self.name} no ofrece histórico largo")
+
     def get_profile(self, symbol: str) -> dict:
         """-> {symbol, name, exchange, sector, industry, market_cap, currency}"""
         raise NotSupportedError(f"{self.name} no ofrece perfil de empresa")
@@ -126,6 +139,7 @@ class DataProvider(ABC):
         dispatch = {
             "quote": self.get_quote,
             "price_history": self.get_price_history,
+            "price_history_long": self.get_price_history_long,
             "profile": self.get_profile,
             "fundamentals": self.get_fundamentals,
             "financials": self.get_financials,

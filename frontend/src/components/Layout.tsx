@@ -29,6 +29,7 @@ const NAV_GROUPS: { title: string | null; items: { to: string; label: string }[]
     title: 'Mío',
     items: [
       { to: '/portafolio', label: 'Portafolio' },
+      { to: '/cartera', label: 'Cartera' },
       { to: '/tesis', label: 'Tesis' },
       { to: '/vigilancia', label: 'Vigilancia' },
     ],

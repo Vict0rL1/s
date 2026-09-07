@@ -1516,3 +1516,118 @@ export interface SinTesisResponse {
   watchlist_total: number
   nota: string
 }
+
+// --- Análisis de cartera (no de acciones sueltas) ---------------------------
+
+export interface PosicionDeCartera {
+  symbol: string
+  name: string | null
+  peso_pct: number
+  sector: string | null
+  pais: string | null
+  es_etf: boolean
+  pe_ttm: number | null
+  roe: number | null
+  revenue_growth_5y: number | null
+  market_cap: number | null
+}
+
+export interface MatrizCorrelacion {
+  disponible: boolean
+  nota: string
+  simbolos?: string[]
+  matriz?: number[][]
+  parejas?: { a: string; b: string; corr: number }[]
+  observaciones?: number
+  desde?: string
+  hasta?: string
+  limita_la_ventana?: string | null
+  descartadas?: string[]
+  media?: number | null
+}
+
+export interface ConcentracionReal {
+  disponible: boolean
+  nota: string
+  posiciones?: number
+  apuestas_efectivas?: number
+  primera_componente_pct?: number
+  autovalores_pct?: number[]
+}
+
+export interface LookThroughEtf {
+  disponible: boolean
+  nota: string
+  exposicion: {
+    symbol: string
+    directa_pct: number
+    indirecta_pct: number
+    total_pct: number
+    via: { etf: string; peso_en_etf_pct: number }[]
+  }[]
+  etfs_analizados: string[]
+  etfs_sin_composicion: string[]
+  cobertura_por_etf_pct: Record<string, number>
+  duplicadas: string[]
+}
+
+export interface ExposicionAgregada {
+  filas: { etiqueta: string; peso_pct: number }[]
+  desconocido_pct: number
+  concentracion_mayor_pct: number | null
+  nota: string
+}
+
+export interface CaracteristicaPonderada {
+  campo: string
+  etiqueta: string
+  familia: string
+  valor: number | null
+  cobertura_pct: number
+  motivo?: string
+  referencia?: number
+  desvio_pct?: number | null
+  inclinacion?: 'hacia' | 'en contra'
+}
+
+export interface CaracteristicasDeCartera {
+  caracteristicas: CaracteristicaPonderada[]
+  con_referencia: boolean
+  universo_empresas: number
+  nota: string
+}
+
+export interface CrisisEstresada {
+  clave: string
+  nombre: string
+  desde: string
+  hasta: string
+  caida_sp500_pct: number
+  contexto: string
+  medible: boolean
+  nota: string
+  cobertura_pct: number
+  sin_datos: string[]
+  retorno_pct?: number
+  max_drawdown_pct?: number
+  vs_sp500_pp?: number
+  posiciones_cubiertas?: number
+  posiciones_totales?: number
+  sesiones?: number
+  titular_fiable?: boolean
+}
+
+export interface RiesgoDeCartera {
+  disponible: boolean
+  nota?: string
+  posiciones?: PosicionDeCartera[]
+  sin_precio?: string[]
+  sin_historico?: Record<string, string>
+  correlacion?: MatrizCorrelacion
+  concentracion?: ConcentracionReal
+  look_through?: LookThroughEtf
+  exposicion?: { sector: ExposicionAgregada; geografia: ExposicionAgregada }
+  caracteristicas?: CaracteristicasDeCartera
+  estres?: { crisis: CrisisEstresada[]; medibles: number; aviso_general: string }
+  nota_geografia?: string
+}

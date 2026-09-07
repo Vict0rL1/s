@@ -757,6 +757,147 @@ alguien la va a buscar. Lo que no se hizo fue rellenar el hueco del 200 en la
 paleta: `border-amber-200` se usa en catorce sitios como borde visible de las
 cajas de aviso, y oscurecerlo habría roto los catorce para arreglar dos.
 
+## Del análisis por acción al análisis de cartera
+
+Ocho análisis buenos de ocho empresas no son un análisis de la cartera. La
+diferencia no es de agregación: es que las preguntas cambian. «¿Es buena esta
+empresa?» y «¿qué le pasa a mi dinero si el mercado se gira?» se contestan con
+datos distintos, y la segunda no se deduce de ocho respuestas a la primera.
+
+El motor está en `backend/app/analysis/portfolio_risk.py`, lo sirve
+`GET /api/portfolio/riesgo` y se ve en **Cartera**.
+
+### Concentración real: cuántas apuestas hay detrás de N tickers
+
+La concentración que se suele mirar —el peso de la posición más grande— no ve
+el problema de fondo: diez posiciones distintas que se mueven juntas son una
+sola apuesta repartida en diez recibos.
+
+Se descompone la matriz de correlación en componentes principales. La primera
+componente es el movimiento común de esa cartera, y su peso en la varianza
+total dice cuánto del riesgo viene de una sola cosa. El número efectivo de
+apuestas es el inverso del índice de concentración de los autovalores:
+
+| Cartera | Apuestas efectivas |
+|---|---|
+| 10 posiciones idénticas | 1,0 |
+| 10 posiciones independientes | 10,0 |
+| 7 posiciones tecnológicas reales | ~2 |
+
+Ese tercer caso es el que importa: la pantalla dice «tienes 7 posiciones pero
+se comportan como 2,1 apuestas independientes», y añade que diversificar más
+dentro de ese mismo movimiento no reduce el riesgo, solo reparte el mismo
+riesgo en más recibos.
+
+### Lo que llevas dentro de los ETFs
+
+Si tienes AAPL y también un ETF del S&P 500, tu exposición a Apple no es la de
+tu posición en AAPL: es esa más el ~7 % de Apple que lleva dentro el fondo. Es
+la forma más común de estar más concentrado de lo que uno cree, y no aparece
+en ninguna tabla de posiciones.
+
+El límite se declara en pantalla: la fuente gratuita solo da los ~10 mayores
+holdings de cada fondo, así que se informa **qué fracción del fondo cubre esa
+lectura** (para un S&P 500, en torno al 28 %). Lo que encuentra es real; lo que
+no sale puede existir igual, y un «no hay solape» sobre el 28 % del fondo no es
+un «no hay solape».
+
+### Correlación: sobre retornos, y con la ventana declarada
+
+Dos decisiones que cambian el resultado:
+
+- **Retornos, no precios.** Dos precios que suben correlacionan siempre. Hay un
+  test que construye dos series con tendencia común y ruido independiente:
+  correlación de precios > 0,8, correlación de retornos < 0,15. Si el módulo
+  devolviera lo primero, el test falla.
+- **Dos años, no todo el histórico.** La correlación media de 2006-2024 es un
+  promedio de regímenes que ya no existen. El estrés sí usa todo el histórico:
+  son preguntas distintas sobre los mismos precios.
+
+Y se dice **qué posición limita la ventana**: si una se compró el año pasado,
+todas se correlacionan sobre ese año, y quien mira la tabla cree estar viendo
+la correlación de siempre.
+
+### Estrés en 2008, 2020 y 2022: la honestidad está en el denominador
+
+Fechas fijas y públicas (pico a valle del S&P 500), escritas en el código y no
+calculadas sobre la propia cartera, que es como se eligen ventanas que quedan
+bonitas.
+
+Si de siete posiciones solo seis existían en 2008, el resultado **no es «tu
+cartera en 2008»**: es «las seis que existían, reponderadas». Se calcula igual
+—es informativo— pero:
+
+- se reporta qué fracción del dinero cubre y **qué posiciones faltan, por
+  nombre**;
+- por debajo del 50 % de cobertura se apaga el titular (`titular_fiable:
+  false`) y la nota dice que el número «describe esa parte reponderada, NO tu
+  cartera»;
+- sin ningún histórico se dice «no es que aguantara bien: es que no existía o
+  no hay datos», porque el silencio se lee como buena noticia.
+
+Se simula con **mezcla constante**, rebalanceando a los pesos de hoy, por la
+misma razón que en `sizing.peor_ventana`: comprar y no tocar deja que los pesos
+deriven y acaba midiendo otra cartera. Un test lo fija con un caso donde las
+dos formas dan 0 % y +50 % sobre los mismos precios.
+
+Y el aviso que va debajo de las tres tarjetas, porque ninguna aritmética lo
+arregla: aplicar los pesos de HOY al pasado responde «cómo se habría comportado
+esta mezcla», no «cómo se habría comportado tu cartera» — en 2008 no la tenías,
+y la empresa de hoy tampoco es la de entonces: Apple en 2008 vendía iPods.
+
+### Lo que estas medias NO son
+
+La tabla de características (P/E, ROE, crecimiento, volatilidad, tamaño) es una
+media ponderada por peso, y se dice así. **No es una exposición a factores en
+el sentido académico** —para eso hace falta una regresión contra series de
+factores que las fuentes gratuitas no dan— y llamarla así sería vestir de rigor
+una media ponderada.
+
+La comparación mezcla dos estadísticos a propósito: **media ponderada** para la
+cartera (dónde está tu dinero) contra **mediana** del universo escaneado (la
+empresa típica). Un P/E de 900 de una empresa que casi no gana dinero arrastra
+cualquier media, y la mediana es lo que sobrevive a eso. La referencia solo
+aparece con al menos 20 empresas escaneadas: compararse contra tres no es
+compararse contra nada.
+
+La geografía es el **país de domicilio**, que es el dato que dan las fuentes
+gratuitas. Apple está domiciliada en Estados Unidos y vende medio mundo: eso
+mide riesgo regulatorio y de divisa, no exposición económica. Lo que no tiene
+dato va a su propio cubo y se cuenta, en vez de repartirse entre los demás:
+si un 15 % de la cartera no tiene sector conocido, esa es la información.
+
+### El histórico largo va por su propio camino
+
+Llegar a 2008 pide décadas de cierres, y eso no cabe en el `price_history` de
+252 barras. Se añadió un tipo de dato aparte, `price_history_long`, por dos
+razones concretas:
+
+- **Twelve Data recorta a 5000 barras en silencio** (`min(outputsize, 5000)`).
+  Un recorte silencioso aquí se leería como «esta posición no existía en 2008»,
+  que es exactamente la mentira que el resto de esta sección intenta evitar. El
+  tipo nuevo solo lo sirve yfinance.
+- **Los precios de 2008 no cambian nunca.** TTL de 7 días, contra las 6 horas
+  del histórico corto: refrescar veinte años cada seis horas sería descargar dos
+  décadas para enterarse del cierre de ayer.
+
+La primera carga de la pantalla **no descarga nada** (`descargar=false`): dice
+qué posiciones no tienen histórico y ofrece un botón. La volatilidad anualizada
+sale de ese mismo histórico ya descargado, sin gastar una llamada más.
+
+### Un bug que solo se vio mirando la pantalla
+
+`ventana_reciente` recorta todas las series a 504 sesiones, así que después del
+recorte **todas miden lo mismo**. El `min(series, key=len)` que buscaba «la
+posición con menos histórico» devolvía entonces una cualquiera, y la pantalla
+llegó a decir que AAPL —con veinte años de datos— era la que recortaba la
+ventana. Acusaba a una posición inocente de un recorte que no existía.
+
+Los tests no lo cogieron porque usaban fixtures con longitudes deliberadamente
+distintas, que es justo el caso en que la función acierta. Ahora solo se señala
+a una posición si de verdad es más corta que las demás, y si no, se dice que
+todas cubren la ventana entera. Hay un test para el caso del empate.
+
 ## Módulo de valoración: rangos, no precios objetivo
 
 Cuatro piezas que contestan preguntas distintas, y ninguna basta sola.
