@@ -16,7 +16,7 @@
 
 import { getDb } from '../db.ts';
 import { footballConfig } from '../config.ts';
-import { extractNews, fromStructured, hasApiKey } from '../news/extract.ts';
+import { extractNews, fromStructured, hasApiKey, NewsExtractionError } from '../news/extract.ts';
 import { storeNews, newsForTeam, newsTiming, matchPlayer } from '../news/repo.ts';
 import { buildFootballPrediction } from '../football/predict.ts';
 import { rotationRisk } from '../football/lineups.ts';
@@ -260,6 +260,19 @@ function show(league: LeagueId): void {
 }
 
 const main = async (): Promise<void> => {
+  try {
+    await run();
+  } catch (err) {
+    if (err instanceof NewsExtractionError) {
+      console.log(`\n  ✗ ${err.message}`);
+      process.exitCode = 1;
+      return;
+    }
+    throw err;
+  }
+};
+
+const run = async (): Promise<void> => {
   if (args.text) {
     await ingestFreeText(args.text);
   } else if (!args.show) {
