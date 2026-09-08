@@ -17,6 +17,7 @@ import {
 import { BREAK_EVEN_COLOR, LOSS_COLOR, PROFIT_COLOR } from '../../lib/theme';
 import { dayLabel, groupByDay } from '../../lib/format';
 import { Card, DayHeading, EmptyState, Panel, SectionTitle, SkeletonList, pillClass } from '../ui';
+import LatencyPanel from '../LatencyPanel';
 import BetCalendar from './BetCalendar';
 import ProfitCurve from './ProfitCurve';
 import BetForm from './BetForm';
@@ -93,6 +94,11 @@ export default function BetsDashboard() {
           </button>
         )}
       </div>
+
+      {/* El escáner de líneas vive aquí y no en cada deporte: la latencia es una sola
+          para toda la app —un único ciclo de sondeo alimenta las cinco pestañas— y
+          repetir el mismo panel cinco veces sugeriría cinco mediciones distintas. */}
+      <LatencyPanel />
 
       {(adding || editing) && (
         <BetForm

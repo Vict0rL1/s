@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { reportClientLatency } from '../../lib/liveOdds';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
   EmptySlate,
@@ -41,6 +42,13 @@ export default function FootballDashboard() {
   // should see the whole schedule.
   const [day, setDay] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
+  /**
+   * Cuándo llegó la respuesta, para poder medir lo que tarda en verse.
+   *
+   * Un ref y no un estado a propósito: guardarlo en estado provocaría el render que
+   * intenta medir, y la medición se perseguiría a sí misma.
+   */
+  const arrivedAt = useRef<number | null>(null);
 
   useEffect(() => {
     Promise.all([fbApi.meta(), fbApi.leagues()])
@@ -84,12 +92,38 @@ export default function FootballDashboard() {
     setLoading(true);
     Promise.all([fbApi.upcoming(league), fbApi.power(league, 40)])
       .then(([f, p]) => {
+        // La etapa «cliente» empieza AQUÍ: la respuesta ya está parseada y lo que queda
+        // por medir es lo único que el servidor no puede ver — React montando las
+        // tarjetas y el navegador pintándolas.
+        arrivedAt.current = performance.now();
         setFixtures(f);
         setPower(p.teams);
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [league]);
+
+  /**
+   * Cerrar la medición cuando esto está de verdad en pantalla.
+   *
+   * Dos `requestAnimationFrame` anidados y no uno: el primero se ejecuta ANTES del
+   * pintado del fotograma, así que medir ahí daría un número sistemáticamente corto. El
+   * segundo corre ya en el fotograma siguiente, o sea después de que el usuario lo haya
+   * visto — que es lo que dice medir esta etapa.
+   */
+  useEffect(() => {
+    const started = arrivedAt.current;
+    if (started == null) return;
+    arrivedAt.current = null;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => reportClientLatency(started, { sport: 'football' }));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [fixtures]);
 
   async function handleRefresh() {
     setRefreshing(true);

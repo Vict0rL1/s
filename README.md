@@ -815,6 +815,7 @@ ves, en vez de fallar en silencio.
 | `npm run study:postprocess` | **La capa entre el modelo y la pantalla**: ajusta la calibración (Platt vs. isotónica), el peso de la mezcla con el mercado y el encogimiento, y escribe `experiments/postprocess.json` |
 | `npm run study:thin` | **Mercados de menos liquidez**: mide la dispersión de cada conteo, ajusta la ν de la COM-Poisson y puntúa los mercados de mitades contra el modelo anterior |
 | `npm run news` | **El pipeline de noticias**: extrae estructura del texto libre con la API de Anthropic, la empareja con jugadores y mete las ausencias en la λ. `--text "..."` para un texto pegado, `--show` para ver qué le hace a cada partido |
+| `npm run latency` | **La latencia del escáner de líneas**, desglosada por etapa con su dueño, contra un objetivo declarado. `--probe` comprueba si el proveedor ofrece WebSocket; `--prune N` poda las muestras viejas |
 | `npm run doctor` | Diagnostica por qué la app muestra **cuotas de demostración**: `.env`, clave, cuota y qué hay guardado |
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
@@ -945,6 +946,170 @@ Sin `ANTHROPIC_API_KEY` la extracción de texto libre no funciona y lo dice. No 
 camino de respaldo con expresiones regulares que rellene el hueco: sería peor y
 silencioso, y nadie se enteraría de que la pieza buena lleva un mes sin funcionar. Las
 reglas baratas siguen funcionando, porque esas nunca dependieron del modelo.
+
+---
+
+## La latencia del escáner de líneas (`npm run latency`)
+
+Desde que una casa publica un precio hasta que ese precio está **en tu pantalla** hay
+cuatro tramos, y tienen dueños distintos. El total no es lo accionable: si tardas ocho
+minutos, lo único que sirve es saber en cuál de los cuatro se van.
+
+| etapa | qué mide | de quién depende | presupuesto |
+| --- | --- | --- | --- |
+| `origen` | la casa publica → lo tenemos | la cadencia de sondeo y el proveedor | 4 min |
+| `ingesta` | lo tenemos → escrito en la base | nuestro parseo y la base de datos | 30 s |
+| `servidor` | petición → respuesta | nuestra API | 20 s |
+| `cliente` | respuesta → pintado | la red y el navegador | 10 s |
+
+El objetivo por defecto es **5 minutos de punta a punta (p95)**, y el reparto es
+deliberadamente asimétrico: cuatro de los cinco minutos se le dan a `origen` porque ahí
+es donde se va el tiempo de verdad. `LATENCY_TARGET_MS` lo cambia y escala el reparto
+manteniendo las proporciones.
+
+Se publica el **p95**, no la media. Un ciclo que va bien 95 veces y se atasca 5 tiene una
+media estupenda y una experiencia mala, porque lo que se nota es justo el atasco.
+
+### Lo primero que dice el informe es si el objetivo es alcanzable
+
+Antes de reprocharle nada a nadie:
+
+```
+OBJETIVO: 5.0 min de punta a punta (p95)
+  ✗ NO alcanzable con este plan. 500 peticiones al mes y 10 por ciclo dan un sondeo
+    cada 864 min, o sea 432.0 min de antigüedad media frente a los 4.0 del objetivo.
+    Se arregla con un plan mayor o sondeando menos deportes, no con código.
+```
+
+La antigüedad media de un precio es **medio intervalo de sondeo** —llega uniformemente
+entre dos sondeos— así que el plan pone un suelo que ninguna optimización de parseo
+toca. Con el plan gratuito de 500 peticiones al mes, un precio tiene de media unas seis
+horas cuando lo lees. Decirlo primero evita mandar a alguien a optimizar serialización
+cuando lo que hay que cambiar es el plan.
+
+### La medición incompleta NO se pinta como un aprobado
+
+Cuando falta alguna etapa por medir, el total está por debajo del real. Un `✓` verde ahí
+sería una afirmación falsa, así que se marca con `·` y se dice qué falta:
+
+```
+· Medición incompleta: sin muestras de origen, cliente. El total de abajo es solo
+  de las etapas que sí se han medido.
+```
+
+Lo mismo con las etapas vacías: salen con `n = 0` y su motivo, nunca con un `0 ms` que
+se lee como un récord.
+
+Y la suma de cuatro p95 **no** es el p95 del total —solo sería cierto si se atascaran
+siempre a la vez— así que sale pesimista. Se usa así a propósito: para un objetivo de
+latencia, equivocarse por el lado pesimista es el lado correcto.
+
+### Sondeo adaptativo: el mismo presupuesto, gastado donde importa
+
+«Adaptativo» suena a «sondear más a menudo», y con The Odds API eso es imposible: son
+500 peticiones **al mes** en el plan gratuito, y sondear un solo deporte cada minuto
+serían 43.200. No hay ajuste fino que arregle un factor de ochenta y seis.
+
+Lo que sí se puede es gastar el mismo presupuesto de forma **desigual**. Antes todo se
+refrescaba cada N minutos: el partido que empieza en veinte minutos y la línea que lleva
+tres días quieta recibían la misma atención. Ahora pesan dos cosas:
+
+* **Proximidad** — decae como una exponencial con semivida de 6 horas. La forma importa
+  más que los números: un escalón («a partir de 60 minutos, ×10») produce un salto de
+  gasto en un instante y deja el minuto 61 tan desatendido como el día anterior.
+* **Movimiento reciente** — cada cambio observado en 24 h multiplica, con techo en ×4
+  para que una línea histérica no se lleve el presupuesto entero.
+
+Con techo también en la aceleración total (×8): gastar hoy ocho veces más es no tener
+nada mañana.
+
+**La unidad es el deporte, no el partido**, y hay que decirlo: la API cobra por petición
+y devuelve todos los eventos del deporte en cada una, así que «refrescar solo este
+partido» no existe. Pedir el Arsenal–City trae la Premier entera y cuesta lo mismo. Lo
+que se decide es cada cuánto se pide cada deporte, y la urgencia se hereda del partido
+que más la tenga.
+
+Las dos heurísticas son **declaradas, no medidas**, y se dicen así. Lo que sí es
+aritmética es la consecuencia: repartir un presupuesto fijo proporcionalmente a un peso
+baja la latencia media ponderada por ese peso.
+
+### WebSocket: se comprueba, no se supone
+
+El encargo decía «WebSockets donde la API los ofrezca». La parte importante de esa frase
+es *donde los ofrezca*, y averiguarlo es trabajo. Escribir un cliente contra un endpoint
+que no existe es peor que no escribirlo: parece que la funcionalidad está y falla en
+tiempo de ejecución en casa de otro.
+
+Así que hay una **sonda** que intenta el apretón de manos de verdad y guarda lo que
+contestó el servidor, con fecha:
+
+```
+npm run latency -- --probe
+```
+
+Un 404 o un 400 son respuestas válidas: dicen que ahí no hay WebSocket. Lo que **no** es
+una respuesta es un error de conexión, y la sonda distingue las dos cosas — «no pude
+comprobarlo» no es «no hay». La primera versión no distinguía y concluía «el proveedor
+es REST» desde una red que simplemente no alcanzaba el host: un veredicto sobre la red
+disfrazado de veredicto sobre la API.
+
+Entre **nuestro** servidor y el navegador sí hay empuje, y es SSE en vez de WebSocket
+porque el tráfico va en una sola dirección, el navegador reconecta solo y atraviesa
+proxies que a veces rompen los WebSocket. Son dos tramos distintos del recorrido y no
+hay que confundirlos.
+
+### Alertas push, no refresco manual
+
+Un precio puede llevar veinte minutos escrito en la base y no estar en la pantalla
+porque nadie ha pulsado nada. Ese hueco **cuenta igual que el resto**: si el objetivo es
+cinco minutos, un refresco manual lo hace inalcanzable por definición, porque depende de
+que alguien mire.
+
+El panel de la pestaña 🎟️ escucha el canal y se actualiza solo. Con permiso, además
+avisa con una notificación del sistema, etiquetada por partido para que un aviso nuevo
+**sustituya** al anterior en vez de apilarse — una línea que se mueve cinco veces deja
+si no cinco notificaciones casi idénticas, y la persona las silencia todas.
+
+El permiso **no** se pide al cargar. Un permiso denegado es permanente hasta que la
+persona lo cambie a mano en el navegador, así que pedirlo sin contexto no es un intento
+fallido: es haber gastado la única oportunidad. Se pide desde el botón.
+
+Y se **mide de todos, se avisa de algunos**. Cada precio nuevo es una muestra válida y
+tirarla sesgaría los percentiles, pero avisar de todos es otra cosa: el primer sondeo con
+una clave nueva ve por primera vez cada partido de cada liga, y sin techo eso son decenas
+de notificaciones de golpe. Se avisa de los cinco partidos más próximos —los accionables,
+porque una línea del sábado que se mueve el miércoles no exige mirar ahora mismo— y el
+resto va en un solo aviso que dice cuántos son. Un canal de alertas que se silencia el
+primer día es un canal de alertas que no existe.
+
+### La última etapa la mide el navegador, porque es la única que puede
+
+El servidor no sabe cuánto tardó la red del usuario ni cuánto tardó React en pintar. Sin
+esa medición, «de punta a punta» sería en realidad «hasta que salió de mi máquina», que
+es la parte fácil. Así que el cliente cierra el cronómetro y lo reporta.
+
+Dos detalles que no son adorno: se usa `performance.now()` y no `Date.now()` (el reloj
+del sistema puede saltar a mitad de la medición, y una latencia negativa en un panel es
+la clase de dato que hace desconfiar de todo el panel), y se cierra tras **dos**
+`requestAnimationFrame` anidados, porque el primero corre antes del pintado del fotograma
+y medir ahí daría un número sistemáticamente corto.
+
+### Lo que se sabía y estaba mal antes de esto
+
+Dos hallazgos de la investigación, porque explican de dónde salió el trabajo:
+
+* La ingesta **descartaba `last_update`**, que es la única marca de tiempo de origen que
+  el proveedor devuelve. Sin ella no había forma de medir la primera etapa, que es la
+  que se come el 80 % del presupuesto.
+* `AUTO_REFRESH_MINUTES` traía 720 por defecto — **12 horas**, o seis de antigüedad
+  media. La cadencia automática ya lo arreglaba en cuanto se conoce el plan, pero el
+  suelo seguía sin estar medido.
+
+Y una advertencia sobre `origen`: son en realidad dos cosas pegadas —«la casa publica →
+la API se entera» y «la API lo tiene → nosotros lo pedimos»— que **no se pueden
+separar**, porque el proveedor no sella cuándo lo recibió él: devuelve el `last_update`
+de la casa. Se mide la suma y se llama `origen` para no fingir una precisión que no hay.
+
 
 ---
 
@@ -1401,6 +1566,10 @@ Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede
 | `GET /api/football/power?league=` | Clasificación por Elo |
 | `GET /api/football/track-record?league=` | Acierto medido en RPS |
 | `POST /api/football/predict` | Predicción ad-hoc `{league, home, away, oddsHome?, oddsDraw?, oddsAway?}` |
+| `GET /api/latency?hours=` | Latencia por etapa, objetivo, si es alcanzable, transporte y reparto adaptativo |
+| `GET /api/latency/stream` | **SSE**: el servidor empuja los cambios de precio. Reemplaza al refresco manual |
+| `POST /api/latency/client` | El navegador reporta la última etapa `{ms, sport?, fixtureId?}` |
+| `GET /api/latency/stages` | Los cuatro tramos y sus etiquetas |
 
 ## Diseño
 

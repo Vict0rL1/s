@@ -350,6 +350,40 @@ function createSchema(d: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_fb_players_team ON fb_players (league, team_id, minutes DESC);
 
     -- =====================================================================
+    -- LATENCIA DEL ESCÁNER DE LÍNEAS
+    -- =====================================================================
+    -- Una fila por medición y por ETAPA. Separadas y no un total, porque un total
+    -- no se puede accionar: si tardas ocho minutos, lo único que importa es en cuál
+    -- de los cuatro tramos se van, y son tramos con dueños distintos —la cadencia
+    -- de sondeo, nuestro parseo, nuestra API, el navegador—.
+    CREATE TABLE IF NOT EXISTS latency_samples (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      -- 'origen' | 'ingesta' | 'servidor' | 'cliente'
+      stage         TEXT NOT NULL,
+      ms            REAL NOT NULL,
+      sport         TEXT,
+      fixture_id    TEXT,
+      -- Contexto para poder cortar por él: minutos que faltaban para el inicio.
+      minutes_to_start REAL,
+      observed_at   TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_latency_stage ON latency_samples (stage, observed_at DESC);
+
+    -- Cuándo dijo la CASA que publicó este precio, no cuándo lo leímos nosotros.
+    -- Es el único ancla real del reloj: sin él, «latencia» solo puede medir el
+    -- tiempo dentro de nuestra propia máquina, que es la parte que menos tarda.
+    CREATE TABLE IF NOT EXISTS odds_freshness (
+      fixture_id    TEXT NOT NULL,
+      sport         TEXT NOT NULL,
+      -- El last_update más reciente de entre todas las casas del evento.
+      source_updated_at TEXT NOT NULL,
+      fetched_at    TEXT NOT NULL,
+      books         INTEGER,
+      PRIMARY KEY (fixture_id, source_updated_at)
+    );
+    CREATE INDEX IF NOT EXISTS idx_freshness ON odds_freshness (sport, fetched_at DESC);
+
+    -- =====================================================================
     -- NOTICIAS Y MOVIMIENTOS DE LÍNEA
     -- =====================================================================
     -- Dos tablas que existen para poder responder UNA pregunta: ¿se movió el precio

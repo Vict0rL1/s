@@ -10,13 +10,23 @@ import { refreshBasketballOdds } from './basketball/ingest/odds.ts';
 import { refreshFootballOdds } from './football/ingest/odds.ts';
 import { refreshBaseballOdds } from './baseball/ingest/odds.ts';
 import { refreshOdds as refreshNflOdds } from './nfl/ingest/odds.ts';
-import { getQuota, planTotal, recommendedRefreshMinutes, recordCycleSpend } from './oddsQuota.ts';
+import {
+  getQuota,
+  lastCycleCredits,
+  planTotal,
+  recommendedRefreshMinutes,
+  recordCycleSpend,
+} from './oddsQuota.ts';
 import { registerRoutes } from './routes/api.ts';
 import { registerBasketballRoutes } from './routes/basketball.ts';
 import { registerFootballRoutes } from './routes/football.ts';
 import { registerBaseballRoutes } from './routes/baseball.ts';
 import { registerNflRoutes } from './routes/nfl.ts';
 import { registerBetRoutes } from './routes/bets.ts';
+import { registerLatencyRoutes } from './routes/latency.ts';
+import { recordLatency } from './latency/record.ts';
+import { checkLatency, publish } from './latency/alert.ts';
+import { allocate } from './latency/schedule.ts';
 import { resolvePredictions } from './trackRecord.ts';
 import { resolveGamePredictions } from './basketball/trackRecord.ts';
 import { resolveFootballPredictions } from './football/trackRecord.ts';
@@ -121,13 +131,62 @@ function startAutoRefresh(log: (msg: string) => void): void {
     if (before != null && q.used != null && q.used > before) {
       recordCycleSpend(q.used - before);
     }
+
+    // ===========================================================================
+    // LA ALERTA: SE COMPRUEBA CADA CICLO, NO CUANDO ALGUIEN MIRA
+    // ===========================================================================
+    // Un objetivo de latencia que solo se comprueba al abrir un panel no es un
+    // objetivo, es una curiosidad. Se mira aquí, se dice en el log, y se empuja al
+    // canal para que aparezca en pantalla sin que nadie tenga que ir a buscarlo.
+    try {
+      const al = checkLatency();
+      if (al.breached) {
+        log(`⚠ Latencia: ${al.message}`);
+        publish({
+          type: 'latency',
+          title: 'Latencia fuera del objetivo',
+          body: al.message,
+          at: new Date().toISOString(),
+        });
+      }
+    } catch {
+      // Comprobar la latencia no puede romper el ciclo de odds.
+    }
     schedule();
   };
 
   const schedule = () => {
     // An explicit AUTO_REFRESH_MINUTES always wins: someone who set it meant it.
+    //
+    // ===========================================================================
+    // CADENCIA ADAPTATIVA
+    // ===========================================================================
+    // El ritmo base sigue saliendo del tamaño del plan, como antes. Lo nuevo es que se
+    // ACELERA cuando hay un partido inminente o un mercado moviéndose, y se relaja
+    // cuando no hay nada. El gasto medio no cambia —lo que se adelanta hoy se devuelve
+    // mañana— pero el precio llega antes justo cuando llegar antes vale algo.
+    //
+    // Un partido a media hora con la línea moviéndose puede acelerar el ciclo ×8; una
+    // tarde sin nada lo deja en el ritmo del plan. Ver latency/schedule.ts para por qué
+    // el reparto es por deporte y no por partido: el proveedor cobra por petición y
+    // devuelve la liga entera, así que «refrescar solo este partido» no existe.
     const suggested = env.autoRefreshMinutesExplicit ? null : recommendedRefreshMinutes();
-    const next = suggested ?? env.autoRefreshMinutes;
+    let next = suggested ?? env.autoRefreshMinutes;
+    if (!env.autoRefreshMinutesExplicit) {
+      const plan = planTotal();
+      const perCycle = lastCycleCredits();
+      if (plan != null && perCycle != null && perCycle > 0) {
+        try {
+          const a = allocate(plan / 30, perCycle);
+          if (a.cycleMinutes < next) {
+            log(`Latencia: acelerando a ${a.cycleMinutes} min — ${a.explanation}`);
+            next = a.cycleMinutes;
+          }
+        } catch {
+          // Si el reparto falla, el ritmo del plan sigue siendo correcto.
+        }
+      }
+    }
     if (next !== currentMinutes) {
       log(`Auto-refresh: ${currentMinutes} → ${next} min (ajustado al plan de The Odds API).`);
       currentMinutes = next;
@@ -197,11 +256,47 @@ async function main() {
 
 
   const app = Fastify({ logger: { level: 'info', transport: undefined } });
+
+  // ===========================================================================
+  // ETAPA «SERVIDOR»: petición → respuesta
+  // ===========================================================================
+  // Se mide con los ganchos de Fastify y no con un cronómetro dentro de cada ruta,
+  // porque así cubre TODA la petición —parseo, ruta, serialización— y no se puede
+  // olvidar en una ruta nueva. Solo se guardan las de predicción: medir el endpoint de
+  // latencia dentro de la propia latencia añade ruido y no informa de nada.
+  app.addHook('onRequest', async (req) => {
+    (req as { __t0?: bigint }).__t0 = process.hrtime.bigint();
+  });
+  app.addHook('onResponse', async (req) => {
+    const t0 = (req as { __t0?: bigint }).__t0;
+    if (!t0) return;
+    const url = req.url;
+    // Solo las rutas que producen una predicción: son las que están en el camino del
+    // precio hasta la pantalla. Las demás no forman parte de este recorrido.
+    if (!/\/api\/(football|basketball|baseball|nfl|matches)/.test(url)) return;
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    const sport = url.includes('/football')
+      ? 'football'
+      : url.includes('/basketball')
+        ? 'basketball'
+        : url.includes('/baseball')
+          ? 'baseball'
+          : url.includes('/nfl')
+            ? 'nfl'
+            : 'tennis';
+    try {
+      recordLatency({ stage: 'servidor', ms, sport });
+    } catch {
+      // Medir no puede tumbar una respuesta que ya se ha enviado.
+    }
+  });
+
   await app.register(cors, { origin: true });
   await app.register(registerRoutes, { prefix: '/api' });
   // Basketball lives in its own namespace: no endpoint can return both sports.
   await app.register(registerBasketballRoutes, { prefix: '/api/basketball' });
   await app.register(registerFootballRoutes, { prefix: '/api/football' });
+  await app.register(registerLatencyRoutes, { prefix: '/api/latency' });
   await app.register(registerBaseballRoutes, { prefix: '/api/baseball' });
   await app.register(registerNflRoutes, { prefix: '/api/nfl' });
   // The bet log is not a sixth sport: it records what the person staked, not what

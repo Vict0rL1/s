@@ -58,6 +58,15 @@ import {
 } from '../markets/comPoisson.ts';
 import { countPmf, fitCounts } from '../markets/counts.ts';
 import { liquidityOf } from '../markets/liquidity.ts';
+import { budgetFromEnv, reachable, DEFAULT_BUDGET, STAGES } from '../latency/budget.ts';
+import { recordLatency, recordMany, stageStats, recordFreshness } from '../latency/record.ts';
+import {
+  proximityWeight,
+  movementWeight,
+  allocateFrom,
+  type FixtureUrgency,
+} from '../latency/schedule.ts';
+import { checkLatency, subscribe, publish } from '../latency/alert.ts';
 import { halfMarkets, HALF_NU } from '../football/halves.ts';
 import { getHalfParams } from '../football/halvesRepo.ts';
 import { getTeamCounts } from '../football/teamCounts.ts';
@@ -2248,6 +2257,270 @@ function auditClubNameSplits(): void {
   console.log(`  ${rows.length} equipos · ${byKey.size} clubes distintos tras normalizar el nombre`);
 }
 
+// ===========================================================================
+// LATENCIA
+// ===========================================================================
+// Un panel de latencia que se equivoca es peor que no tenerlo: hace tomar decisiones
+// sobre el plan de peticiones con números inventados. Y sus fallos son especialmente
+// silenciosos —un percentil mal indexado sigue devolviendo un número plausible— así que
+// lo que se comprueba aquí es la ARITMÉTICA contra casos con respuesta conocida a mano.
+//
+// Las mediciones de prueba se escriben con `sport = '__verify__'` y se borran al final:
+// dejarlas metería latencias inventadas en los percentiles reales del panel, que es
+// exactamente la clase de contaminación que este script existe para cazar.
+function auditLatency(): void {
+  console.log('\n▸ Latencia de punta a punta');
+  const db = getDb();
+  const MARK = '__verify__';
+  const clean = (): void => {
+    db.prepare('DELETE FROM latency_samples WHERE sport = ?').run(MARK);
+    db.prepare('DELETE FROM odds_freshness WHERE fixture_id LIKE ?').run(`${MARK}%`);
+  };
+  clean();
+
+  try {
+    // --- El presupuesto reparte el total, no lo inventa ---
+    const b = budgetFromEnv();
+    const sum = STAGES.reduce((a, s) => a + b.perStage[s], 0);
+    check(
+      'latencia: las cuatro etapas suman el objetivo total',
+      Math.abs(sum - b.totalMs) < 1e-6,
+      `${sum} contra ${b.totalMs}`,
+    );
+
+    // --- ¿Es alcanzable? Aritmética con respuesta calculable a mano ---
+    // 500 peticiones al mes / 10 por ciclo = 50 ciclos; 43.200 min de mes / 50 = 864 min
+    // entre sondeos; la antigüedad MEDIA es la mitad, 432 min = 25,92 min.
+    const free = reachable(DEFAULT_BUDGET, 500, 10);
+    check(
+      'latencia: la antigüedad media es medio intervalo de sondeo',
+      free.bestPossibleMs != null && Math.abs(free.bestPossibleMs - 432 * 60_000) < 1,
+      `${((free.bestPossibleMs ?? 0) / 60_000).toFixed(2)} min, esperado 432`,
+    );
+    check(
+      'latencia: el plan gratuito NO alcanza el objetivo por defecto',
+      !free.ok,
+      '432 min de antigüedad media caben en 4 min de presupuesto, lo cual es imposible',
+    );
+    // Un plan enorme sí lo alcanza. Sin este caso, un `reachable` que devolviera
+    // siempre `false` pasaría la comprobación de arriba.
+    check(
+      'latencia: un plan grande SÍ alcanza el objetivo',
+      reachable(DEFAULT_BUDGET, 1_000_000, 10).ok,
+      'declara inalcanzable un objetivo que sí cabe',
+    );
+    // Sin datos del plan no se puede afirmar nada, y afirmar «no alcanzable» ahí sería
+    // acusar al código de un incumplimiento que nadie ha medido.
+    check(
+      'latencia: sin datos del plan no se declara inalcanzable',
+      reachable(DEFAULT_BUDGET, null, null).ok,
+      'declara inalcanzable sin saber el plan',
+    );
+
+    // --- Los percentiles, con una muestra cuya respuesta se sabe ---
+    // 1..100 ms: p50 = 50, p95 = 95, max = 100. Un índice desplazado en uno se ve aquí
+    // y en ningún otro sitio, porque cualquier valor cercano sigue pareciendo creíble.
+    recordMany(
+      Array.from({ length: 100 }, (_, i) => ({ stage: 'servidor' as const, ms: i + 1, sport: MARK })),
+    );
+    const st = stageStats(24, MARK).find((s) => s.stage === 'servidor')!;
+    check('latencia: n cuenta todas las muestras', st.n === 100, String(st.n));
+    check('latencia: p50 de 1..100 es 50', st.p50 === 50, String(st.p50));
+    check('latencia: p95 de 1..100 es 95', st.p95 === 95, String(st.p95));
+    check('latencia: max de 1..100 es 100', st.max === 100, String(st.max));
+
+    // Con una sola muestra los tres percentiles son esa muestra. Es el caso que rompe
+    // un `Math.ceil(p*n)` sin acotar por abajo.
+    db.prepare('DELETE FROM latency_samples WHERE sport = ?').run(MARK);
+    recordLatency({ stage: 'servidor', ms: 7, sport: MARK });
+    const one = stageStats(24, MARK).find((s) => s.stage === 'servidor')!;
+    check(
+      'latencia: con una muestra, p50 = p95 = max',
+      one.p50 === 7 && one.p95 === 7 && one.max === 7,
+      `${one.p50}/${one.p95}/${one.max}`,
+    );
+
+    // --- Una etapa sin muestras hace INCOMPLETO el total, no rápido ---
+    const empty = stageStats(24, MARK).filter((s) => s.n === 0);
+    check(
+      'latencia: una etapa sin muestras da n = 0, no un percentil inventado',
+      empty.length === 3 && empty.every((s) => s.p95 === 0 && s.max === 0),
+      `${empty.length} etapas vacías`,
+    );
+
+    // --- Frescura: mide CAMBIOS, no sondeos ---
+    const src = '2026-01-01T12:00:00.000Z';
+    const got = '2026-01-01T12:02:00.000Z';
+    const first = recordFreshness({
+      fixtureId: `${MARK}-1`,
+      sport: MARK,
+      sourceUpdatedAt: src,
+      fetchedAt: got,
+      books: 3,
+    });
+    check('latencia: la frescura de un precio nuevo son 2 min', first === 120_000, String(first));
+    // Releer el MISMO precio no es un cambio. Si esto devolviera un número, cada sondeo
+    // inventaría una latencia de origen y el p95 mediría la cadencia, no la frescura.
+    const again = recordFreshness({
+      fixtureId: `${MARK}-1`,
+      sport: MARK,
+      sourceUpdatedAt: src,
+      fetchedAt: '2026-01-01T12:30:00.000Z',
+      books: 3,
+    });
+    check('latencia: releer el mismo precio no cuenta como cambio', again === null, String(again));
+
+    // --- Los pesos del reparto adaptativo ---
+    check(
+      'latencia: la proximidad decae, no salta',
+      proximityWeight(0) === 1 &&
+        Math.abs(proximityWeight(360) - 0.5) < 1e-9 &&
+        proximityWeight(30) > proximityWeight(120) &&
+        proximityWeight(120) > proximityWeight(1440),
+      `${proximityWeight(0)} / ${proximityWeight(360)} / ${proximityWeight(1440)}`,
+    );
+    check(
+      'latencia: un partido ya empezado no gasta presupuesto',
+      proximityWeight(-1) === 0,
+      String(proximityWeight(-1)),
+    );
+    check(
+      'latencia: el movimiento sube con techo en 4',
+      movementWeight(0) === 1 &&
+        movementWeight(4) > movementWeight(1) &&
+        movementWeight(100) === 4 &&
+        movementWeight(1000) === 4,
+      `${movementWeight(0)} / ${movementWeight(100)}`,
+    );
+
+    // --- El reparto no se pasa del presupuesto ---
+    // Con una lista escrita a mano, no con lo que haya hoy en la base: los partidos
+    // próximos caducan solos, y una comprobación que dependa de ellos se vuelve vacía
+    // en cuanto la base envejece dos días — sin fallar, que es lo peor.
+    const urgency = (minutesToStart: number, recentMoves: number): FixtureUrgency => ({
+      fixtureId: `${MARK}-f`,
+      sport: MARK,
+      commenceTime: new Date(Date.now() + minutesToStart * 60_000).toISOString(),
+      minutesToStart,
+      recentMoves,
+      weight: proximityWeight(minutesToStart) * movementWeight(recentMoves),
+      reason: 'prueba',
+    });
+
+    // Sin partidos, cadencia mínima: acelerar sin nada que mirar es tirar créditos.
+    const idle = allocateFrom([], 48, 2);
+    check(
+      'latencia: sin partidos próximos, cadencia mínima',
+      idle.cycleMinutes === 720 && idle.fixtures.length === 0,
+      `${idle.cycleMinutes} min`,
+    );
+    // 48 peticiones al día a 2 por ciclo son 24 ciclos = 60 min de base. Un partido
+    // inminente y moviéndose es el caso más urgente posible, y ni así puede bajar del
+    // techo: 60/8 = 7,5 → 8 min.
+    const hot = allocateFrom([urgency(0, 10)], 48, 2);
+    check(
+      'latencia: ni el caso más urgente se salta el techo de aceleración',
+      hot.cycleMinutes === 8,
+      `${hot.cycleMinutes} min, esperado 8`,
+    );
+    // Y uno lejano y quieto no acelera nada: se queda en la base entera.
+    const cold = allocateFrom([urgency(10_000, 0)], 48, 2);
+    check(
+      'latencia: un partido lejano y quieto no acelera',
+      cold.cycleMinutes === 60,
+      `${cold.cycleMinutes} min, esperado 60`,
+    );
+    check(
+      'latencia: más urgencia nunca alarga el ciclo',
+      hot.cycleMinutes <= allocateFrom([urgency(120, 1)], 48, 2).cycleMinutes &&
+        allocateFrom([urgency(120, 1)], 48, 2).cycleMinutes <= cold.cycleMinutes,
+      'la cadencia no es monótona en la urgencia',
+    );
+    // Un presupuesto que no alcanza para un ciclo diario no puede producir dos.
+    check(
+      'latencia: un presupuesto mínimo da como mucho un ciclo al día',
+      allocateFrom([urgency(10_000, 0)], 1, 100).cycleMinutes === 1440,
+      String(allocateFrom([urgency(10_000, 0)], 1, 100).cycleMinutes),
+    );
+
+    // --- La alerta no puede decir «se cumple» sin haber medido ---
+    // Y esto hay que MONTARLO. Preguntar sin más por `checkLatency()` da una
+    // comprobación vacía: sin muestras el total es 0, no se pasa del objetivo y
+    // `breached` sale falso tanto con la guarda de completitud como sin ella. Se probó
+    // así primero y no cazaba el fallo. Para que muerda hace falta un total que SÍ se
+    // pase mientras alguna etapa sigue sin medir.
+    //
+    // `checkLatency` mira todas las muestras, no solo las marcadas, así que esto solo
+    // se puede montar cuando la instalación tiene alguna etapa vacía. Con las cuatro
+    // llenas la pregunta no aplica, y decirlo es más honesto que fingir que se probó.
+    const antes = stageStats(24);
+    const vacias = antes.filter((s) => s.n === 0);
+    if (vacias.length === 0) {
+      console.log('  las cuatro etapas tienen muestras: la guarda de completitud no aplica aquí');
+    } else {
+      // Diez minutos, el doble del objetivo por defecto, en una etapa que NO deje la
+      // medición completa.
+      const donde = antes.find((s) => s.n > 0)?.stage ?? vacias[0].stage;
+      recordLatency({ stage: donde, ms: 10 * 60_000, sport: MARK });
+      const al = checkLatency(24);
+      check(
+        'latencia: el montaje deja el total por encima del objetivo',
+        al.totalMs > al.targetMs && !al.complete,
+        `total ${al.totalMs} contra objetivo ${al.targetMs}, completo=${al.complete}`,
+      );
+      check(
+        'latencia: sin medición completa no se declara incumplimiento',
+        !al.breached,
+        'declara incumplido un objetivo que no ha terminado de medir',
+      );
+      db.prepare('DELETE FROM latency_samples WHERE sport = ?').run(MARK);
+    }
+
+    // --- El canal de empuje: un suscriptor que revienta no puede callar a los demás ---
+    // Sin esta comprobación el fallo sería invisible: el canal seguiría aceptando
+    // conexiones, el informe seguiría contando suscriptores, y los avisos simplemente
+    // dejarían de llegar a partir del que falló. Un canal de alertas roto se parece
+    // demasiado a un canal tranquilo.
+    const recibidos: string[] = [];
+    const offMalo = subscribe(() => {
+      throw new Error('suscriptor roto a propósito');
+    });
+    const offBueno = subscribe((e) => recibidos.push(e.title));
+    publish({ type: 'latency', title: 'prueba', body: 'prueba', at: new Date().toISOString() });
+    offMalo();
+    offBueno();
+    check(
+      'latencia: un suscriptor que falla no impide la entrega a los demás',
+      recibidos.length === 1 && recibidos[0] === 'prueba',
+      `entregas: ${recibidos.length}`,
+    );
+    // Y darse de baja tiene que dar de baja de verdad, o cada recarga del navegador
+    // deja un suscriptor fantasma y el contador miente para siempre.
+    const antesDeBaja = recibidos.length;
+    publish({ type: 'latency', title: 'después', body: '', at: new Date().toISOString() });
+    check(
+      'latencia: darse de baja deja de recibir',
+      recibidos.length === antesDeBaja,
+      'sigue recibiendo tras darse de baja',
+    );
+
+    // Lo medido de verdad en esta instalación, que es distinto de lo comprobado arriba:
+    // arriba se verifica la aritmética, aquí se dice si hay datos que meterle.
+    clean();
+    const real = stageStats(24);
+    const conMuestras = real.filter((s) => s.n > 0);
+    console.log(
+      `  objetivo ${(b.totalMs / 60_000).toFixed(0)} min · ` +
+        (conMuestras.length === 0
+          ? 'sin mediciones todavía en las últimas 24 h (arranca el servidor y abre la app)'
+          : `${conMuestras.map((s) => `${s.stage} n=${s.n}`).join(' · ')}` +
+            (conMuestras.length < 4 ? ' — medición incompleta' : '')),
+    );
+  } finally {
+    clean();
+  }
+}
+
 function main(): void {
   console.log('\n🔎 Verificación de los datos\n' + '='.repeat(46));
   console.log(
@@ -2269,6 +2542,7 @@ function main(): void {
   auditPostprocess();
   auditThinMarkets();
   auditNews();
+  auditLatency();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

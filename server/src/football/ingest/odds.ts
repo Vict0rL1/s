@@ -18,6 +18,8 @@ import { secondDivisionOf } from '../promotion.ts';
 import { seedPromotedTeam } from '../ratings.ts';
 import type { LeagueId } from '../types.ts';
 import { recordOdds } from '../../news/repo.ts';
+import { recordLatency, recordFreshness } from '../../latency/record.ts';
+import { publish } from '../../latency/alert.ts';
 
 const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
 
@@ -29,6 +31,15 @@ interface Aggregated {
   /** name → median decimal odds. The draw arrives as the literal "Draw". */
   price: Record<string, number>;
   books: number;
+  /**
+   * El `last_update` MÁS RECIENTE de entre todas las casas del evento.
+   *
+   * Es la única marca de tiempo del origen que da el proveedor, y sin ella la palabra
+   * «latencia» solo puede referirse al tiempo dentro de nuestra máquina — que es la
+   * parte que menos tarda con diferencia. Se coge el máximo y no la media porque la
+   * pregunta es «¿cuándo se publicó el precio más nuevo que tengo?».
+   */
+  sourceUpdatedAt: string | null;
 }
 
 function leagueByKey(): Map<string, LeagueId> {
@@ -69,9 +80,17 @@ async function fetchLive(sportKey: string): Promise<Aggregated[]> {
   const events = (await res.json()) as any[];
   return events.map((ev) => {
     const prices: Record<string, number[]> = {};
+    let newest = 0;
     for (const bk of ev.bookmakers ?? []) {
       const h2h = (bk.markets ?? []).find((m: any) => m.key === 'h2h');
       if (!h2h) continue;
+      // `last_update` viene en el mercado en las versiones nuevas y en la casa en las
+      // viejas. Se miran los dos: si solo se leyera uno, media API devolvería null y la
+      // latencia de origen saldría «sin datos» sin que nadie supiera por qué.
+      for (const t of [h2h.last_update, bk.last_update]) {
+        const ms = t ? Date.parse(String(t)) : NaN;
+        if (Number.isFinite(ms) && ms > newest) newest = ms;
+      }
       for (const o of h2h.outcomes ?? []) (prices[o.name] ??= []).push(o.price);
     }
     const price: Record<string, number> = {};
@@ -83,6 +102,7 @@ async function fetchLive(sportKey: string): Promise<Aggregated[]> {
       away: String(ev.away_team ?? ''),
       price,
       books: (ev.bookmakers ?? []).length,
+      sourceUpdatedAt: newest > 0 ? new Date(newest).toISOString() : null,
     };
   });
 }
@@ -125,6 +145,9 @@ function generateFixtures(league: LeagueId, count = 6): Aggregated[] {
       // usually still the same day.
       id: `fixture-${league}-${kickoffs[out.length]}-${i / 2}`,
       commence_time: kickoffs[out.length],
+      // Sin origen: son inventadas. Poner `ahora` aquí daría una latencia de cero y
+      // haría que el panel presumiera de una velocidad que no existe.
+      sourceUpdatedAt: null,
       home: home.name,
       away: away.name,
       price: {
@@ -177,6 +200,10 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
   const known = leagueByKey();
   const perLeague = new Map<LeagueId, Aggregated[]>();
   let source: 'live' | 'fixture' = 'fixture';
+  // El reloj arranca cuando TERMINA la descarga: a partir de ahí, todo lo que pase es
+  // nuestro. Lo de antes es del proveedor y de la cadencia, y se mide con la marca de
+  // origen de cada evento, no con este cronómetro.
+  let fetchDoneAt = 0;
 
   if (env.oddsApiKey) {
     let sports: { key: string }[] = [];
@@ -198,6 +225,7 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
         process.stderr.write(`  odds de ${s.key} fallaron: ${(e as Error).message}\n`);
       }
     }
+    fetchDoneAt = Date.now();
   }
 
   if (perLeague.size === 0) {
@@ -209,6 +237,69 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
   }
 
   const nowIso = new Date().toISOString();
+
+  // ===========================================================================
+  // ETAPA «ORIGEN»: LA CASA PUBLICA → LO TENEMOS
+  // ===========================================================================
+  // Solo se mide cuando el precio es NUEVO: `recordFreshness` devuelve null si ya se
+  // había visto esa marca de origen. Medir en cada sondeo el mismo precio inflaría la
+  // muestra con no-cambios y haría bajar los percentiles sin que nada mejorara — que es
+  // la forma más fácil de que un panel de latencia mienta a su favor.
+  if (source === 'live' && fetchDoneAt > 0) {
+    const fetchedAt = new Date(fetchDoneAt).toISOString();
+    const nuevos: { ev: Aggregated; ms: number; minutesToStart: number }[] = [];
+    for (const [, events] of perLeague) {
+      for (const ev of events) {
+        if (!ev.sourceUpdatedAt) continue;
+        const ms = recordFreshness({
+          fixtureId: ev.id,
+          sport: 'football',
+          sourceUpdatedAt: ev.sourceUpdatedAt,
+          fetchedAt,
+          books: ev.books,
+        });
+        if (ms == null) continue;
+        const minutesToStart = (Date.parse(ev.commence_time) - fetchDoneAt) / 60_000;
+        recordLatency({ stage: 'origen', ms, sport: 'football', fixtureId: ev.id, minutesToStart });
+        nuevos.push({ ev, ms, minutesToStart });
+      }
+    }
+
+    // ===========================================================================
+    // AVISAR DE ALGUNOS, NO DE TODOS
+    // ===========================================================================
+    // MEDIR es de todos —cada precio nuevo es una muestra válida y tirarlas sesgaría
+    // los percentiles—, pero AVISAR de todos es otra cosa. El primer sondeo con una
+    // clave nueva ve por primera vez cada partido de cada liga: sin techo, eso son
+    // decenas de notificaciones de golpe, cada una con su propia etiqueta, y la persona
+    // silencia el canal el primer día. Un canal de alertas que se silencia es un canal
+    // de alertas que no existe.
+    //
+    // Así que se avisa de los más inminentes, que son los accionables —una línea de un
+    // partido del sábado que se mueve el miércoles no exige mirar ahora mismo— y el
+    // resto va en UN aviso que dice cuántos son.
+    const MAX_AVISOS = 5;
+    nuevos.sort((a, b) => a.minutesToStart - b.minutesToStart);
+    for (const { ev, ms } of nuevos.slice(0, MAX_AVISOS)) {
+      publish({
+        type: 'odds',
+        title: `${ev.home} vs ${ev.away}`,
+        body: `Precio nuevo (${ev.books} casas), publicado hace ${(ms / 60_000).toFixed(1)} min.`,
+        fixtureId: ev.id,
+        at: fetchedAt,
+      });
+    }
+    if (nuevos.length > MAX_AVISOS) {
+      publish({
+        type: 'odds',
+        title: `${nuevos.length - MAX_AVISOS} precios más se movieron`,
+        body: 'Están en las tarjetas, ya actualizadas. Se avisa aparte de los partidos más próximos.',
+        at: fetchedAt,
+      });
+    }
+  }
+
+  const ingestStart = Date.now();
   db.exec('BEGIN');
   try {
     // Keeps the matches that already kicked off today — see pruneUpcoming.
@@ -290,6 +381,12 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
       }
     }
     db.exec('COMMIT');
+    // ETAPA «INGESTA»: lo teníamos en la mano → está escrito. Es la parte más rápida de
+    // las cuatro con diferencia, y se mide igualmente: sin medirla no se puede afirmar
+    // que es pequeña, solo suponerlo.
+    if (source === 'live' && fetchDoneAt > 0) {
+      recordLatency({ stage: 'ingesta', ms: Date.now() - ingestStart, sport: 'football' });
+    }
     setMeta('fb_odds_source', source);
     setMeta('fb_odds_refreshed_at', new Date().toISOString());
     return { source, count, leagues: [...perLeague.keys()], promoted };
