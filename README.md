@@ -881,6 +881,77 @@ de la NFL lo dice en su salida.
 
 ---
 
+## La clasificación por Elo, en las cinco pestañas
+
+Cada deporte tiene su tabla de Elo, y las cinco usan el mismo componente
+(`web/src/components/EloRanking.tsx`) en vez de cinco copias que se van separando solas.
+
+### Tres cosas que hacen que sirva para analizar
+
+* **La probabilidad.** Un `1650` no se puede interpretar, y la escala cambia por liga.
+  La columna **«vs. medio»** dice la probabilidad de ganarle a un rival con el Elo
+  mediano de esa lista — que es exactamente lo mismo que el Elo, porque el rating existe
+  para producir ese número: `P = 1/(1 + 10^(−Δ/400))`. Los cinco deportes usan el mismo
+  divisor 400, así que una conversión sirve para todos.
+* **La barra.** El orden se ve en cualquier lista ordenada; los **huecos** no. Dos
+  equipos separados por 200 puntos y dieciocho apretados en 40 es una liga distinta de
+  una repartida por igual, y las dos producen la misma lista de nombres. La barra se
+  ancla al rango de la lista, no a un cero absoluto: desde cero, un 1500 y un 1900 se
+  ven casi iguales.
+* **La fiabilidad.** Un Elo sobre 4 partidos y otro sobre 400 se imprimen igual. El de
+  pocos se marca con `◦n`. Se marca, **no se oculta**: una fila que desaparece sin
+  explicación es peor que una con una advertencia.
+
+Y una línea arriba que resume la forma de la competición: *«el primero le ganaría al
+último el 87 % de las veces»*. Cerca del 50 % es igualdad; por encima del 90 %, un
+abismo.
+
+### Tenis: la tabla que puede comparar a alguien consigo mismo
+
+Es la única con **cuatro Elo por fila** — general, dura, tierra y hierba — así que el
+selector de superficie **reordena de verdad**, no añade una columna. Ahí es donde se
+contesta *«¿en cuál es mejor?»*.
+
+La columna **«Mejor sup.»** compara al jugador *consigo mismo*: cuánto sube su Elo en su
+mejor superficie respecto de su propio general. Un `+150` es un especialista claro; un
+`+10`, alguien igual de bueno en todas.
+
+### El retirado que salía cuarto del mundo
+
+Un Elo se queda **congelado en el último partido**. Sin filtro, la lista de la ATP salía
+así:
+
+```
+4. Roger Federer   2091   último partido: junio de 2021
+8. Rafael Nadal    2020   último partido: noviembre de 2024
+```
+
+Los dos números son correctos y la lista es inútil: preguntada *«¿quién es mejor
+ahora?»*, contesta con dos retirados. No es un dato erróneo — responde a otra pregunta,
+*«quién llegó más alto»* — y mezclar las dos sin decirlo es cómo alguien acaba analizando
+una superficie con un jugador que no la pisa desde hace cuatro años.
+
+Así que por defecto se piden los **activos** (algún partido en dos años, 205 de 500 en
+este archivo) y la lista histórica se puede pedir a propósito, con el botón «Histórico».
+Un jugador **sin fecha conocida no se descarta**: «no lo sé» no es «hace mucho».
+
+### Un defecto de los datos que solo se puede decir
+
+`player_rankings` guarda el último snapshot **de cada jugador**, no el ranking completo
+de un día. Esas fechas abarcan **4.031 días** en este archivo, así que la columna
+«Oficial» mezcla el ranking de agosto de uno con el de enero de otro — y salen **tres
+jugadores con «#5»**, que se lee como un fallo de la app.
+
+Marcarlo fila a fila no sirve: comparando con la fecha más nueva, el **100 %** de las
+filas sale «desfasada», y una marca que aparece en todas partes no informa de nada. Lo
+que sí informa es el rango, así que la tabla advierte una vez que la columna no es una
+foto de un día y cada celda lleva su fecha en el tooltip.
+
+Arreglarlo de verdad es traer el ranking completo de una fecha **en la ingesta**, no
+cambiar la consulta. Eso está dicho en el código y aquí, no disimulado.
+
+---
+
 ## El pipeline de noticias (`npm run news`)
 
 Un pipeline que **cambia** las predicciones, no que las decore. Las ausencias entran
@@ -1776,6 +1847,7 @@ Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede
 | `GET /api/meta` | Fuente de datos y conteos |
 | `GET /api/track-record?tour=` | Acierto medido de la app en partidos ya jugados (+ mercado) |
 | `GET /api/tours` | Circuitos ATP/WTA con conteos |
+| `GET /api/power?tour=&limit=&minMatches=&activeDays=` | **Clasificación por Elo del circuito**, con Elo por superficie, ranking oficial y filtro de actividad (`activeDays=0` para la lista histórica) |
 | `GET /api/tours/:tour/players?q=` | Jugadores (búsqueda) |
 | `GET /api/players/:tour/:id` | Perfil: Elo general + por superficie + últimos resultados |
 | `GET /api/tournaments?tour=` | Torneos configurados y cuáles tienen partidos próximos |

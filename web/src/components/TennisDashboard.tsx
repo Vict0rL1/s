@@ -9,6 +9,7 @@ import {
 import MatchCard from './MatchCard';
 import PlayerProfile from './PlayerProfile';
 import TrackRecordPanel from './TrackRecordPanel';
+import TennisEloPanel from './TennisEloPanel';
 import {
   DayFilter, DayHeading, pillClass, StaleHistoryWarning, PicksPanel, DashboardHeader,
   EmptySlate,
@@ -256,6 +257,8 @@ export default function TennisDashboard() {
           ))}
         </>
       )}
+
+      <TennisEloPanel tour={tour} onOpenPlayer={(t, id) => setProfile({ tour: t, id })} />
 
       {profile && (
         <PlayerProfile

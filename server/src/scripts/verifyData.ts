@@ -28,6 +28,7 @@
 // Exit code is non-zero on failure, so it can gate a data refresh.
 
 import { getDb } from '../db.ts';
+import { getEloRanking, officialRankingCoherence } from '../repo.ts';
 import { normalizeTeamName } from '../football/ingest/teamNames.ts';
 import { parseFootballTxt } from '../football/ingest/openfootballTxt.ts';
 import { readRegistry, distinctExperiments } from '../experiments/registry.ts';
@@ -2763,6 +2764,118 @@ function auditPortfolio(): void {
   );
 }
 
+// ===========================================================================
+// LA CLASIFICACIÓN POR ELO
+// ===========================================================================
+// El fallo que esta tabla puede tener no lanza una excepción: enseña a un retirado como
+// el cuarto mejor del mundo, o un Elo de tres partidos junto a uno de cuatrocientos, y
+// las dos cosas se leen como datos.
+function auditEloRanking(): void {
+  console.log('\n▸ Clasificación por Elo');
+  const tours = ['atp', 'wta'];
+  let probado = false;
+
+  for (const tour of tours) {
+    const todos = getEloRanking(tour, { limit: 500, minMatches: 0, activeDays: null });
+    if (todos.length < 20) {
+      console.log(`  ${tour}: ${todos.length} valorados — muy pocos para comprobar, saltado`);
+      continue;
+    }
+    probado = true;
+
+    // --- Orden ---
+    const desc = todos.every((r, i) => i === 0 || todos[i - 1].elo >= r.elo);
+    check(`${tour}: la clasificación va de mayor a menor Elo`, desc, 'no está ordenada');
+
+    // --- El filtro de partidos ---
+    const min20 = getEloRanking(tour, { limit: 500, minMatches: 20, activeDays: null });
+    check(
+      `${tour}: el mínimo de partidos se aplica`,
+      min20.every((r) => r.matches >= 20),
+      `${min20.filter((r) => r.matches < 20).length} por debajo del mínimo`,
+    );
+    check(
+      `${tour}: un mínimo más alto no puede devolver MÁS jugadores`,
+      min20.length <= todos.length,
+      `${min20.length} con mínimo 20 contra ${todos.length} sin mínimo`,
+    );
+
+    // --- El filtro de actividad, que es el que evita el retirado en el top ---
+    // Sin él la lista contesta «quién llegó más alto» a la pregunta «quién es mejor
+    // ahora». Medido en este archivo: Federer sale cuarto con su último partido en 2021.
+    const activos = getEloRanking(tour, { limit: 500, minMatches: 20, activeDays: 730 });
+    check(
+      `${tour}: el filtro de actividad se aplica`,
+      activos.every((r) => r.daysSince == null || r.daysSince <= 730),
+      `${activos.filter((r) => r.daysSince != null && r.daysSince > 730).length} inactivos colados`,
+    );
+    check(
+      `${tour}: los activos son un subconjunto de la lista histórica`,
+      activos.length <= min20.length,
+      `${activos.length} activos contra ${min20.length} en total`,
+    );
+    // Y que el filtro haga ALGO: si no quitara a nadie, la comprobación de arriba
+    // pasaría igual y no habría filtro que valga.
+    const quitados = min20.length - activos.length;
+    check(
+      `${tour}: el filtro de actividad quita a alguien de verdad`,
+      quitados > 0,
+      'no quita a nadie: o el archivo no tiene retirados o el filtro no hace nada',
+    );
+
+    // Un jugador SIN fecha no se descarta: «no lo sé» no es «hace mucho», y borrarlo
+    // sería tan afirmativo como dejarlo arriba.
+    const sinFecha = min20.filter((r) => r.lastDate == null);
+    if (sinFecha.length > 0) {
+      check(
+        `${tour}: un jugador sin fecha no se descarta por inactivo`,
+        sinFecha.every((r) => activos.some((a) => a.id === r.id)),
+        'se descartan jugadores cuya fecha simplemente no se conoce',
+      );
+    }
+
+    // --- El límite ---
+    const diez = getEloRanking(tour, { limit: 10, minMatches: 20, activeDays: 730 });
+    check(`${tour}: el límite se respeta`, diez.length <= 10, `devolvió ${diez.length}`);
+    check(
+      `${tour}: el límite recorta por el final, no reordena`,
+      diez.every((r, i) => r.id === activos[i]?.id),
+      'los diez primeros no son los mismos que sin límite',
+    );
+
+    // --- La coherencia del ranking oficial ---
+    // No se exige que sea coherente: en este archivo NO lo es, y el objetivo es que la
+    // app lo diga, no que finja lo contrario. Lo que se comprueba es que el diagnóstico
+    // detecte el desfase que de verdad hay.
+    const coh = officialRankingCoherence(tour);
+    if (coh.from && coh.to) {
+      check(
+        `${tour}: el diagnóstico del ranking oficial cuadra con sus fechas`,
+        coh.spanDays != null && coh.coherent === (coh.spanDays <= 7),
+        `abarca ${coh.spanDays} días y dice coherent=${coh.coherent}`,
+      );
+      const dupes = getDb()
+        .prepare(
+          'SELECT COUNT(*) n FROM (SELECT rank FROM player_rankings WHERE tour = ? GROUP BY rank HAVING COUNT(*) > 1)',
+        )
+        .get(tour) as unknown as { n: number };
+      // Si hay puestos repetidos, el diagnóstico TIENE que decir que no es coherente.
+      // Al revés sería enseñar tres «#5» seguidos sin una sola advertencia.
+      check(
+        `${tour}: con puestos repetidos, el diagnóstico avisa`,
+        dupes.n === 0 || !coh.coherent,
+        `${dupes.n} puestos repetidos y coherent=${coh.coherent}`,
+      );
+      console.log(
+        `  ${tour}: ${todos.length} valorados · ${activos.length} en activo · ` +
+          `ranking oficial en ${coh.spanDays} días (${coh.coherent ? 'coherente' : 'MEZCLA FECHAS'})`,
+      );
+    }
+  }
+
+  if (!probado) console.log('  sin circuitos con datos suficientes, saltado');
+}
+
 function main(): void {
   console.log('\n🔎 Verificación de los datos\n' + '='.repeat(46));
   console.log(
@@ -2786,6 +2899,7 @@ function main(): void {
   auditNews();
   auditLatency();
   auditPortfolio();
+  auditEloRanking();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

@@ -334,6 +334,41 @@ export interface TrackRecord {
   }[];
 }
 
+export interface EloRankPlayer {
+  id: number;
+  name: string;
+  country: string | null;
+  elo: number;
+  /** Elo por superficie. Comparar las tres es media utilidad de la tabla. */
+  hard: number;
+  clay: number;
+  grass: number;
+  matches: number;
+  lastDate: string | null;
+  /** Días desde el último partido. Un Elo se congela ahí: sin esto, un retirado
+      aparece como si fuera el cuarto mejor del mundo hoy. */
+  daysSince: number | null;
+  officialRank: number | null;
+  officialRankDate: string | null;
+}
+
+export interface EloRankingResponse {
+  tour: string;
+  minMatches: number;
+  /** null = sin filtro de actividad, o sea la lista histórica. */
+  activeDays: number | null;
+  players: EloRankPlayer[];
+  /** Cuántos hay valorados con ese mínimo de partidos, activos o no. */
+  rated: number;
+  /**
+   * Si la columna de ranking oficial es una foto de un mismo día.
+   *
+   * No lo es en este archivo: cada jugador trae su último snapshot y son de fechas
+   * distintas, así que salen varios «#5». Se advierte en vez de disimularlo.
+   */
+  officialRanking: { from: string | null; to: string | null; spanDays: number | null; coherent: boolean };
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`/api${path}`);
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
@@ -362,4 +397,12 @@ export const api = {
   trackRecord: (tour?: string) =>
     get<TrackRecord>(`/track-record${tour ? `?tour=${encodeURIComponent(tour)}` : ''}`),
   refresh: () => post<RefreshResult>('/refresh'),
+  power: (tour: string, opts: { limit?: number; minMatches?: number; activeDays?: number } = {}) => {
+    const q = new URLSearchParams({ tour });
+    if (opts.limit != null) q.set('limit', String(opts.limit));
+    if (opts.minMatches != null) q.set('minMatches', String(opts.minMatches));
+    // 0 significa «sin filtro de actividad»; el servidor lo interpreta así a propósito.
+    if (opts.activeDays != null) q.set('activeDays', String(opts.activeDays));
+    return get<EloRankingResponse>(`/power?${q.toString()}`);
+  },
 };

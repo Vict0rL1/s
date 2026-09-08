@@ -16,6 +16,7 @@ import {
   type BsbTrackRecord,
 } from '../../lib/baseball';
 import GameCard from './GameCard';
+import EloRanking from '../EloRanking';
 import { formatDate, formatDateTime, countryFlag, dayChipLabel, groupByDay } from '../../lib/format';
 
 /**
@@ -36,7 +37,6 @@ export default function BaseballDashboard() {
   // null = every day, which is the default: someone who has not asked to filter
   // should see the whole schedule.
   const [day, setDay] = useState<string | null>(null);
-  const [showTeams, setShowTeams] = useState(false);
 
   useEffect(() => {
     Promise.all([bsbApi.meta(), bsbApi.leagues()])
@@ -230,61 +230,30 @@ export default function BaseballDashboard() {
         </>
       )}
 
-      {power.length > 0 && (
-        <div className="mt-8 rounded-xl border border-white/[0.07] bg-[#14161b] p-4">
-          <button
-            onClick={() => setShowTeams((s) => !s)}
-            className="flex w-full items-center justify-between text-left"
-          >
-            <span>
-              <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
-                Todos los equipos · {activeLeague?.name}
-              </span>
-              <br />
-              <span className="text-[16px] text-[#d5d9df]">{power.length} equipos ordenados por Elo</span>
-            </span>
-            <span className="text-[14px] text-[#5c636c]">{showTeams ? '▲' : '▼'}</span>
-          </button>
-          {showTeams && (
-            <div className="mt-3 overflow-x-auto border-t border-white/[0.07] pt-3">
-              <table className="w-full text-left text-[14px] tabular-nums">
-                <thead className="text-[#7b828d]">
-                  <tr>
-                    <th className="py-1 pr-2">#</th>
-                    <th className="py-1 pr-2">Equipo</th>
-                    <th className="py-1 pr-2 text-right">Elo</th>
-                    <th className="py-1 pr-2 text-right">CF/p</th>
-                    <th className="py-1 pr-2 text-right">CC/p</th>
-                    <th className="py-1 text-right">Partidos</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {power.map((t, i) => (
-                    <tr key={t.id} className="border-t border-white/[0.07]">
-                      <td className="py-1 pr-2 text-[#7b828d]">{i + 1}</td>
-                      <td className="py-1 pr-2">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <TeamCrest league={league!} name={t.name ?? t.id} code={t.id} size={16} />
-                          <button
-                            className="truncate text-[#d5d9df] hover:underline"
-                            onClick={() => setTeam({ league: league!, id: t.id })}
-                          >
-                            {t.name ?? t.id}
-                          </button>
-                        </span>
-                      </td>
-                      <td className="py-1 pr-2 text-right text-[#d5d9df]">{Math.round(t.elo)}</td>
-                      <td className="py-1 pr-2 text-right text-[#9aa1ac]">{t.rs ?? '—'}</td>
-                      <td className="py-1 pr-2 text-right text-[#9aa1ac]">{t.ra ?? '—'}</td>
-                      <td className="py-1 text-right text-[#7b828d]">{t.games}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+      <EloRanking
+        title={`Todos los equipos · ${activeLeague?.name ?? ''}`}
+        rows={power.map((t) => ({
+          id: t.id,
+          name: t.name ?? t.id,
+          elo: t.elo,
+          matches: t.games,
+          badge: <TeamCrest league={league!} name={t.name ?? t.id} code={t.id} size={16} />,
+          onOpen: () => setTeam({ league: league!, id: t.id }),
+          extra: [
+            { label: 'CF/p', value: t.rs?.toFixed(2) ?? '—', title: 'Carreras a favor por partido' },
+            { label: 'CC/p', value: t.ra?.toFixed(2) ?? '—', title: 'Carreras en contra por partido' },
+            { label: 'Partidos', value: String(t.games), title: 'Partidos que respaldan el Elo' },
+          ],
+        }))}
+        extraHeaders={['CF/p', 'CC/p', 'Partidos']}
+        footer={
+          <>
+            El béisbol es el deporte con más azar por partido de los cinco, así que sus Elo se
+            aprietan más que los del resto: 50 puntos de diferencia aquí ya son muchos. Por eso
+            el porcentaje contra un rival medio rara vez se aleja del 55 %.
+          </>
+        }
+      />
 
       {team && <TeamProfile league={team.league} id={team.id} onClose={() => setTeam(null)} />}
     </div>

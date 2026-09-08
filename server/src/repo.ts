@@ -556,3 +556,161 @@ export function countRows(table: string): number {
   };
   return row.c;
 }
+
+// ===========================================================================
+// LA CLASIFICACIÓN POR ELO
+// ===========================================================================
+
+export interface EloRankRow {
+  id: number;
+  name: string;
+  country: string | null;
+  elo: number;
+  /** Elo por superficie. La comparación entre las tres es media utilidad de esto. */
+  hard: number;
+  clay: number;
+  grass: number;
+  matches: number;
+  /** YYYYMMDD del último partido. Es lo que distingue «es bueno» de «era bueno». */
+  lastDate: string | null;
+  /** Días desde ese partido, para poder decir «hace 4 años» sin hacer cuentas fuera. */
+  daysSince: number | null;
+  /** Ranking oficial ATP/WTA, para contrastar el Elo con la lista de puntos. */
+  officialRank: number | null;
+  /**
+   * De qué fecha es ese ranking, y si está desfasado respecto del snapshot más nuevo.
+   *
+   * ===========================================================================
+   * POR QUÉ HACE FALTA LA FECHA Y NO BASTA EL NÚMERO
+   * ===========================================================================
+   * `player_rankings` guarda el snapshot más reciente DE CADA JUGADOR, y esos snapshots
+   * NO son del mismo día. En este archivo hay tres jugadores con «rank 5»: Djokovic
+   * (noviembre), Auger-Aliassime (enero) y Draper (agosto). Cada número es correcto en
+   * su fecha y la columna entera es engañosa sin ella — dos «ATP#5» uno debajo del otro
+   * se leen como un error de la app.
+   *
+   * No se arregla eligiendo uno: el dato que falta es el snapshot completo de un mismo
+   * día, y eso lo tiene que traer la ingesta. Lo que sí se puede hacer, y se hace, es no
+   * presentarlo como si fuera de hoy.
+   */
+  officialRankDate: string | null;
+}
+
+/**
+ * Los mejores por Elo, con dos filtros que NO son cosméticos.
+ *
+ * ===========================================================================
+ * POR QUÉ HAY QUE FILTRAR POR ACTIVIDAD
+ * ===========================================================================
+ * El Elo de un jugador se queda CONGELADO en su último partido. Sin filtro, la lista
+ * de la ATP sale así:
+ *
+ *     4. Roger Federer   2091   último partido: 2021-06-28
+ *     8. Rafael Nadal    2020   último partido: 2024-11-19
+ *
+ * Los dos números son correctos y la lista es inútil: preguntada «¿quién es mejor
+ * ahora?», contesta con dos retirados. No es un dato erróneo, es un dato que responde a
+ * otra pregunta — «quién llegó más alto» — y mezclarlas en la misma tabla sin decirlo
+ * es la forma más fácil de que alguien analice una superficie basándose en un jugador
+ * que no la pisa desde hace cuatro años.
+ *
+ * Así que el filtro existe, tiene un valor por defecto declarado, y se puede apagar
+ * para ver la lista histórica a propósito.
+ *
+ * ===========================================================================
+ * Y POR QUÉ FILTRAR POR PARTIDOS JUGADOS
+ * ===========================================================================
+ * Con 3 partidos, un Elo es ruido con tres decimales. En este archivo hay 1.275
+ * jugadores valorados y solo 373 con 20 partidos o más; los de pocos partidos no
+ * llegan arriba del todo, pero sí ensucian la parte media de la tabla con números que
+ * nadie puede interpretar. El umbral se enseña, no se esconde.
+ *
+ * @param activeDays  null = sin filtro de actividad (la lista histórica)
+ */
+export function getEloRanking(
+  tour: TourId,
+  opts: { limit?: number; minMatches?: number; activeDays?: number | null } = {},
+): EloRankRow[] {
+  const limit = Math.min(opts.limit ?? 50, 500);
+  const minMatches = opts.minMatches ?? 20;
+  const activeDays = opts.activeDays === undefined ? 730 : opts.activeDays;
+
+  const rows = getDb()
+    .prepare(
+      `SELECT p.id, p.name, p.country,
+              r.overall AS elo, r.hard, r.clay, r.grass,
+              r.matches_played AS matches, r.last_date AS lastDate,
+              k.rank AS officialRank, k.ranking_date AS officialRankDate
+       FROM player_ratings r
+       JOIN players p ON p.tour = r.tour AND p.id = r.player_id
+       LEFT JOIN player_rankings k ON k.tour = r.tour AND k.player_id = r.player_id
+       WHERE r.tour = ? AND r.matches_played >= ?
+       ORDER BY r.overall DESC`,
+    )
+    .all(tour, minMatches) as unknown as (Omit<EloRankRow, 'daysSince'> & {
+    lastDate: string | null;
+  })[];
+
+  const today = new Date();
+  const todayYmd =
+    `${today.getUTCFullYear()}` +
+    `${String(today.getUTCMonth() + 1).padStart(2, '0')}` +
+    `${String(today.getUTCDate()).padStart(2, '0')}`;
+
+  const withAge = rows.map((r) => ({
+    ...r,
+    daysSince: r.lastDate ? daysBetweenYmd(r.lastDate, todayYmd) : null,
+  }));
+
+  // Un jugador sin fecha NO se descarta al filtrar por actividad: no se sabe cuándo
+  // jugó, y tratar «no lo sé» como «hace mucho» lo borraría de la lista con la misma
+  // seguridad que si se supiera. Se deja y su columna de fecha lo dice.
+  const active =
+    activeDays == null
+      ? withAge
+      : withAge.filter((r) => r.daysSince == null || r.daysSince <= activeDays);
+
+  return active.slice(0, limit);
+}
+
+/**
+ * ¿Forma la columna de ranking oficial un snapshot coherente?
+ *
+ * ===========================================================================
+ * UN DEFECTO DE LOS DATOS QUE NO SE PUEDE ARREGLAR AQUÍ, SOLO DECIR
+ * ===========================================================================
+ * `player_rankings` guarda el snapshot más reciente DE CADA JUGADOR, no el ranking
+ * completo de un día. Esos snapshots son de fechas distintas, así que la columna mezcla
+ * el ranking de agosto de uno con el de enero de otro — y en este archivo salen TRES
+ * jugadores con «rank 5».
+ *
+ * Marcarlo fila a fila no sirve: comparando con la fecha más nueva, el 100 % de las
+ * filas sale «desfasada» y una marca que aparece en todas partes no informa de nada. Lo
+ * que sí informa es el rango: si los rankings van de agosto a enero, la columna no es
+ * una foto de hoy y hay que leerla como lo que es.
+ *
+ * Arreglarlo de verdad es trabajo de la ingesta —traer el ranking completo de un día—,
+ * no de la consulta.
+ */
+export function officialRankingCoherence(tour: TourId): {
+  from: string | null;
+  to: string | null;
+  spanDays: number | null;
+  coherent: boolean;
+} {
+  const row = getDb()
+    .prepare(
+      'SELECT MIN(ranking_date) AS a, MAX(ranking_date) AS b FROM player_rankings WHERE tour = ?',
+    )
+    .get(tour) as unknown as { a: string | null; b: string | null };
+  if (!row.a || !row.b) return { from: null, to: null, spanDays: null, coherent: true };
+  const spanDays = daysBetweenYmd(row.a, row.b);
+  return {
+    from: row.a,
+    to: row.b,
+    spanDays,
+    // Una semana de margen: las listas oficiales se publican los lunes, así que un
+    // par de días de diferencia es la misma lista, y un mes no lo es.
+    coherent: spanDays != null && spanDays <= 7,
+  };
+}

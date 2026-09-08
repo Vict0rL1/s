@@ -16,6 +16,7 @@ import {
   type FbTeamInfo,
 } from '../../lib/football';
 import MatchCard from './MatchCard';
+import EloRanking from '../EloRanking';
 import { formatDate, countryFlag, dayChipLabel, groupByDay } from '../../lib/format';
 
 /**
@@ -41,7 +42,6 @@ export default function FootballDashboard() {
   // null = every day, which is the default: someone who has not asked to filter
   // should see the whole schedule.
   const [day, setDay] = useState<string | null>(null);
-  const [showTable, setShowTable] = useState(false);
   /**
    * Cuándo llegó la respuesta, para poder medir lo que tarda en verse.
    *
@@ -297,65 +297,37 @@ export default function FootballDashboard() {
       )}
 
       {/* All teams in the league, ranked by Elo */}
-      {power.length > 0 && (
-        <div className="mt-8 rounded-xl border border-white/[0.07] bg-[#14161b] p-4">
-          <button
-            onClick={() => setShowTable((s) => !s)}
-            className="flex w-full items-center justify-between text-left"
-          >
-            <span>
-              <span className="text-[14px] uppercase tracking-wide text-[#7b828d]">
-                Todos los equipos · {active?.name}
-              </span>
-              <br />
-              <span className="text-[16px] text-[#d5d9df]">{power.length} equipos por Elo</span>
-            </span>
-            <span className="text-[14px] text-[#5c636c]">{showTable ? '▲' : '▼'}</span>
-          </button>
-          {showTable && (
-            <div className="mt-3 overflow-x-auto border-t border-white/[0.07] pt-3">
-              <table className="w-full text-left text-[14px] tabular-nums">
-                <thead className="text-[#7b828d]">
-                  <tr>
-                    <th className="py-1 pr-2 font-normal">#</th>
-                    <th className="py-1 pr-2 font-normal">Equipo</th>
-                    <th className="py-1 pr-2 font-normal">Elo</th>
-                    <th className="py-1 pr-2 font-normal">GF</th>
-                    <th className="py-1 pr-2 font-normal">GC</th>
-                    <th className="py-1 font-normal">Dif.</th>
-                  </tr>
-                </thead>
-                <tbody className="text-[#d5d9df]">
-                  {power.map((t, i) => (
-                    <tr key={t.id} className="border-t border-white/[0.07]">
-                      <td className="py-1 pr-2 text-[#7b828d]">{i + 1}</td>
-                      <td className="py-1 pr-2">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <TeamCrest league={league!} name={t.name} code={t.id} size={16} />
-                          <button
-                            onClick={() => setTeam({ league: league!, id: t.id })}
-                            className="truncate text-[#c3c9d1] hover:underline"
-                          >
-                            {t.name}
-                          </button>
-                        </span>
-                      </td>
-                      <td className="py-1 pr-2">{Math.round(t.elo)}</td>
-                      <td className="py-1 pr-2">{t.gf ?? '—'}</td>
-                      <td className="py-1 pr-2">{t.ga ?? '—'}</td>
-                      <td className="py-1">
-                        {t.gf != null && t.ga != null
-                          ? `${t.gf - t.ga > 0 ? '+' : ''}${(t.gf - t.ga).toFixed(2)}`
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+      <EloRanking
+        title={`Todos los equipos · ${active?.name ?? ''}`}
+        rows={power.map((t) => ({
+          id: t.id,
+          name: t.name,
+          elo: t.elo,
+          matches: t.matches,
+          badge: <TeamCrest league={league!} name={t.name} code={t.id} size={16} />,
+          onOpen: () => setTeam({ league: league!, id: t.id }),
+          extra: [
+            { label: 'GF', value: t.gf?.toFixed(2) ?? '—', title: 'Goles a favor por partido' },
+            { label: 'GC', value: t.ga?.toFixed(2) ?? '—', title: 'Goles en contra por partido' },
+            {
+              label: 'Dif.',
+              value:
+                t.gf != null && t.ga != null
+                  ? `${t.gf - t.ga > 0 ? '+' : ''}${(t.gf - t.ga).toFixed(2)}`
+                  : '—',
+              title: 'Diferencia de goles por partido',
+            },
+          ],
+        }))}
+        extraHeaders={['GF', 'GC', 'Dif.']}
+        footer={
+          <>
+            El Elo sale de los resultados, no de la clasificación: gana puntos quien gana a
+            rivales fuertes y los pierde quien pierde con débiles, así que un equipo puede ir
+            quinto en la tabla y primero aquí. Los goles a favor y en contra son por partido.
+          </>
+        }
+      />
 
       {team && <TeamProfile league={team.league} id={team.id} onClose={() => setTeam(null)} />}
     </div>

@@ -13,7 +13,9 @@ import {
 import { getMeta } from '../db.ts';
 import {
   countRows,
+  getEloRanking,
   getProfile,
+  officialRankingCoherence,
   getH2HMeetings,
   getPlayerInfo,
   getUpcomingById,
@@ -26,7 +28,7 @@ import { impliedProbabilities, type MarketProbabilities } from '../model/market.
 import { buildPrediction, type Prediction } from '../model/predict.ts';
 import { refreshOdds } from '../ingest/odds.ts';
 import { getTrackRecord, logPrediction } from '../trackRecord.ts';
-import type { UpcomingRow } from '../types.ts';
+import type { TourId, UpcomingRow } from '../types.ts';
 
 /** Attach a full prediction to an upcoming-match row (null if players unknown). */
 function predictRow(row: UpcomingRow): Prediction | null {
@@ -166,6 +168,39 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   }));
 
   // --- the app's own measured accuracy on real, already-played matches ---
+  /**
+   * La clasificación por Elo del circuito.
+   *
+   * `activeDays` por defecto son 730: un Elo se congela en el último partido, y sin
+   * filtro la lista contesta «quién llegó más alto» a la pregunta «quién es mejor
+   * ahora». Con `activeDays=0` se pide la histórica a propósito.
+   */
+  app.get<{
+    Querystring: { tour?: string; limit?: string; minMatches?: string; activeDays?: string };
+  }>('/power', async (req) => {
+    const tour = (req.query.tour ?? 'atp') as TourId;
+    const limit = Math.min(Number(req.query.limit) || 50, 500);
+    const minMatches = req.query.minMatches != null ? Number(req.query.minMatches) : 20;
+    const raw = req.query.activeDays;
+    // `0` significa «sin filtro» y no «hoy mismo»: un umbral de cero días dejaría la
+    // lista vacía, que no es lo que pide nadie escribiendo un cero.
+    const activeDays = raw == null ? 730 : Number(raw) > 0 ? Number(raw) : null;
+    const players = getEloRanking(tour, { limit, minMatches, activeDays });
+    return {
+      tour,
+      minMatches,
+      activeDays,
+      players,
+      // Cuántos hay en total con ese mínimo de partidos, para que se vea qué parte de
+      // la lista se está mirando y cuántos quedaron fuera por inactividad.
+      rated: getEloRanking(tour, { limit: 500, minMatches, activeDays: null }).length,
+      // El ranking oficial NO es una foto de un día: cada jugador trae el suyo con su
+      // fecha. Se dice aquí para que el panel pueda advertirlo en vez de enseñar tres
+      // «#5» seguidos como si fuera un fallo de la app.
+      officialRanking: officialRankingCoherence(tour),
+    };
+  });
+
   app.get<{ Querystring: { tour?: string } }>('/track-record', async (req) => {
     return getTrackRecord(req.query.tour);
   });
