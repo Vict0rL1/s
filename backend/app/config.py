@@ -64,6 +64,10 @@ CACHE_TTL_SECONDS: dict[str, int] = {
     "earnings_calendar": 12 * 3600,  # calendario de resultados: 12 h
     "peers": 7 * 24 * 3600,      # pares del sector: cambian rarísimo — 7 días
     "etf_data": 7 * 24 * 3600,   # composición de ETFs: 7 días
+    # Cadena de opciones: 1 h. La IV se mueve durante la sesión, pero cada
+    # consulta son seis peticiones HTTP a Yahoo y refrescarla por minuto no
+    # cambiaría ninguna lectura de las que hace este panel.
+    "options_chain": 3600,
     "bulk_momentum": 6 * 3600,   # momentum de un universo entero: 6 h
     "daily_picks": 6 * 3600,     # lista diaria ya puntuada: 6 h
 }

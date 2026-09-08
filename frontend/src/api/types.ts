@@ -1631,3 +1631,127 @@ export interface RiesgoDeCartera {
   estres?: { crisis: CrisisEstresada[]; medibles: number; aviso_general: string }
   nota_geografia?: string
 }
+
+// --- Señales del mercado de opciones ----------------------------------------
+// Deliberadamente SIN un campo de score agregado: estas señales van al lado del
+// fundamental, y fundirlas en un número borraría que pueden contradecirlo.
+
+export interface CalidadCadena {
+  recibidos: number
+  usados: number
+  descartados: number
+  motivos: Record<string, number>
+  nota: string
+}
+
+export interface PrimaDeRiesgo {
+  disponible: boolean
+  nota?: string
+  iv?: number
+  rv?: number
+  prima?: number
+  ratio?: number | null
+  percentil?: number | null
+  base_n?: number
+  aviso_sesgo?: string
+}
+
+export interface SkewSignal {
+  disponible: boolean
+  nota: string
+  skew?: number
+  iv_put_25d?: number
+  iv_call_25d?: number
+  strike_put?: number
+  strike_call?: number
+  dias?: number
+  delta_call_hallado?: number
+  delta_put_hallado?: number
+}
+
+export interface EstructuraTemporal {
+  disponible: boolean
+  nota: string
+  puntos: { vencimiento: string; dias: number; iv: number }[]
+  pendiente?: number
+  forma?: 'contango' | 'backwardation' | 'plana'
+}
+
+export interface MovimientoEsperado {
+  implicito: {
+    disponible: boolean
+    nota?: string
+    movimiento_pct?: number
+    strike?: number
+    straddle?: number
+    vencimiento?: string
+    resultados?: string
+    dias_tras_resultados?: number
+  }
+  historico: {
+    disponible: boolean
+    nota: string
+    movimientos: { fecha: string; movimiento_pct: number }[]
+    n?: number
+    mediana_abs_pct?: number
+    maximo_abs_pct?: number
+  }
+  comparacion: {
+    disponible: boolean
+    nota: string
+    implicito_pct?: number
+    mediana_historica_pct?: number
+    razon?: number | null
+    veces_superado?: number
+    de?: number
+  }
+}
+
+export interface ActividadOpciones {
+  volumen_calls: number
+  volumen_puts: number
+  oi_calls: number
+  oi_puts: number
+  put_call_volumen: number | null
+  put_call_oi: number | null
+  volumen_sobre_oi: number | null
+  posiciones_nuevas: {
+    tipo: string
+    strike: number
+    volumen: number
+    oi: number
+    ratio: number
+  }[]
+  nota_posiciones: string
+  nota_base: string
+  inusual: {
+    volumen_hoy: number
+    media: number
+    z: number | null
+    base_n: number
+  } | null
+}
+
+export interface SeñalesDeOpciones {
+  disponible: boolean
+  nota?: string
+  symbol: string
+  spot?: number
+  calidad?: CalidadCadena
+  prima_de_riesgo?: PrimaDeRiesgo
+  iv_30d?: { disponible: boolean; iv?: number; dias?: number; interpolada?: boolean; nota?: string }
+  skew?: SkewSignal
+  estructura_temporal?: EstructuraTemporal
+  movimiento_esperado?: MovimientoEsperado
+  actividad?: ActividadOpciones
+  aviso?: string
+  fuente?: string
+  cacheado?: boolean
+  as_of?: string
+  vencimientos_leidos?: string[]
+  vencimientos_totales?: number
+  base_historica?: { n: number; desde: string | null; nota: string }
+  sin_precios?: boolean
+  nota_precios?: string | null
+  fallo_calendario?: string | null
+}

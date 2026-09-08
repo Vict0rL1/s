@@ -9,12 +9,20 @@ import { DeepDiveSection } from '../components/ticker/DeepDiveSection'
 import { FilingsSection } from '../components/ticker/FilingsSection'
 import { FinancialsSection } from '../components/ticker/FinancialsSection'
 import { HealthSection } from '../components/ticker/HealthSection'
+import { OptionsSection } from '../components/ticker/OptionsSection'
 import { ValuationSection } from '../components/ticker/ValuationSection'
 import { fmtBig, fmtChangePct, fmtNumber } from '../lib/format'
 
 const RANGES: HistoryRange[] = ['1M', '3M', '6M', 'YTD', '1Y', '5Y', '10Y']
 
-type TabName = 'resumen' | 'informe' | 'fundamentales' | 'valoracion' | 'salud' | 'filings'
+type TabName =
+  | 'resumen'
+  | 'informe'
+  | 'fundamentales'
+  | 'valoracion'
+  | 'opciones'
+  | 'salud'
+  | 'filings'
 
 // Las pestañas cargan sus datos solo al abrirse: no se gastan llamadas de API
 // en análisis que no estás mirando.
@@ -23,6 +31,7 @@ const TABS: { id: TabName; label: string }[] = [
   { id: 'informe', label: 'Informe completo' },
   { id: 'fundamentales', label: 'Fundamentales' },
   { id: 'valoracion', label: 'Valoración' },
+  { id: 'opciones', label: 'Opciones' },
   { id: 'salud', label: 'Salud y riesgo' },
   { id: 'filings', label: 'Filings' },
 ]
@@ -192,6 +201,7 @@ export function TickerPage() {
           {tab === 'informe' && <DeepDiveSection symbol={symbol} />}
           {tab === 'fundamentales' && <FinancialsSection symbol={symbol} />}
           {tab === 'valoracion' && <ValuationSection symbol={symbol} />}
+          {tab === 'opciones' && <OptionsSection symbol={symbol} />}
           {tab === 'salud' && <HealthSection symbol={symbol} />}
           {tab === 'filings' && <FilingsSection symbol={symbol} />}
 

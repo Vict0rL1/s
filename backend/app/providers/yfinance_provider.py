@@ -129,6 +129,7 @@ class YFinanceProvider(DataProvider):
             "quote",
             "price_history",
             "price_history_long",
+            "options_chain",
             "profile",
             "fundamentals",
             "etf_data",
@@ -221,6 +222,78 @@ class YFinanceProvider(DataProvider):
             "bars": bars,
             "desde": bars[0]["ts"],
             "hasta": bars[-1]["ts"],
+            "as_of": iso_utc(),
+        }
+
+    def get_options_chain(self, symbol: str, max_expiraciones: int = 6) -> dict:
+        """Cadena de opciones de Yahoo, acotada a los primeros vencimientos.
+
+        yfinance hace UNA petición HTTP por vencimiento, y una empresa líquida
+        cotiza treinta y pico: traerlos todos costaría medio minuto para
+        calcular exactamente lo mismo. Seis cubren ~3 meses, que es donde está
+        todo lo que este módulo mira (el tenor de 30 días, el skew, y el primer
+        vencimiento después de resultados).
+        """
+        ticker = self._ticker(symbol)
+        try:
+            expiraciones = list(ticker.options or [])
+        except Exception as exc:
+            raise ProviderError(f"yfinance: {exc}") from exc
+        if not expiraciones:
+            raise DataNotFoundError(f"yfinance: {symbol} no cotiza opciones")
+
+        contratos: list[dict] = []
+        spot: float | None = None
+        usadas: list[str] = []
+        for venc in expiraciones[:max_expiraciones]:
+            try:
+                cadena = ticker.option_chain(venc)
+            except Exception:
+                continue  # un vencimiento que falla no tumba los demás
+            if spot is None:
+                sub = getattr(cadena, "underlying", None) or {}
+                spot = _clean(sub.get("regularMarketPrice")) if isinstance(sub, dict) else None
+            usadas.append(venc)
+            for tipo, df in (("call", cadena.calls), ("put", cadena.puts)):
+                if df is None:
+                    continue
+                for _, row in df.iterrows():
+                    ultimo = row.get("lastTradeDate")
+                    contratos.append(
+                        {
+                            "tipo": tipo,
+                            "strike": _clean(row.get("strike")),
+                            "vencimiento": venc,
+                            "iv": _clean(row.get("impliedVolatility")),
+                            "bid": _clean(row.get("bid")),
+                            "ask": _clean(row.get("ask")),
+                            "volumen": _clean(row.get("volume")) or 0,
+                            "oi": _clean(row.get("openInterest")) or 0,
+                            # NaT, como NaN, no es igual a sí mismo: eso lo
+                            # descarta sin tener que importar pandas aquí solo
+                            # para preguntarlo.
+                            "ultimo_cruce": (
+                                ultimo.strftime("%Y-%m-%d")
+                                if ultimo is not None
+                                and ultimo == ultimo
+                                and hasattr(ultimo, "strftime")
+                                else None
+                            ),
+                        }
+                    )
+
+        if not contratos:
+            raise DataNotFoundError(f"yfinance: sin contratos utilizables para {symbol}")
+        if spot is None:
+            # El bloque `underlying` no siempre viene; la cotización sí.
+            spot = self.get_quote(symbol).get("price")
+
+        return {
+            "symbol": symbol.upper(),
+            "spot": spot,
+            "contratos": contratos,
+            "expiraciones": usadas,
+            "expiraciones_totales": len(expiraciones),
             "as_of": iso_utc(),
         }
 

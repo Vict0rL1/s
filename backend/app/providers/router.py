@@ -43,6 +43,8 @@ DEFAULT_SOURCE_ORDER: dict[str, list[str]] = {
     "earnings_calendar": ["finnhub"],
     "peers": ["finnhub"],
     "etf_data": ["yfinance"],
+    # Solo yfinance: el resto cobra la cadena de opciones aparte.
+    "options_chain": ["yfinance"],
     "bulk_momentum": ["yfinance"],
 }
 

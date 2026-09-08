@@ -421,3 +421,43 @@ class Experiment(Base):
     # aperturas es el dato que impide fingir que solo se miró una vez.
     uso_holdout: Mapped[bool] = mapped_column(Boolean, default=False)
     notas: Mapped[str | None] = mapped_column(Text)
+
+
+class OptionsSnapshot(Base):
+    """Una lectura del mercado de opciones de una empresa, guardada por día.
+
+    Existe por una razón concreta: la cadena gratuita es una FOTO. Trae la IV,
+    el volumen y el open interest de ahora mismo y ninguna historia, así que
+    «volumen inusual respecto a su media» y «prima de riesgo alta para esta
+    empresa» son literalmente incalculables el primer día — no hay media contra
+    la que comparar.
+
+    La alternativa habitual es comparar contra un umbral universal («IV alta si
+    pasa del 40 %»), que es peor que no comparar: un 40 % es tranquilidad en una
+    biotecnológica y pánico en una eléctrica. Guardando una lectura por día, la
+    base se construye sola y el juicio pasa a ser contra la propia historia de
+    la empresa, que es la única comparación que significa algo.
+
+    Una fila por símbolo y día: consultar el panel diez veces en una tarde no
+    debe pesar diez veces en la media.
+    """
+
+    __tablename__ = "options_snapshots"
+    __table_args__ = (
+        UniqueConstraint("symbol", "fecha", name="uq_options_snapshot_dia"),
+        Index("ix_options_symbol_fecha", "symbol", "fecha"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    fecha: Mapped[str] = mapped_column(String(10))  # YYYY-MM-DD
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    spot: Mapped[float | None] = mapped_column(Float)
+    iv_30d: Mapped[float | None] = mapped_column(Float)
+    rv_30d: Mapped[float | None] = mapped_column(Float)
+    # IV menos realizada. Se guarda calculada porque es lo que se percentiliza,
+    # y recomputarla luego exigiría el histórico de precios de aquel día.
+    prima: Mapped[float | None] = mapped_column(Float)
+    skew_25d: Mapped[float | None] = mapped_column(Float)
+    volumen_total: Mapped[int | None] = mapped_column(Integer)
+    oi_total: Mapped[int | None] = mapped_column(Integer)

@@ -87,6 +87,18 @@ class DataProvider(ABC):
         """
         raise NotSupportedError(f"{self.name} no ofrece histórico largo")
 
+    def get_options_chain(self, symbol: str, max_expiraciones: int = 6) -> dict:
+        """Cadena de opciones -> {symbol, spot, contratos: [...], expiraciones}.
+
+        Cada contrato: {tipo('call'|'put'), strike, vencimiento(YYYY-MM-DD), iv,
+        bid, ask, volumen, oi, ultimo_cruce(YYYY-MM-DD|None)}.
+
+        Se acota el número de vencimientos porque cada uno es una petición HTTP
+        aparte: una cadena entera de una empresa líquida son treinta y pico
+        expiraciones y no hacen falta para nada de lo que se calcula.
+        """
+        raise NotSupportedError(f"{self.name} no ofrece cadena de opciones")
+
     def get_profile(self, symbol: str) -> dict:
         """-> {symbol, name, exchange, sector, industry, market_cap, currency}"""
         raise NotSupportedError(f"{self.name} no ofrece perfil de empresa")
@@ -140,6 +152,7 @@ class DataProvider(ABC):
             "quote": self.get_quote,
             "price_history": self.get_price_history,
             "price_history_long": self.get_price_history_long,
+            "options_chain": self.get_options_chain,
             "profile": self.get_profile,
             "fundamentals": self.get_fundamentals,
             "financials": self.get_financials,

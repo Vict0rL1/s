@@ -757,6 +757,97 @@ alguien la va a buscar. Lo que no se hizo fue rellenar el hueco del 200 en la
 paleta: `border-amber-200` se usa en catorce sitios como borde visible de las
 cajas de aviso, y oscurecerlo habría roto los catorce para arreglar dos.
 
+## Señales del mercado de opciones, al lado del fundamental
+
+El mercado de opciones cotiza algo que el fundamental no cotiza: cuánto se
+espera que se mueva la acción, hacia qué lado duele más, y cuánto se paga por
+cubrirse. Motor en `backend/app/analysis/options.py`, servido por
+`GET /api/options/{symbol}` y visible como pestaña **Opciones** en la ficha del
+valor — hermana de Fundamentales y Valoración, no dentro de ellas.
+
+### Por qué no hay un score de opciones
+
+Es la restricción explícita del encargo y también la decisión correcta: fundir
+estas señales en un número, o sumarlas al score fundamental, **borraría lo único
+que las hace útiles**. Una empresa barata con la volatilidad implícita disparada
+está diciendo dos cosas a la vez, y esa contradicción es la información. Un
+promedio la elimina justo cuando más informa. Hay un test que lo fija:
+`test_el_panel_no_devuelve_ningun_score_unico`.
+
+### Las cuatro señales
+
+| Señal | La pregunta | El límite declarado |
+|---|---|---|
+| **Prima de riesgo** | ¿se paga más por cubrirse de lo que la acción se mueve? | IV mira 30 días adelante, la realizada 30 atrás |
+| **Skew 25Δ** | ¿a qué lado le tiene miedo el mercado? | la cadena no trae delta: se calcula con Black-Scholes |
+| **Estructura temporal** | ¿el susto es ahora o más adelante? | contango es lo normal; lo informativo es la inversión |
+| **Movimiento esperado** | ¿lo implícito se parece a lo que esta empresa hace? | el straddle cubre todo el periodo, no solo el día |
+
+### Dos límites del dato gratuito que decidieron el diseño
+
+**La cadena no trae delta.** Sin él, el «skew de 25 delta» del que habla todo el
+mundo no se puede construir, y la alternativa fácil —comparar la IV un 10 % por
+encima y por debajo del spot— cambia de significado según la empresa: ese 10 %
+está lejísimos en una eléctrica y al lado en una biotecnológica, así que compara
+cosas distintas y las llama iguales. Se calcula el delta con Black-Scholes a
+partir de la IV que sí viene (`math.erf` para N(x), sin scipy). Y cuando la
+cadena no llega al 25 delta de verdad, **se niega a dar el número** en vez de
+ponerle nombre técnico al strike que hubiera.
+
+**No hay histórico de IV ni de open interest.** «Inusual respecto a su media»
+necesita una media y el día uno no existe. La salida fácil sería un umbral
+universal («IV alta por encima del 40 %»), que es peor que no comparar: un 40 %
+es tranquilidad en una biotecnológica y pánico en una eléctrica. Así que la
+tabla `options_snapshots` guarda **una lectura por símbolo y día** —abrir el
+panel diez veces en una tarde no debe pesar diez veces en la media— y hasta
+tener diez, el panel dice que no tiene con qué comparar.
+
+### Filtrar es tirar datos, y se dice cuántos
+
+Buena parte de una cadena gratuita es basura: strikes ilíquidos con IV de 300 %,
+precios de hace tres días, horquillas del 80 %. Una sola de esas IV arrastra
+cualquier media y convierte el panel en ruido con aspecto de señal. Se filtran
+por último cruce (≤2 días), horquilla (≤35 %) e IV (1 %–300 %), y la salida
+informa de cuántos contratos se descartaron y por qué. Con menos de seis
+utilizables no se calcula nada, y se distingue **una cadena que llegó fina** (la
+empresa casi no tiene mercado de opciones) de **una que se quedó en nada al
+filtrar** (el dato es malo): son causas distintas y el usuario necesita saber
+cuál.
+
+### Detalles que cambian el número
+
+- **La IV a 30 días se interpola en varianza, no en volatilidad.** La varianza
+  es lo que escala con el tiempo; hacerlo en vol da un número parecido y sesgado
+  siempre en la misma dirección. Hay un test que exige que las dos formas
+  difieran de verdad en el caso probado.
+- **El movimiento implícito usa el primer vencimiento POSTERIOR a resultados.**
+  Un straddle que vence antes del anuncio no dice nada del anuncio.
+- **El movimiento real se mide del cierre anterior al anuncio al siguiente**, y
+  el calendario de Finnhub llega entero: se filtra por símbolo, porque devuelve
+  también el de las demás empresas.
+- **La volatilidad realizada sale del histórico largo ya cacheado** por el
+  estrés de cartera. Pedirlo otra vez sería pagar dos veces por el mismo dato.
+
+### Lo que no se hace
+
+No se emite ninguna recomendación. Que el implícito supere a la mediana
+histórica **no** es «vende volatilidad»: es lo habitual, y el trimestre en que
+el mercado acierta se lleva por delante a quien vendió los otros cuatro. La nota
+lo dice cada vez, y hay un test que lo verifica.
+
+### Tres bugs que salió a buscar el humo sintético
+
+1. **Una base sin dispersión se leía como normalidad.** Con desviación típica
+   cero la z salía `0.0` y el panel decía «dentro de lo normal» con el volumen
+   al doble de la media. Ahora se devuelve `z: null` y se explica que sin
+   dispersión no hay juicio posible.
+2. **El separador de miles se comía las comas de la prosa.** Estaba hecho con
+   `.replace(",", ".")` sobre la frase entera: «Es un salto grande, y merece»
+   salía «Es un salto grande. y merece». Ahora se formatea el número, no el
+   texto.
+3. **«Solo 4 contratos de 4»** sugería un filtrado que no había ocurrido. Ver
+   arriba: cadena fina y cadena filtrada son cosas distintas.
+
 ## Del análisis por acción al análisis de cartera
 
 Ocho análisis buenos de ocho empresas no son un análisis de la cartera. La

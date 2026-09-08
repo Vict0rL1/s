@@ -53,6 +53,7 @@ import type {
   ProviderUsage,
   Quote,
   RiesgoDeCartera,
+  SeñalesDeOpciones,
   RiskResponse,
   ScenarioAssumptions,
   SectorEntry,
@@ -316,6 +317,8 @@ export const api = {
       signal,
       context: signal.context,
     }),
+  opciones: (symbol: string) =>
+    fetchJson<SeñalesDeOpciones>(`/api/options/${encodeURIComponent(symbol)}`),
   marketOverview: () => fetchJson<{ indices: IndexEntry[] }>('/api/market/overview'),
   marketSectors: () => fetchJson<{ sectors: SectorEntry[]; note: string }>('/api/market/sectors'),
   yieldCurve: () => fetchJson<YieldCurve>('/api/market/yield-curve'),
