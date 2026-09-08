@@ -790,6 +790,7 @@ ves, en vez de fallar en silencio.
 |---------|----------|
 | `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
 | `npm run seed` | Tenis: carga el dataset de demostración |
+| `npm run fetch-data` | **Descarga la base ya construida** (9 MB) en vez de reconstruirla. `-- --force` reemplaza la que haya, conservando tus apuestas |
 | `npm run update-all` | **Los cinco deportes de una tirada.** `-- --skip-odds` no gasta cuota; `-- --only fb,bb` limita a algunos. Un deporte que falle no para a los demás y el resumen dice cuál fue |
 | `npm run update-data` | Tenis: refresca histórico real + odds |
 | `npm run backtest` | Tenis: mide la exactitud del modelo |
@@ -822,6 +823,69 @@ ves, en vez de fallar en silencio.
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 | `npm run lint` | Lint real (oxlint, solo la categoría **correctness**) |
+
+## Tener los datos al día sin hacer nada (`npm run fetch-data`)
+
+Hay un workflow (`.github/workflows/data.yml`) que cada noche reconstruye la base, la
+comprueba y la publica comprimida (**9 MB**) en una release rodante. Desde cualquier
+clon:
+
+```bash
+npm run fetch-data              # la baja si no hay ninguna
+npm run fetch-data -- --force   # reemplaza la que haya, conservando tus apuestas
+```
+
+De «repositorio recién clonado» a «todos los datos al día» en segundos, en vez de los
+~2 minutos y 100 MB de descargas que cuesta `npm run update-all`.
+
+### Las cuotas NO van dentro, y es a propósito
+
+Dos motivos:
+
+* Gastarían cuota de The Odds API **cada noche**, y el plan gratuito son 500 al mes.
+* Un precio de hace ocho horas no sirve para nada.
+
+Las cuotas las refresca el propio servidor mientras está arrancado, con una cadencia que
+se ajusta al tamaño de tu plan y acelera cuando hay un partido inminente. O sea: **si
+tienes el servidor en marcha, no tienes que actualizar cuotas nunca**.
+
+### El repositorio es público, así que la base publicada también
+
+Está bien para datos deportivos —son públicos de origen— y estaría **muy mal** para el
+registro de apuestas de alguien. En un runner limpio no hay apuestas, pero «no debería
+haber» no es una garantía, así que antes de subir corre `npm run check-publishable`, que
+falla si encuentra algo. Distingue los dos motivos, porque no son el mismo:
+
+* **privacidad** — `bets` con filas bloquea la publicación. Es dinero de una persona.
+* **integridad** — un `*_prediction_log` con filas significa que alguien arrancó la app
+  sobre esa base, o sea que no es una construcción limpia. No filtraría nada delicado;
+  bloquea porque indica que la base no es la que se cree.
+
+### Y la descarga se niega a destruir lo tuyo
+
+La base publicada se construye en un runner limpio, así que su tabla `bets` está
+**vacía**. Instalarla encima de la tuya borraría tus apuestas — y lo haría en silencio,
+porque la app arrancaría perfectamente después.
+
+Por eso `fetch-data` no toca una base existente sin `--force`, y ni con `--force` se
+pierde nada: guarda una copia con fecha y **copia tus tablas** (apuestas y track record)
+a la base nueva antes de dejarla en su sitio.
+
+Antes de instalar nada valida: SHA-256 contra el publicado, descomprime a un temporal,
+lo abre y cuenta filas. Un SQLite truncado **no falla al abrirse** — falla mucho más
+tarde, con una consulta cualquiera y un mensaje que no señala a la descarga.
+
+Probado con la release simulada en local: checksum incorrecto, fichero truncado y
+release inexistente dejan la base intacta, las apuestas intactas y ningún temporal.
+
+### El cron solo corre desde la rama por defecto
+
+GitHub ejecuta los `schedule` **únicamente desde la rama por defecto** del repositorio.
+Mientras este workflow viva solo en una rama de trabajo, la ejecución nocturna no se
+dispara: se puede lanzar a mano desde Actions → Datos → «Run workflow», pero el horario
+no existe hasta que el fichero llega a la rama por defecto.
+
+---
 
 ## Actualizar todo (`npm run update-all`)
 
