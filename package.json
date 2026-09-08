@@ -17,6 +17,7 @@
     "dev:web": "npm run dev --workspace web",
     "seed": "npm run seed --workspace server",
     "update-data": "npm run update-data --workspace server --",
+    "update-all": "node scripts/update-all.mjs",
     "backtest": "npm run backtest --workspace server --",
     "build": "npm run build --workspace web && npm run typecheck --workspace server",
     "typecheck": "npm run typecheck --workspaces --if-present",

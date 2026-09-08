@@ -790,6 +790,7 @@ ves, en vez de fallar en silencio.
 |---------|----------|
 | `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
 | `npm run seed` | Tenis: carga el dataset de demostración |
+| `npm run update-all` | **Los cinco deportes de una tirada.** `-- --skip-odds` no gasta cuota; `-- --only fb,bb` limita a algunos. Un deporte que falle no para a los demás y el resumen dice cuál fue |
 | `npm run update-data` | Tenis: refresca histórico real + odds |
 | `npm run backtest` | Tenis: mide la exactitud del modelo |
 | `npm run update-data:bb` | **Baloncesto**: equipos, resultados, partidos próximos y cuotas |
@@ -821,6 +822,64 @@ ves, en vez de fallar en silencio.
 | `npm run build` | Build de producción del frontend + typecheck del backend |
 | `npm run typecheck` | Chequeo de tipos de ambos workspaces |
 | `npm run lint` | Lint real (oxlint, solo la categoría **correctness**) |
+
+## Actualizar todo (`npm run update-all`)
+
+Los cinco deportes en una tirada:
+
+```bash
+npm run update-all                   # todo, con cuotas
+npm run update-all -- --skip-odds    # solo el histórico, sin gastar cuota
+npm run update-all -- --only fb,bb   # solo algunos (fb, tennis, bb, bsb, naf)
+```
+
+```
+RESUMEN
+  ✅ ⚽ Fútbol           10 s
+  ✅ 🎾 Tenis             5 s
+  ✅ 🏀 Baloncesto       15 s
+  ✅ ⚾ Béisbol          66 s
+  ✅ 🏈 NFL               1 s
+
+  5/5 correctos en 98 s.
+```
+
+### Por qué un script y no cinco `&&`
+
+* **Un fallo no puede parar a los demás.** Encadenando con `&&`, si la fuente del
+  béisbol está caída la NFL no se actualiza — y no porque le pase nada, sino porque iba
+  detrás. Aquí cada deporte es independiente: el que falle se anota y se sigue, y el
+  código de salida es 1 para que un cron se entere.
+* **Hay que saber cuál falló.** Cinco comandos encadenados dejan un muro de salida; esto
+  deja una tabla con el comando exacto para repetir solo el que se rompió.
+* **El orden no es indiferente.** El fútbol va primero porque es el que más partes tiene
+  (histórico, próximos, cuotas y plantillas) y el que más tarda: si algo va a fallar,
+  mejor enterarse en el primer minuto.
+
+### La cuota, que es lo que de verdad cuesta
+
+«Actualizar todo» son cinco tiradas contra The Odds API y el plan gratuito son **500
+peticiones al mes**. Correrlo varias veces al día lo quema en una semana.
+
+El histórico de resultados cambia una vez por jornada y **no necesita precios**, así que
+para el uso diario `--skip-odds` es lo normal. Las cuotas ya se refrescan solas mientras
+el servidor está arrancado, con una cadencia que se ajusta al tamaño del plan y que
+acelera cuando hay un partido inminente.
+
+Lo que sí cambia a diario son las plantillas y el parte de lesionados:
+
+```bash
+npm run update-squads:fb    # mucho más barato que la actualización completa
+```
+
+### Un flag que no hacía nada
+
+`--skip-odds` lo aceptaban cuatro de los cinco scripts. El de la NFL no tomaba
+argumentos, así que lo recibía, lo **ignoraba en silencio** y pedía cuotas igualmente:
+una tirada que se creía gratis gastaba cuota solo ahí. Ahora los cinco lo respetan y el
+de la NFL lo dice en su salida.
+
+---
 
 ## El pipeline de noticias (`npm run news`)
 

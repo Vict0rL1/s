@@ -1,4 +1,4 @@
-// npm run update-data:naf
+// npm run update-data:naf [-- --skip-odds]
 //
 // Downloads the NFL archive, rebuilds the ratings, stores the remaining
 // schedule as upcoming games, and — if there is an API key — overlays live
@@ -15,6 +15,12 @@ import { fetchText, parseGames, parseTeams, storeGames, storeSchedule } from '..
 import { refreshOdds } from '../ingest/odds.ts';
 import { countGames, countTeams, getLeagueState, rebuildRatings } from '../repo.ts';
 import { ELO_PER_POINT } from '../model.ts';
+
+// `--skip-odds` existe por consistencia con los otros cuatro deportes. Sin él, el
+// `update-all` que sí lo acepta lo pasaba a este script, este lo ignoraba en silencio, y
+// una tirada que se creía gratis gastaba cuota solo aquí — el peor sitio para descubrir
+// que un flag no hace nada.
+const skipOdds = process.argv.slice(2).includes('--skip-odds');
 
 async function main(): Promise<void> {
   getDb();
@@ -63,7 +69,9 @@ async function main(): Promise<void> {
     );
   }
 
-  if (env.oddsApiKey) {
+  if (skipOdds) {
+    console.log('\n▸ Cuotas: saltadas por --skip-odds (no se gasta cuota).');
+  } else if (env.oddsApiKey) {
     console.log('\n▸ Cuotas en vivo');
     try {
       const n = await refreshOdds();
