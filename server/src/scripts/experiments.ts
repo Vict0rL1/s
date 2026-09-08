@@ -7,7 +7,7 @@
 import {
   readRegistry,
   distinctExperiments,
-  datasetKey,
+  familyKey,
   bonferroniAlpha,
   benjaminiHochberg,
   REGISTRY_PATH,
@@ -55,7 +55,7 @@ if (unlocks.length === 0) {
 type Row = Experiment & { times: number; pSpread: [number, number] };
 const families = new Map<string, Row[]>();
 for (const e of experiments) {
-  const k = datasetKey(e.dataset);
+  const k = familyKey(e);
   families.set(k, [...(families.get(k) ?? []), e]);
 }
 
@@ -106,12 +106,18 @@ for (const [key, fam] of [...families].sort()) {
     // igual que un acierto rotundo. Le pasó al experimento de Glicko: p = 0.005, dos
     // «sí» en las columnas de significancia, y lo que decía era que la feature
     // empeoraba de forma inequívoca.
+    // En 'corr' un delta positivo NO es «peor»: es más dependencia, que es justo lo que
+    // se estaba buscando. Enseñarlo como EMPEORA leería un hallazgo como un fracaso.
     const dir =
       e.result.p >= 0.05
         ? '   —      '
-        : e.result.delta < 0
-          ? ' mejora   '
-          : ' EMPEORA  ';
+        : e.metric === 'corr'
+          ? e.result.delta > 0
+            ? ' MÁS dep. '
+            : ' menos dep'
+          : e.result.delta < 0
+            ? ' mejora   '
+            : ' EMPEORA  ';
     const delta =
       Math.abs(e.result.delta) >= 1
         ? (e.result.delta >= 0 ? '+' : '') + e.result.delta.toFixed(1)
@@ -127,12 +133,19 @@ for (const [key, fam] of [...families].sort()) {
   // ---- lo que hay que leerse ----
   // Solo cuentan los que mejoran: «pasa el listón» significa «hay evidencia de que
   // esto AYUDA», no «hay evidencia de que esto es distinto de cero en algún sentido».
-  const improves = (e: Experiment) => e.result.delta < 0;
-  const nominalHits = fam.filter((e) => e.result.p < 0.05 && improves(e)).length;
-  const bonfHits = fam.filter((e) => e.result.p < alpha && improves(e)).length;
-  const bhHits = fam.filter((e, i) => bh.has(i) && improves(e)).length;
+  //
+  // Salvo en la familia de correlación, donde «mejorar» no quiere decir nada: lo que se
+  // busca ahí es que el parámetro NO sea cero, en cualquier sentido. Contando solo los
+  // negativos, un ρ de +0.19 con p = 0.001 se resumía como «0 con evidencia», que es lo
+  // contrario de lo que dice la tabla dos líneas más arriba.
+  const isCorr = fam.every((e) => e.metric === 'corr');
+  const counts = (e: Experiment) => (isCorr ? true : e.result.delta < 0);
+  const nominalHits = fam.filter((e) => e.result.p < 0.05 && counts(e)).length;
+  const bonfHits = fam.filter((e) => e.result.p < alpha && counts(e)).length;
+  const bhHits = fam.filter((e, i) => bh.has(i) && counts(e)).length;
   console.log(
-    `\n  Mejoras con evidencia: ${nominalHits} al listón nominal del 5 %, ` +
+    `\n  ${isCorr ? 'Distintos de cero con evidencia' : 'Mejoras con evidencia'}: ` +
+      `${nominalHits} al listón nominal del 5 %, ` +
       `${bonfHits} tras Bonferroni, ${bhHits} tras Benjamini–Hochberg.`,
   );
   // El número que pone las cosas en su sitio: cuántos falsos esperas por puro azar.

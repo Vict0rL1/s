@@ -24,6 +24,7 @@ import { registerBaseballRoutes } from './routes/baseball.ts';
 import { registerNflRoutes } from './routes/nfl.ts';
 import { registerBetRoutes } from './routes/bets.ts';
 import { registerLatencyRoutes } from './routes/latency.ts';
+import { registerStakingRoutes } from './routes/staking.ts';
 import { recordLatency } from './latency/record.ts';
 import { checkLatency, publish } from './latency/alert.ts';
 import { allocate } from './latency/schedule.ts';
@@ -297,6 +298,7 @@ async function main() {
   await app.register(registerBasketballRoutes, { prefix: '/api/basketball' });
   await app.register(registerFootballRoutes, { prefix: '/api/football' });
   await app.register(registerLatencyRoutes, { prefix: '/api/latency' });
+  await app.register(registerStakingRoutes, { prefix: '/api/staking' });
   await app.register(registerBaseballRoutes, { prefix: '/api/baseball' });
   await app.register(registerNflRoutes, { prefix: '/api/nfl' });
   // The bet log is not a sixth sport: it records what the person staked, not what

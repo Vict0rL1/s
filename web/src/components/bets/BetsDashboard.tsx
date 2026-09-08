@@ -18,6 +18,7 @@ import { BREAK_EVEN_COLOR, LOSS_COLOR, PROFIT_COLOR } from '../../lib/theme';
 import { dayLabel, groupByDay } from '../../lib/format';
 import { Card, DayHeading, EmptyState, Panel, SectionTitle, SkeletonList, pillClass } from '../ui';
 import LatencyPanel from '../LatencyPanel';
+import ExposurePanel from '../ExposurePanel';
 import BetCalendar from './BetCalendar';
 import ProfitCurve from './ProfitCurve';
 import BetForm from './BetForm';
@@ -99,6 +100,11 @@ export default function BetsDashboard() {
           para toda la app —un único ciclo de sondeo alimenta las cinco pestañas— y
           repetir el mismo panel cinco veces sugeriría cinco mediciones distintas. */}
       <LatencyPanel />
+
+      {/* El sizing de cartera vive aquí y no en la pestaña de fútbol porque es una
+          pregunta sobre TU dinero, no sobre un partido: cuánto hay en juego a la vez y
+          cuánto riesgo es eso de verdad. */}
+      <ExposurePanel />
 
       {(adding || editing) && (
         <BetForm

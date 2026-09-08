@@ -804,6 +804,7 @@ ves, en vez de fallar en silencio.
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate (`--model elo` mide el camino de respaldo) |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
+| `npm run study:correlation` | **Mide la correlación entre posiciones abiertas** con residuos tipificados fuera de muestra, con grupo de control y bootstrap por bloques. `--record` lo anota en el registro |
 | `npm run staking` | **La capa de decisión**: Kelly fraccional, topes, límites de pérdida y drawdown esperado |
 | `npm run study:calibration` | Mide el ECE por deporte y escribe lo que el módulo de riesgo lee para dimensionar |
 | `npm run experiments` | **El registro**: cuántas veces se han mirado estos datos, y qué resultados sobreviven a la corrección por comparaciones múltiples |
@@ -1287,6 +1288,168 @@ lo escribe en su salida en vez de dejarlo en un decimal.
 
 ---
 
+## Apuestas simultáneas: correlación, Kelly de cartera y topes (`npm run study:correlation`)
+
+El sizing dimensionaba cada apuesta **como si fuera la única**. Un sábado no lo es: hay
+ocho posiciones abiertas a la vez y, si fallan juntas, el banco no cae ocho veces un
+poco — cae una vez mucho.
+
+### Primero se midió, y salió lo contrario de lo esperado
+
+La hipótesis era la intuitiva: las apuestas de una misma liga y jornada se arrastran
+entre sí (mismo árbitro, mismo clima, mismo sesgo del modelo). Para comprobarlo se sacan
+las predicciones **fuera de muestra** del Dixon-Coles y se mira el residuo tipificado
+
+```
+z = (y − p) / √(p·q)
+```
+
+Con el modelo calibrado, E[z] = 0 y Var[z] = 1, así que la correlación entre dos
+apuestas es directamente E[z_i·z_j]: cero es independencia, positivo es fallar juntas.
+Medido: media de z = 0.016, varianza = 1.007. Sobre **65.505 predicciones**, 2.063
+jornadas, 13 ligas.
+
+| pareja | ρ | IC 95 % | pares |
+| --- | --- | --- | --- |
+| **mismo partido** · over 2.5 ~ ambos marcan | **+0.558** | [+0.546, +0.572] | 21.835 |
+| **mismo partido** · gana el local ~ over 2.5 | **+0.164** | [+0.151, +0.178] | 21.835 |
+| **mismo partido** · gana el local ~ ambos marcan | **−0.141** | [−0.154, −0.128] | 21.835 |
+| misma liga · misma jornada · mismo mercado | +0.0013 | [−0.0020, +0.0047] | 357.606 |
+| … y además el mismo lado (**mismo sesgo**) | +0.0007 | [−0.0038, +0.0053] | 225.362 |
+| **control**: ligas y días distintos | −0.0002 | — | 918.752 |
+
+La correlación que se fue a buscar **no existe**: entre partidos distintos de la misma
+liga y jornada no se distingue de cero, ni siquiera restringiendo a apuestas del mismo
+lado. La que sí existe es entre **mercados del mismo partido**, y es dos órdenes de
+magnitud mayor.
+
+### El control es la mitad del experimento
+
+Pares de ligas y días distintos. No hay mecanismo por el que el error del Betis en marzo
+deba parecerse al del Everton en noviembre, así que ese número **tiene** que salir ~0 — y
+sale −0.0002. Es lo que convierte el cero de arriba en una **medición** y no en falta de
+potencia: el mismo estimador detecta un 0.558 cuando lo hay.
+
+Sin el control, este script sería una máquina de fabricar números convincentes.
+
+### Y un error propio, en la primera versión
+
+El grupo «mercados distintos» salía significativo con ρ = 0.019 e **incluía pares del
+mismo partido**. Estaba midiendo el 1X2 contra el over del mismo marcador —correlacionado
+por construcción— y presentándolo como una propiedad de la jornada. Separados los dos
+casos, uno se desploma a cero y el otro sube a 0.19.
+
+### El error estándar no puede ser el ingenuo
+
+Un partido entra en muchos pares, así que N pares no son N observaciones. El intervalo
+sale de un **bootstrap por bloques** que remuestrea jornadas enteras. Con un bootstrap
+sobre pares, los intervalos saldrían varias veces más estrechos y el ruido pasaría por
+hallazgo.
+
+### El signo no es un detalle
+
+Las cifras están en dirección canónica (gana el local / hay over / marcan los dos).
+Respaldar el lado contrario en una de las dos **invierte el signo**.
+
+«Local + ambos marcan» sale **negativa**: es una cobertura parcial, no una concentración.
+Un modelo de correlación que tomara valores absolutos —que es lo que sale de suponer en
+vez de medir— recortaría justo ahí un tamaño que no hacía falta recortar.
+
+### Kelly de cartera
+
+Kelly maximiza el crecimiento del **banco**, y el banco es uno solo. Con varias
+posiciones lo que crece es `1 + Σ f_i·r_i`, y el logaritmo de esa suma no se separa en
+suma de logaritmos.
+
+Con la aproximación cuadrática, `f* = Σ⁻¹μ` — el problema de Markowitz. Pero esa
+aproximación **no coincide** con el Kelly exacto ni con una sola apuesta (a cuota 6.00
+pide un 13 % menos), así que no sustituye al sizing que ya había. Devuelve un **factor**:
+
+```
+factor_i = f_cartera,i / f_independiente,i
+```
+
+con las dos bajo la **misma** aproximación, de modo que el error de aproximación se
+cancela en el cociente y lo que queda es solo el efecto de la correlación. Ese factor
+multiplica el tamaño de siempre.
+
+**El factor nunca sube de 1.** Con correlación negativa el óptimo pediría apostar más; se
+recorta igualmente. Una estimación de correlación negativa es la menos fiable de todas y
+el premio por creérsela es pequeño, mientras que el castigo es apalancarse justo donde
+uno creía estar cubierto. Un módulo de riesgo que puede *aumentar* una apuesta es una vía
+nueva de perder dinero.
+
+Con cuatro apuestas —dos de ellas mercados del mismo partido— el efecto es visible:
+
+```
+apuesta                  en solitario   de cartera   factor
+A vs B — local                  15.17        12.74   ×0.84
+A vs B — over 2.5               17.23        14.97   ×0.87
+C vs D — local                  15.17        15.04   ×0.99
+E vs F — local                  15.17        15.16   ×1.00
+```
+
+### Exposición agregada real contra la suma ingenua
+
+Son **dos preguntas distintas** y hacen falta las dos:
+
+* **Suma ingenua** `Σf_i` — «¿cuánto puedo perder?». No depende de la correlación: si
+  fallan todas se pierde la suma. Gobierna los topes duros.
+* **Riesgo efectivo** `√(fᵀ·C·f)` — «¿cuánto riesgo corro?». Es el tamaño de *una*
+  apuesta con la misma varianza. Gobierna el tamaño, porque es lo que entra en el
+  crecimiento logarítmico.
+
+25 apuestas al 2 %: la ingenua es el 50 %, la efectiva el 10 % (√25 veces una, no 25).
+Con correlación perfecta las dos coinciden. Usar solo la ingenua rechaza carteras
+diversificadas sanas; usar solo la efectiva deja pasar una concentración que vacía el
+banco en una tarde.
+
+### Topes por día y por liga
+
+Dos puertas nuevas, la 7 y la 8:
+
+| tope | valor | protege de |
+| --- | --- | --- |
+| por evento | 2 % | una `p` disparatada en un partido |
+| total simultáneo | 10 % | demasiado vivo a la vez |
+| **por día** | **6 %** | que una tarde entera se liquide junta |
+| **por liga** | **5 %** | que el banco dependa de que el modelo de *una* liga esté bien |
+
+El tope por liga **no** protege de una dependencia medida — ya se ha dicho que es cero.
+Protege del **riesgo de modelo**: si el Dixon-Coles de una liga está roto (datos mal
+cargados, un ascenso mal sembrado), el fallo es de esa liga entera y se lleva todas sus
+posiciones por delante. La correlación de resultados es cero; la de «que mi modelo esté
+equivocado» no lo es, y esa no se puede estimar con los mismos datos que produjeron el
+modelo.
+
+Cuando un tope no da para todo, se recorta **proporcionalmente**, no por orden de
+llegada: servir por orden dejaría la última candidata a cero por el azar del orden de la
+consulta, y ese azar no es un criterio de riesgo.
+
+### La correlación tiene su propia familia de Bonferroni
+
+Bonferroni corrige por haber hecho muchas preguntas **parecidas** sobre los mismos datos.
+«¿Mejora el log loss?» preguntado dieciocho veces es una familia; «¿cuánto correlacionan
+dos apuestas?» no es la misma pregunta ni sobre la misma cantidad. Meterlas en la misma
+bolsa encarecía el listón de las comparaciones de predicción por medir algo que no compite
+con ellas, y hacía que **añadir una medición debilitara retroactivamente** conclusiones
+anteriores que no habían cambiado.
+
+No es una escapatoria: dentro de su familia se corrige igual, con divisor 2 y a la vista.
+Y la columna de dirección tuvo que aprender que en `corr` un delta positivo no es
+`EMPEORA` sino `MÁS dep.` — es el hallazgo, no un fracaso.
+
+### Un fallo que solo cazó la comprobación
+
+La tabla de correlaciones se indexaba con claves escritas a mano, y `over_under~btts` no
+encontraba nada: la búsqueda ordena alfabéticamente y genera `btts~over_under`. El par
+con la correlación **más alta de las tres** caía en el valor por defecto. No rompía nada
+visible porque el defecto es prudente — que es exactamente lo que hace que un fallo así
+sobreviva. Ahora las claves se construyen con la misma función que las busca.
+
+
+---
+
 ## Modelo y decisión son dos cosas
 
 El modelo dice una probabilidad. Otra cosa distinta decide un dinero. Viven en
@@ -1301,7 +1464,7 @@ predicción se parecen demasiado.
 npm run staking -- --bankroll 1000
 ```
 
-### Las cinco puertas
+### Las ocho puertas
 
 Una apuesta pasa por todas, en este orden:
 
@@ -1315,8 +1478,18 @@ Una apuesta pasa por todas, en este orden:
 6. **Exposición total simultánea** — 10 % del banco en riesgo a la vez, contando lo
    pendiente. Las cinco primeras dimensionan cada apuesta como si fuera la única, y en
    un sábado no lo es: sin esta puerta, 25 candidatas al 2 % sumaban el 50 % del banco.
+7. **Kelly de cartera** — un factor ≤ 1 por la correlación **medida** con el resto de
+   las posiciones abiertas. Ver la sección de apuestas simultáneas más arriba.
+8. **Topes por día y por liga** — 6 % y 5 %. Manda el más ajustado de los tres topes, no
+   el producto: son condiciones que hay que cumplir a la vez, no descuentos que se
+   acumulan.
 
-Y antes de las seis, una regla de entrada: **una sola selección por partido**. Los tres
+Las puertas 1–6 se evalúan por apuesta; las 7 y 8 **solo se pueden evaluar mirándolas
+todas juntas**, y por eso existe `decideBook` además de `decideStake`. Llamar n veces a
+la función de una deja las tres cosas nuevas sin gobierno, y el fallo no se ve: cada
+apuesta sale con su tamaño «prudente» y la cartera entera no lo es.
+
+Y antes de las ocho, una regla de entrada: **una sola selección por partido**. Los tres
 lados de un 1X2 son mutuamente excluyentes, así que se elige la de mayor **crecimiento
 esperado** —no la de mayor ventaja, que no es lo mismo: `f* = ventaja / (cuota − 1)`, y
 una selección a cuota larga puede tener más ventaja y un Kelly ridículo.
@@ -1570,6 +1743,7 @@ Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede
 | `GET /api/latency/stream` | **SSE**: el servidor empuja los cambios de precio. Reemplaza al refresco manual |
 | `POST /api/latency/client` | El navegador reporta la última etapa `{ms, sport?, fixtureId?}` |
 | `GET /api/latency/stages` | Los cuatro tramos y sus etiquetas |
+| `GET /api/staking/book?bankroll=` | La cartera de hoy: tamaño de cartera contra tamaño en solitario, exposición agregada real contra la ingenua, topes que recortaron y correlaciones medidas |
 
 ## Diseño
 

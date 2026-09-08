@@ -72,8 +72,13 @@ export interface Experiment {
    * 'elo' existe porque no todo lo que se mide es una diferencia de log loss: la
    * escala de la banda de fiabilidad se estimó en puntos Elo. Meterla en la columna de
    * log loss ponía un −135 al lado de un −0.005 y hacía ilegible la tabla entera.
+   *
+   * 'corr' es el mismo caso por el mismo motivo: la correlación entre posiciones
+   * abiertas no es una diferencia contra un baseline de predicción, es un parámetro de
+   * la cartera. Y a diferencia de las demás, en 'corr' un delta POSITIVO no es «peor»
+   * — es más dependencia, que es lo que se estaba buscando.
    */
-  metric: 'logloss' | 'brier' | 'rps' | 'roi' | 'elo';
+  metric: 'logloss' | 'brier' | 'rps' | 'roi' | 'elo' | 'corr';
   /** Contra qué se compara. Un delta sin baseline no significa nada. */
   baseline: string;
   result: ExperimentResult;
@@ -138,6 +143,28 @@ export function readRegistry(): { experiments: Experiment[]; unlocks: UnlockEntr
 export const datasetKey = (d: DatasetId): string => `${d.sport}/${d.split}`;
 
 /**
+ * En qué FAMILIA de comparaciones múltiples entra una métrica.
+ *
+ * Bonferroni corrige por haber hecho muchas preguntas PARECIDAS sobre los mismos datos.
+ * «¿Mejora el log loss?» preguntado veinte veces es una familia. «¿Cuánto correlacionan
+ * dos apuestas?» no es la misma pregunta ni sobre la misma cantidad, y meterla en la
+ * misma bolsa tiene dos efectos y los dos son malos: encarece el listón de las
+ * comparaciones de predicción por medir algo que no compite con ellas, y hace que añadir
+ * una medición debilite retroactivamente conclusiones anteriores que no han cambiado.
+ *
+ * Así que la correlación tiene su propia familia. No es una escapatoria para librarse de
+ * la corrección: dentro de su familia se corrige igual, y son dos, así que el divisor es
+ * 2 y está a la vista.
+ */
+export function metricFamily(metric: Experiment['metric']): string {
+  return metric === 'corr' ? 'correlacion' : 'prediccion';
+}
+
+/** La familia completa: mismo conjunto Y misma clase de pregunta. */
+export const familyKey = (e: Pick<Experiment, 'dataset' | 'metric'>): string =>
+  `${datasetKey(e.dataset)} · ${metricFamily(e.metric)}`;
+
+/**
  * Un experimento distinto por hipótesis y conjunto, quedándose con la MEDICIÓN MÁS
  * RECIENTE — y contando cuántas veces se ha medido.
  *
@@ -174,11 +201,15 @@ export function distinctExperiments(
  * Este es EL número. Es el que convierte «p = 0.03, significativo» en «p = 0.03 sobre
  * 24 intentos, o sea lo que se espera del ruido».
  */
-export function familySize(d: DatasetId, registry = readRegistry().experiments): number {
-  const key = datasetKey(d);
+export function familySize(
+  d: DatasetId,
+  registry = readRegistry().experiments,
+  metric: Experiment['metric'] = 'logloss',
+): number {
+  const key = familyKey({ dataset: d, metric });
   // Sobre los DISTINTOS, no sobre las líneas del log: repetir una medición no es una
   // comparación nueva y no debe encarecer el listón de las demás.
-  return distinctExperiments(registry).filter((e) => datasetKey(e.dataset) === key).length;
+  return distinctExperiments(registry).filter((e) => familyKey(e) === key).length;
 }
 
 // ===========================================================================

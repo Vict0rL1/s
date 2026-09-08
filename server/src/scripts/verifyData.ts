@@ -33,7 +33,7 @@ import { parseFootballTxt } from '../football/ingest/openfootballTxt.ts';
 import { readRegistry, distinctExperiments } from '../experiments/registry.ts';
 import { fullKelly, fractionalKelly, expectedLogGrowth, expectedValue } from '../staking/kelly.ts';
 import { decideStake, decideEvent, DEFAULT_CONFIG } from '../staking/policy.ts';
-import { calibrationMultiplier } from '../staking/calibration.ts';
+import { calibrationMultiplier, type CalibrationFile } from '../staking/calibration.ts';
 import { simulate } from '../staking/drawdown.ts';
 import { fitDixonColes, expectedGoalsDc } from '../football/bayes/dixonColes.ts';
 import { getDcParams } from '../football/bayes/repo.ts';
@@ -67,6 +67,17 @@ import {
   type FixtureUrgency,
 } from '../latency/schedule.ts';
 import { checkLatency, subscribe, publish } from '../latency/alert.ts';
+import {
+  correlation,
+  correlationMatrix,
+  aggregateExposure,
+  MEASURED,
+  SAME_LEAGUE_DAY_RHO,
+  pairKey,
+  type Position,
+} from '../staking/correlation.ts';
+import { portfolioFactors, type Candidate } from '../staking/portfolio.ts';
+import { decideBook, type BookCandidate } from '../staking/book.ts';
 import { halfMarkets, HALF_NU } from '../football/halves.ts';
 import { getHalfParams } from '../football/halvesRepo.ts';
 import { getTeamCounts } from '../football/teamCounts.ts';
@@ -2521,6 +2532,237 @@ function auditLatency(): void {
   }
 }
 
+// ===========================================================================
+// SIZING DE CARTERA
+// ===========================================================================
+// Aquí un fallo no lanza una excepción: devuelve un número plausible y se apuesta. Un
+// factor de correlación con el signo cambiado recorta lo que había que dejar y deja lo
+// que había que recortar, y por fuera se ve igual de prudente.
+//
+// Lo que se comprueba son PROPIEDADES con respuesta conocida a mano: dos apuestas
+// idénticas y perfectamente correlacionadas tienen que sumar exactamente una; n
+// independientes tienen que dar un riesgo efectivo de √n veces una, no n veces.
+function auditPortfolio(): void {
+  console.log('\n▸ Sizing de cartera');
+  const pos = (
+    key: string,
+    matchKey: string,
+    market: Position['market'],
+    side: Position['side'],
+    fraction = 0.02,
+    league = 'epl',
+    day = '2026-09-12',
+  ): Position => ({ key, matchKey, league, day, market, side, fraction });
+  const cand = (p: Position, prob = 0.55, odds = 2.0): Candidate => ({ ...p, p: prob, odds });
+
+  // --- La matriz de correlación dice lo que se midió ---
+  check(
+    'cartera: la misma posición correlaciona 1 consigo misma',
+    correlation(pos('a', 'm1', '1x2', 'canonica'), pos('a', 'm1', '1x2', 'canonica')).rho === 1,
+    'no da 1',
+  );
+  // Mismo partido y mismo mercado se declara 1 a propósito (ver correlation.ts): su
+  // correlación real es negativa, pero tratarla así dejaría abrir los dos lados de un
+  // 1X2 llamándolo cobertura, cuando garantiza perder una de las dos patas.
+  check(
+    'cartera: dos lados del mismo mercado se tratan como una sola posición',
+    correlation(pos('a', 'm1', '1x2', 'canonica'), pos('b', 'm1', '1x2', 'contraria')).rho === 1,
+    'no las funde',
+  );
+  const overBtts = correlation(
+    pos('a', 'm1', 'over_under', 'canonica'),
+    pos('b', 'm1', 'btts', 'canonica'),
+  ).rho;
+  check('cartera: over~btts usa el 0.558 medido', Math.abs(overBtts - 0.558) < 1e-9, String(overBtts));
+
+  // --- EL SIGNO. Es la propiedad que más fácil se rompe y peor se ve ---
+  // Local y «ambos marcan» correlacionan NEGATIVO (−0.141 medido): son una cobertura
+  // parcial. Con el signo perdido —tomando valor absoluto, que es lo que sale de suponer
+  // en vez de medir— el módulo recortaría justo donde no hacía falta.
+  const homeBtts = correlation(
+    pos('a', 'm1', '1x2', 'canonica'),
+    pos('b', 'm1', 'btts', 'canonica'),
+  ).rho;
+  check('cartera: local~ambos-marcan es NEGATIVA', homeBtts < 0, String(homeBtts));
+  const flipped = correlation(
+    pos('a', 'm1', '1x2', 'canonica'),
+    pos('b', 'm1', 'btts', 'contraria'),
+  ).rho;
+  check(
+    'cartera: ir al lado contrario invierte el signo',
+    Math.abs(flipped + homeBtts) < 1e-9 && flipped > 0,
+    `${homeBtts} → ${flipped}`,
+  );
+
+  check(
+    'cartera: partidos de ligas distintas no correlacionan',
+    correlation(
+      pos('a', 'm1', '1x2', 'canonica', 0.02, 'epl'),
+      pos('b', 'm2', '1x2', 'canonica', 0.02, 'laliga'),
+    ).rho === 0,
+    'inventa correlación entre ligas',
+  );
+  check(
+    'cartera: misma liga y día usa el extremo alto del intervalo medido',
+    correlation(pos('a', 'm1', '1x2', 'canonica'), pos('b', 'm2', '1x2', 'canonica')).rho ===
+      SAME_LEAGUE_DAY_RHO,
+    'no usa el valor publicado',
+  );
+
+  const M = correlationMatrix([
+    pos('a', 'm1', '1x2', 'canonica'),
+    pos('b', 'm1', 'btts', 'canonica'),
+    pos('c', 'm2', '1x2', 'canonica'),
+  ]);
+  check(
+    'cartera: la matriz es simétrica con unos en la diagonal',
+    M.every((row, i) => row[i] === 1 && row.every((v, j) => Math.abs(v - M[j][i]) < 1e-12)),
+    'no es simétrica',
+  );
+
+  // --- Exposición agregada: las dos cifras y su relación ---
+  // 25 al 2 %: la suma es el 50 %, y con independencia el riesgo efectivo es √25 = 5
+  // veces una, o sea el 10 %. Es la aritmética entera de «real contra ingenua».
+  const many = Array.from({ length: 25 }, (_, i) => pos(`k${i}`, `m${i}`, '1x2', 'canonica', 0.02, `lg${i}`));
+  const agg = aggregateExposure(many);
+  check('cartera: la suma ingenua de 25 al 2 % es el 50 %', Math.abs(agg.naive - 0.5) < 1e-9, String(agg.naive));
+  check(
+    'cartera: 25 independientes dan √25 veces una, no 25',
+    Math.abs(agg.effective - 0.1) < 1e-9,
+    `${agg.effective} en vez de 0.10`,
+  );
+  // Todas del mismo partido y mercado → correlación 1 → efectiva IGUAL que la ingenua.
+  // Es el otro extremo, y sin él un `effective` que devolviera siempre √ pasaría.
+  const clones = Array.from({ length: 5 }, (_, i) => pos(`k${i}`, 'm1', '1x2', 'canonica', 0.02));
+  const aggC = aggregateExposure(clones);
+  check(
+    'cartera: con correlación 1 la efectiva IGUALA a la ingenua',
+    Math.abs(aggC.effective - aggC.naive) < 1e-9,
+    `${aggC.effective} contra ${aggC.naive}`,
+  );
+  check(
+    'cartera: la exposición efectiva nunca supera a la ingenua',
+    agg.effective <= agg.naive + 1e-12 && aggC.effective <= aggC.naive + 1e-12,
+    'la efectiva se pasa de la ingenua',
+  );
+
+  // --- Kelly de cartera ---
+  check(
+    'cartera: una sola posición no se recorta',
+    portfolioFactors([cand(pos('a', 'm1', '1x2', 'canonica'))]).factors[0] === 1,
+    'recorta una apuesta sola',
+  );
+  // Dos idénticas y perfectamente correlacionadas son UNA: los factores tienen que
+  // sumar 1. Es el caso con respuesta exacta, y el que caza un solver roto.
+  const twin = portfolioFactors([
+    cand(pos('a', 'm1', '1x2', 'canonica')),
+    cand(pos('b', 'm1', '1x2', 'contraria')),
+  ]);
+  check(
+    'cartera: dos posiciones idénticas suman el tamaño de una',
+    Math.abs(twin.factors.reduce((x, y) => x + y, 0) - 1) < 0.01,
+    `suman ${twin.factors.reduce((x, y) => x + y, 0).toFixed(4)}`,
+  );
+  // Con correlación negativa la solución óptima pediría apostar MÁS. Se recorta a 1: un
+  // módulo de riesgo que puede aumentar una apuesta es una vía nueva de perder dinero.
+  const hedge = portfolioFactors([
+    cand(pos('a', 'm1', '1x2', 'canonica')),
+    cand(pos('b', 'm1', 'btts', 'canonica')),
+  ]);
+  check(
+    'cartera: el factor nunca sube de 1, ni con correlación negativa',
+    hedge.factors.every((f) => f <= 1 + 1e-12 && f >= 0),
+    hedge.factors.join(' '),
+  );
+  // Y es monótono: más correlación, menos tamaño. Sin esto, un signo cambiado en el
+  // solver pasaría todas las comprobaciones de rango de arriba.
+  const soloPair = portfolioFactors([
+    cand(pos('a', 'm1', 'over_under', 'canonica')),
+    cand(pos('b', 'm2', 'over_under', 'canonica', 0.02, 'laliga')),
+  ]).factors[0];
+  const corrPair = portfolioFactors([
+    cand(pos('a', 'm1', 'over_under', 'canonica')),
+    cand(pos('b', 'm1', 'btts', 'canonica')),
+  ]).factors[0];
+  check(
+    'cartera: más correlación recorta más',
+    corrPair < soloPair,
+    `correlacionadas ×${corrPair.toFixed(3)} contra independientes ×${soloPair.toFixed(3)}`,
+  );
+
+  // --- decideBook: los topes ---
+  const bank = 1000;
+  const mkCand = (key: string, league: string, day: string, matchKey: string): BookCandidate => ({
+    key,
+    label: key,
+    sport: 'football',
+    league,
+    day,
+    matchKey,
+    market: '1x2',
+    side: 'canonica',
+    p: 0.6,
+    odds: 2.0,
+  });
+  // Calibración forzada a 1 y sin apuestas pendientes: se comprueban los topes, no la
+  // calibración medida de esta instalación (que cambia con los datos y volvería la
+  // comprobación dependiente de ellos).
+  const cal: CalibrationFile = { football: { multiplier: 1, reason: 'prueba', ece: 0, n: 0 } } as never;
+  const cfg = { ...DEFAULT_CONFIG };
+
+  // Ocho de la misma liga y el mismo día: el tope de liga (5 %) es el más ajustado.
+  const eight = Array.from({ length: 8 }, (_, i) => mkCand(`c${i}`, 'epl', '2026-09-12', `m${i}`));
+  const bk = decideBook(eight, bank, cfg, cal, new Date('2026-09-10T12:00:00Z'));
+  const placedTotal = bk.entries.reduce((a, e) => a + e.stake, 0);
+  check(
+    'cartera: el tope por liga se respeta',
+    placedTotal <= cfg.maxExposurePerLeague * bank + 0.01,
+    `${placedTotal.toFixed(2)} sobre un tope de ${(cfg.maxExposurePerLeague * bank).toFixed(2)}`,
+  );
+  check(
+    'cartera: la suma ingenua es MAYOR que lo que se pone',
+    bk.naiveStake > bk.totalStake,
+    `ingenua ${bk.naiveStake.toFixed(2)} contra puesta ${bk.totalStake.toFixed(2)}`,
+  );
+  // El recorte es PROPORCIONAL, no por orden de llegada. Con ocho candidatas idénticas,
+  // servir por orden dejaría a las últimas en cero y a las primeras enteras — y el orden
+  // de una consulta no es un criterio de riesgo.
+  const stakes = bk.entries.map((e) => e.stake);
+  check(
+    'cartera: ocho candidatas idénticas reciben lo mismo',
+    Math.max(...stakes) - Math.min(...stakes) <= 0.02,
+    `de ${Math.min(...stakes).toFixed(2)} a ${Math.max(...stakes).toFixed(2)}`,
+  );
+
+  // Repartidas en ligas y días distintos, el tope de liga deja de morder y manda el
+  // total. Sin este caso, un tope de liga que se aplicara siempre pasaría el de arriba.
+  const spread = Array.from({ length: 8 }, (_, i) =>
+    mkCand(`c${i}`, `lg${i}`, `2026-09-${12 + i}`, `m${i}`),
+  );
+  const bk2 = decideBook(spread, bank, cfg, cal, new Date('2026-09-10T12:00:00Z'));
+  const total2 = bk2.entries.reduce((a, e) => a + e.stake, 0);
+  check(
+    'cartera: repartida en ligas y días, manda el tope total',
+    total2 <= cfg.maxTotalExposure * bank + 0.01 && total2 > cfg.maxExposurePerLeague * bank,
+    `${total2.toFixed(2)} con tope total ${(cfg.maxTotalExposure * bank).toFixed(2)}`,
+  );
+  // Y el tope diario muerde cuando todo cae el mismo día en ligas distintas.
+  const oneDay = Array.from({ length: 8 }, (_, i) => mkCand(`c${i}`, `lg${i}`, '2026-09-12', `m${i}`));
+  const bk3 = decideBook(oneDay, bank, cfg, cal, new Date('2026-09-10T12:00:00Z'));
+  const total3 = bk3.entries.reduce((a, e) => a + e.stake, 0);
+  check(
+    'cartera: el tope por día se respeta',
+    total3 <= cfg.maxExposurePerDay * bank + 0.01,
+    `${total3.toFixed(2)} sobre un tope diario de ${(cfg.maxExposurePerDay * bank).toFixed(2)}`,
+  );
+
+  console.log(
+    `  ρ medido over~btts ${MEASURED.sameMatch[pairKey('over_under', 'btts')].rho} · ` +
+      `entre partidos ${MEASURED.sameLeagueDay.rho} (IC alto ${SAME_LEAGUE_DAY_RHO}) · ` +
+      `control ${MEASURED.control.rho}`,
+  );
+}
+
 function main(): void {
   console.log('\n🔎 Verificación de los datos\n' + '='.repeat(46));
   console.log(
@@ -2543,6 +2785,7 @@ function main(): void {
   auditThinMarkets();
   auditNews();
   auditLatency();
+  auditPortfolio();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

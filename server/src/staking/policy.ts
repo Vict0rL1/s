@@ -64,6 +64,29 @@ export interface StakingConfig {
    * golpe — medido, no supuesto — y el sizing de cada una decía «2 %, prudente».
    */
   maxTotalExposure: number;
+  /**
+   * Tope de exposición por DÍA, como fracción del banco.
+   *
+   * Distinto del tope total y no redundante con él: el total gobierna todo lo que está
+   * vivo a la vez, incluidas las apuestas de un torneo que se resuelve el jueves. Este
+   * gobierna lo que se juega EN UNA TARDE, que es la unidad en la que llega una mala
+   * racha — quince partidos del sábado se liquidan juntos y su resultado es un solo
+   * salto del banco, no quince pasos.
+   */
+  maxExposurePerDay: number;
+  /**
+   * Tope de exposición por LIGA, como fracción del banco.
+   *
+   * Existe por un motivo que la medición NO respalda y hay que decirlo: se midió la
+   * correlación entre partidos de una misma liga y jornada y salió indistinguible de
+   * cero (ver staking/correlation.ts). Así que esto no protege de una dependencia
+   * medida, protege del RIESGO DE MODELO: si el Dixon-Coles de una liga concreta está
+   * roto —datos mal cargados, un ascenso mal sembrado, una temporada corta— el fallo es
+   * de esa liga entera y se lleva todas sus posiciones por delante a la vez. La
+   * correlación de resultados es cero; la de «que mi modelo esté equivocado» no lo es, y
+   * esa no se puede estimar con los mismos datos que produjeron el modelo.
+   */
+  maxExposurePerLeague: number;
 }
 
 /**
@@ -93,6 +116,12 @@ export const DEFAULT_CONFIG: StakingConfig = {
   // 10 %: cinco apuestas al tope simultáneas. Por encima de eso, una mala jornada deja
   // de ser una mala jornada.
   maxTotalExposure: 0.1,
+  // 6 % en un día: tres apuestas al tope. Es menos que el total a propósito — el total
+  // puede repartirse entre varios días, y el día es donde una racha se concentra.
+  maxExposurePerDay: 0.06,
+  // 5 % por liga: la mitad del total. Con seis ligas configuradas, obliga a que el
+  // banco no dependa de que el modelo de UNA de ellas esté bien.
+  maxExposurePerLeague: 0.05,
 };
 
 export interface StakeRequest {
@@ -334,6 +363,25 @@ export function decideEvent(
   cal: CalibrationFile = readCalibration(),
   now = new Date(),
 ): (StakeDecision & { label: string }) | null {
+  const best = bestSelection(selections, cfg);
+  if (!best) return null;
+  const d = decideStake({ ...base, p: best.p, odds: best.odds }, cfg, cal, now);
+  return { ...d, label: best.label };
+}
+
+/**
+ * Cuál de las selecciones excluyentes se elige, sin dimensionarla.
+ *
+ * Extraída de `decideEvent` para que el sizing de cartera pueda elegir primero y
+ * dimensionar después, con todas las candidatas ya sobre la mesa. Con la regla copiada
+ * en dos sitios, la lista de la cartera y la decisión individual podrían discrepar
+ * sobre qué lado del mismo partido se juega, y esa clase de desacuerdo no se nota hasta
+ * que el número de la pantalla y el del informe son distintos.
+ */
+export function bestSelection<T extends { p: number; odds: number }>(
+  selections: T[],
+  cfg: StakingConfig = DEFAULT_CONFIG,
+): T | null {
   if (selections.length === 0) return null;
   const growth = (s: { p: number; odds: number }): number =>
     expectedLogGrowth(s.p, s.odds, fractionalKelly(s.p, s.odds, cfg.kellyFraction));
@@ -341,8 +389,7 @@ export function decideEvent(
   for (const s of selections) {
     if (growth(s) > growth(best)) best = s;
   }
-  const d = decideStake({ ...base, p: best.p, odds: best.odds }, cfg, cal, now);
-  return { ...d, label: best.label };
+  return best;
 }
 
 /**
@@ -356,4 +403,33 @@ export function pendingExposure(): number {
     .prepare(`SELECT COALESCE(SUM(stake), 0) AS s FROM bets WHERE status = 'pending'`)
     .get() as unknown as { s: number };
   return row.s;
+}
+
+/**
+ * Lo pendiente, partido por día y por liga.
+ *
+ * Un único total no puede gobernar tres topes distintos: 8 % repartido entre cuatro
+ * ligas y cuatro días es una cartera; el mismo 8 % en una liga y un sábado es una sola
+ * apuesta disfrazada de cuatro.
+ */
+export function exposureBreakdown(): {
+  total: number;
+  byDay: Map<string, number>;
+  byLeague: Map<string, number>;
+} {
+  const rows = getDb()
+    .prepare(`SELECT placed_on, league, stake FROM bets WHERE status = 'pending'`)
+    .all() as unknown as { placed_on: string; league: string | null; stake: number }[];
+  const byDay = new Map<string, number>();
+  const byLeague = new Map<string, number>();
+  let total = 0;
+  for (const r of rows) {
+    total += r.stake;
+    byDay.set(r.placed_on, (byDay.get(r.placed_on) ?? 0) + r.stake);
+    // Sin liga van a un cubo propio y no se reparten: meterlas en «todas» inventaría
+    // exposición donde no la hay, y descartarlas la escondería.
+    const lg = r.league ?? '(sin liga)';
+    byLeague.set(lg, (byLeague.get(lg) ?? 0) + r.stake);
+  }
+  return { total, byDay, byLeague };
 }
