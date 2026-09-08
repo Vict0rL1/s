@@ -276,3 +276,51 @@ def test_la_cadena_se_cachea_y_no_se_vuelve_a_pedir(client):
 def test_simbolo_invalido_se_rechaza(client):
     c, _, _ = client()
     assert c.get("/api/options/no-es-un-simbolo-larguisimo").status_code == 422
+
+
+def test_la_segunda_consulta_del_dia_no_se_compara_consigo_misma(client, session_factory):
+    """La instantánea se escribe al final de cada consulta. Si la base la
+    incluyera, la variación de open interest daría 0 % siempre a partir de la
+    segunda visita: la señal entera apagada, sin avisar."""
+    with session_factory() as s:
+        for i in range(12):
+            s.add(
+                OptionsSnapshot(
+                    symbol="AAPL",
+                    fecha=(HOY - timedelta(days=i + 1)).isoformat(),
+                    oi_total=50_000 + i * 100,
+                    volumen_total=30_000 + i * 50,
+                    prima=0.03 + i * 0.001,
+                )
+            )
+        s.commit()
+
+    c, _, _ = client()
+    primera = c.get("/api/options/AAPL").json()["actividad"]["variacion_oi"]
+    segunda = c.get("/api/options/AAPL").json()["actividad"]["variacion_oi"]
+
+    assert primera["disponible"] is True
+    # La referencia es la lectura de AYER en ambas, no la que acaba de escribirse.
+    assert segunda["anterior"] == primera["anterior"]
+    assert segunda["cambio_pct"] == primera["cambio_pct"]
+
+
+def test_el_open_interest_se_percentiliza_igual_que_el_volumen(client, session_factory):
+    """Se pedían las dos cosas; el OI se guardaba y no se comparaba con nada."""
+    with session_factory() as s:
+        for i in range(12):
+            s.add(
+                OptionsSnapshot(
+                    symbol="AAPL",
+                    fecha=(HOY - timedelta(days=i + 1)).isoformat(),
+                    oi_total=50_000 + (i % 5) * 800,
+                    volumen_total=30_000 + (i % 4) * 600,
+                )
+            )
+        s.commit()
+
+    c, _, _ = client()
+    act = c.get("/api/options/AAPL").json()["actividad"]
+    assert act["open_interest"]["disponible"] is True
+    assert act["open_interest"]["detalle"]["z"] is not None
+    assert act["volumen"]["disponible"] is True

@@ -782,6 +782,23 @@ promedio la elimina justo cuando más informa. Hay un test que lo fija:
 | **Skew 25Δ** | ¿a qué lado le tiene miedo el mercado? | la cadena no trae delta: se calcula con Black-Scholes |
 | **Estructura temporal** | ¿el susto es ahora o más adelante? | contango es lo normal; lo informativo es la inversión |
 | **Movimiento esperado** | ¿lo implícito se parece a lo que esta empresa hace? | el straddle cubre todo el periodo, no solo el día |
+| **Volumen y open interest** | ¿se está montando algo hoy que no estaba ayer? | «respecto a su media» necesita una media que el día uno no existe |
+
+### Volumen y open interest se juzgan por separado
+
+Son la misma pregunta hecha a dos datos que pueden contestar cosas opuestas, y
+**el open interest es la mitad que más informa**. El volumen se cruza en las dos
+direcciones: una sesión frenética puede cerrar tantas posiciones como abre y
+dejar el mercado donde estaba. El open interest es lo que QUEDÓ abierto al
+final, así que su variación es lo más cercano a «hay más gente dentro que ayer»
+que dan estos datos. Se publican tres lecturas —volumen contra su media, OI
+contra su media, y variación del OI desde la lectura anterior— sin fundirlas.
+
+Un detalle que apagaba la señal entera: la instantánea del día se escribe al
+final de cada consulta, así que a partir de la segunda visita del día la fila de
+hoy ya estaba en la base y la variación de OI daba **0 % siempre**. Hoy se
+excluye explícitamente del histórico, y hay un test que abre el panel dos veces
+y exige la misma referencia en ambas.
 
 ### Dos límites del dato gratuito que decidieron el diseño
 

@@ -610,7 +610,7 @@ def comparar_movimiento(implicito: dict, historico: dict) -> dict:
 def actividad(contratos: list[dict], base: dict | None = None) -> dict:
     """Volumen y open interest, y qué tiene de raro lo de hoy.
 
-    Dos lecturas distintas que suelen confundirse:
+    Cuatro lecturas que suelen confundirse entre sí:
 
     - **Volumen sobre open interest** se lee HOY, sin histórico: si en un strike
       se cruzan más contratos de los que había abiertos, ahí se está montando
@@ -618,11 +618,17 @@ def actividad(contratos: list[dict], base: dict | None = None) -> dict:
     - **Volumen contra su media** necesita una media, y el día uno no hay
       ninguna. Se construye guardando instantáneas; hasta que haya suficientes
       se dice que no la hay en vez de comparar contra un número inventado.
+    - **Open interest contra su media**, lo mismo. Y es la mitad que más
+      informa: el volumen se cruza en las dos direcciones, así que una sesión
+      frenética puede cerrar tantas posiciones como abre; el open interest es lo
+      que quedó abierto.
+    - **Variación del open interest** desde la lectura anterior, que es lo más
+      cercano a «hay más gente dentro que ayer» que dan estos datos.
 
-    Ninguna de las dos dice quién compra ni por qué. Un volumen enorme en puts
-    puede ser miedo, puede ser una cobertura de alguien que acaba de comprar la
-    acción, y puede ser el otro lado de una venta. Aquí se cuenta lo que pasó,
-    no lo que significa.
+    Ninguna dice quién compra ni por qué. Un volumen enorme en puts puede ser
+    miedo, puede ser una cobertura de alguien que acaba de comprar la acción, y
+    puede ser el otro lado de una venta. Aquí se cuenta lo que pasó, no lo que
+    significa.
     """
     calls = [c for c in contratos if c.get("tipo") == "call"]
     puts = [c for c in contratos if c.get("tipo") == "put"]
@@ -668,16 +674,38 @@ def actividad(contratos: list[dict], base: dict | None = None) -> dict:
         ),
     }
 
-    historico = (base or {}).get("volumen") or []
+    salida["volumen"] = _contra_su_media(vol_total, (base or {}).get("volumen") or [], "volumen")
+    salida["open_interest"] = _contra_su_media(
+        oi_total, (base or {}).get("oi") or [], "open interest"
+    )
+    salida["variacion_oi"] = _variacion_de_oi(oi_total, (base or {}).get("oi") or [])
+
+    # `inusual` y `nota_base` se conservan apuntando al volumen: son lo que ya
+    # consumía la pantalla, y romperlos para renombrarlos no arregla nada.
+    salida["inusual"] = salida["volumen"]["detalle"]
+    salida["nota_base"] = salida["volumen"]["nota"]
+    return salida
+
+
+def _contra_su_media(hoy: float, historico: list[float], etiqueta: str) -> dict:
+    """Lo de hoy contra su propia media, o por qué todavía no se puede decir.
+
+    Un solo sitio para el juicio, porque el volumen y el open interest hacen
+    exactamente la misma pregunta y tenerlo duplicado era la forma segura de que
+    la guarda de dispersión cero se arreglara en uno y no en el otro.
+    """
     if len(historico) < MIN_BASE_HISTORICA:
-        salida["inusual"] = None
-        salida["nota_base"] = (
-            f"«Inusual respecto a su media» necesita una media: hay "
-            f"{len(historico)} instantáneas de las {MIN_BASE_HISTORICA} que hacen "
-            "falta. Se guarda una por consulta, así que la base se construye sola. "
-            "Hasta entonces solo se informa del dato de hoy."
-        )
-        return salida
+        return {
+            "disponible": False,
+            "detalle": None,
+            "nota": (
+                f"«{etiqueta.capitalize()} inusual respecto a su media» necesita una "
+                f"media: hay {len(historico)} instantáneas de las "
+                f"{MIN_BASE_HISTORICA} que hacen falta. Se guarda una por día, así "
+                "que la base se construye sola. Hasta entonces solo se informa del "
+                "dato de hoy."
+            ),
+        }
 
     media = sum(historico) / len(historico)
     var = sum((v - media) ** 2 for v in historico) / (len(historico) - 1)
@@ -686,39 +714,90 @@ def actividad(contratos: list[dict], base: dict | None = None) -> dict:
     if sd <= 0:
         # Base sin variación: la z sería una división por cero y devolver 0,0
         # diría «dentro de lo normal» justo cuando el dato de hoy puede estar al
-        # doble de la media. Se informa de la desviación en crudo y se dice que
-        # no hay dispersión con la que juzgarla.
-        salida["inusual"] = {
-            "volumen_hoy": vol_total,
-            "media": round(media, 1),
-            "z": None,
-            "base_n": len(historico),
+        # doble de la media.
+        return {
+            "disponible": True,
+            "detalle": {
+                "hoy": hoy,
+                "volumen_hoy": hoy,  # nombre viejo, para no romper la pantalla
+                "media": round(media, 1),
+                "z": None,
+                "base_n": len(historico),
+            },
+            "nota": (
+                f"El {etiqueta} de hoy ({_miles(hoy)}) contra una media de "
+                f"{_miles(media)} sobre {len(historico)} lecturas, pero esas lecturas "
+                "no varían entre sí: sin dispersión no hay forma de decir si esto es "
+                "mucho. Con más instantáneas distintas el juicio aparece solo."
+            ),
         }
-        salida["nota_base"] = (
-            f"El volumen de hoy ({_miles(vol_total)}) contra una media de "
-            f"{_miles(media)} sobre {len(historico)} lecturas, pero esas lecturas no "
-            "varían entre sí: sin dispersión no hay forma de decir si esto es mucho. "
-            "Con más instantáneas distintas el juicio aparece solo."
-        )
-        return salida
 
-    z = (vol_total - media) / sd
-    salida["inusual"] = {
-        "volumen_hoy": vol_total,
-        "media": round(media, 1),
-        "z": round(z, 2),
-        "base_n": len(historico),
+    z = (hoy - media) / sd
+    return {
+        "disponible": True,
+        "detalle": {
+            "hoy": hoy,
+            "volumen_hoy": hoy,
+            "media": round(media, 1),
+            "z": round(z, 2),
+            "base_n": len(historico),
+        },
+        "nota": (
+            f"El {etiqueta} de hoy ({_miles(hoy)}) está a {z:+.1f} desviaciones de su "
+            f"media de {_miles(media)} sobre {len(historico)} lecturas. "
+            + (
+                "Es un salto grande, y merece mirar qué strikes."
+                if abs(z) >= 2
+                else "Dentro de lo normal para esta empresa."
+            )
+        ),
     }
-    salida["nota_base"] = (
-        f"El volumen de hoy ({_miles(vol_total)}) está a {z:+.1f} desviaciones de su "
-        f"media de {_miles(media)} sobre {len(historico)} lecturas. "
-        + (
-            "Es un salto grande, y merece mirar qué strikes."
-            if abs(z) >= 2
-            else "Dentro de lo normal para esta empresa."
-        )
-    )
-    return salida
+
+
+def _variacion_de_oi(hoy: int, historico: list[float]) -> dict:
+    """Cuánto ha cambiado el open interest desde la última lectura.
+
+    Es la señal que el volumen no da. El volumen cuenta lo que se cruzó, y se
+    cruza en las dos direcciones: media sesión frenética puede cerrar tantas
+    posiciones como abre y dejar el mercado donde estaba. El open interest es lo
+    que QUEDÓ abierto al final del día, así que su variación es lo más cercano a
+    «hay más gente dentro que ayer» que dan estos datos.
+
+    Cae del histórico que ya se guarda para la media, sin ninguna llamada extra.
+    """
+    if not historico:
+        return {
+            "disponible": False,
+            "nota": (
+                "Sin una lectura anterior no hay variación que medir. La primera "
+                "consulta guarda la referencia; a partir de la segunda aparece."
+            ),
+        }
+    anterior = historico[-1]
+    if not anterior:
+        return {"disponible": False, "nota": "La lectura anterior no tiene open interest."}
+    cambio = hoy - anterior
+    pct = cambio / anterior * 100
+    return {
+        "disponible": True,
+        "anterior": anterior,
+        "hoy": hoy,
+        "cambio": cambio,
+        "cambio_pct": round(pct, 1),
+        "nota": (
+            f"El open interest {'sube' if cambio > 0 else 'baja' if cambio < 0 else 'queda igual'} "
+            f"un {abs(pct):.1f} % desde la lectura anterior "
+            f"({_miles(anterior)} → {_miles(hoy)}). "
+            + (
+                "Subir es que quedan más posiciones abiertas que antes: se está "
+                "montando algo, no deshaciendo."
+                if pct > 5
+                else "Bajar es que se están cerrando posiciones, no abriendo."
+                if pct < -5
+                else "Sin cambio de posicionamiento apreciable."
+            )
+        ),
+    }
 
 
 # --- Ensamblado ---------------------------------------------------------------

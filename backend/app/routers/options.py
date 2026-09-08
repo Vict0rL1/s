@@ -115,16 +115,22 @@ def _fechas_de_resultados(
     return pasadas[-TRIMESTRES_ATRAS:], (futuras[0] if futuras else None), None
 
 
-def _base_historica(session: Session, symbol: str) -> dict:
-    """Lo que este endpoint ha ido guardando de esta empresa.
+def _base_historica(session: Session, symbol: str, hoy: date) -> dict:
+    """Lo que este endpoint ha ido guardando de esta empresa, SIN el día de hoy.
 
     Es lo que convierte «IV del 45 %» en «IV en el percentil 90 DE ESTA
     EMPRESA», que es la única versión de la frase que sirve para decidir algo.
+
+    Hoy se excluye a propósito. La instantánea del día se escribe al final de
+    cada consulta, así que a partir de la segunda del día la fila de hoy ya
+    estaría dentro: la media se compararía consigo misma —efecto pequeño— y la
+    variación de open interest daría 0 % siempre, que no es un efecto pequeño
+    sino la señal entera apagada.
     """
     filas = (
         session.execute(
             select(OptionsSnapshot)
-            .where(OptionsSnapshot.symbol == symbol)
+            .where(OptionsSnapshot.symbol == symbol, OptionsSnapshot.fecha != hoy.isoformat())
             .order_by(OptionsSnapshot.fecha)
         )
         .scalars()
@@ -133,6 +139,9 @@ def _base_historica(session: Session, symbol: str) -> dict:
     return {
         "prima": [f.prima for f in filas if f.prima is not None],
         "volumen": [f.volumen_total for f in filas if f.volumen_total is not None],
+        # El open interest se guardaba y no se comparaba con nada: el juicio de
+        # «inusual» se emitía solo sobre el volumen, que es la mitad ruidosa.
+        "oi": [f.oi_total for f in filas if f.oi_total is not None],
         "skew": [f.skew_25d for f in filas if f.skew_25d is not None],
         "desde": filas[0].fecha if filas else None,
         "n": len(filas),
@@ -227,7 +236,7 @@ def señales_de_opciones(
 
     cierres = _cierres(service, symbol)
     pasadas, proxima, fallo_calendario = _fechas_de_resultados(service, symbol, hoy)
-    base = _base_historica(session, symbol)
+    base = _base_historica(session, symbol, hoy)
 
     panel = opt.panel(
         por_vencimiento,

@@ -272,18 +272,57 @@ function Actividad({ a }: { a: ActividadOpciones }) {
             {fmtNumber(a.volumen_sobre_oi, 2)}
           </div>
         </div>
-        {a.inusual && a.inusual.z !== null && (
+        {/* Volumen y open interest se juzgan por separado a propósito: pueden
+            decir cosas opuestas, y mucho volumen con el OI plano es trasiego
+            intradía, no posicionamiento. */}
+        {a.volumen?.detalle?.z !== null && a.volumen?.detalle && (
           <div>
             <div className="text-[10px] uppercase tracking-wide text-slate-400">
-              Contra su media
+              Volumen vs. su media
             </div>
             <div
               className={`text-xl font-semibold tabular-nums ${
-                Math.abs(a.inusual.z) >= 2 ? 'text-amber-700' : 'text-slate-800'
+                Math.abs(a.volumen.detalle.z as number) >= 2
+                  ? 'text-amber-700'
+                  : 'text-slate-800'
               }`}
             >
-              {a.inusual.z > 0 ? '+' : ''}
-              {fmtNumber(a.inusual.z, 1)} σ
+              {(a.volumen.detalle.z as number) > 0 ? '+' : ''}
+              {fmtNumber(a.volumen.detalle.z, 1)} σ
+            </div>
+          </div>
+        )}
+        {a.open_interest?.detalle?.z !== null && a.open_interest?.detalle && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              OI vs. su media
+            </div>
+            <div
+              className={`text-xl font-semibold tabular-nums ${
+                Math.abs(a.open_interest.detalle.z as number) >= 2
+                  ? 'text-amber-700'
+                  : 'text-slate-800'
+              }`}
+            >
+              {(a.open_interest.detalle.z as number) > 0 ? '+' : ''}
+              {fmtNumber(a.open_interest.detalle.z, 1)} σ
+            </div>
+          </div>
+        )}
+        {a.variacion_oi?.disponible && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              OI desde ayer
+            </div>
+            <div
+              className={`text-xl font-semibold tabular-nums ${
+                Math.abs(a.variacion_oi.cambio_pct ?? 0) >= 5
+                  ? 'text-amber-700'
+                  : 'text-slate-800'
+              }`}
+            >
+              {(a.variacion_oi.cambio_pct ?? 0) > 0 ? '+' : ''}
+              {fmtNumber(a.variacion_oi.cambio_pct, 1)} %
             </div>
           </div>
         )}
@@ -321,7 +360,9 @@ function Actividad({ a }: { a: ActividadOpciones }) {
       )}
 
       <Nota>{a.nota_posiciones}</Nota>
-      <Nota>{a.nota_base}</Nota>
+      <Nota>{a.volumen?.nota}</Nota>
+      <Nota>{a.open_interest?.nota}</Nota>
+      <Nota>{a.variacion_oi?.nota}</Nota>
     </>
   )
 }

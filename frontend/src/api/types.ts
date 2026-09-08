@@ -1707,7 +1707,31 @@ export interface MovimientoEsperado {
   }
 }
 
+export interface ContraSuMedia {
+  disponible: boolean
+  nota: string
+  detalle: {
+    hoy: number
+    volumen_hoy: number
+    media: number
+    z: number | null
+    base_n: number
+  } | null
+}
+
+export interface VariacionOi {
+  disponible: boolean
+  nota: string
+  anterior?: number
+  hoy?: number
+  cambio?: number
+  cambio_pct?: number
+}
+
 export interface ActividadOpciones {
+  volumen: ContraSuMedia
+  open_interest: ContraSuMedia
+  variacion_oi: VariacionOi
   volumen_calls: number
   volumen_puts: number
   oi_calls: number

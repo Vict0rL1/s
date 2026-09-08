@@ -411,3 +411,81 @@ def test_sin_vencimiento_posterior_a_resultados_se_dice():
     imp = r["movimiento_esperado"]["implicito"]
     assert imp["disponible"] is False
     assert "posterior a los resultados" in imp["nota"]
+
+
+# --- Open interest contra su media, y su variación ----------------------------
+
+
+def test_el_open_interest_tambien_se_compara_con_su_media():
+    """Se pedían las dos cosas y solo se percentilizaba el volumen; el OI se
+    guardaba y no se comparaba con nada."""
+    contratos = [
+        {"tipo": "call", "strike": 100, "iv": 0.3, "medio": 2, "volumen": 500, "oi": 90000},
+        {"tipo": "put", "strike": 95, "iv": 0.3, "medio": 2, "volumen": 400, "oi": 30000},
+    ]
+    base = {
+        "volumen": [900] * 6 + [850, 950, 800, 1000, 870, 930],
+        "oi": [50000, 52000, 48000, 51000, 49000, 53000, 47000, 50500, 49500, 51500, 48500, 52500],
+    }
+    r = op.actividad(contratos, base)
+
+    assert r["open_interest"]["disponible"] is True
+    assert r["open_interest"]["detalle"]["hoy"] == 120000
+    assert r["open_interest"]["detalle"]["z"] > 2      # 120k contra una media de ~50k
+    assert "open interest de hoy" in r["open_interest"]["nota"]
+
+
+def test_volumen_y_open_interest_se_juzgan_por_separado():
+    """Pueden decir cosas opuestas, y ahí está la gracia: mucho volumen con el
+    OI plano es trasiego intradía, no posicionamiento."""
+    contratos = [{"tipo": "call", "strike": 100, "iv": 0.3, "medio": 2, "volumen": 9000, "oi": 50000}]
+    base = {
+        "volumen": [900, 850, 950, 800, 1000, 870, 930, 910, 880, 920, 940, 860],
+        "oi": [50000, 50100, 49900, 50050, 49950, 50200, 49800, 50000, 50100, 49900, 50000, 50050],
+    }
+    r = op.actividad(contratos, base)
+    assert r["volumen"]["detalle"]["z"] > 2            # volumen disparado
+    assert abs(r["open_interest"]["detalle"]["z"]) < 2  # OI donde estaba
+
+
+def test_sin_base_de_open_interest_se_dice_en_vez_de_comparar():
+    contratos = [{"tipo": "call", "strike": 100, "iv": 0.3, "medio": 2, "volumen": 500, "oi": 9000}]
+    r = op.actividad(contratos, {"oi": [1000, 1100]})
+    assert r["open_interest"]["disponible"] is False
+    assert "necesita una media" in r["open_interest"]["nota"]
+
+
+def test_la_variacion_de_open_interest_compara_con_la_lectura_anterior():
+    """El volumen se cruza en las dos direcciones; el OI es lo que quedó."""
+    contratos = [{"tipo": "call", "strike": 100, "iv": 0.3, "medio": 2, "volumen": 500, "oi": 60000}]
+    r = op.actividad(contratos, {"oi": [40000, 45000, 50000]})
+    v = r["variacion_oi"]
+    assert v["disponible"] is True
+    assert v["anterior"] == 50000
+    assert v["cambio_pct"] == pytest.approx(20.0)
+    assert "montando algo" in v["nota"]
+
+
+def test_un_open_interest_que_baja_se_lee_como_cierre_de_posiciones():
+    contratos = [{"tipo": "call", "strike": 100, "iv": 0.3, "medio": 2, "volumen": 500, "oi": 30000}]
+    v = op.actividad(contratos, {"oi": [50000, 50000, 50000]})["variacion_oi"]
+    assert v["cambio_pct"] < 0
+    assert "cerrando posiciones" in v["nota"]
+
+
+def test_sin_lectura_anterior_no_hay_variacion_que_medir():
+    contratos = [{"tipo": "call", "strike": 100, "iv": 0.3, "medio": 2, "volumen": 500, "oi": 30000}]
+    v = op.actividad(contratos, None)["variacion_oi"]
+    assert v["disponible"] is False
+    assert "primera consulta" in v["nota"].lower()
+
+
+def test_la_guarda_de_dispersion_cero_vale_para_las_dos_medidas():
+    """Estaba duplicada la aritmética; al unificarla, arreglarla en una sola
+    parte tiene que arreglarla en ambas."""
+    contratos = [{"tipo": "call", "strike": 100, "iv": 0.3, "medio": 2, "volumen": 8000, "oi": 8000}]
+    r = op.actividad(contratos, {"volumen": [4000] * 12, "oi": [4000] * 12})
+    assert r["volumen"]["detalle"]["z"] is None
+    assert r["open_interest"]["detalle"]["z"] is None
+    for bloque in ("volumen", "open_interest"):
+        assert "no varían entre sí" in r[bloque]["nota"]
