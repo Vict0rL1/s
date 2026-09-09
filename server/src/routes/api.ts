@@ -30,6 +30,9 @@ import { refreshOdds } from '../ingest/odds.ts';
 import { evaluate } from '../live/engine.ts';
 import { matchupServe } from '../live/serve.ts';
 import { describe as describeState, type LiveState } from '../live/state.ts';
+import { predictFromPoints } from '../points/predict.ts';
+import { modelForServing } from '../points/repo.ts';
+import type { Surface as PointsSurface } from '../points/fit.ts';
 import { getTrackRecord, logPrediction } from '../trackRecord.ts';
 import type { TourId, UpcomingRow } from '../types.ts';
 
@@ -211,6 +214,80 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * Los `prior` se pueden pasar a mano o dejar que salgan de los ids de los jugadores;
    * lo segundo es lo normal y lo primero permite probar el motor sin base.
    */
+  /**
+   * Todos los mercados de un partido, del modelo jerárquico de puntos.
+   *
+   * Un solo endpoint para partido, set, hándicap y total: son la misma distribución
+   * mirada de cuatro formas. Endpoints separados invitarían a que alguien calculara uno
+   * de ellos por otro camino, que es justo lo que este modelo existe para impedir.
+   */
+  app.get<{
+    Querystring: {
+      tour?: string;
+      p1?: string;
+      p2?: string;
+      surface?: string;
+      bestOf?: string;
+      tourney?: string;
+      date?: string;
+    };
+  }>('/points', async (req, reply) => {
+    const tour = (req.query.tour ?? 'atp') as TourId;
+    const id1 = Number(req.query.p1);
+    const id2 = Number(req.query.p2);
+    if (!Number.isFinite(id1) || !Number.isFinite(id2)) {
+      return reply.code(400).send({ error: 'hacen falta los ids `p1` y `p2`' });
+    }
+    const surfaceRaw = (req.query.surface ?? 'Hard').toLowerCase();
+    const surface: PointsSurface =
+      surfaceRaw.startsWith('cl') || surfaceRaw.startsWith('tie')
+        ? 'Clay'
+        : surfaceRaw.startsWith('gr') || surfaceRaw.startsWith('hie')
+          ? 'Grass'
+          : 'Hard';
+
+    const model = modelForServing(tour);
+    if (!model) {
+      return reply.code(503).send({
+        error:
+          'El modelo de puntos no está ajustado y no se ha podido ajustar ahora. ' +
+          'Corre `npm run update-data` para traer datos de saque.',
+      });
+    }
+
+    const p = predictFromPoints(
+      model,
+      id1,
+      id2,
+      surface,
+      Number(req.query.bestOf) || 3,
+      req.query.tourney,
+      req.query.date,
+    );
+    // Sin datos de alguno, todos los mercados salen del jugador medio. Se rechaza en vez
+    // de servir cuatro mercados coherentes entre sí y ajenos a este partido.
+    if (p.unknown.p1 || p.unknown.p2) {
+      return reply.code(404).send({
+        error:
+          `Sin datos de puntos para ${[p.unknown.p1 ? `p1=${id1}` : null, p.unknown.p2 ? `p2=${id2}` : null]
+            .filter(Boolean)
+            .join(' y ')}. Todos los mercados saldrían del jugador medio.`,
+      });
+    }
+
+    return {
+      ...p,
+      model: {
+        fittedAt: model.fittedAt,
+        ageDays: Math.round(model.ageDays),
+        observations: model.meta.observations,
+        players: model.meta.players,
+        // Un modelo viejo sirve números creíbles para jugadores que no conoce. Se dice.
+        stale: model.ageDays > 30,
+      },
+    };
+  });
+
   app.post<{
     Body: {
       state: LiveState;

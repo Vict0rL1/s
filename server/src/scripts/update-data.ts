@@ -14,6 +14,7 @@ import { getDb, resetData, setMeta } from '../db.ts';
 import { RAW_DIR, toursConfig } from '../config.ts';
 import { ingestRankings, ingestTour, preflight, tourConfigs } from '../ingest/sackmann.ts';
 import { recomputeRatings } from '../ingest/ratings.ts';
+import { refitAndSave } from '../points/repo.ts';
 import { refreshOdds } from '../ingest/odds.ts';
 import { ingestTennisData } from '../ingest/tennisData.ts';
 import { getTrackRecord, resolvePredictions } from '../trackRecord.ts';
@@ -205,6 +206,27 @@ async function main() {
   console.log('\n▸ Computing Elo ratings…');
   const ratings = recomputeRatings();
   console.log(`  rated players: ${JSON.stringify(ratings)}`);
+
+  // El modelo de puntos se reajusta aquí y no bajo demanda: ajustarlo cuesta ~8 s, y
+  // hacerlo en la primera petición HTTP que llegue le regala esos 8 s a quien tenga la
+  // mala suerte de ser el primero, sin que pueda saber por qué.
+  console.log('\n▸ Ajustando el modelo jerárquico de puntos…');
+  for (const tour of ['atp', 'wta']) {
+    try {
+      const m = refitAndSave(tour);
+      console.log(
+        `  ${tour}: ${m.meta.observations.toLocaleString('es')} actuaciones al saque · ` +
+          `${m.meta.players} jugadores · ` +
+          `dura ${(1 / (1 + Math.exp(-m.mu.Hard)) * 100).toFixed(1)} % · ` +
+          `tierra ${(1 / (1 + Math.exp(-m.mu.Clay)) * 100).toFixed(1)} % · ` +
+          `hierba ${(1 / (1 + Math.exp(-m.mu.Grass)) * 100).toFixed(1)} %`,
+      );
+    } catch (e) {
+      // Un circuito sin datos de saque no puede ajustar, y eso no debe romper la
+      // actualización entera: el resto de la app funciona sin este modelo.
+      console.log(`  ${tour}: sin ajustar — ${(e as Error).message}`);
+    }
+  }
 
   // Score the app's own past predictions against the results just ingested.
   // This is what turns the prediction log into a real, measured track record.

@@ -806,6 +806,7 @@ ves, en vez de fallar en silencio.
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate (`--model elo` mide el camino de respaldo) |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
+| `npm run study:points` | **Modelo jerárquico de puntos**: ajusta saque/resto por jugador con ajuste por rival y δ por superficie, y lo mide cara a cara contra el modelo de Elo |
 | `npm run study:live` | **Motor en vivo**: mide μ y κ del saque, y valida la cadena de Markov contra una simulación independiente |
 | `npm run study:correlation` | **Mide la correlación entre posiciones abiertas** con residuos tipificados fuera de muestra, con grupo de control y bootstrap por bloques. `--record` lo anota en el registro |
 | `npm run staking` | **La capa de decisión**: Kelly fraccional, topes, límites de pérdida y drawdown esperado |
@@ -943,6 +944,178 @@ npm run update-squads:fb    # mucho más barato que la actualización completa
 argumentos, así que lo recibía, lo **ignoraba en silencio** y pedía cuotas igualmente:
 una tirada que se creía gratis gastaba cuota solo ahí. Ahora los cinco lo respetan y el
 de la NFL lo dice en su salida.
+
+---
+
+## El modelo jerárquico de puntos (`npm run study:points`)
+
+Saque y resto por jugador ajustados por la calidad del rival, propagados por la cadena de
+Markov, con desviaciones por superficie encogidas. Y de ahí **todos** los mercados:
+partido, set, hándicap de juegos y total de juegos.
+
+### El resultado primero: NO reemplaza al modelo de partido
+
+El encargo era reemplazar el modelo de partido por este. Lo construí, lo medí cara a cara
+fuera de muestra con walk-forward, y **pierde**:
+
+Sobre 5.667 partidos de ATP desde 2024, walk-forward con reajuste trimestral:
+
+| modelo | log loss del ganador |
+| --- | --- |
+| Elo por jugador con ajuste de superficie (el publicado) | **0.558** |
+| modelo de puntos, λ 0.05 · semivida 1 año | 0.667 |
+| modelo de puntos, λ 0.05 · sin decay | 0.680 |
+
+No es un empate discutible: 0.68 está a un paso del 0.693 de la moneda. Forzar la
+sustitución habría sido cambiar un modelo medido por uno más elegante.
+
+**Por qué, con lo que se puede afirmar desde aquí:** las tasas de punto agregadas **tiran
+la información de quién ganó**. Se puede ganar el 63 % de los puntos al saque y perder el
+partido por haber perdido los importantes, y este modelo no distingue las dos cosas. El
+Elo aprende de victorias, que es justo lo que se está prediciendo.
+
+Y el modelo de Elo de esta app no es un Elo pelado: lleva forma reciente, fatiga, cara a
+cara y superficie, cada cosa medida por separado en su momento.
+
+### Comprobé que la ventaja del Elo no fuera un artefacto
+
+El Elo se evalúa con sus ratings **actuales**, que en principio podrían filtrar el
+futuro. Si eso lo estuviera inflando, los partidos más antiguos puntuarían mejor —el
+rating de hoy sabe cómo acabaron. Sale lo contrario:
+
+| periodo | log loss del Elo |
+| --- | --- |
+| 2023 H1 | 0.591 |
+| 2024 H1 | 0.556 |
+| 2025 H1 | 0.548 |
+| 2025 Q4+ | 0.535 |
+
+Mejora hacia el presente, que es lo que produce la *obsolescencia* del rating, no la
+filtración. Y aun en su peor periodo (0.591) le gana al mejor del modelo de puntos
+(0.667).
+
+### Lo que el modelo de puntos SÍ aporta, y es el motivo de que se publique
+
+Mercados que el modelo de partido **no puede producir en absoluto**. El Elo da un número:
+la probabilidad de ganar. No da una distribución de juegos, así que no hay hándicap ni
+total que derivar de él.
+
+El de puntos enumera el partido entero y de ahí sale todo:
+
+```
+GET /api/points?tour=atp&p1=…&p2=…&surface=Clay&bestOf=5&tourney=Roland+Garros
+
+  puntos: p1=0.6209 p2=0.5985      ← los DOS únicos números de entrada
+  partido 64.1 % · set 57.6 % · 40.9 juegos esperados
+  sets:      3-1 24.3% · 3-2 20.7% · 3-0 19.1%
+  totales:   +37.5 64% · +39.5 56% · +41.5 48% · +43.5 41%
+  hándicaps: −6.5 24% · −4.5 40% · −3.5 47% · −2.5 53% · −1.5 58%
+```
+
+**No pueden contradecirse.** Con modelos separados por mercado es perfectamente posible
+publicar un 70 % de ganar el partido y un total de juegos que implique un 60 %, y nadie
+se entera hasta que alguien lo suma a mano.
+
+### El ajuste por rival, y por qué no basta restar medias
+
+«Este jugador gana el 68 % de sus puntos al saque» está contaminado: se midió contra los
+restadores que le tocaron. La versión anterior (`live/serve.ts`) restaba medias de
+carrera, que es la corrección de primer orden y arrastra el mismo sesgo — restar dos
+números contaminados no descontamina ninguno.
+
+Aquí se estiman **todos los saques y todos los restos a la vez**:
+
+```
+logit P(i gana un punto sacando contra j) = μ_superficie + s_i − r_j
+```
+
+Descenso de gradiente sobre la verosimilitud binomial, ~8.800 parámetros, 58.652
+observaciones. Y el resultado se valida solo:
+
+| mejor saque | | mejor resto | |
+| --- | --- | --- | --- |
+| Ivo Karlovic | +0.374 | Novak Djokovic | +0.267 |
+| John Isner | +0.357 | Rafael Nadal | +0.252 |
+| Milos Raonic | +0.330 | Carlos Alcaraz | +0.245 |
+| Roger Federer | +0.327 | Jannik Sinner | +0.212 |
+
+Son las listas canónicas, y el modelo no las recibió de nadie.
+
+### Las superficies salen del ajuste, no de una tabla
+
+Los interceptos por superficie: **hierba 66.0 % > dura 64.6 % > tierra 62.0 %** de puntos
+al saque. Es el orden conocido y el ajuste lo deriva de los datos — hay una comprobación
+en `verify:data` que falla si sale al revés, porque entonces el modelo estaría aprendiendo
+otra cosa.
+
+Y las desviaciones individuales, con λ = 0.05:
+
+| jugador | superficie | δ saque | δ resto |
+| --- | --- | --- | --- |
+| Nadal | tierra | +0.037 | **+0.096** |
+| Federer | tierra | +0.022 | −0.032 |
+| Federer | hierba | +0.050 | +0.039 |
+| Isner | tierra | +0.056 | **−0.068** |
+
+El δ más grande de la tabla es el resto de Nadal en tierra, que es exactamente donde
+está su dominio. Isner al resto en tierra es su peor casilla. Correcto en los dos casos.
+
+**Un error mío al leer esto:** primero resumí las superficies como `δ saque − δ resto` y
+Nadal salía *negativo* en tierra, que parecía invertido. La métrica compuesta era la
+equivocada — separados, el modelo dice lo correcto. Investigar antes de "arreglar" evitó
+romper un modelo que funcionaba.
+
+### Las variantes de tiebreak del set final
+
+No es un detalle: cambia el total de juegos esperado y, con dos sacadores parejos, también
+quién gana. Están en un solo sitio con su fecha, así que el pasado se puntúa con las
+reglas que regían entonces:
+
+* hasta 2018 — Wimbledon, Roland Garros y Australia: set largo
+* 2019-2021 — cada Grand Slam con su regla (Australia TB a 10, US Open TB a 7, Wimbledon
+  y Roland Garros efectivamente largos)
+* desde 2022 — los cuatro con **tiebreak a 10**
+
+### El decay se midió, no se supuso
+
+Sin decay, el modelo describe una carrera entera y no al jugador que juega mañana:
+
+Barrido sobre 1.460 partidos de 2025 con un solo ajuste previo (más rápido que el
+walk-forward, y suficiente para ordenar las opciones entre sí):
+
+| semivida | log loss |
+| --- | --- |
+| sin decay | 0.660 |
+| 4 años | 0.654 |
+| 2 años | 0.651 |
+| **1 año** | **0.650** |
+| 6 meses | 0.652 |
+
+Se publica un año, y el walk-forward lo confirma (0.667 con decay contra 0.680 sin).
+Ayuda, pero no cierra la distancia con el Elo — que es la parte importante del resultado.
+
+> Los números de esta tabla y los de la comparación de arriba **no son comparables entre
+> sí**: estos salen de un ajuste único sobre 2025 y aquellos de un walk-forward sobre
+> 2024-2026. Sirven para ordenar configuraciones, no para compararse con el Elo.
+
+### Un fallo de rendimiento que hacía el modelo inservible
+
+`matchDistribution` al mejor de 5 tardaba **2,2 segundos**: 3,7 horas para evaluar una
+temporada. La causa era mía — el árbol guardaba un nodo por *camino*, y un set tiene ~14
+finales posibles, así que un mejor de 5 son 14⁵ ≈ 537.000 caminos.
+
+Dos caminos que llegan a los mismos sets, los mismos juegos y el mismo sacador son **el
+mismo estado**: lo que pase después no depende de cómo se llegó. Fusionándolos y cacheando
+la enumeración del set, 2.229 ms → **7 ms**. El modelo era correcto y completamente
+inservible.
+
+### Comprobado por conservación y contraste cruzado
+
+Una distribución mal repartida sigue pareciendo una distribución. Lo que se comprueba son
+las masas (todas suman 1 a 1e-9) y, sobre todo, que la **enumeración** de
+`points/markets.ts` y la **recursión** de `live/markov.ts` calculen la probabilidad de
+partido por caminos completamente distintos y coincidan a 1e-9. Dos implementaciones que
+se equivoquen igual son mucho menos probables que una que se equivoque sola.
 
 ---
 
@@ -2032,6 +2205,7 @@ Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede
 | `GET /api/meta` | Fuente de datos y conteos |
 | `GET /api/track-record?tour=` | Acierto medido de la app en partidos ya jugados (+ mercado) |
 | `GET /api/tours` | Circuitos ATP/WTA con conteos |
+| `GET /api/points?tour=&p1=&p2=&surface=&bestOf=&tourney=` | **Los cuatro mercados del modelo de puntos**: partido, set, hándicap de juegos y total de juegos, todos de la misma distribución |
 | `POST /api/live` | **Probabilidad en vivo** desde el marcador exacto: `{state, tour, p1, p2, tally?, odds?}` |
 | `GET /api/power?tour=&limit=&minMatches=&activeDays=` | **Clasificación por Elo del circuito**, con Elo por superficie, ranking oficial y filtro de actividad (`activeDays=0` para la lista histórica) |
 | `GET /api/tours/:tour/players?q=` | Jugadores (búsqueda) |

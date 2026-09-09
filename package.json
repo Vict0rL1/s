@@ -56,7 +56,8 @@
     "news": "npm run news --workspace server --",
     "latency": "npm run latency --workspace server --",
     "study:correlation": "npm run study:correlation --workspace server --",
-    "study:live": "npm run study:live --workspace server --"
+    "study:live": "npm run study:live --workspace server --",
+    "study:points": "npm run study:points --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

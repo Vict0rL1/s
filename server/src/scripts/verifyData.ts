@@ -41,6 +41,16 @@ import { advancePoint, validate, type LiveState } from '../live/state.ts';
 import { leverage, situations } from '../live/situations.ts';
 import { updateServe, KAPPA_SERVE } from '../live/bayes.ts';
 import { TOUR_BASELINE } from '../live/serve.ts';
+import {
+  setScoreDistribution,
+  matchDistribution,
+  overGames,
+  coverHandicap,
+  STANDARD_SET,
+} from '../points/markets.ts';
+import { decidingSetRules } from '../points/predict.ts';
+import { loadModel as loadPointsModel } from '../points/repo.ts';
+import { SURFACES } from '../points/fit.ts';
 import { normalizeTeamName } from '../football/ingest/teamNames.ts';
 import { parseFootballTxt } from '../football/ingest/openfootballTxt.ts';
 import { readRegistry, distinctExperiments } from '../experiments/registry.ts';
@@ -3024,6 +3034,198 @@ function auditLive(): void {
   console.log(`  cadena validada contra valores de libro · κ = ${KAPPA_SERVE} puntos · μ ATP = ${TOUR_BASELINE.atp}`);
 }
 
+// ===========================================================================
+// EL MODELO JERÁRQUICO DE PUNTOS
+// ===========================================================================
+// Lo que se comprueba son CONSERVACIONES y CONTRASTES CRUZADOS, que es lo único que caza
+// un error en una distribución. Un marcador de set con la masa mal repartida sigue
+// pareciendo una distribución, y un total de juegos que no suma 1 se pinta igual de bien.
+//
+// El contraste más fuerte es que la enumeración de `points/markets.ts` y la recursión de
+// `live/markov.ts` calculan la probabilidad de partido por caminos completamente
+// distintos y tienen que coincidir. Dos implementaciones que se equivocaran igual son
+// mucho menos probables que una que se equivoque sola.
+function auditPointsModel(): void {
+  console.log('\n▸ Modelo jerárquico de puntos');
+  const mass = (xs: { probability: number }[]): number => xs.reduce((a, x) => a + x.probability, 0);
+
+  // --- La distribución de marcadores de set conserva la masa ---
+  for (const [p1, p2, srv] of [[0.66, 0.62, 1], [0.5, 0.5, 1], [0.85, 0.4, 2], [0.4, 0.85, 1]] as [number, number, 1 | 2][]) {
+    const d = setScoreDistribution(p1, p2, srv);
+    check(
+      `puntos: los marcadores de set suman 1 (${p1}/${p2} saca ${srv})`,
+      Math.abs(mass(d) - 1) < 1e-9,
+      `suman ${mass(d).toFixed(10)}`,
+    );
+    // Y ninguno puede ser un marcador imposible.
+    const bad = d.filter((s) => {
+      const hi = Math.max(s.g1, s.g2);
+      const lo = Math.min(s.g1, s.g2);
+      return !((hi === 6 && lo <= 4) || (hi === 7 && (lo === 5 || lo === 6)) || (hi === 8 && lo === 6));
+    });
+    check(`puntos: ningún marcador de set imposible (${p1}/${p2})`, bad.length === 0,
+      bad.map((s) => `${s.g1}-${s.g2}`).join(' '));
+  }
+
+  // --- El set sin tiebreak también conserva la masa ---
+  const long = setScoreDistribution(0.75, 0.74, 1, { tiebreak: false, tiebreakTo: 7 });
+  check('puntos: un set largo también suma 1', Math.abs(mass(long) - 1) < 1e-9, mass(long).toFixed(10));
+  check('puntos: un set largo no produce tiebreaks', long.every((s) => !s.tiebreak), 'produce tiebreaks');
+
+  // --- EL CONTRASTE CRUZADO: enumeración contra recursión ---
+  for (const [p1, p2, bestOf] of [[0.66, 0.62, 3], [0.7, 0.55, 5], [0.5, 0.5, 3], [0.45, 0.8, 5]] as [number, number, 3 | 5][]) {
+    const enumerated = matchDistribution(p1, p2, 1, {
+      bestOf, set: STANDARD_SET, decidingSet: STANDARD_SET,
+    });
+    const recursive = matchProb(p1, p2, 0, 0, 0, 0, 1, null, { bestOf });
+    check(
+      `puntos: enumerar y recursar dan lo mismo (${p1}/${p2} bo${bestOf})`,
+      Math.abs(enumerated.matchProb - recursive) < 1e-9,
+      `${enumerated.matchProb.toFixed(10)} contra ${recursive.toFixed(10)}`,
+    );
+    check(
+      `puntos: los totales de juegos suman 1 (${p1}/${p2} bo${bestOf})`,
+      Math.abs(mass(enumerated.totalGames) - 1) < 1e-9,
+      mass(enumerated.totalGames).toFixed(10),
+    );
+    check(
+      `puntos: los márgenes de juegos suman 1 (${p1}/${p2} bo${bestOf})`,
+      Math.abs(mass(enumerated.gameMargin) - 1) < 1e-9,
+      mass(enumerated.gameMargin).toFixed(10),
+    );
+    check(
+      `puntos: los marcadores en sets suman 1 (${p1}/${p2} bo${bestOf})`,
+      Math.abs(mass(enumerated.setScores) - 1) < 1e-9,
+      mass(enumerated.setScores).toFixed(10),
+    );
+  }
+
+  // --- Los mercados derivados son coherentes entre sí ---
+  const d = matchDistribution(0.68, 0.6, 1, { bestOf: 3, set: STANDARD_SET, decidingSet: STANDARD_SET });
+  // El hándicap de 0.5 tiene que reproducir la probabilidad de ganar el partido... NO:
+  // se puede ganar el partido con menos juegos que el rival (2-1 con un 6-0 en contra).
+  // Lo que sí tiene que cumplirse es que ganar por muchos juegos sea menos probable que
+  // ganar por pocos, y que las dos ramas de cada hándicap sumen 1.
+  for (const h of [-4.5, -1.5, 2.5]) {
+    const c = coverHandicap(d, h);
+    check(`puntos: el hándicap ${h} reparte toda la masa`,
+      Math.abs(c.cover + c.fail + c.push - 1) < 1e-9,
+      `${(c.cover + c.fail + c.push).toFixed(10)}`);
+  }
+  check('puntos: cubrir un hándicap más exigente es menos probable',
+    coverHandicap(d, -6.5).cover < coverHandicap(d, -2.5).cover &&
+      coverHandicap(d, -2.5).cover < coverHandicap(d, 2.5).cover,
+    'no es monótono en el hándicap');
+  for (const line of [18.5, 22.5, 26.5]) {
+    const o = overGames(d, line);
+    check(`puntos: el total ${line} reparte toda la masa`,
+      Math.abs(o.over + o.under + o.push - 1) < 1e-9,
+      `${(o.over + o.under + o.push).toFixed(10)}`);
+  }
+  check('puntos: una línea más alta tiene menos over',
+    overGames(d, 26.5).over < overGames(d, 22.5).over &&
+      overGames(d, 22.5).over < overGames(d, 18.5).over,
+    'no es monótono en la línea');
+  // Media unidad = sin empates posibles. Es el motivo de que las líneas sean .5.
+  check('puntos: una línea de media unidad no produce empates',
+    overGames(d, 22.5).push === 0, 'produce empates');
+
+  // --- Simetría ---
+  const sym = matchDistribution(0.6, 0.6, 1, { bestOf: 3, set: STANDARD_SET, decidingSet: STANDARD_SET });
+  check('puntos: con jugadores idénticos el partido es 50/50',
+    Math.abs(sym.matchProb - 0.5) < 1e-9, sym.matchProb.toFixed(10));
+  // ===========================================================================
+  // ABRIR EL PARTIDO VALE JUEGOS, PERO NO PROBABILIDAD
+  // ===========================================================================
+  // Con dos jugadores idénticos, quien saca el primer juego del partido tiene un margen
+  // esperado de +0.071 JUEGOS —abre dos de los tres sets— y exactamente el 50 % de ganar.
+  // Las dos cosas a la vez, y ninguna es un fallo.
+  //
+  // Esta comprobación pedía primero que el margen fuera cero con un solo saque de salida
+  // y fallaba: el fallo era de la comprobación. Lo que sí tiene que dar cero es la MEDIA
+  // sobre los dos saques posibles, que es lo que publica `predictFromPoints` — porque
+  // antes del partido el saque lo decide un sorteo y no se sabe.
+  const symB = matchDistribution(0.6, 0.6, 2, { bestOf: 3, set: STANDARD_SET, decidingSet: STANDARD_SET });
+  const em = (d: typeof sym): number => d.gameMargin.reduce((a, x) => a + x.margin * x.probability, 0);
+  check('puntos: abrir el partido da margen de juegos pero no probabilidad',
+    Math.abs(sym.matchProb - 0.5) < 1e-9 && em(sym) > 0.01,
+    `P=${sym.matchProb.toFixed(6)} margen=${em(sym).toFixed(6)}`);
+  check('puntos: promediando los dos saques de salida el margen es cero',
+    Math.abs((em(sym) + em(symB)) / 2) < 1e-9,
+    `${((em(sym) + em(symB)) / 2).toExponential(2)}`);
+
+  // --- Las reglas del set decisivo por torneo ---
+  // Un modelo que suponga «tiebreak a 7 siempre» se equivoca justo en los partidos más
+  // largos, que son los que más mueven un total de juegos.
+  check('puntos: los Grand Slams usan tiebreak a 10 desde 2022',
+    decidingSetRules('Wimbledon', '20230703').tiebreakTo === 10 &&
+      decidingSetRules('Roland Garros', '20240527').tiebreakTo === 10,
+    'no aplica la regla vigente');
+  check('puntos: antes de 2019 solo el US Open tenía tiebreak en el quinto',
+    decidingSetRules('Wimbledon', '20170703').tiebreak === false &&
+      decidingSetRules('Us Open', '20170828').tiebreak === true,
+    'no aplica las reglas de la época');
+  check('puntos: un torneo normal usa la regla estándar',
+    decidingSetRules('Barcelona', '20240415').tiebreak === true &&
+      decidingSetRules('Barcelona', '20240415').tiebreakTo === 7,
+    'cambia la regla de un torneo que no es Grand Slam');
+  // Y las reglas TIENEN que mover el número, o llevarlas no sirve de nada.
+  const tb7 = matchDistribution(0.74, 0.73, 1, { bestOf: 5, set: STANDARD_SET, decidingSet: STANDARD_SET });
+  const lng = matchDistribution(0.74, 0.73, 1, { bestOf: 5, set: STANDARD_SET, decidingSet: { tiebreak: false, tiebreakTo: 7 } });
+  check('puntos: el set largo cambia el total de juegos esperado',
+    lng.expectedGames > tb7.expectedGames,
+    `largo ${lng.expectedGames.toFixed(2)} contra tiebreak ${tb7.expectedGames.toFixed(2)}`);
+
+  // --- El ajuste conjunto, sobre los datos que haya ---
+  // Estas comprobaciones son sobre el MODELO AJUSTADO, no sobre aritmética: si la base
+  // no lo tiene guardado, se saltan en vez de fallar.
+  const fitted = loadPointsModel('atp');
+  if (!fitted) {
+    console.log('  modelo de puntos sin ajustar todavía — `npm run update-data` lo ajusta');
+  } else {
+    check('puntos: el modelo guardado trae jugadores', fitted.serve.size > 100, `${fitted.serve.size}`);
+    // Los interceptos por superficie tienen que reproducir el orden conocido: la hierba
+    // favorece al sacador más que la dura, y la tierra menos que ninguna. Es el hecho de
+    // tenis más establecido que hay, y el ajuste NO lo recibe de nadie — sale de los
+    // datos. Si sale al revés, el modelo está aprendiendo cualquier otra cosa.
+    check(
+      'puntos: hierba > dura > tierra para el sacador',
+      fitted.mu.Grass > fitted.mu.Hard && fitted.mu.Hard > fitted.mu.Clay,
+      `hierba ${fitted.mu.Grass.toFixed(3)} dura ${fitted.mu.Hard.toFixed(3)} tierra ${fitted.mu.Clay.toFixed(3)}`,
+    );
+    // Y en el rango correcto: entre el 55 % y el 72 % de puntos al saque.
+    const asProb = (x: number): number => 1 / (1 + Math.exp(-x));
+    check(
+      'puntos: los interceptos caen en un rango de tenis real',
+      SURFACES.every((s) => asProb(fitted.mu[s]) > 0.55 && asProb(fitted.mu[s]) < 0.72),
+      SURFACES.map((s) => `${s} ${(asProb(fitted.mu[s]) * 100).toFixed(1)}%`).join(' '),
+    );
+    // El ajuste conjunto tiene que separar a los sacadores de los restadores. Con todos
+    // los parámetros a cero —un fallo perfectamente silencioso— la desviación sería 0.
+    const serves = [...fitted.serve.entries()]
+      .filter(([id]) => (fitted.servePoints.get(id) ?? 0) > 3000)
+      .map(([, v]) => v);
+    const sd = Math.sqrt(
+      serves.reduce((a, x) => a + x * x, 0) / serves.length -
+        (serves.reduce((a, x) => a + x, 0) / serves.length) ** 2,
+    );
+    check(
+      'puntos: el ajuste separa a los jugadores, no los deja todos iguales',
+      serves.length > 20 && sd > 0.03,
+      `SD del saque ${sd.toFixed(4)} sobre ${serves.length} jugadores`,
+    );
+    console.log(
+      `  ajuste: hierba ${(asProb(fitted.mu.Grass) * 100).toFixed(1)} % · ` +
+        `dura ${(asProb(fitted.mu.Hard) * 100).toFixed(1)} % · ` +
+        `tierra ${(asProb(fitted.mu.Clay) * 100).toFixed(1)} % al saque`,
+    );
+  }
+
+  console.log(
+    `  set enumerado exacto · enumeración = recursión a 1e-9 · reglas de set decisivo por torneo y época`,
+  );
+}
+
 function main(): void {
   console.log('\n🔎 Verificación de los datos\n' + '='.repeat(46));
   console.log(
@@ -3049,6 +3251,7 @@ function main(): void {
   auditPortfolio();
   auditEloRanking();
   auditLive();
+  auditPointsModel();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

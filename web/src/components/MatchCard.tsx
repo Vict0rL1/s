@@ -4,6 +4,7 @@ import { confidenceLabelEs, flag, surfaceLabelEs } from '../lib/format';
 import ProbabilityBars, { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import MatchDetail from './MatchDetail';
 import LivePanel from './LivePanel';
+import PointsMarkets from './PointsMarkets';
 import { Badge, Card, MatchTime, ResultBanner, SeriesDot } from './ui';
 
 export default function MatchCard({
@@ -140,6 +141,18 @@ export default function MatchCard({
           {open && (
             <>
               <MatchDetail prediction={prediction} />
+              {/* Los cuatro mercados del modelo de puntos, antes del motor en vivo: el
+                  de puntos contesta «cómo está el partido antes de empezar» y el en vivo
+                  «cómo está ahora». */}
+              <PointsMarkets
+                tour={match.tour}
+                p1={prediction.players.p1.id}
+                p2={prediction.players.p2.id}
+                names={[prediction.players.p1.name, prediction.players.p2.name]}
+                surface={match.surface ?? 'Hard'}
+                bestOf={prediction.scorelines.bestOf}
+                tourney={match.tournament_name}
+              />
               {/* El motor en vivo va DENTRO de la tarjeta desplegada, no en la lista: es
                   para un partido concreto que se está mirando, no para hojear. */}
               <LivePanel
