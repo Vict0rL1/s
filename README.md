@@ -806,6 +806,7 @@ ves, en vez de fallar en silencio.
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate (`--model elo` mide el camino de respaldo) |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
+| `npm run study:live` | **Motor en vivo**: mide μ y κ del saque, y valida la cadena de Markov contra una simulación independiente |
 | `npm run study:correlation` | **Mide la correlación entre posiciones abiertas** con residuos tipificados fuera de muestra, con grupo de control y bootstrap por bloques. `--record` lo anota en el registro |
 | `npm run staking` | **La capa de decisión**: Kelly fraccional, topes, límites de pérdida y drawdown esperado |
 | `npm run study:calibration` | Mide el ECE por deporte y escribe lo que el módulo de riesgo lee para dimensionar |
@@ -942,6 +943,126 @@ npm run update-squads:fb    # mucho más barato que la actualización completa
 argumentos, así que lo recibía, lo **ignoraba en silencio** y pedía cuotas igualmente:
 una tirada que se creía gratis gastaba cuota solo ahí. Ahora los cinco lo respetan y el
 de la NFL lo dice en su salida.
+
+---
+
+## El motor en vivo (`npm run study:live`)
+
+Dado el marcador exacto —sets, juegos, puntos y quién saca— la probabilidad de victoria
+en tiempo real, con una cadena de Markov punto a punto.
+
+### No había ninguna cadena de Markov. Había que construirla
+
+El encargo decía «la misma cadena de Markov». No existía: el modelo de tenis va de Elo a
+una probabilidad de partido y de ahí **baja** a una por set invirtiendo una fórmula
+cerrada. Nunca modeló puntos, ni juegos, ni el saque.
+
+Para una predicción previa eso basta. Para una en vivo no sirve: con 4-5 y 30-40 en
+contra, lo que decide el partido es el punto que se juega ahora. Así que la cadena se
+construyó de abajo arriba —punto → juego → set → partido— y **todo se calcula desde
+cualquier estado**, que es la diferencia entre un modelo previo y uno en vivo.
+
+### Validada contra una simulación independiente
+
+Una cadena mal montada no lanza excepciones: devuelve números plausibles. Los 9 casos
+cuadran con 300.000 partidos simulados por una implementación separada que juega los
+puntos de verdad; mayor diferencia **0.0014**. Y con los valores de libro: `p = 0.60` da
+`0.7357` de ganar el juego, deuce da `0.6923`, `p = 0.50` da exactamente `0.5`.
+
+El 6-6 del tiebreak se resuelve **exacto**, no truncando: desde un empate, la
+probabilidad de llevarse los dos puntos siguientes no depende de quién saque primero de
+los dos, porque `p1·(1−p2)` es conmutativo. Por eso 20-20 devuelve idéntico a 6-6.
+
+**Un resultado que parecía un fallo y no lo era:** con el marcador empatado (0-0, 3-3,
+5-5) la función devuelve lo mismo saque quien saque, hasta el último decimal. La
+simulación reproduce los valores idénticos por su cuenta: desde un empate, cualquier
+continuación reparte los mismos juegos al saque entre los dos. "Arreglarlo" habría roto
+un modelo correcto.
+
+### Actualización bayesiana del saque: κ = 63 puntos, medido
+
+Un jugador va 1 de 12 con su saque. ¿Mal día o doce puntos? Las dos respuestas fáciles
+están mal: «ignorarlo» supone que el saque es una constante de la carrera, y «creérselo»
+convierte doce puntos en una probabilidad de partido.
+
+La respuesta es un peso, y el peso se mide. Descomposición de varianza sobre **58.732
+actuaciones al saque**:
+
+```
+varianza observada dentro de un jugador   0.006805
+componente binomial esperado             −0.003192
+─────────────────────────────────────────────────
+variación REAL partido a partido          0.003613  →  κ = 63 puntos
+```
+
+| puntos servidos hoy | peso frente a su carrera |
+| --- | --- |
+| 10 | 14 % |
+| 40 | 39 % |
+| 100 | 61 % |
+
+**Y el hallazgo que justifica la funcionalidad entera:** σ de un jugador entre partidos
+es **6.0 pp**; la que separa a los jugadores entre sí es **2.7 pp**. Un jugador varía más
+consigo mismo, de un día a otro, que lo que los jugadores se diferencian entre ellos.
+Comprobado por dos rutas — la descomposición agregada y las desviaciones individuales de
+Zverev (6.1), Djokovic (5.0), Bautista (6.2), Medvedev (5.5), Rublev (5.4) y Fritz (6.1).
+
+Con eso, un jugador sacando 20 pp por debajo de su media sobre 48 puntos pasa de
+**36.1 % a 15.5 %** de ganar el partido. Eso es «actualizar en vez de ignorarlo», a un
+ritmo que sale de los datos.
+
+### Situaciones: la etiqueta no es la información
+
+«Break point» en rojo no dice nada que no se vea en el marcador. Lo que importa es cuánto
+mueve el partido ese punto, y la cadena lo da exacto:
+
+| situación | vale |
+| --- | --- |
+| break point a 2-2 en el primer set | **6.5 pp** |
+| break point a 5-5 en el set decisivo | **41.8 pp** |
+| break point a 2-5, con el set perdido | **1.6 pp** |
+
+Los tres se llaman «break point». Solo el número los distingue.
+
+Se detectan break point (con cuántas bolas seguidas), punto de set, punto de partido,
+sacar para el set y sacar para el partido — comprobando qué pasaría si alguien ganara el
+punto, no reconociendo marcadores de memoria, así que no puede desincronizarse de las
+reglas que usa la cadena.
+
+### El momentum tras un quiebre: NO se ajusta, y se dice por qué
+
+Se detecta y se enseña, pero **no se aplica ningún ajuste de probabilidad**. Medir si un
+jugador recién quebrado saca peor en el juego siguiente exige datos **punto a punto**, y
+esta base tiene agregados por partido: 29.486 partidos con el total de puntos al saque,
+sin el orden en que ocurrieron. No hay forma de mirar el juego siguiente a un break
+porque no se sabe cuándo hubo breaks.
+
+Las opciones eran inventarse un multiplicador «porque todo el mundo sabe que el momentum
+existe» o decir que no se ha medido. La casilla queda marcada como pendiente, con lo que
+haría falta para llenarla.
+
+### Contra la cuota en vivo: discrepancia, no ventaja
+
+Se compara y se marcan las diferencias de 5 pp o más, con una advertencia que forma parte
+del resultado: **en vivo el mercado ve cosas que este modelo no puede ver** —un jugador
+cojeando, un fisio en pista, el viento— y va a discrepar más justo cuando tiene razón. Se
+llama «discrepancia» y no «valor» por eso.
+
+### Lo que rechaza
+
+Un marcador imposible produce una probabilidad perfectamente creíble, así que se valida
+siempre y se devuelve 400 con el motivo: 8-2 en juegos, dos sets a dos al mejor de tres,
+un tiebreak fuera de 6-6. Y un id de jugador sin datos de saque se rechaza con 404 en vez
+de caer en silencio a la media del circuito — que es exactamente lo que pasó al probar el
+endpoint con ids inventados: dos jugadores distintos con `p = 0.6369` clavado.
+
+### Un hueco en mis propias comprobaciones
+
+Rompí el cálculo de la ventaja (`p + (1−p)·D` → `D`) y **no falló ninguna comprobación**.
+El motivo: desde 0-0 la recursión nunca visita una ventaja, porque al llegar a 40-40 corta
+con la forma cerrada del deuce. Y la identidad «5-4 = 4-3» tampoco lo cazaba, porque los
+dos estados pasan por la misma rama rota. Hacía falta comprobar el **valor**, no solo la
+coherencia.
 
 ---
 
@@ -1911,6 +2032,7 @@ Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede
 | `GET /api/meta` | Fuente de datos y conteos |
 | `GET /api/track-record?tour=` | Acierto medido de la app en partidos ya jugados (+ mercado) |
 | `GET /api/tours` | Circuitos ATP/WTA con conteos |
+| `POST /api/live` | **Probabilidad en vivo** desde el marcador exacto: `{state, tour, p1, p2, tally?, odds?}` |
 | `GET /api/power?tour=&limit=&minMatches=&activeDays=` | **Clasificación por Elo del circuito**, con Elo por superficie, ranking oficial y filtro de actividad (`activeDays=0` para la lista histórica) |
 | `GET /api/tours/:tour/players?q=` | Jugadores (búsqueda) |
 | `GET /api/players/:tour/:id` | Perfil: Elo general + por superficie + últimos resultados |

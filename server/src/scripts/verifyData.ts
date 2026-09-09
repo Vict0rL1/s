@@ -29,6 +29,18 @@
 
 import { getDb } from '../db.ts';
 import { getEloRanking, officialRankingCoherence } from '../repo.ts';
+import {
+  gameProb,
+  deuceProb,
+  tiebreakProb,
+  tiebreakServer,
+  setProb,
+  matchProb,
+} from '../live/markov.ts';
+import { advancePoint, validate, type LiveState } from '../live/state.ts';
+import { leverage, situations } from '../live/situations.ts';
+import { updateServe, KAPPA_SERVE } from '../live/bayes.ts';
+import { TOUR_BASELINE } from '../live/serve.ts';
 import { normalizeTeamName } from '../football/ingest/teamNames.ts';
 import { parseFootballTxt } from '../football/ingest/openfootballTxt.ts';
 import { readRegistry, distinctExperiments } from '../experiments/registry.ts';
@@ -2876,6 +2888,142 @@ function auditEloRanking(): void {
   if (!probado) console.log('  sin circuitos con datos suficientes, saltado');
 }
 
+// ===========================================================================
+// EL MOTOR EN VIVO
+// ===========================================================================
+// Una cadena de Markov mal montada no lanza excepciones: devuelve probabilidades
+// plausibles. Así que lo que se comprueba son IDENTIDADES con respuesta conocida a mano
+// —el valor de libro del juego, las simetrías, las sumas que tienen que dar 1— y las
+// monotonías, que es lo que caza un signo cambiado.
+function auditLive(): void {
+  console.log('\n▸ Motor en vivo');
+  const S = (o: Partial<LiveState>): LiveState => ({
+    sets: [0, 0], games: [0, 0], points: [0, 0], server: 1, bestOf: 3, ...o,
+  });
+
+  // --- El juego, contra los valores de libro ---
+  // Con p = 0.6 la probabilidad de ganar el juego es 0.7357. Es el número que aparece en
+  // cualquier texto sobre esto, y un índice desplazado o un deuce mal resuelto lo mueve.
+  check('vivo: juego con p=0.60 da el 0.7357 de libro', Math.abs(gameProb(0.6) - 0.735483) < 0.001, gameProb(0.6).toFixed(6));
+  check('vivo: deuce con p=0.60 da 0.6923', Math.abs(deuceProb(0.6) - 0.692308) < 1e-5, deuceProb(0.6).toFixed(6));
+  check('vivo: con p=0.50 el juego es exactamente 0.5', Math.abs(gameProb(0.5) - 0.5) < 1e-12, gameProb(0.5).toFixed(12));
+  check('vivo: 40-0 gana casi siempre y 0-40 casi nunca',
+    gameProb(0.62, 3, 0) > 0.97 && gameProb(0.62, 0, 3) < 0.2,
+    `${gameProb(0.62,3,0).toFixed(3)} / ${gameProb(0.62,0,3).toFixed(3)}`);
+  // Monotonía: más p, más juego. Un signo cambiado pasa todos los rangos y falla esto.
+  let mono = true;
+  for (let p = 0.3; p < 0.9; p += 0.05) if (gameProb(p + 0.05) <= gameProb(p)) mono = false;
+  check('vivo: el juego crece con p', mono, 'no es monótono');
+  // ===========================================================================
+  // LAS VENTAJAS SE COMPRUEBAN POR SEPARADO, Y HAY UN MOTIVO
+  // ===========================================================================
+  // Desde 0-0 la recursión NUNCA visita una ventaja: al llegar a 40-40 corta con la
+  // forma cerrada del deuce. Así que se puede romper el cálculo de la ventaja entero y
+  // `gameProb(0.6)` sigue dando el 0.7357 de libro. Comprobado inyectando el fallo:
+  // sustituir «p + (1−p)·D» por «D» no rompía ninguna comprobación.
+  //
+  // Y la identidad 5-4 = 4-3 tampoco lo caza, porque los dos estados pasan por la misma
+  // rama rota. Hace falta el VALOR, no solo la coherencia.
+  const AD = 0.6 + 0.4 * deuceProb(0.6); // ventaja del sacador con p = 0.6
+  check('vivo: ventaja del sacador con p=0.60 vale 0.8769',
+    Math.abs(gameProb(0.6, 4, 3) - AD) < 1e-9 && Math.abs(AD - 0.876923) < 1e-5,
+    gameProb(0.6, 4, 3).toFixed(6));
+  check('vivo: ventaja del restador con p=0.60 vale 0.4154',
+    Math.abs(gameProb(0.6, 3, 4) - 0.6 * deuceProb(0.6)) < 1e-9,
+    gameProb(0.6, 3, 4).toFixed(6));
+  check('vivo: ventaja saque > deuce > ventaja resto',
+    gameProb(0.6, 4, 3) > deuceProb(0.6) && deuceProb(0.6) > gameProb(0.6, 3, 4),
+    `${gameProb(0.6,4,3).toFixed(4)} / ${deuceProb(0.6).toFixed(4)} / ${gameProb(0.6,3,4).toFixed(4)}`);
+
+  // La reducción de las ventajas es exacta, no aproximada: 5-4 ES 4-3.
+  check('vivo: las ventajas repetidas son el mismo estado',
+    Math.abs(gameProb(0.62, 5, 4) - gameProb(0.62, 4, 3)) < 1e-12 &&
+      Math.abs(gameProb(0.62, 9, 9) - gameProb(0.62, 3, 3)) < 1e-12,
+    'la reducción de deuce no es exacta');
+
+  // --- El tiebreak ---
+  check('vivo: el patrón de saque del tiebreak es 1,2,2,2…',
+    Array.from({ length: 14 }, (_, t) => tiebreakServer(t, 1)).join('') === '12211221122112',
+    Array.from({ length: 14 }, (_, t) => tiebreakServer(t, 1)).join(''));
+  check('vivo: tiebreak simétrico a 6-6 es 0.5', Math.abs(tiebreakProb(0.62, 0.62, 6, 6, 1) - 0.5) < 1e-12, String(tiebreakProb(0.62,0.62,6,6,1)));
+  // El 6-6 se resuelve en forma cerrada, así que 20-20 tiene que dar EXACTAMENTE lo
+  // mismo. Con un truncamiento en vez de la forma cerrada, esto se separa.
+  check('vivo: 20-20 es idéntico a 6-6 en el tiebreak',
+    Math.abs(tiebreakProb(0.7, 0.55, 20, 20, 1) - tiebreakProb(0.7, 0.55, 6, 6, 1)) < 1e-12,
+    'la reducción del tiebreak no es exacta');
+
+  // --- El set y el partido ---
+  // Mirar el mismo set desde el otro jugador: se intercambian las p, los juegos Y EL
+  // SAQUE. Lo tercero se me olvidó al escribir esta comprobación la primera vez y falló
+  // — el fallo era de la comprobación, y la suma con el saque intercambiado da 1 exacto.
+  check('vivo: el set reparte toda la probabilidad entre los dos',
+    Math.abs(setProb(0.66, 0.62, 3, 2, 1) + setProb(0.62, 0.66, 2, 3, 2) - 1) < 1e-9,
+    `suma ${(setProb(0.66, 0.62, 3, 2, 1) + setProb(0.62, 0.66, 2, 3, 2)).toFixed(9)}`);
+  // Al mejor de 5 el mejor jugador gana MÁS que al mejor de 3: más partido, menos azar.
+  const bo3 = matchProb(0.68, 0.62, 0, 0, 0, 0, 1, null, { bestOf: 3 });
+  const bo5 = matchProb(0.68, 0.62, 0, 0, 0, 0, 1, null, { bestOf: 5 });
+  check('vivo: al mejor de 5 el favorito gana más que al mejor de 3', bo5 > bo3, `${bo5.toFixed(4)} contra ${bo3.toFixed(4)}`);
+  check('vivo: dos sets a cero al mejor de 3 es partido ganado',
+    matchProb(0.5, 0.5, 2, 0, 0, 0, 1, null, { bestOf: 3 }) === 1, 'no cierra el partido');
+
+  // --- El avance del estado ---
+  const g = advancePoint(S({ points: [3, 0] }), 1);
+  check('vivo: 40-0 más un punto cierra el juego',
+    !('done' in g) && g.games[0] === 1 && g.points[0] === 0 && g.server === 2,
+    JSON.stringify(g));
+  const m = advancePoint(S({ sets: [1, 0], games: [5, 4], points: [3, 0] }), 1);
+  check('vivo: el punto de partido lo termina', 'done' in m && m.done === 1, JSON.stringify(m));
+
+  // --- El apalancamiento, que es lo que hace útil la detección ---
+  // Tres «break points» que valen cosas completamente distintas. Si el apalancamiento
+  // no dependiera del contexto, los tres darían lo mismo y la funcionalidad no serviría.
+  const early = leverage(S({ games: [2, 2], points: [0, 3] }), 0.66, 0.63).swingPp;
+  const decisive = leverage(S({ sets: [1, 1], games: [5, 5], points: [2, 3] }), 0.66, 0.63).swingPp;
+  const dead = leverage(S({ games: [2, 5], points: [0, 3] }), 0.66, 0.63).swingPp;
+  check('vivo: un break point decisivo vale mucho más que uno temprano', decisive > 3 * early, `${decisive.toFixed(1)} contra ${early.toFixed(1)} pp`);
+  check('vivo: un break point con el set perdido vale casi nada', dead < early, `${dead.toFixed(1)} contra ${early.toFixed(1)} pp`);
+
+  // --- Las situaciones ---
+  const kinds = (st: LiveState): string[] => situations(st).map((x) => x.kind);
+  check('vivo: detecta el break point', kinds(S({ games: [2, 2], points: [1, 3] })).includes('break-point'), kinds(S({ games: [2,2], points: [1,3] })).join(','));
+  check('vivo: detecta que saca para el partido',
+    kinds(S({ sets: [1, 0], games: [5, 3], points: [0, 0] })).includes('saca-para-partido'),
+    kinds(S({ sets: [1,0], games: [5,3], points: [0,0] })).join(','));
+  check('vivo: detecta el punto de partido',
+    kinds(S({ sets: [1, 0], games: [5, 3], points: [3, 0] })).includes('match-point'), 'no lo detecta');
+  // A 0-0 no pasa nada, y decirlo importa: un detector que siempre encuentra algo no
+  // sirve para avisar de nada.
+  check('vivo: a 0-0 no inventa situaciones', kinds(S({})).length === 0, kinds(S({})).join(','));
+
+  // --- La validación del marcador ---
+  check('vivo: rechaza 8-2 en juegos', validate(S({ games: [8, 2] })).length > 0, 'lo acepta');
+  check('vivo: rechaza dos sets a dos al mejor de 3', validate(S({ sets: [2, 2] })).length > 0, 'lo acepta');
+  check('vivo: rechaza un tiebreak fuera de 6-6', validate(S({ games: [3, 2], inTiebreak: true })).length > 0, 'lo acepta');
+  check('vivo: acepta un marcador normal', validate(S({ sets: [1, 0], games: [4, 5], points: [2, 3] })).length === 0,
+    validate(S({ sets: [1,0], games: [4,5], points: [2,3] })).map((i) => i.reason).join('; '));
+
+  // --- La actualización bayesiana ---
+  const u0 = updateServe(0.65, { won: 0, played: 0 });
+  check('vivo: sin puntos servidos el posterior es el prior', Math.abs(u0.posterior - 0.65) < 1e-12 && u0.weight === 0, String(u0.posterior));
+  const uBad = updateServe(0.65, { won: 20, played: 50 });
+  check('vivo: sacando mal, el posterior baja pero no llega a lo observado',
+    uBad.posterior < 0.65 && uBad.posterior > 0.4, `${uBad.posterior.toFixed(4)} con 0.40 observado`);
+  // El peso crece con los puntos y tiende a 1. Con un κ mal aplicado esto no se cumple.
+  const w20 = updateServe(0.65, { won: 10, played: 20 }).weight;
+  const w200 = updateServe(0.65, { won: 100, played: 200 }).weight;
+  check('vivo: el peso del partido crece con los puntos servidos', w200 > w20 && w200 < 1, `${w20.toFixed(3)} → ${w200.toFixed(3)}`);
+  // Y con κ = 63, 40 puntos pesan un 39 %: es el número publicado en el módulo.
+  check('vivo: κ publicado da el peso publicado',
+    Math.abs(updateServe(0.65, { won: 20, played: 40 }).weight - 40 / (40 + KAPPA_SERVE)) < 1e-12,
+    'el peso no sale de κ');
+  check('vivo: un κ más grande mueve menos el posterior',
+    Math.abs(updateServe(0.65, { won: 20, played: 50 }, 200).posterior - 0.65) <
+      Math.abs(updateServe(0.65, { won: 20, played: 50 }, 20).posterior - 0.65),
+    'κ no controla la fuerza del prior');
+
+  console.log(`  cadena validada contra valores de libro · κ = ${KAPPA_SERVE} puntos · μ ATP = ${TOUR_BASELINE.atp}`);
+}
+
 function main(): void {
   console.log('\n🔎 Verificación de los datos\n' + '='.repeat(46));
   console.log(
@@ -2900,6 +3048,7 @@ function main(): void {
   auditLatency();
   auditPortfolio();
   auditEloRanking();
+  auditLive();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

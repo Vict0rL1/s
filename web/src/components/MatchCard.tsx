@@ -3,6 +3,7 @@ import type { PlayerInfo, Reliability, UpcomingMatch, UpcomingWithPrediction } f
 import { confidenceLabelEs, flag, surfaceLabelEs } from '../lib/format';
 import ProbabilityBars, { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import MatchDetail from './MatchDetail';
+import LivePanel from './LivePanel';
 import { Badge, Card, MatchTime, ResultBanner, SeriesDot } from './ui';
 
 export default function MatchCard({
@@ -136,7 +137,20 @@ export default function MatchCard({
           >
             {open ? '▲ Ocultar desglose' : '▼ Ver desglose (Elo · forma · H2H · mercado)'}
           </button>
-          {open && <MatchDetail prediction={prediction} />}
+          {open && (
+            <>
+              <MatchDetail prediction={prediction} />
+              {/* El motor en vivo va DENTRO de la tarjeta desplegada, no en la lista: es
+                  para un partido concreto que se está mirando, no para hojear. */}
+              <LivePanel
+                tour={match.tour}
+                p1={prediction.players.p1.id}
+                p2={prediction.players.p2.id}
+                names={[prediction.players.p1.name, prediction.players.p2.name]}
+                bestOf={prediction.scorelines.bestOf === 5 ? 5 : 3}
+              />
+            </>
+          )}
         </>
       ) : (
         <MissingPlayers match={match} players={players} />

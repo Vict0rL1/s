@@ -27,6 +27,9 @@ import { computeH2H } from '../model/h2h.ts';
 import { impliedProbabilities, type MarketProbabilities } from '../model/market.ts';
 import { buildPrediction, type Prediction } from '../model/predict.ts';
 import { refreshOdds } from '../ingest/odds.ts';
+import { evaluate } from '../live/engine.ts';
+import { matchupServe } from '../live/serve.ts';
+import { describe as describeState, type LiveState } from '../live/state.ts';
 import { getTrackRecord, logPrediction } from '../trackRecord.ts';
 import type { TourId, UpcomingRow } from '../types.ts';
 
@@ -199,6 +202,73 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       // «#5» seguidos como si fuera un fallo de la app.
       officialRanking: officialRankingCoherence(tour),
     };
+  });
+
+  /**
+   * El motor en vivo. POST porque el marcador es un objeto con seis campos, y meterlo
+   * en una query string lo haría ilegible y difícil de validar.
+   *
+   * Los `prior` se pueden pasar a mano o dejar que salgan de los ids de los jugadores;
+   * lo segundo es lo normal y lo primero permite probar el motor sin base.
+   */
+  app.post<{
+    Body: {
+      state: LiveState;
+      tour?: string;
+      p1?: number;
+      p2?: number;
+      surface?: string | null;
+      prior?: [number, number];
+      tally?: [{ won: number; played: number }, { won: number; played: number }];
+      odds?: [number, number] | null;
+      lastGame?: { winner: 1 | 2; wasBreak: boolean };
+      kappa?: number;
+    };
+  }>('/live', async (req, reply) => {
+    const b = req.body ?? ({} as never);
+    if (!b.state) return reply.code(400).send({ error: 'falta `state` con el marcador' });
+
+    let prior = b.prior;
+    let derived: ReturnType<typeof matchupServe> | null = null;
+    if (!prior) {
+      if (b.p1 == null || b.p2 == null) {
+        return reply
+          .code(400)
+          .send({ error: 'pasa `prior` o los ids `p1` y `p2` para derivarlo del histórico' });
+      }
+      derived = matchupServe((b.tour ?? 'atp') as TourId, Number(b.p1), Number(b.p2), b.surface);
+      // Sin datos del jugador, `matchupServe` devuelve la media del circuito — que es un
+      // número perfectamente creíble y no dice nada de nadie. Se rechaza en vez de
+      // servir una probabilidad de partido construida sobre dos medias.
+      if (derived.detail.unknown1 || derived.detail.unknown2) {
+        const who = [
+          derived.detail.unknown1 ? `p1=${b.p1}` : null,
+          derived.detail.unknown2 ? `p2=${b.p2}` : null,
+        ].filter(Boolean);
+        return reply.code(404).send({
+          error:
+            `Sin datos de saque para ${who.join(' y ')}. Sin ellos el modelo usaría la ` +
+            'media del circuito para los dos y devolvería una probabilidad que no habla ' +
+            'de este partido. Comprueba los ids o pasa `prior` a mano.',
+        });
+      }
+      prior = [derived.p1, derived.p2];
+    }
+
+    const result = evaluate({
+      state: b.state,
+      prior,
+      tally: b.tally,
+      odds: b.odds,
+      lastGame: b.lastGame,
+      kappa: b.kappa,
+    });
+    // El marcador inválido devuelve 400 CON el detalle, no una probabilidad. Un 8-2 en
+    // juegos produce un número perfectamente creíble si se deja pasar.
+    if (result.invalid.length > 0) {
+      return reply.code(400).send({ error: 'marcador imposible', invalid: result.invalid });
+    }
+    return { ...result, derived, describe: describeState(b.state) };
   });
 
   app.get<{ Querystring: { tour?: string } }>('/track-record', async (req) => {
