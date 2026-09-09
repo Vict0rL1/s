@@ -104,6 +104,19 @@ export interface FitOptions {
    * merece menos confianza por construcción.
    */
   lambdaSurface?: number;
+  /**
+   * Si se estiman desviaciones por superficie.
+   *
+   * `false` las apaga de verdad. Existe porque la forma «obvia» de apagarlas —poner λ
+   * enorme— NO las apaga: HACE DIVERGIR EL AJUSTE. Con λ = 100 el paso de la penalización
+   * es 100·δ·lr, o sea 50 veces δ en sentido contrario, así que δ oscila y explota. Medido:
+   * 2.003 de 3.126 desviaciones no finitas y verosimilitud NaN.
+   *
+   * Un barrido que usara λ = 1e6 como «sin superficie» no estaría midiendo un modelo sin
+   * superficie: estaría midiendo un modelo roto. Pasó, y la fila salía idéntica para los
+   * cuatro decays — que es lo que la delató, porque el decay tiene que cambiar algo.
+   */
+  useSurface?: boolean;
   iterations?: number;
   learningRate?: number;
   /** Solo partidos anteriores a esta fecha (YYYYMMDD). Para el walk-forward. */
@@ -162,6 +175,20 @@ function daysBetween(a: string, b: string): number {
 export function fitPoints(tour: TourId, opts: FitOptions = {}): PointsModel {
   const lambda = opts.lambda ?? 0.02;
   const lambdaSurface = opts.lambdaSurface ?? 0.20;
+  const useSurface = opts.useSurface ?? true;
+  // El paso del descenso es estable mientras λ·lr < 2. Por encima, la penalización
+  // empuja más lejos de cero que la distancia a cero y el parámetro oscila divergiendo.
+  // Se comprueba antes de gastar ocho segundos en producir NaN.
+  const lrCheck = opts.learningRate ?? 0.5;
+  for (const [name, l] of [['lambda', lambda], ['lambdaSurface', lambdaSurface]] as [string, number][]) {
+    if (l * lrCheck >= 2) {
+      throw new Error(
+        `${name} = ${l} con learningRate ${lrCheck} hace divergir el descenso ` +
+          `(${name}·lr = ${(l * lrCheck).toFixed(1)} ≥ 2). Para apagar las desviaciones ` +
+          'por superficie usa `useSurface: false`, no una λ enorme.',
+      );
+    }
+  }
   const iterations = opts.iterations ?? 600;
   const lr = opts.learningRate ?? 0.5;
 
@@ -234,14 +261,18 @@ export function fitPoints(tour: TourId, opts: FitOptions = {}): PointsModel {
       const b = idx.get(o.returner)!;
       const si = surfIdx[o.surface];
       const w = weights[i];
-      const eta = mu[o.surface] + (S[a] + dS[si][a]) - (R[b] + dR[si][b]);
+      const eta = useSurface
+        ? mu[o.surface] + (S[a] + dS[si][a]) - (R[b] + dR[si][b])
+        : mu[o.surface] + S[a] - R[b];
       const p = sigmoid(eta);
       // Gradiente de la binomial: (k − n·p) por cada parámetro que entra en eta.
       const resid = (o.won - o.played * p) * w;
       gS[a] += resid;
-      gdS[si][a] += resid;
       gR[b] -= resid;
-      gdR[si][b] -= resid;
+      if (useSurface) {
+        gdS[si][a] += resid;
+        gdR[si][b] -= resid;
+      }
       logLik += w * (o.won * Math.log(Math.max(p, 1e-12)) + (o.played - o.won) * Math.log(Math.max(1 - p, 1e-12)));
     }
 
@@ -253,12 +284,29 @@ export function fitPoints(tour: TourId, opts: FitOptions = {}): PointsModel {
       const wrt = Math.max(rtPts[a], 50);
       S[a] += (lr * (gS[a] - lambda * S[a] * wsv)) / wsv;
       R[a] += (lr * (gR[a] - lambda * R[a] * wrt)) / wrt;
-      for (let s = 0; s < 3; s++) {
-        gdS[s][a] -= lambdaSurface * dS[s][a] * wsv;
-        gdR[s][a] -= lambdaSurface * dR[s][a] * wrt;
-        dS[s][a] += (lr * gdS[s][a]) / wsv;
-        dR[s][a] += (lr * gdR[s][a]) / wrt;
+      if (useSurface) {
+        for (let s = 0; s < 3; s++) {
+          gdS[s][a] -= lambdaSurface * dS[s][a] * wsv;
+          gdR[s][a] -= lambdaSurface * dR[s][a] * wrt;
+          dS[s][a] += (lr * gdS[s][a]) / wsv;
+          dR[s][a] += (lr * gdR[s][a]) / wrt;
+        }
       }
+    }
+  }
+
+  // Un ajuste divergido devuelve NaN y sigue produciendo «probabilidades» perfectamente
+  // pintables: sigmoid(NaN) es NaN, pero un NaN comparado con un umbral es siempre falso
+  // y acaba en un 0 % o un 50 % sin explicación. Se falla aquí, con el motivo.
+  if (!Number.isFinite(logLik)) {
+    throw new Error(
+      'El ajuste divergió: la verosimilitud es NaN. Suele ser una λ demasiado grande ' +
+        `para el learning rate (lambda ${lambda}, lambdaSurface ${lambdaSurface}, lr ${lr}).`,
+    );
+  }
+  for (const arr of [S, R]) {
+    if (arr.some((x) => !Number.isFinite(x))) {
+      throw new Error('El ajuste divergió: hay parámetros no finitos.');
     }
   }
 

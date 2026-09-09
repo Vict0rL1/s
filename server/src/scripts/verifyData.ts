@@ -50,7 +50,7 @@ import {
 } from '../points/markets.ts';
 import { decidingSetRules } from '../points/predict.ts';
 import { loadModel as loadPointsModel } from '../points/repo.ts';
-import { SURFACES } from '../points/fit.ts';
+import { SURFACES, fitPoints } from '../points/fit.ts';
 import { normalizeTeamName } from '../football/ingest/teamNames.ts';
 import { parseFootballTxt } from '../football/ingest/openfootballTxt.ts';
 import { readRegistry, distinctExperiments } from '../experiments/registry.ts';
@@ -3175,6 +3175,30 @@ function auditPointsModel(): void {
   check('puntos: el set largo cambia el total de juegos esperado',
     lng.expectedGames > tb7.expectedGames,
     `largo ${lng.expectedGames.toFixed(2)} contra tiebreak ${tb7.expectedGames.toFixed(2)}`);
+
+  // --- La divergencia se detecta, no se devuelve ---
+  // Un ajuste divergido produce NaN y sigue dando «probabilidades» pintables: sigmoid(NaN)
+  // es NaN, y un NaN comparado con un umbral es siempre falso, así que acaba en un 0 % o
+  // un 50 % sin explicación. Pasó de verdad: un barrido usaba λ = 1e6 para apagar las
+  // superficies, el ajuste explotaba, y la fila se publicó como si midiera algo.
+  let threw = false;
+  try {
+    fitPoints('atp', { before: '20240101', lambdaSurface: 100, iterations: 5 });
+  } catch {
+    threw = true;
+  }
+  check('puntos: una λ que diverge se rechaza en vez de devolver NaN', threw,
+    'devuelve un modelo divergido sin avisar');
+  // Y la forma correcta de apagarlas sí funciona.
+  let noSurf = false;
+  try {
+    const m = fitPoints('atp', { before: '20240101', useSurface: false, iterations: 20 });
+    noSurf = [...m.serveSurface.values()].every((x) => x === 0);
+  } catch {
+    noSurf = false;
+  }
+  check('puntos: useSurface=false deja las desviaciones exactamente en cero', noSurf,
+    'no las apaga');
 
   // --- El ajuste conjunto, sobre los datos que haya ---
   // Estas comprobaciones son sobre el MODELO AJUSTADO, no sobre aritmética: si la base

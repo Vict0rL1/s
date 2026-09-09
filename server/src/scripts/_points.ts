@@ -104,9 +104,16 @@ if (rows.length < 200) {
 // ---------------------------------------------------------------------------
 // El barrido de λ y la comparación, todo con el mismo walk-forward
 // ---------------------------------------------------------------------------
-const lambdas = args['lambda-surface']
-  ? [Number(args['lambda-surface'])]
-  : [0.05, 0.2, 1e6]; // 1e6 = sin desviaciones por superficie
+// `null` = sin desviaciones por superficie, con el flag y no con una λ enorme.
+//
+// La primera versión de este barrido usaba λ = 1e6 para «apagar» las superficies, y no
+// las apagaba: HACÍA DIVERGIR el ajuste (2.003 de 3.126 δ no finitos, verosimilitud NaN).
+// La fila salía 1.05661 IDÉNTICA para los cuatro decays, y eso es lo que la delató —
+// el decay tiene que cambiar algo. Estaba midiendo un modelo roto y publicándolo como
+// «modelo sin superficie».
+const lambdas: (number | null)[] = args['lambda-surface']
+  ? [args['lambda-surface'] === 'none' ? null : Number(args['lambda-surface'])]
+  : [0.05, 0.2, null];
 // El decay se barre igual que λ: si pesa lo mismo un partido de 2015 que uno de ayer, el
 // modelo describe una carrera y no un jugador. Medido, no supuesto.
 const halfLives: (number | null)[] = args['half-life']
@@ -149,14 +156,18 @@ function rulesFor(bestOf: number): MatchRules {
   };
 }
 
-function run(lambdaSurface: number, halfLifeDays: number | null): Score {
+function run(lambdaSurface: number | null, halfLifeDays: number | null): Score {
   let model: PointsModel | null = null;
   let refitAt = '';
   const s: Score = { n: 0, points: 0, elo: 0, totalsPoints: 0, totalsBase: 0, nTotals: 0 };
 
   for (const r of rows) {
     if (!model || r.date >= refitAt) {
-      model = fitPoints(TOUR, { before: r.date, lambdaSurface, halfLifeDays });
+      model = fitPoints(TOUR, {
+        before: r.date,
+        ...(lambdaSurface === null ? { useSurface: false } : { lambdaSurface }),
+        halfLifeDays,
+      });
       refitAt = addDays(r.date, REFIT_DAYS);
     }
     const pp = pointProbs(model, r.w, r.l, r.surface);
@@ -202,14 +213,14 @@ console.log(`\nWalk-forward: reajuste cada ${REFIT_DAYS} días, solo con partido
 console.log('Esto tarda: cada reajuste son ~8 s y hay uno por trimestre.\n');
 console.log('  λ superficie   semivida    n      log loss puntos   log loss Elo   diferencia');
 
-let best: { lambda: number; halfLife: number | null; score: Score } | null = null;
+let best: { lambda: number | null; halfLife: number | null; score: Score } | null = null;
 for (const lam of lambdas) {
   for (const hl of halfLives) {
     const t0 = Date.now();
     const s = run(lam, hl);
     const lp = s.points / s.n;
     const le = s.elo / s.n;
-    const label = lam >= 1e5 ? 'sin superficie' : lam.toFixed(2);
+    const label = lam === null ? 'sin superficie' : lam.toFixed(2);
     console.log(
       `  ${label.padEnd(14)} ${(hl === null ? 'sin decay' : `${hl} d`).padEnd(11)} ${String(s.n).padStart(5)}  ` +
         `${lp.toFixed(5).padStart(15)}   ${le.toFixed(5).padStart(12)}   ` +
@@ -227,7 +238,7 @@ const lp = b.score.points / b.score.n;
 const le = b.score.elo / b.score.n;
 
 console.log(
-  `\nMEJOR CONFIGURACIÓN: λ superficie ${b.lambda >= 1e5 ? 'ninguna (sin δ)' : b.lambda} · ` +
+  `\nMEJOR CONFIGURACIÓN: λ superficie ${b.lambda === null ? 'ninguna (sin δ)' : b.lambda} · ` +
     `${b.halfLife === null ? 'sin decay' : `semivida ${b.halfLife} días`}`,
 );
 console.log(
@@ -299,7 +310,8 @@ if (args.record) {
     dataset: { sport: 'tennis' as never, split: 'validation', n: b.score.n },
     features: ['saque/resto conjunto', 'ajuste por rival', 'δ por superficie', 'cadena de Markov'],
     hyperparams: {
-      lambdaSurface: b.lambda,
+      lambdaSurface: b.lambda ?? 0,
+      useSurface: b.lambda !== null,
       halfLifeDays: b.halfLife ?? 0,
       refitDays: REFIT_DAYS,
       from: FROM,

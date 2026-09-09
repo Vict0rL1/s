@@ -963,8 +963,8 @@ Sobre 5.667 partidos de ATP desde 2024, walk-forward con reajuste trimestral:
 | modelo | log loss del ganador |
 | --- | --- |
 | Elo por jugador con ajuste de superficie (el publicado) | **0.558** |
-| modelo de puntos, λ 0.05 · semivida 1 año | 0.667 |
-| modelo de puntos, λ 0.05 · sin decay | 0.680 |
+| modelo de puntos, mejor de 8 configuraciones (λ 0.20 · 1 año) | 0.663 |
+| modelo de puntos, peor de las 8 (λ 0.05 · sin decay) | 0.680 |
 
 No es un empate discutible: 0.68 está a un paso del 0.693 de la moneda. Forzar la
 sustitución habría sido cambiar un modelo medido por uno más elegante.
@@ -992,7 +992,7 @@ rating de hoy sabe cómo acabaron. Sale lo contrario:
 
 Mejora hacia el presente, que es lo que produce la *obsolescencia* del rating, no la
 filtración. Y aun en su peor periodo (0.591) le gana al mejor del modelo de puntos
-(0.667).
+(0.663).
 
 ### Lo que el modelo de puntos SÍ aporta, y es el motivo de que se publique
 
@@ -1015,6 +1015,17 @@ GET /api/points?tour=atp&p1=…&p2=…&surface=Clay&bestOf=5&tourney=Roland+Garr
 **No pueden contradecirse.** Con modelos separados por mercado es perfectamente posible
 publicar un 70 % de ganar el partido y un total de juegos que implique un 60 %, y nadie
 se entera hasta que alguien lo suma a mano.
+
+Y el total de juegos **se puntuó contra el marcador real**, que es la única forma de
+defender que esto aporta algo. Sobre 5.472 partidos con marcador completo:
+
+| | log loss del total de juegos |
+| --- | --- |
+| modelo de puntos | **0.674** |
+| distribución marginal (no saber nada) | 0.724 |
+
+Aporta 0.050 sobre no saber nada. El Elo no aparece en esa tabla porque no puede: no
+produce una distribución de juegos.
 
 ### El ajuste por rival, y por qué no basta restar medias
 
@@ -1047,6 +1058,20 @@ Los interceptos por superficie: **hierba 66.0 % > dura 64.6 % > tierra 62.0 %** 
 al saque. Es el orden conocido y el ajuste lo deriva de los datos — hay una comprobación
 en `verify:data` que falla si sale al revés, porque entonces el modelo estaría aprendiendo
 otra cosa.
+
+**¿Aportan las desviaciones por superficie?** Sí, pero solo con el encogimiento fuerte —
+y esa condición es el hallazgo:
+
+| configuración | log loss |
+| --- | --- |
+| λ 0.20 · 1 año (con δ, encogidas fuerte) | **0.66267** |
+| **sin δ de superficie** | 0.66580 |
+| λ 0.05 · 1 año (δ con poco encogimiento) | 0.66724 |
+
+Con encogimiento fuerte las superficies ganan 0.0031. Con encogimiento flojo son **peores
+que no tenerlas**: los δ de las muestras pequeñas dejan de ser especialización y pasan a
+ser ruido con nombre. El shrinkage no es un adorno del modelo, es lo que hace que la parte
+de superficie aporte algo en vez de restar.
 
 Y las desviaciones individuales, con λ = 0.05:
 
@@ -1091,12 +1116,33 @@ walk-forward, y suficiente para ordenar las opciones entre sí):
 | **1 año** | **0.650** |
 | 6 meses | 0.652 |
 
-Se publica un año, y el walk-forward lo confirma (0.667 con decay contra 0.680 sin).
+Se publica un año, y el walk-forward lo confirma (0.663 con decay contra 0.676 sin, a
+λ 0.20).
 Ayuda, pero no cierra la distancia con el Elo — que es la parte importante del resultado.
 
 > Los números de esta tabla y los de la comparación de arriba **no son comparables entre
 > sí**: estos salen de un ajuste único sobre 2025 y aquellos de un walk-forward sobre
 > 2024-2026. Sirven para ordenar configuraciones, no para compararse con el Elo.
+
+### Una fila del barrido que no medía nada
+
+Para responder «¿aportan las desviaciones por superficie?» apagué las superficies poniendo
+λ = 10⁶. **No las apaga: hace divergir el ajuste.** Con λ = 100 ya salen 2.003 de 3.126
+desviaciones no finitas y la verosimilitud es NaN — el paso de la penalización es λ·δ·lr,
+o sea cincuenta veces δ en sentido contrario, así que oscila y explota.
+
+Lo que delató la fila fue que daba **1.05661 idéntico para los cuatro decays**. El decay
+tiene que cambiar algo; que no cambiara nada era la señal de que el número no venía de
+ningún modelo.
+
+Dos arreglos, y el segundo importa más que el primero:
+
+* `useSurface: false` apaga las desviaciones de verdad.
+* **`fitPoints` ya no devuelve un ajuste divergido en silencio.** Comprueba λ·lr antes de
+  gastar ocho segundos, y comprueba que la verosimilitud y los parámetros sean finitos
+  antes de devolver. Un modelo con NaN dentro sigue produciendo «probabilidades»
+  perfectamente pintables: `sigmoid(NaN)` es NaN, y un NaN comparado con un umbral es
+  siempre falso, así que acaba en un 0 % o un 50 % sin explicación.
 
 ### Un fallo de rendimiento que hacía el modelo inservible
 
