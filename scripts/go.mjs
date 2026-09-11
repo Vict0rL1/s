@@ -85,7 +85,15 @@ function corre(cmd, args, opts = {}) {
   return r.status === 0;
 }
 
-/** Corre un comando y captura su salida, para preguntas cortas a git. */
+/**
+ * Corre un comando y captura su salida, para preguntas cortas a git.
+ *
+ * OJO con el `trim()`: sirve para respuestas de una línea (un SHA, un nombre de rama) y
+ * ESTROPEA cualquier salida de ancho fijo, porque se lleva el espacio inicial de la
+ * primera línea y descoloca los cortes por posición. Ya rompió una vez el parseo de
+ * `git status --porcelain`. Para preguntas de sí/no sobre ficheros, usa `corre` con
+ * `git diff --quiet`.
+ */
 function captura(cmd, args) {
   const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8' });
   return r.status === 0 ? (r.stdout ?? '').trim() : null;
@@ -213,6 +221,38 @@ if (!enLaRama) {
     'Traer sus commits encima de otra rama mezclaría dos historias sin avisar.',
   );
 } else {
+  // ---------------------------------------------------------------------------
+  // ANTES DE TIRAR: DEVOLVER LOS FICHEROS GENERADOS
+  // ---------------------------------------------------------------------------
+  // `npm install` reescribe `package-lock.json` —basta con que tu npm sea de otra
+  // versión que el que lo generó— y a partir de ahí TODOS los pull se abortan con
+  // «your local changes to the following files would be overwritten by merge». La app
+  // se queda congelada en la versión que fuera, y el mensaje de git no dice que baste
+  // con descartar un fichero que se regenera solo.
+  //
+  // Pasó de verdad y por eso está esto aquí. Solo se devuelve el LOCK: se regenera de
+  // `package.json` en el paso siguiente y no contiene ninguna decisión de nadie. Ningún
+  // otro fichero se toca, porque descartar cambios de alguien para poder arrancar una
+  // app no es un intercambio que este script tenga derecho a hacer.
+  //
+  // Se le pregunta a git fichero por fichero con `diff --quiet` en vez de parsear
+  // `git status --porcelain`. No es preferencia de estilo: la primera versión cortaba el
+  // prefijo de estado con `slice(3)` sobre una salida a la que `captura()` ya le había
+  // hecho `trim()`, y ese trim se come el espacio inicial de la PRIMERA línea — así que
+  // « D data/raw/.gitkeep» se convertía en «ata/raw/.gitkeep», el `git checkout` fallaba
+  // con una ruta inexistente y no se restauraba nada. El pull seguía abortando y el
+  // script decía que había arreglado algo. Salió reproduciendo el fallo, no leyendo el
+  // código.
+  const generados = ['package-lock.json', 'data/raw/.gitkeep'];
+  const sucios = generados.filter(
+    (f) => !corre('git', ['diff', '--quiet', 'HEAD', '--', f], { stdio: 'ignore' }),
+  );
+  if (sucios.length > 0) {
+    if (corre('git', ['checkout', '--', ...sucios], { stdio: 'ignore' })) {
+      nota(`devuelto a su versión del repo: ${sucios.join(', ')} (se regenera solo)`);
+    }
+  }
+
   const antes = captura('git', ['rev-parse', 'HEAD']);
   let hecho = false;
   // Los fallos de red se reintentan; los de git (divergencia) no, porque reintentar no
@@ -231,7 +271,22 @@ if (!enLaRama) {
       break;
     }
     const err = `${r.stdout ?? ''}${r.stderr ?? ''}`;
-    if (/not possible to fast-forward|diverg|local changes/i.test(err)) {
+    // DOS FALLOS DISTINTOS QUE NO SE PUEDEN MEZCLAR. La versión anterior los metía en la
+    // misma condición porque el texto de git dice «local changes» en los dos, y entonces
+    // a quien solo tenía un fichero modificado le decía que su copia «se había separado
+    // de la rama» — un diagnóstico equivocado que manda a mirar el historial cuando el
+    // problema es un fichero.
+    const ficheros = [...err.matchAll(/^\t(.+)$/gm)].map((m) => m[1].trim());
+    if (/would be overwritten by (merge|checkout)|Please commit your changes/i.test(err)) {
+      aviso(
+        `tienes cambios locales en ${ficheros.length ? ficheros.join(', ') : 'algún fichero'} y el pull no puede pisarlos`,
+        ficheros.length
+          ? `Si no son tuyos a propósito: git checkout -- ${ficheros.join(' ')}\n        Si sí lo son: gu\u00e1rdalos con git stash y vuelve a correrlo.`
+          : 'Guárdalos con git stash, o descártalos con git checkout -- <fichero>.',
+      );
+      break;
+    }
+    if (/not possible to fast-forward|diverg/i.test(err)) {
       aviso(
         'tu copia se ha separado de la rama y no la fusiono por mi cuenta',
         'Mira qué tienes de más con: git log --oneline origin/' + BRANCH + '..HEAD',

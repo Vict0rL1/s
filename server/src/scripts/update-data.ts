@@ -69,6 +69,13 @@ async function main() {
           kept++;
           continue;
         }
+        // `.gitkeep` (y cualquier otro punto-fichero) NO es caché: está RASTREADO en git,
+        // y es lo único que hace que `data/raw/` exista en un clon nuevo. Borrarlo dejaba
+        // un `D data/raw/.gitkeep` permanente en `git status` después de cada
+        // actualización — y eso no es cosmético: un borrado local pendiente hace que el
+        // siguiente `git pull` se aborte con «your local changes would be overwritten»,
+        // así que limpiar la caché acababa impidiendo traer código nuevo.
+        if (entry.startsWith('.')) continue;
         if (entry === 'repos') {
           for (const repoDir of fs.readdirSync(path.join(RAW_DIR, 'repos'))) {
             const full = path.join(RAW_DIR, 'repos', repoDir);

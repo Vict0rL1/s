@@ -873,7 +873,11 @@ Hace los seis pasos y arranca la app:
    repositorio es otro proyecto, así que un clon nuevo **no tiene esta app**. Si tienes
    cambios sin guardar no cambia de rama: descartar tu trabajo para arrancarte la app no
    es un intercambio que un script de arranque tenga derecho a hacer.
-3. **Pull** — `--ff-only`, y solo si estás en la rama del proyecto. Los fallos de red se
+3. **Pull** — `--ff-only`, y solo si estás en la rama del proyecto. Antes de tirar
+   devuelve `package-lock.json` y `data/raw/.gitkeep` a su versión del repo si están
+   tocados: son ficheros generados, y bastaba con que tu `npm` fuese de otra versión para
+   que el lock cambiara y **todos** los pull se abortaran con «your local changes would be
+   overwritten by merge», dejando la app congelada. Ningún otro fichero se toca. Los fallos de red se
    reintentan (2s, 4s, 8s, 16s); una divergencia no, porque reintentar no la arregla.
 4. **Dependencias** — `npm install` solo si el lock ha cambiado.
 5. **Base de datos** — si no hay, intenta la descarga rápida y, si la release no está
