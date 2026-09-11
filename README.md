@@ -239,6 +239,32 @@ Una función que hay que descubrir no está entregada. Ahora **se abre sola**, y
 cierras se queda cerrada: la elección se guarda en `localStorage` con una clave por
 pestaña, porque cerrar la de la NFL no tiene por qué cerrar la del tenis.
 
+## «¿Por qué me aparece partido demo?»
+
+La app cae a cuotas de demostración —generadas por el propio modelo— por **tres motivos
+distintos**, y hasta ahora los tres se veían igual: la etiqueta `odds demo` y nada más.
+Solo se guardaba *que* había caído, no *por qué*.
+
+| razón | qué pasa | qué hacer |
+| --- | --- | --- |
+| `sin_clave` | falta `ODDS_API_KEY` | ponerla en `.env` y `npm run update-data` |
+| `fuente_falla` | la clave está, pero el proveedor no contestó: cuota agotada, clave inválida o sin internet | `npm run doctor` — lo dice sin gastar cuota |
+| `sin_eventos` | todo bien, pero no hay tenis en juego | **nada**: entre torneos no se publica nada |
+
+Eso importa porque el aviso decía siempre *«pon tu clave en ODDS_API_KEY»*, que es un
+consejo **equivocado en dos de los tres casos** — y el más frustrante, porque manda a
+revisar algo que ya está bien. `sin_eventos` es el caso normal entre torneos y no hay nada
+que arreglar; `fuente_falla` con la cuota agotada tampoco se arregla tocando la clave.
+
+Ahora la razón se guarda al refrescar (`odds_fallback_reason`), sale en `/api/meta` y la
+pantalla dice la de verdad. El detalle del error del proveedor se guarda solo mientras esa
+sea la causa: dejarlo puesto haría que se enseñara el mensaje de un fallo que ya no ocurre.
+
+Comprobado en el navegador con las cuatro ramas, incluida la neutra (clave puesta y razón
+desconocida, que es lo que ve una base anterior a este cambio). Y `fuente_falla` se
+registró sola en una prueba real: clave puesta, proveedor inalcanzable, `HTTP 403` guardado
+como detalle.
+
 ## «Solo me salen dos partidos»
 
 La cabecera dice 58.367 partidos y la lista enseña dos. Son dos cosas distintas y la

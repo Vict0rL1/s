@@ -285,6 +285,10 @@ export interface Meta {
   seededAt: string | null;
   updatedAt: string | null;
   oddsSource: string | null;
+  /** Por qué son de demostración: 'sin_clave' | 'fuente_falla' | 'sin_eventos'. */
+  oddsFallbackReason: string | null;
+  /** El error del proveedor, cuando la causa fue que no contestó. */
+  oddsFallbackDetail: string | null;
   oddsRefreshedAt: string | null;
   autoRefreshMinutes: number;
   hasOddsKey: boolean;

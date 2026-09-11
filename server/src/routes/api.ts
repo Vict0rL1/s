@@ -139,6 +139,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     seededAt: getMeta('seeded_at'),
     updatedAt: getMeta('updated_at'),
     oddsSource: getMeta('odds_source'),
+    // POR QUÉ son de demostración, no solo que lo son. Sin esto la pantalla tenía que
+    // suponer la causa, y suponía la equivocada dos de cada tres veces.
+    oddsFallbackReason: getMeta('odds_fallback_reason') || null,
+    oddsFallbackDetail: getMeta('odds_fallback_detail') || null,
     oddsRefreshedAt: getMeta('odds_refreshed_at'),
     autoRefreshMinutes: env.autoRefreshMinutes,
     hasOddsKey: !!env.oddsApiKey,

@@ -229,7 +229,7 @@ export default function TennisDashboard() {
       ) : (
         <>
           <DayFilter days={dayChips} selected={day} onSelect={setDay} />
-          <ShortSlateNote matches={matches} />
+          <ShortSlateNote matches={matches} meta={meta} />
           {shownGroups.map((group) => (
             <section key={group.key} className="mb-6">
               <DayHeading label={group.label} count={group.items.length} />
@@ -340,7 +340,13 @@ function DataBadge({ meta }: { meta: Meta }) {
  * Solo aparece con la lista corta. En una semana normal, con seis torneos a la vez, esto
  * sería un párrafo de relleno encima de treinta tarjetas.
  */
-function ShortSlateNote({ matches }: { matches: UpcomingWithPrediction[] }) {
+function ShortSlateNote({
+  matches,
+  meta,
+}: {
+  matches: UpcomingWithPrediction[];
+  meta: Meta | null;
+}) {
   // Seis: por debajo de eso la lista cabe de un vistazo y la pregunta «¿esto es todo?» se
   // la hace cualquiera.
   if (matches.length === 0 || matches.length >= 6) return null;
@@ -352,11 +358,7 @@ function ShortSlateNote({ matches }: { matches: UpcomingWithPrediction[] }) {
       {matches.length === 1 ? 'Un solo partido' : `Solo ${matches.length} partidos`}
       {torneos.length === 1 ? ` (${torneos[0]})` : ''}:{' '}
       {todosDemo ? (
-        <>
-          son de <strong className="text-[#9aa1ac]">demostración</strong>, generados por el
-          propio modelo. Pon tu clave en <code>ODDS_API_KEY</code> y corre{' '}
-          <code>npm run update-data</code> para ver los de verdad.
-        </>
+        <DemoReason meta={meta} />
       ) : (
         <>
           los próximos los publican las casas, con pocos días de antelación y solo cuando
@@ -368,5 +370,70 @@ function ShortSlateNote({ matches }: { matches: UpcomingWithPrediction[] }) {
         </>
       )}
     </p>
+  );
+}
+
+/**
+ * Por qué son de demostración, dicho con la causa REAL.
+ *
+ * ===========================================================================
+ * LA VERSIÓN ANTERIOR DABA UN CONSEJO FALSO DOS DE CADA TRES VECES
+ * ===========================================================================
+ * Decía siempre «pon tu clave en ODDS_API_KEY». Pero la app cae a cuotas de demostración
+ * por tres motivos distintos, y solo en uno falta la clave:
+ *
+ *   sin_clave     falta ODDS_API_KEY.
+ *   fuente_falla  la clave está, pero el proveedor no contestó — cuota agotada, clave
+ *                 inválida o sin internet.
+ *   sin_eventos   todo bien, pero no hay tenis en juego. Entre torneos no hay nada que
+ *                 publicar, y no hay nada que arreglar.
+ *
+ * Mandar a revisar una clave que ya está puesta es peor que no decir nada: se pierde el
+ * tiempo donde no está el problema y se acaba desconfiando de lo que dice la app.
+ */
+function DemoReason({ meta }: { meta: Meta | null }) {
+  const razon = meta?.oddsFallbackReason;
+
+  if (razon === 'sin_eventos') {
+    return (
+      <>
+        son de <strong className="text-[#9aa1ac]">demostración</strong>, y{' '}
+        <strong className="text-[#9aa1ac]">no falta nada por tu parte</strong>: tu clave
+        funciona, pero ahora mismo las casas no publican ningún partido de tenis. Entre
+        torneos es lo normal. Cuando empiece el siguiente aparecerán solos — y mientras
+        tanto la app enseña un calendario generado por el modelo para no quedarse vacía.
+      </>
+    );
+  }
+  if (razon === 'fuente_falla') {
+    return (
+      <>
+        son de <strong className="text-[#9aa1ac]">demostración</strong> porque el proveedor
+        de cuotas no contestó.{' '}
+        <strong className="text-[#9aa1ac]">Tu clave está puesta</strong>, así que suele ser
+        la cuota del mes agotada o falta de conexión. <code>npm run doctor</code> lo dice
+        sin gastar ni una petición.
+        {meta?.oddsFallbackDetail && (
+          <span className="block opacity-70">último error: {meta.oddsFallbackDetail}</span>
+        )}
+      </>
+    );
+  }
+  if (razon === 'sin_clave' || meta?.hasOddsKey === false) {
+    return (
+      <>
+        son de <strong className="text-[#9aa1ac]">demostración</strong>, generados por el
+        propio modelo, porque no hay <code>ODDS_API_KEY</code>. Ponla en el fichero{' '}
+        <code>.env</code> y corre <code>npm run update-data</code> para ver las de verdad.
+      </>
+    );
+  }
+  // Sin razón guardada: es una base anterior a que esto se registrara. Se dice lo que se
+  // sabe y se manda al comando que lo averigua, en vez de adivinar una causa.
+  return (
+    <>
+      son de <strong className="text-[#9aa1ac]">demostración</strong>, generados por el
+      propio modelo. <code>npm run doctor</code> dice por qué, sin gastar cuota.
+    </>
   );
 }

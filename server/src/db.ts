@@ -962,6 +962,8 @@ const TENNIS_META_KEYS = [
   'data_source',
   'updated_at',
   'odds_source',
+  'odds_fallback_reason',
+  'odds_fallback_detail',
   'odds_refreshed_at',
   'seeded_at',
   'history_through',

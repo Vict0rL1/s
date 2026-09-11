@@ -264,10 +264,35 @@ function guessSurface(sportKey: string, title: string): string {
   return ''; // unknown → model uses overall Elo
 }
 
-export async function ingestOdds(): Promise<{ source: 'live' | 'fixture'; count: number }> {
+/**
+ * Por qué se están enseñando cuotas de demostración.
+ *
+ * ===========================================================================
+ * TRES CAUSAS QUE SE VEÍAN IGUAL
+ * ===========================================================================
+ * Hasta ahora solo se guardaba QUE se cayó a demo (`odds_source = 'fixture'`), y las tres
+ * causas son distintas y piden cosas distintas:
+ *
+ *   sin_clave     → falta ODDS_API_KEY. Se arregla poniéndola.
+ *   fuente_falla  → la clave está, pero el proveedor no contestó: cuota agotada, clave
+ *                   inválida o sin internet. Poner la clave otra vez no arregla nada.
+ *   sin_eventos   → todo bien, pero no hay tenis en juego. Entre torneos el proveedor no
+ *                   publica nada y no hay nada que arreglar: hay que esperar.
+ *
+ * Sin distinguirlas, el aviso de la pantalla decía siempre «pon tu clave», que es un
+ * consejo equivocado en dos de los tres casos — y el más frustrante, porque manda a
+ * revisar algo que ya está bien.
+ */
+export type FallbackReason = 'sin_clave' | 'fuente_falla' | 'sin_eventos' | null;
+
+export async function ingestOdds(): Promise<{
+  source: 'live' | 'fixture';
+  count: number;
+  reason: FallbackReason;
+}> {
   if (!env.oddsApiKey) {
     const count = generateFixtures();
-    return { source: 'fixture', count };
+    return { source: 'fixture', count, reason: 'sin_clave' };
   }
 
   const db = getDb();
@@ -285,7 +310,8 @@ export async function ingestOdds(): Promise<{ source: 'live' | 'fixture'; count:
   } catch (e) {
     process.stderr.write(`  could not list tennis sports: ${(e as Error).message}\n`);
     const count = generateFixtures();
-    return { source: 'fixture', count };
+    setMeta('odds_fallback_detail', (e as Error).message.slice(0, 200));
+    return { source: 'fixture', count, reason: 'fuente_falla' };
   }
 
   const nameIndex: Partial<Record<TourId, Map<string, number>>> = {};
@@ -347,16 +373,21 @@ export async function ingestOdds(): Promise<{ source: 'live' | 'fixture'; count:
   // Nothing live at all → keep a working demo with Elo-derived fixtures.
   if (total === 0) {
     const count = generateFixtures();
-    return { source: 'fixture', count };
+    return { source: 'fixture', count, reason: 'sin_eventos' };
   }
-  return { source: 'live', count: total };
+  return { source: 'live', count: total, reason: null };
 }
 
 /** Refresh odds and record when it happened. Used by the timer and /api/refresh. */
 export async function refreshOdds(): Promise<{ source: 'live' | 'fixture'; count: number }> {
   const result = await ingestOdds();
   setMeta('odds_source', result.source);
+  setMeta('odds_fallback_reason', result.reason ?? '');
   setMeta('odds_refreshed_at', new Date().toISOString());
+  // El detalle del error solo tiene sentido mientras la causa sea esa. Si la siguiente
+  // pasada va bien o cae por otro motivo, dejarlo puesto haría que la pantalla enseñara
+  // el mensaje de un fallo que ya no ocurre.
+  if (result.reason !== 'fuente_falla') setMeta('odds_fallback_detail', '');
   return result;
 }
 
