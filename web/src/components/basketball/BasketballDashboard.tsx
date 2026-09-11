@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate,
-} from '../ui';
+  EmptySlate, LeagueFlag} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, basketballPicks } from '../../lib/picks';
 import { useStake } from '../../lib/useStake';
-import { countryFlag, dayChipLabel, groupByDay } from '../../lib/format';
+import { dayChipLabel, groupByDay } from '../../lib/format';
 import {
   bbApi,
   type BbGameWithPrediction,
@@ -167,9 +166,7 @@ export default function BasketballDashboard() {
               title={l.label}
               className={pillClass(league === l.id)}
             >
-              {countryFlag(l.country) && (
-                <span aria-hidden className="mr-1.5">{countryFlag(l.country)}</span>
-              )}
+                <LeagueFlag country={l.country} className="mr-1.5" />
               {l.name}
               {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
               {!l.hasModel && <span className="ml-1.5 text-amber-400" title="Sin modelo Elo">◦</span>}

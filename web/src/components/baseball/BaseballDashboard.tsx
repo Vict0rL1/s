@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate,
-} from '../ui';
+  EmptySlate, LeagueFlag} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, baseballPicks } from '../../lib/picks';
 import { useStake } from '../../lib/useStake';
@@ -17,7 +16,7 @@ import {
 } from '../../lib/baseball';
 import GameCard from './GameCard';
 import EloRanking from '../EloRanking';
-import { formatDate, formatDateTime, countryFlag, dayChipLabel, groupByDay } from '../../lib/format';
+import { formatDate, formatDateTime, dayChipLabel, groupByDay } from '../../lib/format';
 
 /**
  * The whole baseball tab. Holds its own state and talks only to /api/baseball/*,
@@ -170,9 +169,7 @@ export default function BaseballDashboard() {
               title={l.label}
               className={pillClass(league === l.id)}
             >
-              {countryFlag(l.country) && (
-                <span aria-hidden className="mr-1.5">{countryFlag(l.country)}</span>
-              )}
+                <LeagueFlag country={l.country} className="mr-1.5" />
               {l.name}
               {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
               {!l.hasModel && <span className="ml-1.5 text-amber-400" title="Sin modelo Elo">◦</span>}

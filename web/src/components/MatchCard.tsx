@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import type { PlayerInfo, Reliability, UpcomingMatch, UpcomingWithPrediction } from '../lib/api';
-import { confidenceLabelEs, flag, surfaceLabelEs } from '../lib/format';
+import { confidenceLabelEs, surfaceLabelEs } from '../lib/format';
 import ProbabilityBars, { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import MatchDetail from './MatchDetail';
 import LivePanel from './LivePanel';
 import PointsMarkets from './PointsMarkets';
-import { Badge, Card, MatchTime, ResultBanner, SeriesDot } from './ui';
+import { Badge, Card, Flag, MatchTime, ResultBanner, SeriesDot } from './ui';
 
 export default function MatchCard({
   item,
@@ -289,13 +289,16 @@ function PlayerName({
     <div className={`min-w-0 flex-1 ${alignRight ? 'text-right' : 'text-left'}`}>
       <span className={`flex min-w-0 items-center gap-1.5 ${alignRight ? 'justify-end' : ''}`}>
         {!alignRight && <SeriesDot color={color} />}
+        {!alignRight && <Flag country={country} />}
         <button
           onClick={onClick}
           disabled={!onClick}
           className={`font-semibold text-[#e8eaed] break-words ${onClick ? 'hover:underline' : 'cursor-default'}`}
         >
-          {flag(country)} {name}
+          {name}
         </button>
+        {/* La bandera se refleja como el punto: en el borde de fuera en los dos lados. */}
+        {alignRight && <Flag country={country} />}
         {alignRight && <SeriesDot color={color} />}
       </span>
       {/* Headline win probability — one decimal, matching the API value exactly.

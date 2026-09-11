@@ -8,6 +8,13 @@
 import { useState, type ReactNode } from 'react';
 import { INK, LOSS_COLOR, PROFIT_COLOR, RELIABILITY_STYLE } from '../../lib/theme';
 import { crestColors, crestPaint, monogram } from '../../lib/teamColors';
+import {
+  countryName,
+  flagSrc,
+  leagueCountryLabel,
+  leagueFlagSrc,
+  UNKNOWN_COUNTRY,
+} from '../../lib/countries';
 import { relativeTime, shortTime } from '../../lib/format';
 
 // ---------------------------------------------------------------------------
@@ -268,6 +275,164 @@ export function TeamCrest({
           className="absolute inset-0 h-full w-full object-contain p-[2px]"
         />
       )}
+    </span>
+  );
+}
+
+/**
+ * La bandera de un país, o sus tres letras. Nunca la bandera de otro país.
+ *
+ * ===========================================================================
+ * LO QUE ESTE COMPONENTE REEMPLAZA, Y POR QUÉ NO ERA UN DETALLE
+ * ===========================================================================
+ * Antes esto era un emoji: `flag(ioc)` convertía el código en indicadores regionales
+ * Unicode. Dos problemas, y el segundo es el grave.
+ *
+ *   1. EN WINDOWS NO EXISTEN. Segoe UI Emoji no trae glifos de bandera, así que lo que
+ *      se ve son las dos letras del código: un español sale como «ES». La app se veía
+ *      distinta según el sistema y en el más común se veía peor.
+ *
+ *   2. UNA CUARTA PARTE ERAN LA BANDERA EQUIVOCADA. El respaldo cortaba las dos primeras
+ *      letras del código del COI, y `RSA`→`RS` es Serbia, `CHI`→`CH` es Suiza,
+ *      `EST`→`ES` es España. 318 jugadores de 1.272, todos con una bandera segura de sí
+ *      misma. El detalle de cómo se arregló está en `lib/countries.ts`.
+ *
+ * Ahora el SVG sale de `web/public/flags/`, que está en el repo: sin red, sin CDN, y
+ * `verify:data` comprueba que todos los países de la base tienen su fichero.
+ *
+ * ===========================================================================
+ * EL RESPALDO DICE EL CÓDIGO, NO ADIVINA UN PAÍS
+ * ===========================================================================
+ * Si el código no está en la tabla —datos nuevos, un país que nadie previó— sale una
+ * pastilla gris con las tres letras. Es fea a propósito: se lee como «esto es un código
+ * que no sé traducir» y no como una afirmación sobre la nacionalidad de nadie.
+ */
+export function Flag({
+  country,
+  name,
+  // 11px de alto. Una bandera 4:3 a 11px son 15px de ancho, que al lado de un nombre a
+  // 13px pesa lo mismo que una letra mayúscula: se ve de qué país es sin competir con
+  // el nombre, que es el dato.
+  height = 11,
+  className = '',
+}: {
+  country: string | null | undefined;
+  /** El nombre en español, si quien llama ya lo tiene. Si no, lo resuelve él. */
+  name?: string;
+  height?: number;
+  className?: string;
+}) {
+  const code = country?.trim().toUpperCase() ?? '';
+  // Sin país no se pinta NADA. Ni un hueco, ni un interrogante: la fila de al lado no
+  // tiene por qué desalinearse porque a un jugador le falte un dato.
+  if (!country || UNKNOWN_COUNTRY.has(code)) return null;
+  return (
+    <FlagImg
+      src={flagSrc(country)}
+      label={name ?? countryName(country)}
+      code={code}
+      height={height}
+      className={className}
+    />
+  );
+}
+
+/**
+ * La bandera de la sede de una liga, para las pastillas de las cinco pestañas.
+ *
+ * Separada de `Flag` porque el dato de entrada no es el mismo: aquí llega o un ISO-2
+ * (`"US"`) o una etiqueta con el emoji delante (`"🇪🇸 España"`), según el deporte, y hay
+ * que resolver además dos banderas que no son países del COI. Lo resuelve
+ * `leagueFlagSrc`; el dibujo es el mismo.
+ *
+ * Cuando no se resuelve NO sale la pastilla con el código, que es lo que hace `Flag`:
+ * sale nada. El nombre de la liga está a un milímetro y «PREMIER LEAGUE» ya dice de
+ * sobra dónde se juega, mientras que en una lista de cincuenta apellidos el código de
+ * país sí añade algo.
+ */
+export function LeagueFlag({
+  country,
+  height = 11,
+  className = '',
+}: {
+  country: string | null | undefined;
+  height?: number;
+  className?: string;
+}) {
+  const src = leagueFlagSrc(country);
+  if (!src) return null;
+  return (
+    <FlagImg
+      src={src}
+      label={leagueCountryLabel(country)}
+      code=""
+      height={height}
+      className={className}
+    />
+  );
+}
+
+/**
+ * El dibujo, compartido por las dos.
+ *
+ * Lo que hace que merezca ser una función y no dos copias es el par de estados: la
+ * bandera se revela SOLO cuando ha cargado (`ok`) y cae al respaldo solo si falla
+ * (`failed`). Duplicar eso son dos sitios donde olvidarse del `onError` y dejar el icono
+ * de imagen rota, que es exactamente lo que no debe pasar en una fila de datos.
+ */
+function FlagImg({
+  src,
+  label,
+  code,
+  height,
+  className,
+}: {
+  src: string | null;
+  label: string;
+  /** Las tres letras del respaldo. Vacío = sin respaldo, no se pinta nada. */
+  code: string;
+  height: number;
+  className: string;
+}) {
+  const [ok, setOk] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    if (!code) return null;
+    return (
+      <span
+        title={label}
+        className={`inline-block shrink-0 rounded-[2px] bg-white/[0.07] px-1 font-medium tabular-nums text-[#7b828d] ${className}`}
+        style={{ fontSize: Math.max(9, height * 0.82), lineHeight: `${height + 2}px` }}
+      >
+        {code}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      title={label}
+      className={`relative inline-block shrink-0 overflow-hidden rounded-[2px] ${className}`}
+      style={{
+        height,
+        width: height * (4 / 3),
+        // El fondo se ve mientras carga y ocupa el mismo sitio que la bandera, así que
+        // la línea no salta cuando llega. Y el borde interior despega del fondo oscuro
+        // las banderas que tienen blanco en el canto (Japón, Suiza).
+        backgroundColor: ok ? 'transparent' : 'rgba(255,255,255,0.07)',
+        boxShadow: ok ? 'inset 0 0 0 1px rgba(0,0,0,0.35)' : 'none',
+      }}
+    >
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        onLoad={() => setOk(true)}
+        onError={() => setFailed(true)}
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{ opacity: ok ? 1 : 0 }}
+      />
     </span>
   );
 }

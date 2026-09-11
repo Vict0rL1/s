@@ -227,6 +227,52 @@ Detalles y todas las mediciones en **[docs/NFL.md](docs/NFL.md)**.
 - Datos guardados localmente en **SQLite** (`data/tennis.db`) para no depender de llamadas
   repetidas a las APIs.
 
+## Banderas: 318 jugadores las llevaban de otro país
+
+La app pinta la bandera de cada jugador en la tarjeta del partido, en su perfil y en la
+clasificación por Elo, y la de la sede de cada liga en las pastillas de las otras cuatro
+pestañas. Antes eran emoji; ahora son SVG servidos desde `web/public/flags/`. El cambio no
+es estético, o no solo:
+
+**El problema.** El código que convertía el país en bandera tenía 28 países a mano y, para
+el resto, cortaba las dos primeras letras del código del COI y las trataba como ISO-3166.
+Funciona para `ESP`→`ES` y falla en silencio para una cuarta parte del circuito:
+
+| código | daba | es | jugadores |
+|--------|------|-----|-----------|
+| `RSA` Sudáfrica | 🇷🇸 Serbia | 🇿🇦 | 14 |
+| `CHI` Chile | 🇨🇭 Suiza | 🇨🇱 | 9 |
+| `EST` Estonia | 🇪🇸 España | 🇪🇪 | 11 |
+| `ESA` El Salvador | 🇪🇸 España | 🇸🇻 | 11 |
+| `SLO` Eslovenia | 🇸🇱 Sierra Leona | 🇸🇮 | 14 |
+| `UAE` Emiratos | 🇺🇦 Ucrania | 🇦🇪 | 1 |
+| `PAK` Pakistán · `PAR` Paraguay | 🇵🇦 Panamá, los dos | 🇵🇰 🇵🇾 | 17 |
+| … 35 países más | | | |
+
+**318 de 1.272 jugadores, y ninguno salía en blanco.** Todos salían con una bandera
+equivocada y segura de sí misma, que es peor que no poner ninguna: un hueco se lee como «no
+lo sé» y una bandera se lee como «es de aquí». Y en Windows no se veía nada de eso, porque
+Segoe UI Emoji no trae glifos de bandera y lo que aparecía eran las dos letras.
+
+**Lo que hay ahora.** Una tabla completa en `config/countries.json` —el juego entero del
+COI más los alias ISO-3 que el archivo mezcla (`PAR` y `PRY` son los dos Paraguay)— y
+**ninguna heurística de respaldo**, porque la heurística de respaldo es exactamente lo que
+produjo los 318. Un código que no está en la tabla no tiene bandera: sale una pastilla gris
+con sus tres letras.
+
+Los SVG (`lipis/flag-icons`, MIT, versión clavada) están **en el repo**, no enlazados a un
+CDN. Tres razones: la app sigue funcionando sin internet como el resto de ella, un CDN que
+se apague dentro de un año no haría saltar ningún check, y con los ficheros en disco
+`verify:data` puede afirmar que todos los países de la base tienen su bandera — contra una
+URL remota lo más que se puede comprobar es que la cadena está bien formada, y `RSA` →
+`rs.svg` está perfectamente bien formada.
+
+`verify:data` comprueba cuatro cosas (probadas inyectando cada fallo): que todos los
+códigos de la base resuelven, que su SVG existe, que los 14 casos que el prefijo fallaba
+apuntan a su país con el nombre escrito al lado, y que ningún ISO-2 tiene dos nombres de
+país distintos. Hoy: **1.272 de 1.274 jugadores con bandera propia** (los 2 restantes
+constan como `N/A` en el archivo).
+
 ## Fuentes de datos
 
 | Tipo | Fuente | Por qué |
@@ -791,6 +837,7 @@ ves, en vez de fallar en silencio.
 | `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
 | `npm run seed` | Tenis: carga el dataset de demostración |
 | `npm run fetch-data` | **Descarga la base ya construida** (9 MB) en vez de reconstruirla. `-- --force` reemplaza la que haya, conservando tus apuestas |
+| `npm run fetch-flags` | Baja al repo los SVG de las banderas (211, ~1,4 MB). **Solo hace falta una vez**: ya están commiteadas. Se vuelve a correr al añadir un país a `config/countries.json` |
 | `npm run update-all` | **Los cinco deportes de una tirada.** `-- --skip-odds` no gasta cuota; `-- --only fb,bb` limita a algunos. Un deporte que falle no para a los demás y el resumen dice cuál fue |
 | `npm run update-data` | Tenis: refresca histórico real + odds |
 | `npm run backtest` | Tenis: mide la exactitud del modelo |
@@ -1496,6 +1543,27 @@ minutos, lo único que sirve es saber en cuál de los cuatro se van.
 | `ingesta` | lo tenemos → escrito en la base | nuestro parseo y la base de datos | 30 s |
 | `servidor` | petición → respuesta | nuestra API | 20 s |
 | `cliente` | respuesta → pintado | la red y el navegador | 10 s |
+
+### Un check de latencia que dependía de lo que hubiera en la base
+
+La regla importante de la alerta es que **sin medición completa no se declara
+incumplimiento**: si falta una etapa, el total está por debajo del real y decir «se
+cumple» sería falso. Comprobar eso necesita un caso con el total pasado y alguna etapa sin
+medir, y ese caso se montaba escribiendo muestras en la base.
+
+El montaje era frágil de una forma que tardó en aparecer. El total suma el **p95** de cada
+etapa: con la tabla vacía, la única muestra inyectada *era* el p95 de su etapa y el total
+se pasaba del objetivo. Con la tabla ya poblada —después de tener el servidor un rato
+levantado— esa misma muestra caía entre doscientas y no movía el p95 ni un milisegundo, así
+que el montaje dejaba de montar nada. No producía un falso verde: rompía. Pero rompía por
+el andamio y no por el comportamiento que vigila, y un check que se rompe según lo que haya
+medido cada uno es un check que alguien acaba silenciando.
+
+Arreglado igual que se arregló antes `allocate` → `allocateFrom`: la decisión se separó de
+la lectura en `decideLatency(total, etapas, presupuesto)`, que no toca la base. Los tres
+casos se escriben a mano —total pasado con una etapa sin medir, el mismo total con las
+cuatro medidas, y uno dentro del objetivo— y el contraste entre los dos primeros es lo que
+demuestra que manda la guarda y no otra cosa. Comprobado quitando la guarda: falla.
 
 El objetivo por defecto es **5 minutos de punta a punta (p95)**, y el reparto es
 deliberadamente asimétrico: cuatro de los cinco minutos se le dan a `origen` porque ahí

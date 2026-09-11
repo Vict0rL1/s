@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type Profile } from '../lib/api';
-import { flag, formatDate, surfaceLabelEs, surfaceColor } from '../lib/format';
+import { formatDate, surfaceLabelEs, surfaceColor } from '../lib/format';
+import { Flag } from './ui';
 
 /** Slide-over panel showing a player's Elo (overall + per surface) and recent results. */
 export default function PlayerProfile({
@@ -32,8 +33,17 @@ export default function PlayerProfile({
       >
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h2 className="text-[20px] font-bold">
-              {profile ? `${flag(profile.country)} ${profile.name}` : 'Cargando…'}
+            <h2 className="flex items-center gap-2 text-[20px] font-bold">
+              {profile ? (
+                <>
+                  {/* 14px, no 11: el nombre aquí es un titular a 20px y una bandera de
+                      lista se quedaría pequeña al lado. */}
+                  <Flag country={profile.country} height={14} />
+                  {profile.name}
+                </>
+              ) : (
+                'Cargando…'
+              )}
             </h2>
             {profile && (
               <div className="text-[14px] text-[#9aa1ac]">

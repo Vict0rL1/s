@@ -44,11 +44,33 @@ export interface LatencyAlert {
   message: string;
 }
 
-export function checkLatency(hours = 24): LatencyAlert {
-  const budget = budgetFromEnv();
-  const stats = stageStats(hours);
-  const total = totalP95(hours);
-
+/**
+ * La decisión, separada de la lectura de la base.
+ *
+ * ===========================================================================
+ * POR QUÉ ESTO ES UNA FUNCIÓN APARTE Y NO EL CUERPO DE `checkLatency`
+ * ===========================================================================
+ * La propiedad que hay que garantizar es «sin medición completa NO se declara
+ * incumplimiento», y comprobarla necesita un caso con el total por encima del objetivo y
+ * alguna etapa sin medir. Mientras la decisión leía la base, ese caso había que MONTARLO
+ * escribiendo muestras — y el montaje resultó ser frágil de una forma que no se veía:
+ *
+ * El total suma el p95 de cada etapa. Con la tabla vacía, una sola muestra inyectada ES
+ * el p95 de su etapa y el total se pasaba del objetivo; el check pasaba. Con la tabla ya
+ * poblada —después de tener el servidor un rato levantado— esa misma muestra cae en una
+ * etapa con doscientas y no mueve su p95 en absoluto, así que el total se queda donde
+ * estaba y el montaje deja de montar nada. El check no daba un falso verde: fallaba. Pero
+ * fallaba por el andamio, no por el comportamiento que vigila, y un check que se rompe
+ * según lo que haya en la base es un check que se acaba silenciando.
+ *
+ * Con la decisión en una función pura el caso se construye pasando los números, y ni
+ * depende de lo que haya medido nadie ni escribe nada para probarse.
+ */
+export function decideLatency(
+  total: { ms: number; complete: boolean; missing: Stage[] },
+  stats: { stage: Stage; n: number; p95: number }[],
+  budget = budgetFromEnv(),
+): LatencyAlert {
   const offenders = stats
     .filter((s) => s.n > 0 && s.p95 > budget.perStage[s.stage])
     .map((s) => ({
@@ -91,6 +113,11 @@ export function checkLatency(hours = 24): LatencyAlert {
     offenders,
     message,
   };
+}
+
+/** Lo medido en las últimas `hours`, pasado por la decisión de arriba. */
+export function checkLatency(hours = 24): LatencyAlert {
+  return decideLatency(totalP95(hours), stageStats(hours));
 }
 
 // ===========================================================================

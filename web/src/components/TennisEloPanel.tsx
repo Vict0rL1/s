@@ -30,6 +30,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type EloRankPlayer, type EloRankingResponse } from '../lib/api';
 import EloRanking from './EloRanking';
+import { Flag } from './ui';
 
 type Surface = 'overall' | 'hard' | 'clay' | 'grass';
 
@@ -98,6 +99,11 @@ export default function TennisEloPanel({
           name: p.name,
           elo: eloOn(p, surface),
           matches: p.matches,
+          // El mismo hueco que los cuatro deportes de equipo llenan con el escudo. En una
+          // lista de 50 nombres la bandera hace un trabajo que el nombre no hace: agrupa.
+          // «Los tres españoles del top 20» se ve de un barrido y no leyendo cincuenta
+          // apellidos.
+          badge: <Flag country={p.country} />,
           // Solo se avisa a partir de año y medio: en tenis, tres meses sin jugar en
           // pretemporada o por una lesión corta es normal y marcarlo sería ruido.
           note:

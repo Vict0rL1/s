@@ -19,6 +19,7 @@
     "update-data": "npm run update-data --workspace server --",
     "update-all": "node scripts/update-all.mjs",
     "fetch-data": "node --experimental-sqlite --disable-warning=ExperimentalWarning scripts/fetch-data.mjs",
+    "fetch-flags": "node scripts/fetch-flags.mjs",
     "check-publishable": "node --experimental-sqlite --disable-warning=ExperimentalWarning scripts/check-publishable.mjs",
     "backtest": "npm run backtest --workspace server --",
     "build": "npm run build --workspace web && npm run typecheck --workspace server",

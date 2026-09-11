@@ -69,44 +69,18 @@ export function formatDateTime(iso: string): string {
   });
 }
 
-/** Convert an IOC country code to a flag emoji (best-effort). */
-export function flag(ioc: string | null): string {
-  if (!ioc || ioc.length < 2) return '';
-  const map: Record<string, string> = {
-    SRB: 'RS', ESP: 'ES', ITA: 'IT', RUS: 'RU', GER: 'DE', GRE: 'GR', NOR: 'NO',
-    USA: 'US', BUL: 'BG', POL: 'PL', BLR: 'BY', KAZ: 'KZ', TUN: 'TN', CZE: 'CZ',
-    CHN: 'CN', LAT: 'LV', SUI: 'CH', FRA: 'FR', GBR: 'GB', ARG: 'AR', AUS: 'AU',
-    CAN: 'CA', CRO: 'HR', DEN: 'DK', NED: 'NL', AUT: 'AT', BRA: 'BR', JPN: 'JP',
-  };
-  const iso2 = map[ioc.toUpperCase()] ?? ioc.slice(0, 2).toUpperCase();
-  if (!/^[A-Z]{2}$/.test(iso2)) return '';
-  return String.fromCodePoint(...[...iso2].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
-}
+// `flag(ioc)` vivía aquí y ya no existe. Convertía el código del COI en un emoji de
+// bandera cortando sus dos primeras letras cuando no estaba en una lista de 28, y eso
+// ponía la bandera de Serbia a los sudafricanos (RSA→RS) y la de España a los estonios
+// (EST→ES): 318 jugadores de 1.272. Lo sustituye `<Flag>` de `components/ui`, que pinta
+// un SVG real desde la tabla completa de `lib/countries.ts` y no adivina nunca.
 
-/**
- * The flag for a league's country.
- *
- * The five sports' config files spell the country two different ways: football
- * stores a ready-made "🇪🇸 España" (because a league label wants the name too),
- * the others store a bare ISO-2 code. Rather than migrate four config files for
- * a decoration, this accepts both — and returns an empty string for anything it
- * cannot resolve, so a missing flag is a missing flag and never a tofu box.
- */
-export function countryFlag(country: string | null | undefined): string {
-  if (!country) return '';
-  const trimmed = country.trim();
-  // Already an emoji (regional indicators, or a tag sequence like the England
-  // flag): take the leading glyph cluster as-is.
-  const first = [...trimmed][0] ?? '';
-  if (first.codePointAt(0)! >= 0x1f1e6) {
-    const upTo = trimmed.indexOf(' ');
-    return upTo > 0 ? trimmed.slice(0, upTo) : trimmed;
-  }
-  const code = trimmed.slice(0, 2).toUpperCase();
-  if (code === 'EU') return '🇪🇺';
-  if (!/^[A-Z]{2}$/.test(code)) return '';
-  return String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
-}
+// `countryFlag(country)` también vivía aquí y también se ha ido. Hacía lo mismo que
+// `flag()` pero para la sede de una liga, y aunque esa NO daba países equivocados —las
+// ligas guardan un ISO-2 correcto o un emoji ya montado— seguía siendo un emoji, y en
+// Windows los emoji de bandera no se dibujan. Lo sustituye `<LeagueFlag>` de
+// `components/ui`, que resuelve los dos formatos con `leagueFlagSrc` de `lib/countries`
+// y pinta el mismo SVG que las de los jugadores.
 
 // ---------------------------------------------------------------------------
 // Dates and times

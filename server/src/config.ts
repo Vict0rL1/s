@@ -39,6 +39,19 @@ export const baseballConfig = readJson<BaseballConfig>(path.join(CONFIG_DIR, 'ba
 export const nflConfig = readJson<NafConfig>(path.join(CONFIG_DIR, 'americanfootball.json'));
 
 /**
+ * Código del COI (o ISO-3166 alpha-3) → país y su ISO-2, que es lo que nombra el SVG de
+ * la bandera en `web/public/flags/`.
+ *
+ * La pinta el frontend, así que a primera vista no es cosa del servidor. Está aquí
+ * porque `verify:data` tiene que comprobar que todos los países de la base resuelven y
+ * que su fichero existe, y ese check leyendo una copia propia de la tabla no comprobaría
+ * la que se usa de verdad. Una tabla, dos lectores.
+ */
+export const countriesConfig = readJson<Record<string, { iso2: string; name: string }>>(
+  path.join(CONFIG_DIR, 'countries.json'),
+);
+
+/**
  * A number from the environment, where 0 is a legitimate value.
  *
  * `Number(v) || fallback` collapses 0 into the fallback, which is wrong for

@@ -27,7 +27,10 @@
 //
 // Exit code is non-zero on failure, so it can gate a data refresh.
 
+import nodeFs from 'node:fs';
+import nodePath from 'node:path';
 import { getDb } from '../db.ts';
+import { countriesConfig, ROOT } from '../config.ts';
 import { getEloRanking, officialRankingCoherence } from '../repo.ts';
 import {
   gameProb,
@@ -89,7 +92,8 @@ import {
   allocateFrom,
   type FixtureUrgency,
 } from '../latency/schedule.ts';
-import { checkLatency, subscribe, publish } from '../latency/alert.ts';
+import { checkLatency, decideLatency, subscribe, publish } from '../latency/alert.ts';
+import type { Stage } from '../latency/budget.ts';
 import {
   correlation,
   correlationMatrix,
@@ -809,6 +813,145 @@ function auditTennis(): void {
  *      the claim that has to keep being true — and an inverted sign would send it to
  *      roughly 0.78 instead of 0.21.
  */
+/**
+ * ¿Tiene cada jugador SU bandera, y no la de otro?
+ *
+ * ===========================================================================
+ * EL CHECK QUE HABRÍA CAZADO LOS 318
+ * ===========================================================================
+ * Lo que había antes convertía el código del COI en emoji cortando sus dos primeras
+ * letras: `RSA`→`RS` daba Serbia a los sudafricanos y `EST`→`ES` daba España a los
+ * estonios. 318 jugadores de 1.272 con la bandera de otro país, y CERO en blanco.
+ *
+ * Esa es la parte que importa para escribir este check. Un check que solo contara
+ * banderas vacías habría dado el visto bueno a las 1.272, porque el fallo no producía
+ * huecos: producía respuestas equivocadas bien formadas. Así que aquí no se cuentan
+ * huecos, se comprueban tres cosas distintas:
+ *
+ *   1. QUE TODOS LOS CÓDIGOS DE LA BASE ESTÁN EN LA TABLA. Es lo que garantiza que
+ *      nadie cae en el respaldo — que ya no adivina, pero que tampoco debe usarse.
+ *   2. QUE EL SVG EXISTE EN DISCO. Un código bien mapeado a un fichero que no está se
+ *      ve igual que uno mal mapeado: sin bandera.
+ *   3. QUE LOS CASOS QUE FALLABAN AHORA ACIERTAN, uno a uno y con el país escrito. Es
+ *      la única forma de que una futura «simplificación» de la tabla no los rompa otra
+ *      vez en silencio.
+ */
+function auditFlags(): void {
+  console.log('\n▸ Banderas');
+
+  const table = countriesConfig;
+  const flagDir = nodePath.join(ROOT, 'web', 'public', 'flags');
+  const onDisk = new Set(
+    nodeFs.existsSync(flagDir)
+      ? nodeFs.readdirSync(flagDir).filter((f) => f.endsWith('.svg'))
+      : [],
+  );
+
+  check(
+    'la tabla de países está completa',
+    Object.keys(table).length >= 200,
+    `${Object.keys(table).length} países, se esperaban 200 o más`,
+  );
+  check(
+    'las banderas están descargadas',
+    onDisk.size >= 200,
+    `${onDisk.size} SVG en web/public/flags — corre \`npm run fetch-flags\``,
+  );
+
+  // --- 1. Todos los códigos de la base resuelven ---
+  const UNKNOWN = new Set(['N/A', 'UNK', 'XXX', '']);
+  const rows = getDb()
+    .prepare(
+      `SELECT country, COUNT(*) AS n FROM players
+        WHERE country IS NOT NULL AND country <> '' GROUP BY country`,
+    )
+    .all() as unknown as { country: string; n: number }[];
+
+  const sinMapear: string[] = [];
+  const sinFichero: string[] = [];
+  let conBandera = 0;
+  let desconocidos = 0;
+  for (const { country, n } of rows) {
+    const key = country.trim().toUpperCase();
+    if (UNKNOWN.has(key)) {
+      desconocidos += n;
+      continue;
+    }
+    const entry = table[key];
+    if (!entry) {
+      sinMapear.push(`${key} (${n})`);
+      continue;
+    }
+    if (!onDisk.has(`${entry.iso2}.svg`)) {
+      sinFichero.push(`${key}→${entry.iso2} (${n})`);
+      continue;
+    }
+    conBandera += n;
+  }
+
+  check(
+    'todos los países de la base están en la tabla',
+    sinMapear.length === 0,
+    `sin mapear: ${sinMapear.join(', ')} — añádelos a config/countries.json`,
+  );
+  check(
+    'todos los países de la base tienen su SVG en disco',
+    sinFichero.length === 0,
+    `sin fichero: ${sinFichero.join(', ')}`,
+  );
+
+  // --- 2. Los casos que antes salían mal ---
+  // Uno por cada forma distinta de equivocarse que tenía el respaldo: prefijo que es
+  // otro país (RSA, CHI, EST), dos códigos del COI que colisionaban en el mismo prefijo
+  // (PAK y PAR → PA), prefijo que no es ningún país (TPE, KSA) y alias ISO-3 del mismo
+  // país que ya estaba (PRY, SVN).
+  const casos: [string, string, string][] = [
+    ['RSA', 'za', 'Sudáfrica, que el prefijo daba a Serbia'],
+    ['CHI', 'cl', 'Chile, que el prefijo daba a Suiza'],
+    ['EST', 'ee', 'Estonia, que el prefijo daba a España'],
+    ['ESA', 'sv', 'El Salvador, que el prefijo daba a España'],
+    ['SLO', 'si', 'Eslovenia, que el prefijo daba a Sierra Leona'],
+    ['SVK', 'sk', 'Eslovaquia, que el prefijo daba a El Salvador'],
+    ['PAK', 'pk', 'Pakistán, que el prefijo daba a Panamá'],
+    ['PAR', 'py', 'Paraguay, que el prefijo TAMBIÉN daba a Panamá'],
+    ['UAE', 'ae', 'Emiratos, que el prefijo daba a Ucrania'],
+    ['IRL', 'ie', 'Irlanda, que el prefijo daba a Irán'],
+    ['TPE', 'tw', 'Taipéi Chino, cuyo prefijo no es ningún país'],
+    ['KSA', 'sa', 'Arabia Saudí, cuyo prefijo no es ningún país'],
+    ['PRY', 'py', 'Paraguay en ISO-3, que conviven en el archivo'],
+    ['SVN', 'si', 'Eslovenia en ISO-3, que conviven en el archivo'],
+  ];
+  const mal = casos.filter(([code, iso2]) => table[code]?.iso2 !== iso2);
+  check(
+    `los ${casos.length} códigos que el prefijo fallaba ahora apuntan a su país`,
+    mal.length === 0,
+    mal.map(([c, want, why]) => `${c} debería ser ${want} (${why}), es ${table[c]?.iso2}`).join('; '),
+  );
+
+  // --- 3. Ningún ISO-2 duplicado con nombre distinto ---
+  // Dos códigos pueden compartir bandera legítimamente (PAR y PRY son Paraguay), pero
+  // si comparten el ISO-2 y NO el nombre, uno de los dos está mal escrito.
+  const porIso2 = new Map<string, Set<string>>();
+  for (const [, v] of Object.entries(table)) {
+    if (!porIso2.has(v.iso2)) porIso2.set(v.iso2, new Set());
+    porIso2.get(v.iso2)!.add(v.name);
+  }
+  const choques = [...porIso2].filter(([, names]) => names.size > 1);
+  check(
+    'ningún ISO-2 tiene dos nombres de país distintos',
+    choques.length === 0,
+    choques.map(([iso, n]) => `${iso}: ${[...n].join(' / ')}`).join('; '),
+  );
+
+  const total = rows.reduce((a, r) => a + r.n, 0);
+  const pct = total > 0 ? ((conBandera / total) * 100).toFixed(1) : '0';
+  console.log(
+    `  ${conBandera} de ${total} jugadores con bandera propia (${pct} %) · ` +
+      `${rows.length} códigos distintos · ${onDisk.size} SVG en disco` +
+      (desconocidos > 0 ? ` · ${desconocidos} sin país en el archivo` : ''),
+  );
+}
+
 function auditNflMarket(): void {
   const db = getDb();
   const rows = db
@@ -2478,37 +2621,73 @@ function auditLatency(): void {
     );
 
     // --- La alerta no puede decir «se cumple» sin haber medido ---
-    // Y esto hay que MONTARLO. Preguntar sin más por `checkLatency()` da una
-    // comprobación vacía: sin muestras el total es 0, no se pasa del objetivo y
-    // `breached` sale falso tanto con la guarda de completitud como sin ella. Se probó
-    // así primero y no cazaba el fallo. Para que muerda hace falta un total que SÍ se
-    // pase mientras alguna etapa sigue sin medir.
+    // Preguntar sin más por `checkLatency()` da una comprobación vacía: sin muestras el
+    // total es 0, no se pasa del objetivo y `breached` sale falso tanto con la guarda de
+    // completitud como sin ella. Se probó así primero y no cazaba el fallo. Para que
+    // muerda hace falta un total que SÍ se pase mientras alguna etapa sigue sin medir.
     //
-    // `checkLatency` mira todas las muestras, no solo las marcadas, así que esto solo
-    // se puede montar cuando la instalación tiene alguna etapa vacía. Con las cuatro
-    // llenas la pregunta no aplica, y decirlo es más honesto que fingir que se probó.
-    const antes = stageStats(24);
-    const vacias = antes.filter((s) => s.n === 0);
-    if (vacias.length === 0) {
-      console.log('  las cuatro etapas tienen muestras: la guarda de completitud no aplica aquí');
-    } else {
-      // Diez minutos, el doble del objetivo por defecto, en una etapa que NO deje la
-      // medición completa.
-      const donde = antes.find((s) => s.n > 0)?.stage ?? vacias[0].stage;
-      recordLatency({ stage: donde, ms: 10 * 60_000, sport: MARK });
-      const al = checkLatency(24);
-      check(
-        'latencia: el montaje deja el total por encima del objetivo',
-        al.totalMs > al.targetMs && !al.complete,
-        `total ${al.totalMs} contra objetivo ${al.targetMs}, completo=${al.complete}`,
-      );
-      check(
-        'latencia: sin medición completa no se declara incumplimiento',
-        !al.breached,
-        'declara incumplido un objetivo que no ha terminado de medir',
-      );
-      db.prepare('DELETE FROM latency_samples WHERE sport = ?').run(MARK);
-    }
+    // Antes eso se MONTABA escribiendo muestras en la base, y el montaje era frágil de
+    // una forma que tardó en verse: el total suma el p95 de cada etapa, así que con la
+    // tabla vacía una sola muestra inyectada era el p95 de su etapa y el total se pasaba
+    // —pero con la tabla ya poblada, por haber tenido el servidor un rato levantado, esa
+    // misma muestra caía entre doscientas y no movía el p95 ni un milisegundo. El check
+    // no daba un falso verde: rompía. Y un check que rompe según lo que haya en la base
+    // es un check que alguien acaba silenciando.
+    //
+    // Ahora se prueba `decideLatency`, que recibe los números y no lee nada. Los tres
+    // casos se escriben a mano y no dependen de esta instalación.
+    const etapas = (p95: Record<Stage, number>) =>
+      (Object.keys(p95) as Stage[]).map((stage) => ({ stage, n: p95[stage] > 0 ? 10 : 0, p95: p95[stage] }));
+
+    // 1. Total muy por encima del objetivo, pero una etapa sin medir.
+    const incompleto = decideLatency(
+      { ms: 10 * 60_000, complete: false, missing: ['cliente'] },
+      etapas({ origen: 10 * 60_000, ingesta: 0, servidor: 0, cliente: 0 }),
+    );
+    check(
+      'latencia: el caso de prueba deja el total por encima del objetivo',
+      incompleto.totalMs > incompleto.targetMs && !incompleto.complete,
+      `total ${incompleto.totalMs} contra objetivo ${incompleto.targetMs}, completo=${incompleto.complete}`,
+    );
+    check(
+      'latencia: sin medición completa no se declara incumplimiento',
+      !incompleto.breached,
+      'declara incumplido un objetivo que no ha terminado de medir',
+    );
+    check(
+      'latencia: y el mensaje dice qué etapa falta en vez de dar un visto bueno',
+      incompleto.message.includes('incompleta') && incompleto.message.includes('cliente'),
+      incompleto.message,
+    );
+
+    // 2. El mismo total, ya con las cuatro etapas medidas: AHORA sí se incumple.
+    // Es el contraste que demuestra que la guarda del caso 1 es la que manda y no que
+    // `breached` sea falso por cualquier otro motivo.
+    const completo = decideLatency(
+      { ms: 10 * 60_000, complete: true, missing: [] },
+      etapas({ origen: 10 * 60_000, ingesta: 1, servidor: 1, cliente: 1 }),
+    );
+    check(
+      'latencia: con la medición completa y el total pasado, SÍ se declara incumplimiento',
+      completo.breached && completo.message.includes('FUERA DEL OBJETIVO'),
+      `breached=${completo.breached}: ${completo.message}`,
+    );
+    check(
+      'latencia: y el aviso nombra la etapa culpable y de quién depende',
+      completo.offenders.length > 0 && completo.offenders[0].stage === 'origen',
+      `culpables: ${completo.offenders.map((o) => o.stage).join(', ') || '(ninguno)'}`,
+    );
+
+    // 3. Dentro del objetivo y completo: ni incumplimiento ni culpables.
+    const bien = decideLatency(
+      { ms: 1000, complete: true, missing: [] },
+      etapas({ origen: 400, ingesta: 300, servidor: 200, cliente: 100 }),
+    );
+    check(
+      'latencia: dentro del objetivo no se inventa un incumplimiento',
+      !bien.breached && bien.offenders.length === 0 && bien.message.includes('Dentro del objetivo'),
+      `breached=${bien.breached}, culpables=${bien.offenders.length}: ${bien.message}`,
+    );
 
     // --- El canal de empuje: un suscriptor que revienta no puede callar a los demás ---
     // Sin esta comprobación el fallo sería invisible: el canal seguiría aceptando
@@ -2543,12 +2722,18 @@ function auditLatency(): void {
     clean();
     const real = stageStats(24);
     const conMuestras = real.filter((s) => s.n > 0);
+    // Y el veredicto de verdad, por el mismo camino que ve la pantalla. Lo de arriba
+    // comprueba la lógica con números escritos a mano; esto dice en qué punto está ESTA
+    // instalación, que es otra pregunta y también merece salir en el informe.
+    const alReal = checkLatency(24);
     console.log(
       `  objetivo ${(b.totalMs / 60_000).toFixed(0)} min · ` +
         (conMuestras.length === 0
           ? 'sin mediciones todavía en las últimas 24 h (arranca el servidor y abre la app)'
           : `${conMuestras.map((s) => `${s.stage} n=${s.n}`).join(' · ')}` +
-            (conMuestras.length < 4 ? ' — medición incompleta' : '')),
+            (conMuestras.length < 4 ? ' — medición incompleta' : '') +
+            ` · total p95 ${(alReal.totalMs / 1000).toFixed(1)} s` +
+            (alReal.complete ? (alReal.breached ? ' — FUERA DEL OBJETIVO' : ' — dentro') : '')),
     );
   } finally {
     clean();
@@ -3276,6 +3461,7 @@ function main(): void {
   auditEloRanking();
   auditLive();
   auditPointsModel();
+  auditFlags();
   auditTennis();
   auditNflMarket();
   auditRatingsReproduce();

@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { reportClientLatency } from '../../lib/liveOdds';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate,
-} from '../ui';
+  EmptySlate, LeagueFlag} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, footballPicks } from '../../lib/picks';
 import { useStake } from '../../lib/useStake';
@@ -17,7 +16,7 @@ import {
 } from '../../lib/football';
 import MatchCard from './MatchCard';
 import EloRanking from '../EloRanking';
-import { formatDate, countryFlag, dayChipLabel, groupByDay } from '../../lib/format';
+import { formatDate, dayChipLabel, groupByDay } from '../../lib/format';
 
 /**
  * The ⚽ tab.
@@ -216,9 +215,7 @@ export default function FootballDashboard() {
                 title={l.label}
                 className={pillClass(on)}
               >
-                {countryFlag(l.country) && (
-                <span aria-hidden className="mr-1.5">{countryFlag(l.country)}</span>
-              )}
+                <LeagueFlag country={l.country} className="mr-1.5" />
               {l.name}
                 {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
                 {!l.hasModel && (
