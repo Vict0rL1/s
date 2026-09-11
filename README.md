@@ -858,10 +858,51 @@ declarada. Con menos de 30 partidos resueltos avisa de que la muestra es pequeñ
 Sirve además como detector de averías: si los datos se rompen o quedan viejos, el acierto cae y lo
 ves, en vez de fallar en silencio.
 
+## Un solo comando: `npm run go`
+
+```bash
+npm run go
+```
+
+Hace los seis pasos y arranca la app:
+
+1. **Node** — comprueba la versión y para si no llega a 22.5, diciendo cómo actualizarla.
+   Va primero porque es el único fallo cuyo síntoma no señala a la causa: `node:sqlite` no
+   existe antes de 22.5 y el error parece un problema de dependencias.
+2. **Rama** — se pone en `claude/tennis-prediction-app-jlhgxh`. La rama por defecto del
+   repositorio es otro proyecto, así que un clon nuevo **no tiene esta app**. Si tienes
+   cambios sin guardar no cambia de rama: descartar tu trabajo para arrancarte la app no
+   es un intercambio que un script de arranque tenga derecho a hacer.
+3. **Pull** — `--ff-only`, y solo si estás en la rama del proyecto. Los fallos de red se
+   reintentan (2s, 4s, 8s, 16s); una divergencia no, porque reintentar no la arregla.
+4. **Dependencias** — `npm install` solo si el lock ha cambiado.
+5. **Base de datos** — si no hay, intenta la descarga rápida y, si la release no está
+   publicada todavía, la construye desde las fuentes.
+6. **Arranca** — y avisa si falta `ODDS_API_KEY` (la app funciona igual, con cuotas de
+   demostración).
+
+**No gasta cuota de The Odds API.** Ni una petición: si hay que construir la base se hace
+con `--skip-odds`. Refrescar precios cuesta (500 al mes en el plan gratuito) y no puede
+esconderse dentro de «arráncame la app».
+
+La regla que gobierna los seis pasos: **un paso que falla no puede parecer que fue bien, y
+uno que falla sin ser grave no puede impedir que la app arranque.** Son fatales Node viejo,
+`npm install` roto y quedarse sin base; son avisos la falta de red, los cambios locales y
+la falta de clave. Sin la primera mitad, «hazlo todo tú» se convierte en un script que se
+come los errores y deja una app rota sin decir dónde mirar. Sin la segunda, un avión sin
+wifi te deja sin app, cuando la base y el modelo son locales.
+
+Un bug que salió al probarlo, y que vale contar: la primera versión hacía
+`git pull origin <rama-del-proyecto>` sin comprobar en qué rama estabas. Cuando no podía
+cambiarse de rama —por tener cambios sin guardar— traía los commits del proyecto **encima
+de la rama en la que estuvieras**, mezclando dos historias sin mencionarlo. Se vio al
+probar ese caso concreto, no leyendo el código.
+
 ## Scripts
 
 | Comando | Qué hace |
 |---------|----------|
+| `npm run go` | **Todo en uno**: rama, pull, dependencias, base de datos y arranque. El único que hace falta saber |
 | `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
 | `npm run seed` | Tenis: carga el dataset de demostración |
 | `npm run fetch-data` | **Descarga la base ya construida** (9 MB) en vez de reconstruirla. `-- --force` reemplaza la que haya, conservando tus apuestas |
