@@ -858,6 +858,22 @@ declarada. Con menos de 30 partidos resueltos avisa de que la muestra es pequeñ
 Sirve además como detector de averías: si los datos se rompen o quedan viejos, el acierto cae y lo
 ves, en vez de fallar en silencio.
 
+## Abrirla sin escribir nada: `scripts/abrir.command`
+
+En un Mac, **doble clic** en `scripts/abrir.command` y la app se abre. No hace falta la
+Terminal ni acordarse de la carpeta: el fichero se sitúa solo desde su propia ruta, así
+que funciona esté donde esté el proyecto.
+
+Arrástralo al Dock o haz un alias en el Escritorio y queda a un clic.
+
+Lo que hace que este `.command` funcione y la mayoría no: **el Finder lo lanza con un
+shell que no ha leído tu `~/.zshrc`**, así que un Node instalado con nvm —lo más habitual
+en un Mac— sencillamente no está en el PATH, y el doble clic abre una ventana que dice
+«command not found: npm» y se cierra. Este carga nvm si está, prueba las rutas de Homebrew
+(Apple Silicon e Intel) y de Volta, y si aun así no encuentra Node **lo dice, con el
+comando de la Terminal escrito**, en vez de cerrarse. La ventana tampoco se cierra sola al
+terminar: si algo falló, el motivo está justo encima.
+
 ## Un solo comando: `npm run go`
 
 ```bash
@@ -869,6 +885,14 @@ Hace los seis pasos y arranca la app:
 1. **Node** — comprueba la versión y para si no llega a 22.5, diciendo cómo actualizarla.
    Va primero porque es el único fallo cuyo síntoma no señala a la causa: `node:sqlite` no
    existe antes de 22.5 y el error parece un problema de dependencias.
+
+   Y el comando **no lleva banderas de Node**, por un motivo que costó encontrar: la
+   primera versión era `node --experimental-sqlite … scripts/go.mjs`, y **Node 20 rechaza
+   esa bandera antes de leer el fichero** (`node: bad option`, código 9). Es decir que
+   quien tuviera Node viejo —exactamente a quien va dirigido este mensaje— veía un error
+   críptico sobre una bandera en lugar del aviso. El control estaba escrito y era
+   inalcanzable. Ahora no hay banderas, el import de `node:sqlite` es perezoso y el aviso
+   de «experimental» se silencia desde dentro. Comprobado contra un Node 20.20.2 real.
 2. **Rama** — se pone en `claude/tennis-prediction-app-jlhgxh`. La rama por defecto del
    repositorio es otro proyecto, así que un clon nuevo **no tiene esta app**. Si tienes
    cambios sin guardar no cambia de rama: descartar tu trabajo para arrancarte la app no

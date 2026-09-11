@@ -12,7 +12,7 @@
     "web"
   ],
   "scripts": {
-    "go": "node --experimental-sqlite --disable-warning=ExperimentalWarning scripts/go.mjs",
+    "go": "node scripts/go.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:server": "npm run dev --workspace server",
     "dev:web": "npm run dev --workspace web",

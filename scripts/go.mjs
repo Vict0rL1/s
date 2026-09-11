@@ -39,7 +39,7 @@
 // gratuito) y no puede esconderse dentro de «arráncame la app».
 
 import { spawnSync, spawn } from 'node:child_process';
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,6 +47,14 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BRANCH = 'claude/tennis-prediction-app-jlhgxh';
 const DB = path.join(ROOT, 'data', 'tennis.db');
+
+// El aviso de «SQLite is an experimental feature» se silencia aquí y no con la bandera
+// `--disable-warning`, para que el comando funcione igual en cualquier Node: una bandera
+// desconocida no se ignora, aborta el proceso. Los demás avisos siguen saliendo.
+process.removeAllListeners('warning');
+process.on('warning', (w) => {
+  if (w.name !== 'ExperimentalWarning') console.warn(`${w.name}: ${w.message}`);
+});
 
 const avisos = [];
 /**
@@ -111,6 +119,12 @@ function captura(cmd, args) {
  */
 function diasDeRetraso() {
   try {
+    // `node:sqlite` se carga AQUÍ y no arriba. Con un `import` estático, un Node viejo
+    // reventaría al analizar el fichero —antes de ejecutar una sola línea— y el control
+    // de versión del paso 1, que existe justo para dar un mensaje claro en ese caso, no
+    // llegaría a correr nunca. `createRequire` es síncrono, así que sirve dentro de esta
+    // función sin volverla asíncrona.
+    const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
     const db = new DatabaseSync(DB, { readOnly: true });
     // Cada deporte guarda la fecha a su manera: el tenis en YYYYMMDD y el resto en
     // YYYY-MM-DD. Se normaliza a YYYYMMDD para poder compararlas.
@@ -159,6 +173,18 @@ function diasDeRetraso() {
 // «Cannot find module 'node:sqlite'» que parece un problema de dependencias.
 titulo('Versión de Node');
 {
+  // ESTE PASO TIENE QUE PODER EJECUTARSE CON EL NODE QUE SEA.
+  //
+  // La primera versión no podía. El script de npm era
+  // `node --experimental-sqlite ... scripts/go.mjs`, y Node 20 RECHAZA esa bandera antes
+  // de leer el fichero: `node: bad option: --experimental-sqlite`, código 9. O sea que
+  // quien tuviera Node viejo —justo a quien va dirigido este mensaje— veía un error
+  // cript\u00edptico de una bandera en vez de «hace falta 22.5, actualiza así». El control
+  // estaba escrito y era inalcanzable.
+  //
+  // Por eso el script de npm ya no lleva `--experimental-sqlite` (en 22.5+ no hace falta:
+  // `node:sqlite` se importa igual y solo emite un aviso, que se silencia abajo) y el
+  // import de sqlite es perezoso. Comprobado contra un Node 20.20.2 de verdad.
   const [may, men] = process.versions.node.split('.').map(Number);
   if (may < 22 || (may === 22 && men < 5)) {
     morir(
