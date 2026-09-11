@@ -877,7 +877,12 @@ Hace los seis pasos y arranca la app:
    reintentan (2s, 4s, 8s, 16s); una divergencia no, porque reintentar no la arregla.
 4. **Dependencias** — `npm install` solo si el lock ha cambiado.
 5. **Base de datos** — si no hay, intenta la descarga rápida y, si la release no está
-   publicada todavía, la construye desde las fuentes.
+   publicada todavía, la construye desde las fuentes. Si ya hay, dice **hasta cuándo
+   llegan los resultados**: una base de hace tres semanas abre igual, predice igual y no se
+   queja, así que enseña partidos de hace tres semanas con la misma seguridad que los de
+   ayer. La fecha se saca del último partido jugado y no del `mtime` del fichero, porque
+   actualizar y no recibir nada nuevo toca el fichero sin mover los datos — y entonces el
+   `mtime` diría «hoy» de una base de hace un mes. Pasados 5 días te da el comando.
 6. **Arranca** — y avisa si falta `ODDS_API_KEY` (la app funciona igual, con cuotas de
    demostración).
 

@@ -39,6 +39,7 @@
 // gratuito) y no puede esconderse dentro de «arráncame la app».
 
 import { spawnSync, spawn } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,6 +90,58 @@ function captura(cmd, args) {
   const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8' });
   return r.status === 0 ? (r.stdout ?? '').trim() : null;
 }
+
+/**
+ * Hasta cuándo llegan los resultados guardados, en una línea.
+ *
+ * Lee el último partido JUGADO de cada deporte y se queda con el más reciente. No es
+ * `mtime` del fichero a propósito: actualizar y no recibir nada nuevo toca el fichero sin
+ * mover los datos, y entonces `mtime` diría «hoy» de una base de hace un mes.
+ *
+ * Si no se puede leer, lo dice y sigue. Es una línea informativa: no arranca ni para nada,
+ * y caerse aquí sería la peor relación posible entre coste y beneficio.
+ */
+function diasDeRetraso() {
+  try {
+    const db = new DatabaseSync(DB, { readOnly: true });
+    // Cada deporte guarda la fecha a su manera: el tenis en YYYYMMDD y el resto en
+    // YYYY-MM-DD. Se normaliza a YYYYMMDD para poder compararlas.
+    const fuentes = [
+      ['matches', "max(replace(tourney_date,'-',''))"],
+      ['fb_matches', "max(replace(match_date,'-',''))"],
+      ['bb_games', "max(replace(game_date,'-',''))"],
+      ['bsb_games', "max(replace(game_date,'-',''))"],
+      ['naf_games', "max(replace(game_date,'-',''))"],
+    ];
+    let ultima = null;
+    for (const [tabla, expr] of fuentes) {
+      try {
+        const r = db.prepare(`SELECT ${expr} AS d FROM ${tabla}`).get();
+        const d = r?.d ? String(r.d).slice(0, 8) : null;
+        if (d && /^\d{8}$/.test(d) && (ultima === null || d > ultima)) ultima = d;
+      } catch {
+        // Una tabla que no existe todavía no es un problema: los otros deportes cuentan.
+      }
+    }
+    db.close();
+    if (!ultima) return 'sin resultados guardados todavía — npm run update-all -- --skip-odds';
+
+    const y = Number(ultima.slice(0, 4));
+    const m = Number(ultima.slice(4, 6));
+    const dd = Number(ultima.slice(6, 8));
+    const dias = Math.floor((Date.now() - Date.UTC(y, m - 1, dd)) / 86_400_000);
+    const fecha = `${ultima.slice(0, 4)}-${ultima.slice(4, 6)}-${ultima.slice(6, 8)}`;
+    // Cinco días: una jornada de liga cabe en menos, así que por debajo de eso no hay
+    // nada que decirle a nadie.
+    if (dias > 5) {
+      return `resultados hasta ${fecha} (hace ${dias} días) — actualízalos con: npm run update-all -- --skip-odds`;
+    }
+    return `resultados hasta ${fecha}, al día`;
+  } catch (e) {
+    return `no he podido leer la fecha de los datos (${e instanceof Error ? e.message : e})`;
+  }
+}
+
 
 // ===========================================================================
 // 1. NODE
@@ -246,7 +299,12 @@ titulo('Base de datos');
   if (fs.existsSync(DB)) {
     const mb = (fs.statSync(DB).size / 1024 / 1024).toFixed(0);
     ok(`ya está (${mb} MB)`);
-    nota('para actualizarla: npm run update-all -- --skip-odds');
+    // Y CUÁNDO es, que es la parte que no se ve. Una base de hace tres semanas abre
+    // igual, predice igual y no se queja: enseña resultados de hace tres semanas con la
+    // misma seguridad que los de ayer. El fichero tiene fecha de modificación, pero esa
+    // dice cuándo se escribió, no hasta cuándo llegan los partidos — y son cosas
+    // distintas en cuanto alguien corre una actualización que no trae nada nuevo.
+    nota(diasDeRetraso());
   } else {
     nota('no hay base. Intento la descarga rápida (9 MB)…');
     if (corre('npm', ['run', 'fetch-data'])) {
