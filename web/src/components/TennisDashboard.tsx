@@ -229,6 +229,7 @@ export default function TennisDashboard() {
       ) : (
         <>
           <DayFilter days={dayChips} selected={day} onSelect={setDay} />
+          <ShortSlateNote matches={matches} />
           {shownGroups.map((group) => (
             <section key={group.key} className="mb-6">
               <DayHeading label={group.label} count={group.items.length} />
@@ -317,5 +318,55 @@ function DataBadge({ meta }: { meta: Meta }) {
     >
       {isSeed ? 'datos demo' : 'datos reales'} · {meta.counts.matches} partidos
     </span>
+  );
+}
+
+/**
+ * Por qué la lista de partidos es tan corta, cuando lo es.
+ *
+ * ===========================================================================
+ * DOS OCHOS QUE NO SIGNIFICAN LO MISMO
+ * ===========================================================================
+ * La cabecera dice «58.367 partidos» y la lista enseña dos. Son dos cosas distintas y
+ * nada en la pantalla lo decía: el archivo histórico es nuestro y está completo, pero los
+ * PRÓXIMOS salen de las casas de apuestas, y una casa publica un partido de tenis con
+ * pocos días de antelación y solo cuando le pone precio.
+ *
+ * Así que dos partidos suele ser lo correcto, no un fallo: a mitad de un Grand Slam hay
+ * un solo torneo activo y en las rondas finales le quedan dos o cuatro partidos. Pero sin
+ * decirlo se lee como que la app no ha cargado, y la reacción natural es volver a correr
+ * la actualización — que gasta cuota y devuelve los mismos dos.
+ *
+ * Solo aparece con la lista corta. En una semana normal, con seis torneos a la vez, esto
+ * sería un párrafo de relleno encima de treinta tarjetas.
+ */
+function ShortSlateNote({ matches }: { matches: UpcomingWithPrediction[] }) {
+  // Seis: por debajo de eso la lista cabe de un vistazo y la pregunta «¿esto es todo?» se
+  // la hace cualquiera.
+  if (matches.length === 0 || matches.length >= 6) return null;
+  const todosDemo = matches.every((m) => m.match.source === 'fixture');
+  const torneos = [...new Set(matches.map((m) => m.match.tournament_name).filter(Boolean))];
+
+  return (
+    <p className="mb-4 text-[13px] leading-relaxed text-[#7b828d]">
+      {matches.length === 1 ? 'Un solo partido' : `Solo ${matches.length} partidos`}
+      {torneos.length === 1 ? ` (${torneos[0]})` : ''}:{' '}
+      {todosDemo ? (
+        <>
+          son de <strong className="text-[#9aa1ac]">demostración</strong>, generados por el
+          propio modelo. Pon tu clave en <code>ODDS_API_KEY</code> y corre{' '}
+          <code>npm run update-data</code> para ver los de verdad.
+        </>
+      ) : (
+        <>
+          los próximos los publican las casas, con pocos días de antelación y solo cuando
+          les ponen precio. A mitad de un Grand Slam hay un único torneo activo y en las
+          rondas finales quedan dos o cuatro partidos, así que esto suele ser lo que hay y
+          no una carga a medias. El archivo histórico —el de la cabecera— es aparte y está
+          completo. <strong className="text-[#9aa1ac]">Volver a actualizar gasta cuota y
+          devolverá los mismos.</strong>
+        </>
+      )}
+    </p>
   );
 }

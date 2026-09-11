@@ -59,7 +59,7 @@ export default function EloRanking({
   subtitle,
   rows,
   extraHeaders = [],
-  defaultOpen = false,
+  defaultOpen = true,
   footer,
 }: {
   title: string;
@@ -67,13 +67,43 @@ export default function EloRanking({
   rows: EloRow[];
   extraHeaders?: string[];
   /**
-   * Plegada por defecto en las pestañas donde va al final de una página larga; abierta
-   * cuando es lo que el usuario vino a ver.
+   * ABIERTA por defecto, y esto cambió por un motivo.
+   *
+   * Antes el valor por omisión era `false`, con un comentario que decía «plegada donde va
+   * al final de una página larga; abierta cuando es lo que el usuario vino a ver». La
+   * segunda mitad de esa frase nunca se cableó: ninguna de las cinco pestañas pasaba
+   * `defaultOpen`, así que la tabla estaba SIEMPRE plegada, al final de una página de
+   * ocho tarjetas de partido. Para verla había que bajar hasta el fondo y saber que ese
+   * título gris era un botón.
+   *
+   * Esta tabla es lo que se pidió para «visualizar y entender qué equipos o jugadores
+   * tienen mejor Elo». Una función que hay que descubrir no está entregada, así que ahora
+   * se abre sola y quien no la quiera la cierra — y su decisión se recuerda, por pestaña.
    */
   defaultOpen?: boolean;
   footer?: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  // La clave lleva el título porque cada deporte tiene la suya: cerrar la de la NFL no
+  // tiene por qué cerrar la del tenis.
+  const openKey = `elo-open:${title}`;
+  const [open, setOpen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(openKey);
+      return saved === null ? defaultOpen : saved === '1';
+    } catch {
+      // Ventana privada o almacenamiento bloqueado: se abre, que es el valor por defecto.
+      return defaultOpen;
+    }
+  });
+  const toggle = (): void => {
+    const next = !open;
+    setOpen(next);
+    try {
+      localStorage.setItem(openKey, next ? '1' : '0');
+    } catch {
+      // Solo afecta a si se abre plegada la próxima vez.
+    }
+  };
   const [query, setQuery] = useState('');
 
   const spread = useMemo(() => spreadOf(rows.map((r) => r.elo)), [rows]);
@@ -92,7 +122,7 @@ export default function EloRanking({
   return (
     <section className="mt-8 rounded-xl border border-white/[0.07] bg-[#14161b] p-4">
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 text-left"
       >

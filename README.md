@@ -227,6 +227,34 @@ Detalles y todas las mediciones en **[docs/NFL.md](docs/NFL.md)**.
 - Datos guardados localmente en **SQLite** (`data/tennis.db`) para no depender de llamadas
   repetidas a las APIs.
 
+## La clasificación por Elo salía plegada, y nadie la encontraba
+
+Estaba montada al final de cada pestaña, detrás de un título gris que era un botón, y con
+`defaultOpen = false`. El comentario del componente decía «plegada donde va al final de una
+página larga; **abierta cuando es lo que el usuario vino a ver**» — y la segunda mitad no
+se cableó nunca: ninguna de las cinco pestañas pasaba `defaultOpen`, así que estaba siempre
+cerrada, debajo de ocho tarjetas de partido.
+
+Una función que hay que descubrir no está entregada. Ahora **se abre sola**, y si la
+cierras se queda cerrada: la elección se guarda en `localStorage` con una clave por
+pestaña, porque cerrar la de la NFL no tiene por qué cerrar la del tenis.
+
+## «Solo me salen dos partidos»
+
+La cabecera dice 58.367 partidos y la lista enseña dos. Son dos cosas distintas y la
+pantalla no lo decía:
+
+- El **archivo histórico** es nuestro y está completo.
+- Los **próximos** los publican las casas de apuestas, con pocos días de antelación y solo
+  cuando les ponen precio.
+
+Así que dos partidos suele ser lo correcto. A mitad de un Grand Slam hay un único torneo
+activo y en las rondas finales le quedan dos o cuatro. Sin decirlo, se lee como que la app
+no cargó, y la reacción natural es volver a actualizar — que **gasta cuota y devuelve los
+mismos dos**. Ahora, cuando la lista baja de seis partidos, sale una línea que lo explica y
+que distingue los dos casos: cuotas de demostración (falta la clave) o el calendario real
+tal como está. Con seis o más no aparece, porque encima de treinta tarjetas sería relleno.
+
 ## Banderas: 318 jugadores las llevaban de otro país
 
 La app pinta la bandera de cada jugador en la tarjeta del partido, en su perfil y en la
