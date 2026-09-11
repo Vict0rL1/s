@@ -874,6 +874,64 @@ en un Mac— sencillamente no está en el PATH, y el doble clic abre una ventana
 comando de la Terminal escrito**, en vez de cerrarse. La ventana tampoco se cierra sola al
 terminar: si algo falló, el motivo está justo encima.
 
+## Ponerla en línea (Fly.io)
+
+Para abrirla desde el móvil en cualquier sitio, no solo en tu wifi. Cuatro comandos una
+vez, y `npm run deploy` a partir de entonces.
+
+```bash
+brew install flyctl
+fly auth login
+fly launch --no-deploy          # escribe tu nombre de app en fly.toml
+fly volumes create datos --size 3
+fly secrets set APP_PASSWORD="una-frase-larga-y-tuya"
+fly secrets set ODDS_API_KEY="tu-clave"   # opcional: sin ella, cuotas de demostración
+npm run deploy
+```
+
+`npm run deploy` comprueba en dos segundos todo lo que `fly deploy` descubriría al final
+de una construcción de varios minutos: que estás autenticado, que la app y el volumen
+existen, que la contraseña está puesta y que hay base de datos que llevar.
+
+### Por qué lleva contraseña, y por qué no arranca sin ella
+
+En el portátil, «sin autenticación» significa «sin autenticación en localhost». En una URL
+pública significa otra cosa: la tabla `bets` guarda importe, beneficio y notas de cada
+apuesta, y `/api/refresh` dispara una llamada a The Odds API — cualquiera que lo pulse
+gasta tu cuota, y el plan gratuito son 500 al mes.
+
+Con `NODE_ENV=production` y sin `APP_PASSWORD`, **el servidor se niega a arrancar**. Un
+aviso en el log se lee una vez, en un despliegue que salió bien, y la app queda abierta
+durante meses funcionando perfectamente — que es justo el fallo que no da síntomas. Un
+despliegue que falla se arregla; uno que queda abierto no se entera nadie. En local no
+cambia nada.
+
+La única ruta sin contraseña es `/healthz`, porque Fly la usa para saber si la máquina
+vive: si respondiera 401 la daría por muerta y la reiniciaría en bucle. No toca la base ni
+devuelve nada más que `{ ok: true }`.
+
+### Tres cosas que se decidieron por un motivo concreto
+
+**La base vive en un disco aparte, no en la imagen.** Una imagen de contenedor se
+reemplaza entera en cada despliegue. Con la base dentro, cada `fly deploy` borraría el
+registro de apuestas y todo lo descargado — sin error y sin aviso, porque la app
+arrancaría perfectamente, vacía. Por eso `DATA_DIR` es configurable y el volumen se monta
+en `/data`. El arranque copia ahí la base de la imagen **solo si el disco está vacío**;
+copiarla siempre sería una línea más corta y machacaría tus datos en cada despliegue.
+
+**El servidor sirve el frontend.** En desarrollo hay dos servidores —Vite sirve la web y
+hace de proxy hacia Fastify—; en producción solo hay uno. Sin esto, el despliegue
+respondería a `/api/…` y daría 404 en la portada: una app «desplegada con éxito» que no se
+puede abrir. Pasó literalmente al probarlo, por otra causa: la ruta índice de la API
+también estaba en `/` y ganaba al `index.html`, así que abrir la URL devolvía un JSON
+describiendo la API. Ahora esa ruta solo se registra cuando no hay app que servir.
+
+**Supabase no servía para esto**, aunque sea lo primero que se piensa. Supabase es Postgres
+más auth y almacenamiento: no ejecuta un proceso Node persistente, y esta app *es* un
+proceso —cadenas de Markov, ajustes de Elo, el modelo de puntos—. Y usarlo solo para los
+datos costaría reescribir **355 llamadas `db.prepare(...)` repartidas por 80 ficheros**,
+para acabar necesitando igualmente dónde correr el servidor.
+
 ## Un solo comando: `npm run go`
 
 ```bash
@@ -935,6 +993,7 @@ probar ese caso concreto, no leyendo el código.
 
 | Comando | Qué hace |
 |---------|----------|
+| `npm run deploy` | Sube la app a Fly.io, comprobando antes todo lo que fallaría al final del despliegue |
 | `npm run go` | **Todo en uno**: rama, pull, dependencias, base de datos y arranque. El único que hace falta saber |
 | `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
 | `npm run seed` | Tenis: carga el dataset de demostración |

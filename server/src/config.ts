@@ -14,7 +14,16 @@ import type { NafConfig } from './nfl/types.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)); // server/src
 export const ROOT = path.resolve(HERE, '..', '..'); // repo root
-export const DATA_DIR = path.join(ROOT, 'data');
+/**
+ * Dónde vive la base de datos.
+ *
+ * Configurable porque en un despliegue NO puede estar dentro del proyecto. En Fly.io el
+ * código va en la imagen del contenedor —que se reemplaza entera en cada despliegue— y
+ * los datos van en un disco aparte que sobrevive. Con la ruta fija dentro del repo, la
+ * base viviría en la imagen y CADA despliegue borraría el registro de apuestas y todo lo
+ * descargado, sin error y sin aviso: la app arrancaría perfectamente, vacía.
+ */
+export const DATA_DIR = process.env.DATA_DIR?.trim() || path.join(ROOT, 'data');
 export const RAW_DIR = path.join(DATA_DIR, 'raw');
 export const SEED_DIR = path.join(DATA_DIR, 'seed');
 export const DB_PATH = path.join(DATA_DIR, 'tennis.db');

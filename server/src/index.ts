@@ -18,6 +18,8 @@ import {
   recordCycleSpend,
 } from './oddsQuota.ts';
 import { registerRoutes } from './routes/api.ts';
+import { assertAuthConfigured, registerAuth, isProduction } from './auth.ts';
+import { registerStatic, webBuildExists, WEB_DIST } from './static.ts';
 import { registerBasketballRoutes } from './routes/basketball.ts';
 import { registerFootballRoutes } from './routes/football.ts';
 import { registerBaseballRoutes } from './routes/baseball.ts';
@@ -292,6 +294,12 @@ async function main() {
     }
   });
 
+  // La contraseña, antes que NADA. Un hook registrado después de las rutas sigue
+  // corriendo antes que ellas —Fastify ordena por ciclo de vida, no por orden de
+  // registro—, pero ponerlo aquí hace que al leer el fichero se vea que está puesto, y
+  // que nadie añada una ruta «arriba» creyendo que la esquiva.
+  registerAuth(app);
+
   await app.register(cors, { origin: true });
   await app.register(registerRoutes, { prefix: '/api' });
   // Basketball lives in its own namespace: no endpoint can return both sports.
@@ -305,15 +313,45 @@ async function main() {
   // any model claimed, so it gets its own namespace rather than living under one.
   await app.register(registerBetRoutes, { prefix: '/api/bets' });
 
-  app.get('/', async () => ({
-    name: 'tennis-predictor API',
-    docs:
-      'Tenis: /api/health, /api/tours, /api/matches/upcoming, /api/predictions/:id · ' +
-      'Baloncesto: /api/basketball/leagues, /api/basketball/games/upcoming · ' +
-      'Fútbol: /api/football/leagues, /api/football/fixtures/upcoming, /api/football/power',
-  }));
+  // Fly comprueba que la máquina vive pidiendo esto. Va sin contraseña a propósito (ver
+  // auth.ts) y no toca la base: solo dice que el proceso responde.
+  app.get('/healthz', async () => ({ ok: true }));
+
+  // La app construida, si la hay. En desarrollo no la hay y la sirve Vite, así que esto
+  // no se registra y `/` sigue devolviendo el índice de la API de abajo.
+  if (webBuildExists()) {
+    await registerStatic(app);
+    app.log.info(`Sirviendo la app construida desde ${WEB_DIST}`);
+  } else if (isProduction) {
+    // En producción esto NO es un detalle: significa que el despliegue responde a la API
+    // y devuelve 404 en la portada. Mejor no arrancar que quedar así.
+    throw new Error(
+      `No hay app construida en ${WEB_DIST}, y NODE_ENV=production.\n\n` +
+        'El contenedor tiene que construir el frontend (npm run build) antes de arrancar\n' +
+        'el servidor; si no, la URL contesta a /api pero no se puede abrir.',
+    );
+  }
+
+  // El índice de la API en `/` SOLO cuando no hay app que servir.
+  //
+  // Con las dos cosas registradas gana esta, porque una ruta explícita tiene prioridad
+  // sobre el comodín del plugin de estáticos — y entonces abrir la URL desplegada
+  // devuelve un JSON que describe la API en vez de la aplicación. Es el fallo más tonto
+  // posible («desplegado con éxito», imposible de abrir) y salió probando la portada, no
+  // leyendo el código.
+  if (!webBuildExists())
+    app.get('/', async () => ({
+      name: 'tennis-predictor API',
+      docs:
+        'Tenis: /api/health, /api/tours, /api/matches/upcoming, /api/predictions/:id · ' +
+        'Baloncesto: /api/basketball/leagues, /api/basketball/games/upcoming · ' +
+        'Fútbol: /api/football/leagues, /api/football/fixtures/upcoming, /api/football/power',
+    }));
 
   try {
+    // Antes de aceptar una sola conexión: si esto va a ser público y no hay contraseña,
+    // el proceso muere aquí en vez de quedarse abierto.
+    assertAuthConfigured();
     await app.listen({ port: env.port, host: '0.0.0.0' });
     app.log.info(`Tennis Predictor API listening on http://localhost:${env.port}`);
     startAutoRefresh((msg) => app.log.info(msg));
