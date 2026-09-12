@@ -306,13 +306,18 @@ if (!fs.existsSync(DB_PATH)) {
   if (anyDemo && key && remaining !== null && remaining > 0) {
     // Este es el quinto caso, y el más frustrante: todo correcto, datos viejos. Solo
     // se puede afirmar cuando la clave YA se ha validado contra la API en el paso 3.
+    // UN comando, no cinco. `npm run update-all` existe justo para esto y llegó después
+    // que este diagnóstico, que se quedó recomendando la lista larga. Cinco comandos
+    // encadenados a mano tienen dos problemas que el script resuelve: si el tercero
+    // falla, los dos últimos no se ejecutan —y no porque les pase nada—, y al terminar
+    // hay un muro de salida en vez de una tabla que diga cuál falló y cuánta cuota
+    // queda. Se deja la lista larga debajo porque sigue sirviendo para refrescar UN
+    // deporte suelto sin gastar en los otros cuatro.
     problem(
       'La clave funciona, pero lo guardado se descargó sin ella (o antes de ponerla)',
-      'npm run update-data:fb',
-      'npm run update-data:bb',
-      'npm run update-data:bsb',
-      'npm run update-data:naf',
-      'npm run update-data',
+      'npm run update-all',
+      '# ↑ los cinco deportes de una tirada. Gasta 5 peticiones de tu plan.',
+      '# Si solo quieres uno: update-data:fb · :bb · :bsb · :naf · o `npm run update-data` (tenis)',
     );
   }
 }
