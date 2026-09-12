@@ -227,6 +227,68 @@ Detalles y todas las mediciones en **[docs/NFL.md](docs/NFL.md)**.
 - Datos guardados localmente en **SQLite** (`data/tennis.db`) para no depender de llamadas
   repetidas a las APIs.
 
+## Repaso visual: cuatro cosas que estorbaban
+
+Medido en el navegador antes y después, no a ojo.
+
+### El muro ámbar encima de cada deporte
+
+El aviso del panel de sugerencias es de lo más valioso de la app —dice contra qué se ha
+medido el modelo, con cuántos partidos y qué **no** demuestra— y estaba en un solo párrafo
+de hasta doce líneas, en ámbar, antes de cualquier dato. En fútbol ocupaba media pantalla.
+El resultado práctico de un muro de texto es que se salta entero: el formato conseguía lo
+contrario de lo que pretendía.
+
+No se ha recortado ni una palabra. La **primera frase** queda a la vista, porque lleva el
+veredicto («este modelo NO le gana a la línea de cierre»), y el resto se despliega con *Ver
+contra qué se ha medido*. Comprobado en los cinco deportes: fútbol recupera 1.513
+caracteres al abrirlo, la NFL 520.
+
+El corte busca la primera frase **completa** —punto seguido de espacio y mayúscula— y no un
+número de caracteres: partir por la mitad produce un resumen que miente por omisión, y
+además dejaría cortadas cifras como `0.2115`.
+
+### Una diferencia de cero, pintada de rojo
+
+La tabla de sugerencias de la NFL enseñaba filas con **`-0.0 pp` en rojo**. El modelo y el
+precio coincidían hasta la décima, que es justo lo contrario de lo que el color grita. Por
+debajo de media décima, ahora es `0,0 pp` en tinta neutra.
+
+### La comparación modelo/mercado había que leerla
+
+Dos barras apiladas idénticas: para saber si el modelo se aparta del mercado había que leer
+«72,7 %» arriba, «75,8 %» abajo y restar. El dato que la tarjeta existe para dar —¿discrepan?—
+era el único que no se veía.
+
+Ahora el corte del mercado se dibuja **sobre** la barra del modelo, así que **la distancia
+es la discrepancia**, con la cifra al lado («mercado, a 3.1 pp»). Cuando coinciden, lo dice.
+
+### 700 píxeles de selector antes del primer partido
+
+En un teléfono de 390 px, las 17 ligas del fútbol con `flex-wrap` producían **nueve filas
+de pastillas**: más de una pantalla entera de selector antes de llegar a un partido. El
+selector era el contenido.
+
+| | antes | después |
+| --- | --- | --- |
+| alto del selector en móvil | ~700 px | **37 px** |
+| en escritorio | 74 px | 74 px (sin cambios) |
+
+Una sola fila que se desliza en horizontal por debajo de `sm`, y el `flex-wrap` de siempre
+a partir de ahí, donde caben en dos filas y verlas todas de golpe sí ayuda a elegir.
+
+### Y los nueve motivos de cada tarjeta
+
+El modelo produce hasta nueve motivos por partido y se pintaban todos iguales, uno detrás
+de otro. Con dos tarjetas por fila son dieciocho líneas de prosa a la misma altura, y
+encontrar la que mueve la predicción cuesta leerlas todas. El generador **ya los devuelve
+ordenados por importancia** y esa información se tiraba al pintarlos idénticos.
+
+Ahora se ven los cuatro primeros y el resto se despliega con el número al lado («Ver 4
+motivos más»). Cuatro y no tres: las tres primeras son casi siempre Elo, historial y forma
+—el esqueleto de cualquier predicción— y la cuarta es la primera que distingue *este*
+partido de otro.
+
 ## La clasificación por Elo salía plegada, y nadie la encontraba
 
 Estaba montada al final de cada pestaña, detrás de un título gris que era un botón, y con

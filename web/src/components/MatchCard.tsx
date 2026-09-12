@@ -122,14 +122,7 @@ export default function MatchCard({
               Qué es lo más probable
             </div>
             <p className="text-[16px] font-medium text-[#e8eaed]">{prediction.summary.headline}</p>
-            <ul className="mt-2 space-y-1">
-              {prediction.summary.bullets.map((b, i) => (
-                <li key={i} className="flex gap-2 text-[14px] text-[#c3c9d1]">
-                  <span className="text-[#5c636c]">•</span>
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
+            <Bullets items={prediction.summary.bullets} />
           </div>
 
           <button
@@ -324,5 +317,55 @@ function PlayerName({
       {facts.length > 0 && <div className="text-[14px] text-[#9aa1ac]">{facts.join(' · ')}</div>}
       <div className="text-[14px] text-[#7b828d]">{odds != null ? `cuota ${odds}` : 'sin cuota'}</div>
     </div>
+  );
+}
+
+/**
+ * Los motivos, con los cuatro primeros a la vista y el resto a un clic.
+ *
+ * ===========================================================================
+ * NUEVE VIÑETAS DEL MISMO PESO NO SON UNA LISTA, SON UN PÁRRAFO
+ * ===========================================================================
+ * El modelo produce hasta nueve motivos por partido —Elo, historial, forma, cara a cara,
+ * set decisivo, torneo, señales físicas, comparación con el mercado— y se pintaban todos
+ * iguales, uno detrás de otro. Con dos tarjetas por fila eso son dieciocho líneas de
+ * prosa a la misma altura, y encontrar la que mueve la predicción cuesta leerlas todas.
+ *
+ * El generador YA las devuelve en orden de importancia, y esa información se estaba
+ * tirando al pintarlas idénticas. Ahora las cuatro primeras se ven y las demás se
+ * despliegan: no se pierde ni un motivo, pero la tarjeta vuelve a leerse de un vistazo.
+ *
+ * CUATRO, y no tres ni cinco: las tres primeras son casi siempre Elo, historial y forma
+ * —el esqueleto de cualquier predicción— y la cuarta es la primera que distingue ESTE
+ * partido de otro. Cortar en tres deja la lista genérica.
+ *
+ * Y el contador dice cuántas faltan. «Ver más» sin número obliga a pulsar para saber si
+ * merece la pena.
+ */
+function Bullets({ items }: { items: string[] }) {
+  const [open, setOpen] = useState(false);
+  const VISIBLES = 4;
+  const ocultos = items.length - VISIBLES;
+  const mostrados = open ? items : items.slice(0, VISIBLES);
+
+  return (
+    <>
+      <ul className="mt-2 space-y-1">
+        {mostrados.map((b, i) => (
+          <li key={i} className="flex gap-2 text-[14px] text-[#c3c9d1]">
+            <span className="text-[#5c636c]">•</span>
+            <span>{b}</span>
+          </li>
+        ))}
+      </ul>
+      {ocultos > 0 && (
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="mt-1.5 text-[13px] text-[#7b828d] underline-offset-2 hover:text-[#c3c9d1] hover:underline"
+        >
+          {open ? 'Ver menos' : `Ver ${ocultos} motivo${ocultos === 1 ? '' : 's'} más`}
+        </button>
+      )}
+    </>
   );
 }

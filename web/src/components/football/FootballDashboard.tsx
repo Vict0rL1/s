@@ -203,7 +203,19 @@ export default function FootballDashboard() {
 
       {/* ---- LEAGUE SUB-TABS ---- */}
       {selectable.length > 0 ? (
-        <nav className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Ligas">
+        <nav
+          // UNA FILA QUE SE DESLIZA EN EL MÓVIL, no nueve que se apilan.
+          //
+          // Con 17 ligas, `flex-wrap` en una pantalla de 390 px produce nueve filas de
+          // pastillas: 700 píxeles de selector —más de una pantalla entera— antes de
+          // llegar al primer partido. El selector acababa siendo el contenido.
+          //
+          // En ancho de teléfono se convierte en una sola fila con desplazamiento
+          // horizontal; desde `sm` vuelve a envolver, porque ahí caben en dos filas y
+          // verlas todas de golpe sí ayuda a elegir. `snap` para que al soltar el dedo
+          // quede una pastilla entera a la vista y no cortada por la mitad.
+          className="mb-4 flex snap-x gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:pb-0 [&::-webkit-scrollbar]:hidden"
+          role="tablist" aria-label="Ligas">
           {selectable.map((l) => {
             const on = league === l.id;
             return (

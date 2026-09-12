@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Prediction } from '../lib/api';
 import { pct } from '../lib/format';
 
@@ -12,20 +13,41 @@ function SplitBar({
   leftLabel,
   rightLabel,
   title,
+  marker,
+  right,
 }: {
   leftFrac: number | null;
   leftLabel: string;
   rightLabel: string;
   title: string;
+  /**
+   * Dónde parte la OTRA barra, dibujado sobre esta.
+   *
+   * ===========================================================================
+   * LA COMPARACIÓN ERA LA GRACIA Y HABÍA QUE LEERLA
+   * ===========================================================================
+   * Dos barras apiladas con el mismo aspecto: para saber si el modelo se aparta del
+   * mercado había que leer «72,7 %» arriba, «75,8 %» abajo y restar. El dato que la
+   * tarjeta existe para dar —¿discrepan?— era el único que no se veía.
+   *
+   * Con la marca del mercado encima de la barra del modelo, la distancia ES la
+   * discrepancia. Un partido donde coinciden enseña la marca pegada al corte; uno donde
+   * el modelo se aparta seis puntos la enseña a seis puntos. Sin leer nada.
+   */
+  marker?: number | null;
+  /** Texto a la derecha del título, para la diferencia. */
+  right?: ReactNode;
 }) {
   const hasData = leftFrac != null;
   const left = hasData ? Math.round(leftFrac * 1000) / 10 : 50;
+  const markerPct = marker != null ? Math.round(marker * 1000) / 10 : null;
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-[14px] text-[#9aa1ac]">
+      <div className="mb-1 flex items-center justify-between gap-2 text-[14px] text-[#9aa1ac]">
         <span>{title}</span>
+        {right}
       </div>
-      <div className="flex h-6 w-full overflow-hidden rounded-md ring-1 ring-white/[0.07]">
+      <div className="relative flex h-6 w-full overflow-hidden rounded-md ring-1 ring-white/[0.07]">
         <div
           className="flex items-center justify-start pl-2 text-[14px] font-semibold text-slate-900"
           style={{
@@ -46,6 +68,15 @@ function SplitBar({
         >
           {hasData && 100 - left >= 18 ? rightLabel : ''}
         </div>
+        {markerPct != null && (
+          // Blanco sobre los dos colores de la barra, con una sombra fina para que se
+          // vea igual sobre el azul que sobre el naranja.
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 w-[2px] bg-white/80"
+            style={{ left: `calc(${markerPct}% - 1px)`, boxShadow: '0 0 0 1px rgba(0,0,0,0.45)' }}
+          />
+        )}
       </div>
     </div>
   );
@@ -61,6 +92,10 @@ export default function ProbabilityBars({ prediction }: { prediction: Prediction
   const market = prediction.market.market;
   const marketLeft = market ? market.implied1 : null;
 
+  // La diferencia, en puntos porcentuales y con su signo. Por debajo de medio punto no
+  // se anuncia nada: «+0,0 pp» ocupa sitio para decir que no hay diferencia.
+  const gap = marketLeft != null ? (modelLeft - marketLeft) * 100 : null;
+
   return (
     <div className="space-y-3">
       <SplitBar
@@ -68,6 +103,17 @@ export default function ProbabilityBars({ prediction }: { prediction: Prediction
         leftFrac={modelLeft}
         leftLabel={pct(prediction.model.prob1, 1)}
         rightLabel={pct(prediction.model.prob2, 1)}
+        marker={marketLeft}
+        right={
+          gap != null && Math.abs(gap) >= 0.5 ? (
+            <span className="tabular-nums text-[13px] text-[#7b828d]">
+              <span className="mr-1 inline-block h-[9px] w-[2px] translate-y-[1px] bg-white/80" />
+              mercado, a {Math.abs(gap).toFixed(1)} pp
+            </span>
+          ) : gap != null ? (
+            <span className="text-[13px] text-[#7b828d]">coincide con el mercado</span>
+          ) : undefined
+        }
       />
       <SplitBar
         title="Mercado (odds sin vig)"

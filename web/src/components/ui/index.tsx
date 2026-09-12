@@ -1003,6 +1003,57 @@ export function StaleHistoryWarning({
  * the model does not beat the closing line, which is measured and true, and a
  * reader who scrolls straight to the numbers should hit it first.
  */
+/**
+ * La advertencia del panel de sugerencias: la primera frase a la vista, el resto a un clic.
+ *
+ * ===========================================================================
+ * ERA UN MURO Y POR ESO NO LO LEÍA NADIE
+ * ===========================================================================
+ * Este texto es de lo más valioso de la app —dice contra qué se ha medido el modelo, con
+ * cuántos partidos y qué NO demuestra— y estaba en un solo párrafo de hasta doce líneas,
+ * en ámbar, encima de la tabla y antes de cualquier dato. En fútbol ocupaba media
+ * pantalla. El resultado práctico de un muro de texto es que se salta entero, así que el
+ * formato estaba consiguiendo lo contrario de lo que pretendía.
+ *
+ * No se recorta ni una palabra: se ordena. La PRIMERA FRASE queda a la vista, porque es
+ * la que lleva el veredicto («este modelo NO le gana a la línea de cierre»), y el resto
+ * —los números, los p-valores, las condiciones— se despliega. Quien quiera la evidencia
+ * la tiene a un clic; quien solo quiera saber si fiarse, ya lo sabe.
+ *
+ * El desglose se corta por la primera frase completa, no por un número de caracteres:
+ * cortar a mitad de frase produce un resumen que miente por omisión.
+ */
+function CaveatNote({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  // Busca el primer punto seguido de espacio y mayúscula. Un `.` dentro de «0.2115» o de
+  // «p = 0,0005» no separa frases, y partir ahí dejaría a la vista media cifra.
+  const corte = text.search(/\.\s+(?=[A-ZÁÉÍÓÚÑ¡¿«])/);
+  const primera = corte > 0 ? text.slice(0, corte + 1) : text;
+  const resto = corte > 0 ? text.slice(corte + 1).trim() : '';
+
+  return (
+    <div className="px-4 py-3">
+      <p className="text-[13px] leading-relaxed text-amber-200/80">
+        <span aria-hidden>⚠️ </span>
+        {primera}
+      </p>
+      {resto && (
+        <>
+          {open && (
+            <p className="mt-2 text-[13px] leading-relaxed text-amber-200/70">{resto}</p>
+          )}
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="mt-1.5 text-[12px] font-medium text-amber-200/60 underline-offset-2 hover:text-amber-200 hover:underline"
+          >
+            {open ? 'Ocultar el detalle' : 'Ver contra qué se ha medido'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function PicksPanel({
   picks,
   basis,
@@ -1097,9 +1148,7 @@ export function PicksPanel({
 
       {open && (
         <div className="border-t border-white/[0.07]">
-          <p className="px-4 py-3 text-[13px] leading-relaxed text-amber-200/80">
-            ⚠️ {caveat}
-          </p>
+          <CaveatNote text={caveat} />
 
           {/* Horizontal scroll on the table only, never the page — a wide row must
               not be able to push the whole layout sideways on a phone. */}
@@ -1145,9 +1194,27 @@ export function PicksPanel({
                     </td>
                     <td
                       className="px-3 py-2.5 text-right font-semibold tabular-nums"
-                      style={{ color: p.edge == null ? INK.muted : p.edge > 0 ? PROFIT_COLOR : LOSS_COLOR }}
+                      // Una diferencia que REDONDEA A CERO no es una discrepancia, y
+                      // pintarla de rojo la anuncia como un problema. La NFL enseñaba
+                      // filas con «-0.0 pp» en rojo: el modelo y el precio coincidían
+                      // hasta la décima, que es justo lo contrario de lo que el color
+                      // grita. Por debajo de media décima, tinta neutra.
+                      style={{
+                        color:
+                          p.edge == null
+                            ? INK.muted
+                            : Math.abs(p.edge) < 0.005
+                              ? INK.muted
+                              : p.edge > 0
+                                ? PROFIT_COLOR
+                                : LOSS_COLOR,
+                      }}
                     >
-                      {p.edge == null ? '—' : `${p.edge > 0 ? '+' : ''}${(p.edge * 100).toFixed(1)} pp`}
+                      {p.edge == null
+                        ? '—'
+                        : Math.abs(p.edge) < 0.005
+                          ? '0,0 pp'
+                          : `${p.edge > 0 ? '+' : ''}${(p.edge * 100).toFixed(1)} pp`}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-[#c3c9d1]">
                       {p.fairOdds.toFixed(2)}
