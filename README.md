@@ -327,6 +327,45 @@ desconocida, que es lo que ve una base anterior a este cambio). Y `fuente_falla`
 registró sola en una prueba real: clave puesta, proveedor inalcanzable, `HTTP 403` guardado
 como detalle.
 
+## «Quiero las cuotas reales»: `npm run odds`
+
+```bash
+npm run odds
+```
+
+Pide las cuotas de los cinco deportes y dice, deporte a deporte, si han llegado y —cuando
+no— **por qué no**:
+
+```
+  Fútbol      ✓ 84 partidos con cuotas reales
+  Baloncesto  · 8 de demostración
+              ↳ no hay ningún partido con precio publicado
+  NFL         · sin línea publicada (el calendario sigue siendo real)
+  Tenis       ✓ 12 partidos con cuotas reales
+──────────────────────────────────────────────────────────────
+Parcial: 3 de 5 con cuotas reales (Fútbol, Béisbol, Tenis).
+```
+
+Existía un hueco que ni `update-all` ni `doctor` tapaban. `update-all` reingiere el
+**histórico** de los cinco deportes —un centenar de megas y dos minutos— para acabar
+refrescando las cuotas al final: si lo único que ha cambiado es que ahora hay una clave en
+el `.env`, ese histórico ya estaba bien y se vuelve a bajar entero para nada. Y `doctor`
+diagnostica pero no arregla, a propósito.
+
+Cuesta **5 peticiones**, una por deporte, y lo dice antes de gastarlas. Al terminar recuerda
+cuántas quedan.
+
+Tres detalles que no son de estilo:
+
+- **Un deporte que revienta no para a los otros cuatro.** Cada uno habla con un endpoint
+  distinto del proveedor, y el fallo de uno no dice nada de los demás.
+- **La NFL nunca aparece en «qué hacer».** Su estado sin precios es «sin línea publicada»,
+  y sus partidos siguen siendo reales: meterla en la lista de problemas mandaría a buscar
+  una avería que no existe.
+- **Sale con error solo si NINGUNO lo consigue.** Un parcial es un resultado legítimo —
+  tener cuotas de tres deportes y no de los otros dos suele ser el calendario — y devolver
+  error ahí rompería cualquier script que encadene esto.
+
 ## Por qué ESTE deporte sale en demostración (`npm run doctor`)
 
 Cada deporte guardaba `*_odds_source = 'fixture'`, que dice **que** está en demostración.
