@@ -327,6 +327,39 @@ desconocida, que es lo que ve una base anterior a este cambio). Y `fuente_falla`
 registró sola en una prueba real: clave puesta, proveedor inalcanzable, `HTTP 403` guardado
 como detalle.
 
+## Por qué ESTE deporte sale en demostración (`npm run doctor`)
+
+Cada deporte guardaba `*_odds_source = 'fixture'`, que dice **que** está en demostración.
+Las causas son cuatro y piden cosas opuestas — una se arregla y otra se espera — así que
+ahora se guarda también **cuál**:
+
+| causa | qué pasa | qué hacer |
+| --- | --- | --- |
+| `sin_clave` | falta `ODDS_API_KEY` | ponerla en `.env` |
+| `fuente_falla` | el proveedor no contestó: cuota agotada, clave inválida o sin red | mirar el detalle, que trae el error literal |
+| `sin_ligas` | el proveedor contestó y **ninguna** de las competiciones que ofrece es de las configuradas | nada en el `.env`: o no hay liga en juego, o al proveedor le cambió la clave del deporte |
+| `sin_eventos` | reconocimos la liga y no hay ni un partido con precio | esperar |
+
+`sin_ligas` era la que más falta hacía y la que **no se podía diagnosticar de ninguna
+manera**: la ingesta hace `if (!league) continue;` sobre cada competición que el proveedor
+lista, así que si ninguna casa las ofrece bajo la clave que el proyecto conoce, las 140
+filas del fútbol caen a demostración **sin una sola línea de log**. Por eso esa causa
+guarda además las claves que el proveedor sí ofreció, que es el dato con el que se
+arregla.
+
+`npm run doctor` lo enseña debajo de cada deporte:
+
+```
+✗ Fútbol      140 de DEMOSTRACIÓN
+  ↳ el proveedor no contestó (cuota agotada, clave inválida o sin red)
+    Odds API /sports: HTTP 403
+✗ Tenis        27 de DEMOSTRACIÓN
+  ↳ no hay ODDS_API_KEY
+```
+
+La NFL no aparece nunca aquí: su estado sin precios es «solo calendario», que no es una
+cuota inventada y no se cuenta como demostración.
+
 ## «Solo me salen dos partidos»
 
 La cabecera dice 58.367 partidos y la lista enseña dos. Son dos cosas distintas y la

@@ -8,6 +8,7 @@
 // Rows go to fb_upcoming only: the three sports never share a fixtures table.
 
 import { getDb, setMeta } from '../../db.ts';
+import { recordOddsReason, type OddsReason } from '../../oddsReason.ts';
 import { pruneUpcoming } from '../../freshness.ts';
 import { env, footballConfig } from '../../config.ts';
 import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
@@ -205,16 +206,30 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
   // origen de cada evento, no con este cronómetro.
   let fetchDoneAt = 0;
 
+  // Por qué acaba en demostración, si acaba. Se va afinando según avanza: empieza en
+  // «no hay clave» y cada etapa que se supera la sustituye por la siguiente causa
+  // posible. Sin esto, las 140 filas de demostración del fútbol no tenían explicación
+  // en ninguna parte — ni en el log, porque las ligas que no se reconocen se descartan
+  // con un `continue` mudo.
+  let motivo: OddsReason = 'sin_clave';
+  let detalle = '';
+
   if (env.oddsApiKey) {
+    motivo = 'fuente_falla';
     let sports: { key: string }[] = [];
     try {
       sports = await fetchActive();
+      motivo = 'sin_ligas';
     } catch (e) {
+      detalle = (e as Error).message;
       process.stderr.write(`  no pude listar ligas de fútbol: ${(e as Error).message}\n`);
     }
+    const reconocidas: string[] = [];
     for (const s of sports) {
       const league = known.get(s.key);
       if (!league) continue;
+      reconocidas.push(s.key);
+      motivo = 'sin_eventos';
       try {
         const events = await fetchLive(s.key);
         if (events.length) {
@@ -222,8 +237,19 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
           source = 'live';
         }
       } catch (e) {
+        motivo = 'fuente_falla';
+        detalle = `${s.key}: ${(e as Error).message}`;
         process.stderr.write(`  odds de ${s.key} fallaron: ${(e as Error).message}\n`);
       }
+    }
+    if (motivo === 'sin_ligas') {
+      // EL DATO CON EL QUE SE ARREGLA: qué ofreció el proveedor frente a lo que sabemos
+      // traducir. Sin los nombres no hay forma de saber si la liga está fuera de
+      // temporada o si al proveedor le cambió la clave del deporte.
+      detalle =
+        `el proveedor ofrece ${sports.length} competiciones y ninguna coincide con las ` +
+        `${known.size} configuradas. Ofrece: ${sports.map((x) => x.key).slice(0, 8).join(', ')}` +
+        (sports.length > 8 ? '…' : '');
     }
     fetchDoneAt = Date.now();
   }
@@ -389,6 +415,7 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
     }
     setMeta('fb_odds_source', source);
     setMeta('fb_odds_refreshed_at', new Date().toISOString());
+    recordOddsReason('fb_', source === 'live' ? null : motivo, detalle);
     return { source, count, leagues: [...perLeague.keys()], promoted };
   } catch (e) {
     db.exec('ROLLBACK');

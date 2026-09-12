@@ -16,6 +16,7 @@
 // ===========================================================================
 
 import { getDb, setMeta } from '../../db.ts';
+import { recordOddsReason, type OddsReason } from '../../oddsReason.ts';
 import { pruneUpcoming } from '../../freshness.ts';
 import { basketballConfig, env } from '../../config.ts';
 import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
@@ -197,16 +198,25 @@ export async function refreshBasketballOdds(): Promise<BasketballOddsResult> {
   const perLeague = new Map<LeagueId, AggregatedEvent[]>();
   let source: 'live' | 'fixture' = 'fixture';
 
+  // La causa, afinada por etapas. Ver `oddsReason.ts`: sin esto, «11 de DEMOSTRACIÓN» no
+  // distingue una liga fuera de temporada de una clave agotada.
+  let motivo: OddsReason = 'sin_clave';
+  let detalle = '';
+
   if (env.oddsApiKey) {
+    motivo = 'fuente_falla';
     let sports: SportListing[] = [];
     try {
       sports = await fetchActiveBasketballSports();
+      motivo = 'sin_ligas';
     } catch (e) {
+      detalle = (e as Error).message;
       process.stderr.write(`  no pude listar deportes de baloncesto: ${(e as Error).message}\n`);
     }
     for (const sport of sports) {
       const league = known.get(sport.key);
       if (!league) continue;
+      motivo = 'sin_eventos';
       try {
         const events = await fetchLive(sport.key);
         if (events.length) {
@@ -214,8 +224,16 @@ export async function refreshBasketballOdds(): Promise<BasketballOddsResult> {
           source = 'live';
         }
       } catch (e) {
+        motivo = 'fuente_falla';
+        detalle = `${sport.key}: ${(e as Error).message}`;
         process.stderr.write(`  odds de ${sport.key} fallaron: ${(e as Error).message}\n`);
       }
+    }
+    if (motivo === 'sin_ligas') {
+      detalle =
+        `el proveedor ofrece ${sports.length} competiciones y ninguna coincide con las ` +
+        `${known.size} configuradas. Ofrece: ${sports.map((x) => x.key).slice(0, 8).join(', ')}` +
+        (sports.length > 8 ? '…' : '');
     }
   }
 
@@ -265,6 +283,7 @@ export async function refreshBasketballOdds(): Promise<BasketballOddsResult> {
     }
     db.exec('COMMIT');
     setMeta('bb_odds_source', source);
+    recordOddsReason('bb_', source === 'live' ? null : motivo, detalle);
     setMeta('bb_odds_refreshed_at', new Date().toISOString());
     return { source, count, leagues: [...perLeague.keys()] };
   } catch (e) {

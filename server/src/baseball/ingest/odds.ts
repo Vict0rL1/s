@@ -13,6 +13,7 @@
 // ingest that everything else rests on IS real and was validated game by game.
 
 import { getDb, setMeta } from '../../db.ts';
+import { recordOddsReason, type OddsReason } from '../../oddsReason.ts';
 import { pruneUpcoming } from '../../freshness.ts';
 import { env, baseballConfig } from '../../config.ts';
 import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
@@ -274,9 +275,21 @@ export async function refreshBaseballOdds(): Promise<BaseballOddsResult> {
   const perLeague = new Map<LeagueId, AggregatedEvent[]>();
   let source: 'live' | 'fixture' = 'fixture';
 
+  // La causa de la demostración, por etapas. Ver `oddsReason.ts`.
+  let motivo: OddsReason = 'sin_clave';
+  let detalle = '';
+
   if (env.oddsApiKey) {
+    motivo = 'fuente_falla';
     try {
-      for (const s of await fetchActive()) {
+      const activos = await fetchActive();
+      // `fetchActive` ya filtra por las ligas conocidas, así que una lista vacía aquí
+      // significa «el proveedor no ofrece ninguna de las nuestras», no «falló».
+      motivo = activos.length === 0 ? 'sin_ligas' : 'sin_eventos';
+      if (activos.length === 0) {
+        detalle = 'el proveedor no lista ninguna liga de béisbol de las configuradas';
+      }
+      for (const s of activos) {
         const league = byKey.get(s.key)!;
         const events = await fetchLive(s.key);
         if (events.length === 0) continue;
@@ -284,6 +297,8 @@ export async function refreshBaseballOdds(): Promise<BaseballOddsResult> {
         source = 'live';
       }
     } catch (e) {
+      motivo = 'fuente_falla';
+      detalle = (e as Error).message;
       console.warn(`⚠️  Odds API falló, se usarán partidos demo: ${(e as Error).message}`);
     }
   }
@@ -353,6 +368,7 @@ export async function refreshBaseballOdds(): Promise<BaseballOddsResult> {
   }
 
   setMeta('bsb_odds_source', source);
+  recordOddsReason('bsb_', source === 'live' ? null : motivo, detalle);
   setMeta('bsb_odds_refreshed_at', now);
   setMeta('bsb_probables', String(probables.games));
   return { source, count, leagues, withStarters };

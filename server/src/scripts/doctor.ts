@@ -41,6 +41,7 @@ import { env, ROOT, DB_PATH } from '../config.ts';
 import { getDb, getMeta } from '../db.ts';
 import { ODDS_API_BASE } from '../oddsQuota.ts';
 import { DEMO_SOURCE } from '../freshness.ts';
+import { readOddsReason, REASON_TEXT, type SportPrefix } from '../oddsReason.ts';
 
 const NO_NET = process.argv.includes('--sin-red') || process.argv.includes('--no-net');
 
@@ -251,12 +252,14 @@ if (!fs.existsSync(DB_PATH)) {
   // nombre del origen daba "32 partidos con cuotas REALES" para 32 filas con las
   // cuotas a NULL, que es justo la clase de mentira tranquilizadora que este script
   // existe para no contar.
-  const sports: { name: string; table: string; meta: string; price: string; cmd: string }[] = [
-    { name: 'Fútbol', table: 'fb_upcoming', meta: 'fb_odds_source', price: 'odds_home', cmd: 'npm run update-data:fb' },
-    { name: 'Baloncesto', table: 'bb_upcoming', meta: 'bb_odds_source', price: 'home_odds', cmd: 'npm run update-data:bb' },
-    { name: 'Béisbol', table: 'bsb_upcoming', meta: 'bsb_odds_source', price: 'odds_home', cmd: 'npm run update-data:bsb' },
-    { name: 'NFL', table: 'naf_upcoming', meta: 'naf_odds_source', price: 'odds_home', cmd: 'npm run update-data:naf' },
-    { name: 'Tenis', table: 'upcoming_matches', meta: 'odds_source', price: 'p1_odds', cmd: 'npm run update-data' },
+  const sports: {
+    name: string; table: string; meta: string; price: string; cmd: string; prefix: SportPrefix;
+  }[] = [
+    { name: 'Fútbol', table: 'fb_upcoming', meta: 'fb_odds_source', price: 'odds_home', cmd: 'npm run update-data:fb', prefix: 'fb_' },
+    { name: 'Baloncesto', table: 'bb_upcoming', meta: 'bb_odds_source', price: 'home_odds', cmd: 'npm run update-data:bb', prefix: 'bb_' },
+    { name: 'Béisbol', table: 'bsb_upcoming', meta: 'bsb_odds_source', price: 'odds_home', cmd: 'npm run update-data:bsb', prefix: 'bsb_' },
+    { name: 'NFL', table: 'naf_upcoming', meta: 'naf_odds_source', price: 'odds_home', cmd: 'npm run update-data:naf', prefix: 'naf_' },
+    { name: 'Tenis', table: 'upcoming_matches', meta: 'odds_source', price: 'p1_odds', cmd: 'npm run update-data', prefix: '' },
   ];
   let anyDemo = false;
   for (const s of sports) {
@@ -295,6 +298,15 @@ if (!fs.existsSync(DB_PATH)) {
     if (demo > 0) {
       anyDemo = true;
       bad(line);
+      // POR QUÉ, no solo que sí. Es lo que distingue «te falta la clave» de «no hay
+      // liga en juego», que piden cosas opuestas: una se arregla y la otra se espera.
+      const { reason, detail } = readOddsReason(s.prefix);
+      if (reason) {
+        info(`↳ ${REASON_TEXT[reason]}`);
+        if (detail) info(`  ${detail}`);
+      } else {
+        info('↳ sin causa registrada — vuelve a actualizar este deporte y saldrá');
+      }
     } else if (real === 0) {
       // Ni inventados ni reales: hay partidos, no hay mercado con el que comparar.
       // No es un fallo de configuración, así que no entra en QUÉ HACER.
