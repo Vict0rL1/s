@@ -48,6 +48,35 @@ necesitarías** para que la apuesta valga la pena según el modelo. Ver
 
 ---
 
+## Los tres comandos
+
+Todo lo demás de este README es detalle. Esto es lo que se escribe:
+
+```bash
+npm run go       # abrir y actualizar la app. El único que hace falta saber.
+npm run odds     # pedir las cuotas reales, cuando salen «de demostración».
+npm run phone    # abrirla en el móvil, en la misma wifi.
+```
+
+**`npm run go`** hace todo: se pone en la rama correcta, se trae los cambios, instala lo
+que falte, comprueba la base de datos y arranca. Si algo no está, lo dice y dice cómo se
+arregla en vez de fallar a secas. Sirve igual para abrirla y para actualizarla — es el
+mismo comando las dos veces. Detalle en [«Un solo comando»](#un-solo-comando-npm-run-go).
+
+**`npm run odds`** es para una sola cosa: la app dice «cuotas de demostración» y quieres
+las de verdad. Pide las de los cinco deportes y dice, deporte a deporte, si han llegado y
+—cuando no— por qué. Cuesta cinco peticiones del plan y lo avisa antes de gastarlas.
+Detalle en [«Quiero las cuotas reales»](#quiero-las-cuotas-reales-npm-run-odds).
+
+> **El caso que más despista:** pones la clave en el `.env`, reinicias, y la app sigue
+> diciendo demo. No está rota. Las cuotas guardadas se bajaron **antes** de que hubiera
+> clave, y nada las vuelve a pedir solo por reiniciar. `npm run odds` las pide. Desde esta
+> versión `npm run go` detecta justo ese caso y lo dice con el comando al lado.
+
+Y si algo sigue sin cuadrar, **`npm run doctor`** diagnostica sin gastar ni una petición.
+
+---
+
 ## Qué incluye — ⚽ Fútbol
 
 - **Las principales ligas del mundo, cada una en su sub-pestaña** dentro de la pestaña de fútbol —
