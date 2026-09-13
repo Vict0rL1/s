@@ -91,7 +91,12 @@ for (const d of DEPORTES) {
       // La NFL sin línea publicada no entra en «qué hacer»: no hay nada que arreglar.
       // Sus partidos siguen siendo reales, solo que sin precio — y meterla en la lista
       // de problemas mandaría a buscar una avería que no existe.
-      nada: r.source === 'schedule',
+      //
+      // Pero SOLO cuando la causa es que no hay línea. Si la NFL se quedó sin precio
+      // porque falta la clave o porque el proveedor no contestó, eso sí tiene arreglo y
+      // es el mismo que el de los otros cuatro: excluirla ahí escondía la única avería
+      // real detrás de una frase tranquilizadora.
+      nada: r.source === 'schedule' && (reason === 'sin_eventos' || reason === 'sin_ligas' || reason == null),
     });
     const nombre = `  ${d.nombre.padEnd(11)}`;
     console.log(

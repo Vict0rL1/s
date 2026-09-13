@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate, LeagueFlag} from '../ui';
+  EmptySlate, LeagueFlag, DemoOddsNote} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, baseballPicks } from '../../lib/picks';
 import { useStake } from '../../lib/useStake';
@@ -153,6 +153,15 @@ export default function BaseballDashboard() {
       {/* The ranked-markets panel. Built from the SAME rows the cards below
           render, so the two can never disagree about a number. */}
       <PicksPanel {...picks} caveat={CAVEATS.baseball} demoOdds={demoOdds} stake={stake} onStakeChange={setStake} />
+
+      {demoOdds && (
+        <DemoOddsNote
+          reason={meta?.oddsFallbackReason}
+          detail={meta?.oddsFallbackDetail}
+          hasKey={meta?.hasOddsKey ?? false}
+          comando="npm run odds"
+        />
+      )}
 
       {error && (
         <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[15px] text-rose-200">

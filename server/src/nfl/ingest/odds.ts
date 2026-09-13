@@ -17,6 +17,7 @@ import { pruneUpcoming } from '../../freshness.ts';
 import { env, nflConfig } from '../../config.ts';
 import { activeKeys, creditCost, fetchOdds } from '../../oddsQuota.ts';
 import { resolveTeam } from '../repo.ts';
+import { recordOddsReason } from '../../oddsReason.ts';
 import type { LeagueId } from '../types.ts';
 
 const median = (xs: number[]): number => {
@@ -121,7 +122,22 @@ async function fetchLive(
  * and once without.
  */
 export async function refreshOdds(manual = false): Promise<number> {
-  if (!env.oddsApiKey) return 0;
+  // ===========================================================================
+  // POR QUÉ ESTA FUNCIÓN, QUE DEVUELVE UN NÚMERO, TAMBIÉN DEJA ESCRITA LA CAUSA
+  // ===========================================================================
+  // Devuelve cuántos partidos consiguieron precio, y los otros cuatro deportes devuelven
+  // 'live' | 'fixture'. Ese cero es AMBIGUO de una forma que los otros no: puede ser que
+  // falte la clave, que el proveedor no conteste, que la NFL no esté en temporada —lo
+  // normal de marzo a agosto— o que esté en temporada y ninguna casa haya publicado
+  // línea todavía. Las cuatro se ven igual desde fuera y piden cosas distintas.
+  //
+  // La firma NO se cambia: media app depende de que devuelva un número. La causa se deja
+  // en meta, igual que en los otros cuatro deportes, y de ahí la leen `npm run odds`,
+  // `npm run doctor` y la pestaña.
+  if (!env.oddsApiKey) {
+    recordOddsReason('naf_', 'sin_clave');
+    return 0;
+  }
   const db = getDb();
   const byKey = leagueByKey();
   const stamp = new Date().toISOString();
@@ -134,10 +150,12 @@ export async function refreshOdds(manual = false): Promise<number> {
     active = await activeKeys(byKey.keys());
   } catch (err) {
     console.warn(`[nfl] no se pudo listar deportes activos: ${(err as Error).message}`);
+    recordOddsReason('naf_', 'fuente_falla', (err as Error).message);
     return 0;
   }
   if (active.size === 0) {
     console.log('[nfl] ninguna competición en temporada; no se gasta cupo.');
+    recordOddsReason('naf_', 'sin_ligas', 'ninguna competición de la NFL en temporada ahora mismo');
     return 0;
   }
   console.log(
@@ -207,5 +225,8 @@ export async function refreshOdds(manual = false): Promise<number> {
     }
   }
 
+  // Borrar la causa cuando vuelve a funcionar importa tanto como guardarla: una causa
+  // que sobrevive a un refresco correcto manda a arreglar algo que ya está bien.
+  recordOddsReason('naf_', stored > 0 ? null : 'sin_eventos');
   return stored;
 }

@@ -98,6 +98,11 @@ export async function registerNflRoutes(app: FastifyInstance): Promise<void> {
     return {
       updatedAt: getMeta('naf:updatedAt'),
       oddsRefreshedAt: lastOddsUpdate('nfl'),
+      // POR QUÉ no hay línea, no solo que no la haya. En la NFL el cero es más
+      // ambiguo que en los demás: fuera de temporada es lo esperado y en temporada
+      // es un aviso. Ver `oddsReason.ts`.
+      oddsFallbackReason: getMeta('naf_odds_fallback_reason') || null,
+      oddsFallbackDetail: getMeta('naf_odds_fallback_detail') || null,
       hasOddsKey: !!env.oddsApiKey,
       autoRefreshMinutes: env.autoRefreshMinutes,
       counts: { teams: countTeams(), games: countGames() },

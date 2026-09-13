@@ -102,6 +102,10 @@ export async function registerFootballRoutes(app: FastifyInstance): Promise<void
     dataSource: getMeta('fb_data_source') ?? 'unknown',
     updatedAt: getMeta('fb_updated_at'),
     oddsSource: getMeta('fb_odds_source'),
+    // POR QUÉ está en demostración, no solo QUE lo está. Ver `oddsReason.ts`: las
+    // cuatro causas piden cosas distintas y desde la pantalla se ven todas iguales.
+    oddsFallbackReason: getMeta('fb_odds_fallback_reason') || null,
+    oddsFallbackDetail: getMeta('fb_odds_fallback_detail') || null,
     oddsRefreshedAt: getMeta('fb_odds_refreshed_at'),
     hasOddsKey: !!env.oddsApiKey,
     squads: {

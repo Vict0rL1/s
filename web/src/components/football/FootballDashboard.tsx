@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { reportClientLatency } from '../../lib/liveOdds';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate, LeagueFlag} from '../ui';
+  EmptySlate, LeagueFlag, DemoOddsNote} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, footballPicks } from '../../lib/picks';
 import { useStake } from '../../lib/useStake';
@@ -268,6 +268,15 @@ export default function FootballDashboard() {
       {/* The ranked-markets panel. Built from the SAME rows the cards below render,
           so the two can never disagree about a number. */}
       <PicksPanel {...picks} caveat={CAVEATS.football} demoOdds={demoOdds} stake={stake} onStakeChange={setStake} />
+
+      {demoOdds && (
+        <DemoOddsNote
+          reason={meta?.oddsFallbackReason}
+          detail={meta?.oddsFallbackDetail}
+          hasKey={meta?.hasOddsKey ?? false}
+          comando="npm run odds"
+        />
+      )}
 
       {loading ? (
         <SkeletonList />

@@ -264,6 +264,10 @@ export interface FbFixtureWithPrediction {
 export interface FbMeta {
   dataSource: string; updatedAt: string | null;
   oddsSource: string | null; oddsRefreshedAt: string | null;
+  /** Por qué las cuotas son de demostración. Ver `oddsReason.ts` en el servidor. */
+  oddsFallbackReason: string | null;
+  /** El error del proveedor, cuando la causa fue que no contestó. */
+  oddsFallbackDetail: string | null;
   hasOddsKey: boolean; autoRefreshMinutes: number;
   squads: { season: string | null; updatedAt: string | null; leagues: string[] };
   counts: { teams: number; matches: number };

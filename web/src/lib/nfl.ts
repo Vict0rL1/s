@@ -162,6 +162,10 @@ export interface NflGameWithPrediction {
 export interface NflMeta {
   updatedAt: string | null;
   oddsRefreshedAt: string | null;
+  /** Por qué las cuotas son de demostración. Ver `oddsReason.ts` en el servidor. */
+  oddsFallbackReason: string | null;
+  /** El error del proveedor, cuando la causa fue que no contestó. */
+  oddsFallbackDetail: string | null;
   hasOddsKey: boolean;
   autoRefreshMinutes: number;
   counts: { teams: number; games: number };

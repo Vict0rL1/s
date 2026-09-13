@@ -117,6 +117,10 @@ export interface BsbGameWithPrediction {
 export interface BsbMeta {
   dataSource: string; updatedAt: string | null;
   oddsSource: string | null; oddsRefreshedAt: string | null;
+  /** Por qué las cuotas son de demostración. Ver `oddsReason.ts` en el servidor. */
+  oddsFallbackReason: string | null;
+  /** El error del proveedor, cuando la causa fue que no contestó. */
+  oddsFallbackDetail: string | null;
   probables: number;
   hasOddsKey: boolean; autoRefreshMinutes: number;
   counts: { teams: number; games: number };

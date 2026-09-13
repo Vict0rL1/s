@@ -1476,3 +1476,126 @@ export function EmptySlate({
     </div>
   );
 }
+
+/**
+ * POR QUÉ LAS CUOTAS SON DE DEMOSTRACIÓN, EN LA PANTALLA Y NO SOLO EN LA TERMINAL
+ * ===========================================================================
+ * La pestaña de tenis explicaba la causa desde hace tiempo; las otras cuatro solo
+ * enseñaban la palabra «demostración». Y las cuatro causas piden cosas distintas:
+ *
+ *   sin_clave      falta ODDS_API_KEY. Se arregla poniéndola.
+ *   fuente_falla   la clave está, pero el proveedor no contestó: cuota agotada, clave
+ *                  inválida o sin red. Volver a poner la clave no arregla nada.
+ *   sin_ligas      el proveedor contestó y no ofrece ninguna de las ligas configuradas.
+ *                  Fuera de temporada es lo esperado; en temporada es que le cambió la
+ *                  clave de deporte al proveedor.
+ *   sin_eventos    se reconoció la liga y no había ni un partido con precio. Entre
+ *                  jornadas es lo normal.
+ *
+ * Sin distinguirlas, el consejo por defecto —«pon tu clave»— es FALSO tres de cada
+ * cuatro veces, y mandar a revisar una clave que ya está puesta gasta el tiempo donde
+ * no está el problema. Esto ya pasó de verdad: con la clave puesta y funcionando, la
+ * app seguía diciendo demo porque lo guardado se había descargado antes de ponerla, y
+ * lo único que faltaba era volver a pedirlas.
+ */
+export function DemoOddsNote({
+  reason,
+  detail,
+  hasKey,
+  comando,
+}: {
+  reason: string | null | undefined;
+  detail?: string | null;
+  hasKey: boolean;
+  /** El comando que refresca ESTE deporte, para no mandar a uno que no toca. */
+  comando: string;
+}) {
+  const cuerpo =
+    reason === 'sin_eventos' ? (
+      <>
+        y <strong className="text-[#9aa1ac]">no falta nada por tu parte</strong>: la fuente
+        respondió bien, pero ahora mismo las casas no tienen precio publicado para ningún
+        partido. Entre jornadas es lo normal. Aparecerán solas cuando lo publiquen.
+      </>
+    ) : reason === 'sin_ligas' ? (
+      <>
+        porque el proveedor no ofrece ninguna de las ligas configuradas ahora mismo. Fuera
+        de temporada es lo esperado y no hay nada que arreglar. Si la liga <em>sí</em> está
+        en juego, <code>npm run doctor</code> enseña las claves que la casa ofrece, que es
+        el dato con el que se arregla.
+      </>
+    ) : reason === 'fuente_falla' ? (
+      <>
+        porque el proveedor de cuotas no contestó.{' '}
+        <strong className="text-[#9aa1ac]">Tu clave está puesta</strong>, así que suele ser
+        la cuota del mes agotada o falta de conexión. <code>npm run doctor</code> lo dice
+        sin gastar ni una petición.
+        {detail ? <span className="block opacity-70">último error: {detail}</span> : null}
+      </>
+    ) : reason === 'sin_clave' || !hasKey ? (
+      <>
+        porque no hay <code>ODDS_API_KEY</code>. Ponla en el fichero <code>.env</code> de
+        la raíz y corre <code>npm run odds</code> para pedir las de verdad.
+      </>
+    ) : (
+      <>
+        y la causa no está registrada — esta base se llenó antes de que se guardara. Corre{' '}
+        <code>{comando}</code> y, si siguen en demostración, <code>npm run doctor</code>{' '}
+        dice por qué sin gastar cuota.
+      </>
+    );
+
+  return (
+    <p className="mb-4 text-[13px] leading-relaxed text-[#7b828d]">
+      Las cuotas que ves son de <strong className="text-[#9aa1ac]">demostración</strong>,
+      generadas por el propio modelo, {cuerpo}
+    </p>
+  );
+}
+
+/**
+ * La NFL no es un caso de esta nota y por eso NO la usa.
+ *
+ * Los otros cuatro deportes inventan cuotas cuando no las consiguen, así que «demo»
+ * significa «estos precios no son de nadie». La NFL nunca inventa: si no hay línea, la
+ * tarjeta sale sin precio y el partido SIGUE SIENDO REAL. Meterla en la misma nota diría
+ * que sus partidos son inventados, que es peor que no decir nada.
+ */
+export function NflNoLineNote({
+  reason,
+  detail,
+  hasKey,
+}: {
+  reason: string | null | undefined;
+  detail?: string | null;
+  hasKey: boolean;
+}) {
+  if (reason == null && hasKey) return null;
+  return (
+    <p className="mb-4 text-[13px] leading-relaxed text-[#7b828d]">
+      Sin línea de las casas ahora mismo —{' '}
+      {reason === 'sin_ligas' ? (
+        <>
+          la NFL no está en temporada. El calendario y las probabilidades del modelo son
+          reales; lo que falta es el precio con el que compararlas.
+        </>
+      ) : reason === 'fuente_falla' ? (
+        <>
+          el proveedor no contestó (cuota del mes o conexión). <code>npm run doctor</code>{' '}
+          lo desglosa sin gastar peticiones.
+          {detail ? <span className="block opacity-70">último error: {detail}</span> : null}
+        </>
+      ) : reason === 'sin_clave' || !hasKey ? (
+        <>
+          falta <code>ODDS_API_KEY</code> en el <code>.env</code>. El calendario y el modelo
+          funcionan igual; sin clave no hay precio con el que compararlos.
+        </>
+      ) : (
+        <>
+          están en temporada pero ninguna casa ha publicado línea todavía. Suele aparecer
+          unos días antes de la jornada.
+        </>
+      )}
+    </p>
+  );
+}

@@ -97,6 +97,10 @@ export async function registerBaseballRoutes(app: FastifyInstance): Promise<void
     dataSource: getMeta('bsb_data_source') ?? 'unknown',
     updatedAt: getMeta('bsb_updated_at'),
     oddsSource: getMeta('bsb_odds_source'),
+    // POR QUÉ está en demostración, no solo QUE lo está. Ver `oddsReason.ts`: las
+    // cuatro causas piden cosas distintas y desde la pantalla se ven todas iguales.
+    oddsFallbackReason: getMeta('bsb_odds_fallback_reason') || null,
+    oddsFallbackDetail: getMeta('bsb_odds_fallback_detail') || null,
     oddsRefreshedAt: getMeta('bsb_odds_refreshed_at'),
     probables: Number(getMeta('bsb_probables') ?? 0),
     hasOddsKey: !!env.oddsApiKey,

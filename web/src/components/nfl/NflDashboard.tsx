@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate, LeagueFlag} from '../ui';
+  EmptySlate, LeagueFlag, NflNoLineNote} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, nflPicks } from '../../lib/picks';
 import { useStake } from '../../lib/useStake';
@@ -165,6 +165,12 @@ export default function NflDashboard() {
         }
         stake={stake}
         onStakeChange={setStake}
+      />
+
+      <NflNoLineNote
+        reason={meta?.oddsFallbackReason}
+        detail={meta?.oddsFallbackDetail}
+        hasKey={meta?.hasOddsKey ?? false}
       />
 
       {error && (
