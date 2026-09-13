@@ -2,7 +2,9 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { env } from './config.ts';
+import { env, ROOT } from './config.ts';
+import path from 'node:path';
+import { readOddsReason, type SportPrefix } from './oddsReason.ts';
 import { getDb } from './db.ts';
 import { countRows } from './repo.ts';
 import { refreshOdds } from './ingest/odds.ts';
@@ -55,6 +57,92 @@ import { resolveNflPredictions } from './nfl/trackRecord.ts';
  * quota. The interval logic below measures spend per cycle and finds zero, which is
  * the correct answer.
  */
+const ENV_PATH = path.join(ROOT, '.env');
+
+// ===========================================================================
+// EL AVISO DE ARRANQUE: «TUS CUOTAS SON DE DEMOSTRACIÓN Y ESTO ES LO QUE SE ESCRIBE»
+// ===========================================================================
+// El ciclo de arriba ya decía, deporte a deporte, `Tennis odds refreshed: 27 upcoming
+// matches (fixture)`. Esa palabra —`fixture`— ES el aviso, y no lo parece: está en
+// inglés, en medio de un muro de JSON de pino, y no dice ni que sea un problema ni qué
+// hacer. Alguien puede arrancar la app veinte veces, ver esa línea las veinte, y seguir
+// preguntándose por qué salen partidos de demostración. Pasó exactamente así.
+//
+// `npm run go` sí lo dice, pero no todo el mundo arranca con `npm run go`: `npm run dev`
+// es igual de legítimo y es lo que sale en media documentación. Así que el aviso tiene
+// que estar donde arranca el servidor, no en un envoltorio que puede no usarse.
+//
+// Solo en el PRIMER ciclo. Repetirlo cada doce horas lo convertiría en ruido, y el ruido
+// se deja de leer — que es el estado del que este aviso intenta sacar a alguien.
+function avisoDeCuotas(estado: { nombre: string; vivo: boolean; prefijo: SportPrefix }[]): void {
+  const demo = estado.filter((s) => !s.vivo);
+  if (demo.length === 0) return;
+
+  const L: string[] = [];
+  L.push('');
+  L.push('  ┌──────────────────────────────────────────────────────────────────────┐');
+  L.push('  │  LAS CUOTAS SON DE DEMOSTRACIÓN                                      │');
+  L.push('  └──────────────────────────────────────────────────────────────────────┘');
+  const vivos = estado.filter((s) => s.vivo);
+  if (vivos.length > 0) {
+    L.push(`  Con cuotas REALES: ${vivos.map((s) => s.nombre).join(', ')}.`);
+  }
+
+  // Agrupadas por causa, porque cada una se arregla de una forma distinta y cinco
+  // líneas iguales no se leen.
+  const porCausa = new Map<string, string[]>();
+  for (const s of demo) {
+    const { reason } = readOddsReason(s.prefijo);
+    const k = reason ?? 'sin_causa';
+    porCausa.set(k, [...(porCausa.get(k) ?? []), s.nombre]);
+  }
+  for (const [causa, nombres] of porCausa) {
+    L.push('');
+    L.push(`  ${nombres.join(', ')}`);
+    switch (causa) {
+      case 'sin_clave':
+        // El caso de lejos más común, y el que más vueltas ha costado. Se dice la ruta
+        // COMPLETA del fichero: «ponla en el .env» manda a crear un fichero que no se ve
+        // en el Finder, y en la carpeta equivocada no lo lee nadie.
+        L.push('    Falta ODDS_API_KEY. Tiene que estar en el .env de la RAÍZ del proyecto:');
+        L.push(`      ${ENV_PATH}`);
+        L.push('    Con una línea así dentro:   ODDS_API_KEY=tu-clave');
+        L.push('    Y después, en otra terminal y dentro de la carpeta:   npm run odds');
+        break;
+      case 'fuente_falla':
+        L.push('    El proveedor no contestó: cuota del mes agotada, clave inválida o sin red.');
+        L.push('    Poner la clave otra vez NO lo arregla.  npm run doctor  lo desglosa gratis.');
+        break;
+      case 'sin_ligas':
+        L.push('    El proveedor no ofrece ninguna de las ligas configuradas ahora mismo.');
+        L.push('    Fuera de temporada es lo normal y no hay nada que arreglar.');
+        break;
+      case 'sin_eventos':
+        L.push('    Ninguna casa tiene precio publicado todavía. Entre jornadas es lo normal:');
+        L.push('    no hay nada que arreglar, aparecerán solas.');
+        break;
+      default:
+        L.push('    Sin causa registrada.  npm run doctor  lo desglosa sin gastar cuota.');
+    }
+  }
+
+  // ¿Hay clave puesta pero la causa dice que faltaba? Entonces lo guardado se bajó ANTES
+  // de ponerla, y ningún reinicio lo arregla porque el reinicio no vuelve a pedirlas...
+  // salvo que este mismo ciclo acabe de hacerlo. Si sigue en `sin_clave` con clave
+  // puesta, es que este proceso arrancó sin leerla: casi siempre, un .env en la carpeta
+  // equivocada.
+  if (env.oddsApiKey && [...porCausa.keys()].includes('sin_clave')) {
+    L.push('');
+    L.push('  OJO: hay una ODDS_API_KEY cargada en este proceso y aun así la causa dice que');
+    L.push('  faltaba. Eso significa que lo guardado se bajó antes de ponerla. Arréglalo con:');
+    L.push('      npm run odds');
+  }
+  L.push('');
+  // process.stdout, no el logger: el logger escribe JSON de una línea y esto tiene que
+  // poder leerse de un vistazo entre cien líneas de JSON.
+  process.stdout.write(L.join('\n') + '\n');
+}
+
 function startAutoRefresh(log: (msg: string) => void): void {
   if (!env.oddsApiKey) {
     log('Sin ODDS_API_KEY: se refrescará solo el calendario de demostración (no gasta cuota).');
@@ -69,15 +157,22 @@ function startAutoRefresh(log: (msg: string) => void): void {
   // season, and neither of those is something anyone should have to remember.
   let timer: ReturnType<typeof setTimeout> | undefined;
   let currentMinutes = env.autoRefreshMinutes;
+  let primerCiclo = true;
 
   const run = async () => {
     const before = getQuota().used;
+    // Qué consiguió cada deporte en ESTE ciclo, para el aviso de abajo. Se recoge aquí y
+    // no se deduce de la base: un deporte cuya tabla está vacía no entra en el aviso, y
+    // desde fuera «vacía» y «en demostración» se parecen demasiado.
+    const estado: { nombre: string; vivo: boolean; prefijo: SportPrefix }[] = [];
     if (countRows('players') > 0) {
       try {
         const r = await refreshOdds();
         log(`Tennis odds refreshed: ${r.count} upcoming matches (${r.source}).`);
+        estado.push({ nombre: 'Tenis', vivo: r.source === 'live', prefijo: '' });
       } catch (e) {
         log(`Tennis odds refresh failed: ${(e as Error).message}`);
+        estado.push({ nombre: 'Tenis', vivo: false, prefijo: '' });
       }
     }
     // Basketball refreshes independently: one sport failing must not stop the
@@ -86,16 +181,20 @@ function startAutoRefresh(log: (msg: string) => void): void {
       try {
         const r = await refreshBasketballOdds();
         log(`Basketball odds refreshed: ${r.count} games (${r.source}).`);
+        estado.push({ nombre: 'Baloncesto', vivo: r.source === 'live', prefijo: 'bb_' });
       } catch (e) {
         log(`Basketball odds refresh failed: ${(e as Error).message}`);
+        estado.push({ nombre: 'Baloncesto', vivo: false, prefijo: 'bb_' });
       }
     }
     if (countRows('fb_teams') > 0) {
       try {
         const r = await refreshFootballOdds();
         log(`Football odds refreshed: ${r.count} fixtures (${r.source}).`);
+        estado.push({ nombre: 'Fútbol', vivo: r.source === 'live', prefijo: 'fb_' });
       } catch (e) {
         log(`Football odds refresh failed: ${(e as Error).message}`);
+        estado.push({ nombre: 'Fútbol', vivo: false, prefijo: 'fb_' });
       }
     }
     // Baseball and American football were missing from this loop, so their odds
@@ -106,8 +205,10 @@ function startAutoRefresh(log: (msg: string) => void): void {
       try {
         const r = await refreshBaseballOdds();
         log(`Baseball odds refreshed: ${r.count} games (${r.source}).`);
+        estado.push({ nombre: 'Béisbol', vivo: r.source === 'live', prefijo: 'bsb_' });
       } catch (e) {
         log(`Baseball odds refresh failed: ${(e as Error).message}`);
+        estado.push({ nombre: 'Béisbol', vivo: false, prefijo: 'bsb_' });
       }
     }
     if (countRows('naf_teams') > 0) {
@@ -154,6 +255,22 @@ function startAutoRefresh(log: (msg: string) => void): void {
       }
     } catch {
       // Comprobar la latencia no puede romper el ciclo de odds.
+    }
+
+    // Solo en el primer ciclo: ver `avisoDeCuotas`. Repetido cada doce horas sería ruido,
+    // y el ruido se deja de leer.
+    //
+    // La NFL NO entra en el aviso a propósito. Los otros cuatro inventan cuotas cuando no
+    // las consiguen, así que ahí «demostración» significa que el precio no es de nadie.
+    // La NFL nunca inventa: sin línea, la tarjeta sale sin precio y el partido sigue
+    // siendo real. Meterla diría que sus partidos son inventados, que es peor que callarse.
+    if (primerCiclo) {
+      primerCiclo = false;
+      try {
+        avisoDeCuotas(estado);
+      } catch {
+        // Un aviso que no se puede imprimir no puede tumbar el servidor.
+      }
     }
     schedule();
   };
