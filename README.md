@@ -792,6 +792,30 @@ npm run dev:fixed                      # 7373 y 7374 a pelo, sin red de segurida
 
 ## Abrirla en el teléfono
 
+### `npm run phone` daba el puerto equivocado cuando más falta hacía
+
+`npm run dev` busca un puerto libre si el 7373 está ocupado — es lo que permite tener la
+app corriendo junto a otro proyecto. Pero `npm run phone` se lanza en **otra terminal**, no
+hereda el entorno de `dev`, y leía `WEB_PORT` de un sitio donde no está: caía a 7373
+siempre.
+
+O sea que justo en el caso para el que existe la búsqueda de puerto libre, la app quedaba
+en 7376 y esto mandaba a escribir **7373** en el teléfono. Una dirección que no carga,
+acompañada de un «la app no está corriendo» que era **falso**. Reproducido ocupando los dos
+puertos a mano:
+
+```
+dev eligió: 7376 / 7377
+phone decía: http://192.168.x.x:7373   ❌ la app está corriendo
+phone dice:  http://192.168.x.x:7377   ✅ la app está corriendo
+```
+
+Ahora `dev` escribe los puertos que acabó eligiendo en `data/.dev-ports.json` y `phone` los
+lee — pero **los comprueba antes de fiarse**, porque un puerto guardado no es un puerto
+vivo: si el servidor murió, el fichero sigue ahí mintiendo. Con nada corriendo enseña el
+puerto por defecto, no el de la sesión anterior, que ya no significa nada.
+
+
 Con la app corriendo (`npm run dev`):
 
 ```bash

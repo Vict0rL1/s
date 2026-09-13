@@ -30,9 +30,14 @@
 // 4100.
 
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { DEFAULT_API, DEFAULT_PREVIEW, DEFAULT_WEB } from './ports.mjs';
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** How far to walk up looking for a free port before giving up. */
 const SEARCH_RANGE = 20;
@@ -143,6 +148,32 @@ for (const ip of lanAddresses()) {
   console.log(`  En el móvil  http://${ip}:${web.port}`);
 }
 console.log('='.repeat(52) + '\n');
+
+// ---------------------------------------------------------------------------
+// PUBLICAR LOS PUERTOS ELEGIDOS, PARA QUIEN NO ES HIJO DE ESTE PROCESO
+// ---------------------------------------------------------------------------
+// Los hijos heredan los puertos por el entorno, pero `npm run phone` se lanza en OTRA
+// terminal, no hereda nada, y leía WEB_PORT/PORT de un entorno donde no están — así que
+// caía a 7373/7374 SIEMPRE.
+//
+// Eso no era un detalle cosmético: con los puertos por defecto ocupados —que es
+// precisamente el caso para el que existe la búsqueda de puerto libre— la app acababa en
+// 7376 y `phone` mandaba a escribir 7373 en el teléfono. Una dirección que no carga, y
+// además con un «la app no está corriendo» que es falso. Comprobado ocupando los dos
+// puertos a mano.
+//
+// El fichero se reescribe en cada arranque y puede quedar rancio si el servidor muere;
+// por eso quien lo lee COMPRUEBA el puerto antes de fiarse en vez de creérselo.
+try {
+  fs.mkdirSync(path.join(ROOT, 'data'), { recursive: true });
+  fs.writeFileSync(
+    path.join(ROOT, 'data', '.dev-ports.json'),
+    JSON.stringify({ web: web.port, api: api.port, at: new Date().toISOString() }, null, 2),
+  );
+} catch {
+  // Que no se pueda escribir no puede impedir arrancar la app: lo único que se pierde es
+  // que `npm run phone` acierte el puerto a la primera.
+}
 
 // Both children inherit the chosen ports. WEB_PORT is what vite.config reads for
 // its own port, and PORT is what it points its /api proxy at — so the proxy
