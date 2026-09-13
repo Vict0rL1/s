@@ -192,7 +192,7 @@ Detalles y todas las mediciones en **[docs/NFL.md](docs/NFL.md)**.
 - **Datos de cada jugador en el partido**: ranking oficial ATP/WTA + puntos, país, edad y mano.
   Se muestran aunque el modelo no pueda predecir (jugador sin partidos en el historial), y en ese
   caso también se muestra la probabilidad implícita del mercado.
-- **Modelo calibrado y verificado:** `npm run backtest` mide la exactitud real — **65.2% de
+- **Modelo calibrado y verificado:** `npm run backtest` mide la exactitud real — **65.3% de
   acierto** y probabilidades calibradas dentro de ~1 pp, sobre **22.062 partidos ATP
   out-of-sample** (2015–2026). Incluye baseline de ranking y análisis de las discrepancias con el
   mercado. Ver [docs/MODEL.md](docs/MODEL.md).
@@ -1377,32 +1377,66 @@ el log loss al quitarlas.
 
 | pieza apagada | Δ log loss | IC 95 % | p | veredicto |
 | --- | --- | --- | --- | --- |
-| margen de victoria | **+0,00354** | [+0,00281, +0,00427] | 0,0020 | **se gana el sitio** |
-| calibración por formato (bo3/bo5) | **+0,00183** | [+0,00132, +0,00232] | 0,0020 | **se gana el sitio** |
-| cara a cara | **+0,00057** | [+0,00027, +0,00088] | 0,0020 | **se gana el sitio** |
-| penalización por inactividad | **+0,00054** | [+0,00024, +0,00084] | 0,0020 | **se gana el sitio** |
-| Elo por superficie | +0,00192 | [−0,00001, **+0,00402**] | 0,0559 | no se distingue de cero |
-| forma reciente | +0,00031 | [−0,00007, +0,00069] | 0,1079 | no se distingue de cero |
+| Elo por superficie | **+0,00371** | [+0,00233, +0,00521] | 0,0020 | **se gana el sitio** |
+| margen de victoria | **+0,00352** | [+0,00282, +0,00425] | 0,0020 | **se gana el sitio** |
+| calibración por formato (bo3/bo5) | **+0,00166** | [+0,00115, +0,00214] | 0,0020 | **se gana el sitio** |
+| penalización por inactividad | **+0,00052** | [+0,00022, +0,00082] | 0,0020 | **se gana el sitio** |
+| cara a cara | **+0,00051** | [+0,00021, +0,00082] | 0,0020 | **se gana el sitio** |
+| forma reciente | +0,00012 | [−0,00026, +0,00050] | 0,5235 | no se distingue de cero |
 
-Δ positivo = quitarla **empeora** = la pieza sirve. Las cuatro primeras pasan Bonferroni
+Δ positivo = quitarla **empeora** = la pieza sirve. Las cinco primeras pasan Bonferroni
 y Benjamini–Hochberg sobre las seis comparaciones.
 
-### Las dos que no se resuelven, y qué NO se ha hecho con ellas
+### La que no se resuelve, y qué NO se ha hecho con ella
 
-**Nada.** Las dos tienen la estimación puntual positiva, y el Elo por superficie la tiene
-grande: +0,00192, con un intervalo que solo toca el cero por abajo (−0,00001). Borrar una
-pieza por un resultado nulo es el mismo error que añadirla por uno: en los dos casos se
-está decidiendo con evidencia que no alcanza.
+**Nada.** La forma reciente da +0,00012 con un intervalo que cruza el cero por los dos
+lados. Borrar una pieza por un resultado nulo es el mismo error que añadirla por uno: en
+los dos casos se está decidiendo con evidencia que no alcanza. Y el intervalo además es
+**estrecho** —±0,0005—, así que esto no es «falta muestra», es «el efecto sobre el número
+es pequeño». Sigue apareciendo en la tarjeta («llega con 10 victorias seguidas») porque
+**describe** algo cierto y útil de leer, pero conviene saber que su efecto sobre la
+probabilidad no está demostrado.
 
-Lo que sí dice el dato es dónde mirar. El Elo por superficie tiene el intervalo **más ancho
-de los seis** —de −0,00001 a +0,00402— y eso encaja con lo que se sabe del tenis: la
-superficie decide en la gira de tierra y en la de hierba, y no dice casi nada en un año de
-pista dura. El efecto medio es real; lo que no es estable es *por torneo*, y el bootstrap
-por bloques de torneo es justo lo que lo capta.
+### El resultado dudoso que sí tenía arreglo: el peso de la superficie
 
-La forma reciente es otra cosa: +0,00031 es pequeño además de incierto. Sigue apareciendo
-en la tarjeta («llega con 10 victorias seguidas») porque **describe** algo cierto y útil de
-leer, pero conviene saber que su efecto sobre el número no está demostrado.
+En la primera pasada el Elo por superficie salió **inconcluyente** (+0,00192, p=0,0559) y
+con el intervalo más ancho de los seis. La lectura fácil era «la superficie no está clara».
+La lectura correcta era otra: si una pieza que debería ser de las más informativas del
+tenis apenas se distingue de cero, lo sospechoso no es la pieza sino **cuánto se la estaba
+haciendo pesar**.
+
+El modelo mezcla el Elo de superficie con el general (`Elo = w·superficie + (1−w)·general`)
+y `w` valía 0,7 desde el primer día, elegido a ojo y nunca medido. Así que se midió, con el
+periodo partido en dos para que la elección y la comprobación no se hicieran sobre los
+mismos partidos:
+
+```
+  peso de superficie
+    valor      elección     prueba
+    0.3         0.60942    0.62191 ←mejor en prueba
+    0.5         0.60924    0.62198 ←mejor en elección
+    0.7         0.61097    0.62389 (publicado)
+```
+
+El valor que gana **sin ver el periodo de prueba** es 0,5, y en el periodo de prueba también
+le gana al publicado. Eso es lo que se pide para publicar; que 0,3 salga 0,00007 por delante
+de 0,5 en la prueba no cambia nada, porque a 0,3 solo se llega mirando la prueba.
+
+Medido aparte, solo sobre los 7.050 partidos posteriores a 2023 (321 ediciones de torneo):
+
+| | log loss |
+| --- | --- |
+| publicado (w = 0,7) | 0,62389 |
+| candidato (w = 0,5) | **0,62198** |
+| diferencia | **−0,00190** [−0,00301, −0,00068] · p = 0,0020 |
+
+El intervalo entero está por debajo de cero. **Publicado.** Y sobre el backtest completo de
+22.062 partidos el efecto se sostiene: log loss **0,6151 → 0,6133**, Brier **0,2140 →
+0,2132**, acierto **65,2 % → 65,3 %**.
+
+Con el peso corregido, la ablación vuelve a correrse contra el modelo que ahora se sirve, y
+el resultado dudoso deja de serlo: quitar el Elo por superficie pasa de +0,00192 (p=0,0559)
+a **+0,00371 (p=0,0020)**. La pieza siempre sirvió; lo que fallaba era la dosis.
 
 ### Por qué estos negativos son creíbles
 
@@ -1411,13 +1445,13 @@ Por eso el estudio **se niega a publicar** si su réplica del modelo se desvía 
 `npm run backtest` en más de 0,0002:
 
 ```
-Modelo publicado: log loss 0.61510 sobre 22062 partidos
-Coincide con `npm run backtest` (0.6151) · desvío 0.000001
+Modelo publicado: log loss 0.61331 sobre 22062 partidos
+Coincide con `npm run backtest` (0.6133) · desvío 0.000010
 ```
 
-Comprobado que la guarda muerde: cambiando el peso de superficie de 0,7 a 0,5 en la réplica,
-el estudio aborta con «se han separado» en vez de publicar una ablación de un modelo que no
-existe.
+Comprobado que la guarda muerde: es exactamente lo que hizo al cambiar el peso de superficie
+de 0,7 a 0,5 en producción sin traerlo aquí — abortó con «se han separado» en vez de publicar
+una ablación de un modelo que ya no existía.
 
 Dos detalles del método que cambian el resultado:
 
@@ -1428,6 +1462,7 @@ Dos detalles del método que cambian el resultado:
 - **Con 200 remuestreos el p mínimo posible es 0,00995**, por encima del listón de Bonferroni
   (0,00833). Cuatro resultados salían clavados en ese suelo y no habrían podido pasar la
   corrección aunque el efecto fuese enorme. Con 1.000 el suelo baja a 0,002 y se resuelven.
+  El estudio ahora **se niega a registrar** por debajo de 500 remuestreos.
 
 ## El modelo jerárquico de puntos (`npm run study:points`)
 

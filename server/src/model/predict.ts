@@ -58,7 +58,7 @@ import type {
   TourId,
 } from '../types.ts';
 
-const SURFACE_WEIGHT = 0.7; // weight on surface Elo vs overall Elo
+const SURFACE_WEIGHT = 0.5; // weight on surface Elo vs overall Elo (ver docs/MODEL.md: barrido 0.3/0.5/0.7)
 
 export const DISCLAIMER =
   'Estimación estadística basada en Elo, forma reciente, head-to-head y odds de mercado. ' +

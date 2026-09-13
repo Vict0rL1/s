@@ -94,13 +94,21 @@ hay pocos enfrentamientos (`n / (n + 4)`): 1-0 es casi ruido; 8-2 es señal real
 Para cada jugador se construye un **rating efectivo** para *ese* partido:
 
 ```
-1. Mezcla por superficie:  R_eff = 0.7 · Elo_superficie + 0.3 · Elo_general
+1. Mezcla por superficie:  R_eff = 0.5 · Elo_superficie + 0.5 · Elo_general
 2. + ajuste de forma        (acotado)
 3. + ajuste head-to-head    (acotado + encogido; desde la perspectiva del jugador 1)
 4. + penalización por inactividad  (≤ 0; ver abajo)
 
 Prob(gana J1) = expectedScore(R_eff_J1_ajustado, R_eff_J2_ajustado)
 ```
+
+**El 0.5 está medido, no elegido a ojo.** Durante mucho tiempo fue 0,7, puesto a mano el primer
+día. Cuando la ablación (`npm run study:ablation`) dejó el Elo por superficie como la única pieza
+grande que no se distinguía de cero, el sospechoso no era la pieza sino la dosis. Se barrió
+w ∈ {0,3, 0,5, 0,7} eligiendo en un periodo y comprobando en otro: gana 0,5 sin ver el periodo de
+prueba, y en la prueba también le gana al 0,7 publicado (−0,00190 de log loss, IC 95 %
+[−0,00301, −0,00068], p = 0,0020, sobre 7.050 partidos y 321 ediciones de torneo). Con el peso
+corregido, quitar el Elo por superficie pasa de +0,00192 (p = 0,0559) a +0,00371 (p = 0,0020).
 
 ### Inactividad (`elo.ts → layoffAdjustment`)
 
@@ -252,7 +260,7 @@ margen     = σ_brecha · dP/dbrecha
 ```
 
 `n` no es el total de partidos, sino el **efectivo**, ponderado igual que el rating del partido:
-`0.7 · partidos_en_la_superficie + 0.3 · partidos_totales`. Un especialista en arcilla con 400
+`0.5 · partidos_en_la_superficie + 0.5 · partidos_totales`. Un especialista en arcilla con 400
 partidos en tierra está bien descrito en tierra y mal descrito en hierba, y esto lo refleja.
 
 El nivel resulta de tres cortes: **baja** si algún jugador tiene <10 partidos efectivos, el margen
@@ -289,6 +297,12 @@ npm run backtest -- --calibration 1   # curva Elo cruda, para comparar
 
 ### Resultado medido (ATP, 46.166 partidos out-of-sample, 2005–2026)
 
+> **Estas cifras son de una base con más histórico del que se descarga hoy.** El ingestor actual
+> trae 2015–2026 (30.853 partidos, 22.062 evaluables), así que `npm run backtest` en una copia
+> recién clonada da los números de la tabla de abajo —65,3 % / 0,2132 / 0,6133—, no estos. Se
+> conservan porque miden lo mismo sobre veinte años en vez de diez; lo que no se puede es
+> reproducirlos sin el histórico largo. Fueron medidos con el peso de superficie antiguo (0,7).
+
 | Métrica | Valor | Referencia |
 |---|---|---|
 | **Accuracy** (acierta al favorito) | **67.0 %** | Decir siempre «gana el mejor clasificado»: 64.8 % |
@@ -318,10 +332,13 @@ mismos 22.062 partidos:
 | Modelo | Accuracy | Brier | Log loss | Peor sesgo |
 |---|---|---|---|---|
 | Solo Elo + forma + H2H, calibración única | 64.8% | 0.2164 | 0.6208 | +1.9 pp |
-| **+ margen, inactividad y calibración por formato** | **65.2%** | **0.2140** | **0.6151** | **+1.3 pp** |
+| + margen, inactividad y calibración por formato (peso de superficie 0,7) | 65.2% | 0.2140 | 0.6151 | +1.3 pp |
+| **+ peso de superficie medido (0,7 → 0,5) — lo que se sirve hoy** | **65.3%** | **0.2132** | **0.6133** | **+1.3 pp** |
 
-Ganancia modesta y honesta: **+0.4 pp de accuracy**. Lo que más mejora no es acertar más, sino que
-las probabilidades sean más creíbles (Brier y log loss bajan, y el sesgo de calibración se estrecha).
+Ganancia modesta y honesta: **+0.5 pp de accuracy** en total. Lo que más mejora no es acertar más,
+sino que las probabilidades sean más creíbles (Brier y log loss bajan, y el sesgo de calibración se
+estrecha). La última fila es la única con el intervalo de confianza medido aparte: ver el barrido
+del peso de superficie más arriba.
 
 Verificado además en una ventana distinta de la usada para elegir los parámetros (2020–2026,
 10.728 partidos): accuracy 64.1% → 64.6%, Brier 0.2188 → 0.2166. La mejora no es un artefacto de

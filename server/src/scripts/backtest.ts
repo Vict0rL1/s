@@ -61,7 +61,7 @@ interface State {
   lastDate: string | null; // date of their previous match, for staleness
 }
 
-const SURFACE_WEIGHT = 0.7; // must match model/predict.ts
+const SURFACE_WEIGHT = 0.5; // must match model/predict.ts
 const FORM_WEIGHT = 1;
 const H2H_MAX = 35;
 const H2H_SHRINK = 4;
