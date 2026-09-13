@@ -166,6 +166,23 @@ function diasDeRetraso() {
 
 
 /**
+ * ¿Hay una ODDS_API_KEY en el .env AHORA MISMO?
+ *
+ * Es distinto de la causa guardada en la base, y la diferencia entre las dos es el
+ * diagnóstico entero: «la causa dice que faltaba la clave» + «la clave está» significa
+ * que lo guardado se bajó antes de ponerla, y se arregla volviendo a pedir las cuotas.
+ * Con solo uno de los dos datos ese caso es indistinguible de «no hay clave».
+ */
+function hayClave() {
+  try {
+    const f = path.join(ROOT, '.env');
+    return fs.existsSync(f) && /^\s*ODDS_API_KEY\s*=\s*\S+/m.test(fs.readFileSync(f, 'utf8'));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * En qué estado están las cuotas de los cinco deportes, LEYENDO LA BASE.
  *
  * ===========================================================================
@@ -241,6 +258,40 @@ function estadoCuotas() {
       }
       for (const [causa, nombres] of porCausa) {
         lineas.push(`sin cuotas: ${nombres.join(', ')} — ${causa}`);
+      }
+    }
+
+    // ===========================================================================
+    // Y QUÉ COMANDO LO ARREGLA, QUE ES LA PARTE QUE FALTABA
+    // ===========================================================================
+    // Decir «sin cuotas: Fútbol, Tenis — falta la clave» está bien, pero la pregunta
+    // siguiente es siempre «¿y qué escribo?». Las causas piden comandos DISTINTOS, así
+    // que una sola frase genérica sería falsa en tres de los cuatro casos.
+    //
+    // El caso que más ha costado es el primero: la clave está puesta Y la causa guardada
+    // dice que faltaba. Eso no es una contradicción, es la secuencia normal — se bajaron
+    // las cuotas, DESPUÉS se puso la clave, y lo guardado sigue siendo lo de antes. La
+    // app no tiene forma de saberlo sola y se queda diciendo «demo» para siempre.
+    // Reinstalar, reiniciar o volver a poner la clave no lo arregla; solo volver a
+    // PEDIRLAS. Pasó tal cual, varias veces, y sin esta línea no hay manera de deducirlo.
+    const causas = new Set(sinPrecio.map(([, c]) => c));
+    if (causas.size > 0) {
+      if (hayClave()) {
+        if (causas.has('sin_clave')) {
+          lineas.push(
+            'tu clave SÍ está puesta: lo guardado se bajó antes de ponerla. Pídelas: npm run odds',
+          );
+        } else if (causas.has('fuente_falla')) {
+          lineas.push('el proveedor no contestó: npm run doctor lo desglosa sin gastar cuota');
+        } else if (causas.has('sin_eventos')) {
+          lineas.push('no hay nada que arreglar: ninguna casa tiene precio publicado ahora mismo');
+        } else if (causas.has('sin_ligas')) {
+          lineas.push('no hay nada que arreglar: ninguna de las ligas configuradas está en juego');
+        } else {
+          lineas.push('para pedir las cuotas reales de los cinco deportes: npm run odds');
+        }
+      } else {
+        lineas.push('pon ODDS_API_KEY en el .env y luego: npm run odds');
       }
     }
     return lineas;
@@ -517,10 +568,7 @@ titulo('Arrancando la app');
   // La clave no es obligatoria y la app funciona sin ella, pero con cuotas de
   // demostración. Decirlo AQUÍ y no al principio: es lo último que se lee antes de que
   // la app tome la pantalla, así que es donde se recuerda.
-  const env = path.join(ROOT, '.env');
-  const tieneClave =
-    fs.existsSync(env) && /^\s*ODDS_API_KEY\s*=\s*\S+/m.test(fs.readFileSync(env, 'utf8'));
-  if (!tieneClave) {
+  if (!hayClave()) {
     aviso(
       'sin ODDS_API_KEY: las cuotas serán de demostración',
       'Para cuotas reales, pon tu clave en el fichero .env:  ODDS_API_KEY=tu-clave\n' +
