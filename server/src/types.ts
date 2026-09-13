@@ -1,0 +1,192 @@
+// Shared domain types used across ingestion, the model, and the API.
+
+export type TourId = string; // "atp" | "wta" (kept open so tours are config-driven)
+
+/** Surfaces the surface-specific Elo tracks. Carpet / unknown only affect overall Elo. */
+export type Surface = 'Hard' | 'Clay' | 'Grass';
+
+export interface PlayerRow {
+  id: number;
+  tour: TourId;
+  name: string;
+  hand: string | null;
+  country: string | null;
+  birthdate: string | null; // YYYYMMDD as text
+}
+
+export interface MatchRow {
+  id: number;
+  tour: TourId;
+  tourney_id: string;
+  tourney_name: string;
+  tourney_date: string; // YYYYMMDD
+  surface: string; // raw surface (Hard/Clay/Grass/Carpet/…)
+  level: string | null;
+  round: string | null;
+  best_of: number | null;
+  winner_id: number;
+  loser_id: number;
+  score: string | null;
+  // Serve/return stats (nullable — not present for every match)
+  w_ace: number | null;
+  w_df: number | null;
+  w_svpt: number | null;
+  w_1stIn: number | null;
+  w_1stWon: number | null;
+  w_2ndWon: number | null;
+  w_bpSaved: number | null;
+  w_bpFaced: number | null;
+  l_ace: number | null;
+  l_df: number | null;
+  l_svpt: number | null;
+  l_1stIn: number | null;
+  l_1stWon: number | null;
+  l_2ndWon: number | null;
+  l_bpSaved: number | null;
+  l_bpFaced: number | null;
+}
+
+/** Final Elo ratings for a player after processing every match chronologically. */
+export interface RatingRow {
+  player_id: number;
+  tour: TourId;
+  overall: number;
+  hard: number;
+  clay: number;
+  grass: number;
+  matches_played: number;
+  last_date: string | null;
+}
+
+/** An upcoming match with market odds (from The Odds API or local fixtures). */
+/** Aggregated serve / return stats for a player (from stored match stats). */
+export interface ServeStats {
+  matches: number; // matches that had stats
+  acePct: number | null; // aces / service points
+  dfPct: number | null; // double faults / service points
+  firstInPct: number | null; // 1st serves in / service points
+  firstWonPct: number | null; // points won on 1st serve in / 1st serves in
+  secondWonPct: number | null; // points won on 2nd serve / 2nd serve points
+  bpSavedPct: number | null; // break points saved / faced
+  acesPerMatch: number | null;
+}
+
+/** Win/loss record on a given surface. */
+export interface SurfaceRecord {
+  wins: number;
+  losses: number;
+}
+
+/**
+ * Physical-availability signals derived from the match history. There is no open,
+ * reliable feed of current injuries, so instead of inventing one we surface the
+ * traces injuries actually leave in results: retirements mid-match, walkovers,
+ * long absences and heavy recent workload. These are evidence, not a diagnosis.
+ */
+export interface FitnessSignals {
+  /** Retirements (RET) in the player's last 20 matches. */
+  retirements: number;
+  /** Walkovers (W/O) in the player's last 20 matches. */
+  walkovers: number;
+  /** Date of the most recent retirement/walkover, if any (YYYYMMDD). */
+  lastIncidentDate: string | null;
+  /** Days since their last match (null if unknown). Long gaps suggest absence. */
+  daysSinceLastMatch: number | null;
+  /** Matches played in the 30 days before their last match (workload). */
+  matchesLast30Days: number;
+}
+
+/** A player's record at one specific tournament. */
+export interface TournamentHistory {
+  played: number;
+  wins: number;
+  losses: number;
+  titles: number; // finals won at this event
+  finals: number;
+  bestRound: string | null;
+}
+
+/** Official ATP/WTA ranking snapshot for a player. */
+export interface OfficialRanking {
+  rank: number;
+  points: number | null;
+  date: string; // YYYYMMDD
+}
+
+/** Everything we can say about a player independent of a specific match. */
+export interface PlayerInfo {
+  id: number;
+  name: string;
+  country: string | null;
+  hand: string | null;
+  age: number | null;
+  ranking: OfficialRanking | null;
+  matchesInDb: number;
+}
+
+export interface UpcomingRow {
+  id: string;
+  tour: TourId;
+  tournament_id: string;
+  tournament_name: string;
+  surface: string;
+  commence_time: string; // ISO 8601
+  p1_name: string;
+  p2_name: string;
+  p1_id: number | null; // resolved Sackmann id, if the name matched a known player
+  p2_id: number | null;
+  p1_odds: number | null; // decimal odds (consensus across books)
+  p2_odds: number | null;
+  books: number; // how many bookmakers contributed
+  source: 'live' | 'fixture';
+  updated_at: string;
+}
+
+export interface TourConfig {
+  id: TourId;
+  name: string;
+  label: string;
+  sackmann: {
+    /**
+     * Layout of the CSVs:
+     *  • "sackmann" — separate players/rankings files, no header row in those.
+     *  • "tml"      — one {year}.csv per season with a header; players and their
+     *                 official rank/points are embedded in the match rows.
+     */
+    format?: 'sackmann' | 'tml';
+    repo: string;
+    matchesFile: string;
+    playersFile: string;
+    /** Official ranking snapshots (rank + points), newest file first. */
+    rankingsFiles?: string[];
+  };
+}
+
+export interface ToursConfig {
+  history: {
+    startYear: number;
+    /** HTTP sources tried in order ({repo}/{file} placeholders) */
+    rawBaseUrls: string[];
+    /** primary repo → alternative repos to git-clone if it's unreachable */
+    mirrors?: Record<string, string[]>;
+  };
+  tours: TourConfig[];
+}
+
+export interface TournamentConfig {
+  id: string;
+  name: string;
+  category: string;
+  surface: Surface;
+  tours: TourId[];
+  oddsSportKeys: Record<string, string>;
+  sackmannMatch: string[];
+}
+
+export interface TournamentsConfig {
+  categories: Record<string, string>;
+  /** keyword (matched against a live event's key/title) → surface, for events
+   * discovered dynamically that aren't in the tournaments list. */
+  surfaceHints?: Record<string, Surface>;
+  tournaments: TournamentConfig[];
+}

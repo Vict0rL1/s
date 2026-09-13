@@ -1,0 +1,132 @@
+# Reconstruye la base de datos cada noche y la publica, para no tener que actualizar a mano.
+#
+# ===========================================================================
+# QUÉ HACE Y QUÉ NO
+# ===========================================================================
+# SÍ: descarga el histórico de los cinco deportes, comprueba que los datos están bien y
+# publica la base comprimida (unos 9 MB) en una release rodante. `npm run fetch-data` se
+# la baja, así que un clon nuevo tiene datos al instante y sin correr nada durante dos
+# minutos.
+#
+# NO: no toca las cuotas. Dos motivos, y los dos importan:
+#   · gastaría cuota de The Odds API cada noche, y el plan gratuito son 500 al mes
+#   · un precio de hace ocho horas no sirve para nada. Las cuotas las refresca el propio
+#     servidor mientras está arrancado, con una cadencia que se ajusta al plan
+#
+# ===========================================================================
+# LA BASE PUBLICADA ES PÚBLICA. LITERALMENTE
+# ===========================================================================
+# Este repositorio es público, así que el fichero que se sube aquí lo puede descargar
+# cualquiera. Eso está bien para datos deportivos —son públicos de origen— y estaría
+# MUY mal para el registro de apuestas de alguien.
+#
+# En un runner limpio no hay apuestas que publicar, porque las apuestas solo las crea la
+# persona en su máquina. Pero «no debería haber» no es una garantía, así que el paso
+# «Comprobar que no se publica nada personal» lo verifica antes de subir y falla si
+# encuentra algo. Sin esa comprobación, bastaría un cambio futuro que copiara una base
+# local al runner para publicar el historial de apuestas de alguien sin que nadie se
+# diera cuenta.
+#
+# ===========================================================================
+# EL CRON SOLO CORRE DESDE LA RAMA POR DEFECTO
+# ===========================================================================
+# GitHub ejecuta los `schedule` únicamente desde la rama por defecto del repositorio.
+# Mientras este fichero viva solo en una rama de trabajo, la ejecución nocturna NO se
+# dispara — se puede lanzar a mano con «Run workflow», pero el horario no existe hasta
+# que el fichero llega a la rama por defecto.
+
+name: Datos
+
+on:
+  schedule:
+    # 05:30 UTC: de madrugada en Europa y ya cerrada la jornada americana, así que los
+    # resultados del día anterior están completos en las fuentes.
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publicar la base en la release (desmarcar para solo probar la ingesta)'
+        type: boolean
+        default: true
+
+# Dos ejecuciones a la vez se pisarían al publicar en la misma etiqueta.
+concurrency:
+  group: datos
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # `node:sqlite` necesita 22.5 o superior. Ver package.json → engines.
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Actualizar los cinco deportes
+        # --skip-odds a propósito: ver la cabecera. El script no para en el primer
+        # fallo y sale con código 1 si alguno falló, así que un deporte con la fuente
+        # caída no impide publicar los otros cuatro — pero sí queda anotado en el log.
+        run: npm run update-all -- --skip-odds
+        continue-on-error: true
+
+      - name: Comprobar que los datos están bien
+        # Esta es la puerta. Publicar una base que no pasa sus propias comprobaciones
+        # sería peor que no publicar nada: quien la descargue no tiene forma de saber
+        # que está mal, y la app le enseñará números con toda naturalidad.
+        run: npm run verify:data
+
+      - name: Comprobar que no se publica nada personal
+        run: npm run check-publishable
+
+      - name: Comprimir
+        id: pack
+        run: |
+          gzip -9 -c data/tennis.db > tennis.db.gz
+          sha256sum tennis.db.gz | cut -d' ' -f1 > tennis.db.gz.sha256
+          echo "size=$(du -h tennis.db.gz | cut -f1)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(cat tennis.db.gz.sha256)" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar en la release rodante
+        if: github.event_name == 'schedule' || inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          NOTES="Base reconstruida el $(date -u '+%Y-%m-%d %H:%M UTC').
+
+          Tamaño: ${{ steps.pack.outputs.size }} comprimida
+          SHA-256: \`${{ steps.pack.outputs.sha }}\`
+
+          Sin cuotas: las refresca el servidor en marcha. Descárgala con \`npm run fetch-data\`."
+          # Una etiqueta RODANTE y no una por día: lo que hace falta es una URL estable
+          # para que `fetch-data` no tenga que averiguar cuál es la última, y un
+          # historial de releases diarias solo sería basura que crece.
+          if gh release view data-latest >/dev/null 2>&1; then
+            gh release edit data-latest --notes "$NOTES"
+            gh release upload data-latest tennis.db.gz tennis.db.gz.sha256 --clobber
+          else
+            gh release create data-latest tennis.db.gz tennis.db.gz.sha256 \
+              --title 'Base de datos (última)' --notes "$NOTES" --latest=false
+          fi
+
+      - name: Resumen
+        run: |
+          {
+            echo "### Base publicada"
+            echo ""
+            echo "- Tamaño comprimido: ${{ steps.pack.outputs.size }}"
+            echo "- SHA-256: \`${{ steps.pack.outputs.sha }}\`"
+            echo ""
+            echo 'Descárgala con `npm run fetch-data`.'
+          } >> "$GITHUB_STEP_SUMMARY"

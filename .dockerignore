@@ -1,0 +1,21 @@
+# Lo que NO entra en la imagen.
+#
+# OJO con `data/`: NO está aquí, y es deliberado. El Dockerfile copia data/tennis.db
+# como semilla para que el primer despliegue funcione sin subir nada a mano. Si
+# alguien añade `data/` a esta lista, el build fallará en el COPY — que es el fallo
+# correcto: ruidoso y en el sitio, en vez de una app desplegada y vacía.
+
+node_modules
+**/node_modules
+.git
+.env
+web/dist
+data/raw
+data/seed
+data/*.db-journal
+data/*.db-wal
+data/backups
+*.log
+.DS_Store
+experiments
+docs

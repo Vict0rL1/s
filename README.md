@@ -1,27 +1,2909 @@
-# Budget
+# ⚽⚾🏈🏀🎾 Sports Predictor
 
-A simple personal budget tracker built with React, TypeScript, and Tailwind CSS.
+Aplicación web + API REST para **predecir resultados deportivos** combinando historial
+partido a partido, **ratings Elo**, forma reciente y **odds de casas de apuestas**.
 
-## Features
+Cinco deportes en **pestañas separadas** (nunca mezclados), más una pestaña para tus propias apuestas:
 
-- Log income and expense transactions with category, description, and date
-- Monthly dashboard with income, expenses, and balance totals
-- Browse and delete transactions, filtered by month
-- Set a monthly budget per expense category and track spending progress
-- All data is stored locally in the browser (`localStorage`) — no backend required
+- **⚽ Fútbol** — las principales ligas del mundo, cada una en su **sub-pestaña**: Premier League,
+  LaLiga, Bundesliga, Serie A, Ligue 1, Eredivisie, Primeira, Championship, MLS, Liga MX,
+  Brasileirão, Argentina y Champions. **1X2** (con el empate como opción de primera), goles
+  esperados, over/under 2.5, ambos marcan y marcadores probables.
+  Ver [docs/FOOTBALL.md](docs/FOOTBALL.md).
+- **⚾ Béisbol** — MLB (y NPB, KBO y universitario con probabilidades de mercado). El deporte donde
+  **un solo jugador anunciado el día antes**, el lanzador abridor, mueve más el pronóstico que nada
+  salvo los propios equipos — y puedes cambiarlo tú. Ahora también **el estadio**: Coors Field sube
+  el total un 22 %, Seattle lo baja un 8 %. Ganador, total, línea de carreras (±1.5) y rejilla de
+  marcadores, todo de la misma distribución.
+  Ver [docs/BASEBALL.md](docs/BASEBALL.md).
+- **🏈 Fútbol americano** — NFL: hándicap, total y ganador con una distribución de margen que
+  **conoce los números clave del deporte** (el margen acaba en 3 el 15 % de las veces y en 9 el
+  1.6 %) y que sabe **quién juega de quarterback**. Es el único deporte de la app cuyo modelo
+  **se puede medir contra la línea de cierre real** — y el backtest dice, sin adornos, que no la
+  bate, aunque ahora se queda más cerca.
+  Ver [docs/NFL.md](docs/NFL.md).
+- **🏀 Baloncesto** — NBA, WNBA, NCAA (M y F), EuroLeague y NBL: Elo por equipo con ventaja de
+  campo, margen de puntos y descanso, más **diferencia esperada (spread)** y **total de puntos**.
+  Ver [docs/BASKETBALL.md](docs/BASKETBALL.md).
+- **🎾 Tenis** — ATP y WTA singles: Elo por superficie, forma, head-to-head, marcador por sets.
+  Ver [docs/MODEL.md](docs/MODEL.md).
+- **🎟️ Apuestas** — *no es un deporte*: es tu registro. Qué apostaste, cuánto, a qué cuota y cómo
+  acabó, con beneficio, ROI, calendario del mes y rachas. Y lo que ningún historial de casa de
+  apuestas te dice: **si seguir al modelo te sirvió o no**.
 
-## Getting started
+El modelo es **explicable, no una caja negra**: cada señal se expresa en puntos Elo y se
+muestra lado a lado con la probabilidad implícita del mercado, incluyendo la detección de
+posible *value* cuando el modelo discrepa de las cuotas.
+
+Cada pestaña abre con **«donde el modelo no está de acuerdo con el mercado»**: los mercados
+concretos —1X2, doble oportunidad, over/under, ambos marcan, hándicap, línea de carreras— en los
+que el modelo se separa más de la cuota, con la probabilidad de cada uno y **la cuota mínima que
+necesitarías** para que la apuesta valga la pena según el modelo. Ver
+[«Sugerencias por deporte»](#sugerencias-por-deporte-lo-que-el-modelo-destacaría).
+
+> ⚠️ **Aviso**: es una estimación estadística, **no** una certeza ni una recomendación para
+> apostar. No considera lesiones de último momento, clima ni motivación (p. ej. exhibiciones).
+
+![dashboard](docs/dashboard.png)
+
+---
+
+## Qué incluye — ⚽ Fútbol
+
+- **Las principales ligas del mundo, cada una en su sub-pestaña** dentro de la pestaña de fútbol —
+  nadie lee de corrido un listado que mezcla la Premier con el Brasileirão. La liga elegida se
+  recuerda entre visitas. Se amplía en `config/football.json`, sin tocar la lógica.
+- **1X2 completo:** local / empate / visitante con el empate tratado como lo que es, el resultado de
+  ~1 de cada 4 partidos, no una nota al pie.
+- **Mercados de goles coherentes entre sí:** goles esperados de cada equipo, over/under 2.5, ambos
+  marcan y los marcadores exactos más probables. Todos salen de **la misma distribución**, así que
+  es imposible que se contradigan.
+- **La rejilla completa de marcadores**, 7×7, coloreada por resultado: se ve de un vistazo dónde
+  está la probabilidad, cuánta se lleva cada bloque (local / empate / visitante) y cuánta queda
+  lejos del marcador titular. Debajo, la **diferencia de goles** — que es otra pregunta distinta de
+  «quién gana». La interfaz recibe la rejilla del servidor, así que no puede contradecir los
+  porcentajes impresos encima.
+- **Quién juega (Premier League).** Las lesiones y sanciones del día vienen ya marcadas; si sabes la
+  alineación —se publica una hora antes— la marcas tú y **se recalcula la distribución entera**.
+  Medido sobre tres temporadas de alineaciones reales: es la única señal probada en este proyecto
+  que el Elo no contenía ya.
+- **Dixon-Coles jerárquico:** ataque y defensa por equipo, ventaja de campo *por liga*, decay
+  temporal de un año de semivida y priors que encogen hacia la media a los equipos con pocos
+  partidos. La salida es la **distribución completa de marcadores**, y de ahí se derivan el 1X2, el
+  over/under, el «ambos marcan» y los hándicaps — no hay un modelo por mercado.
+- **Modelo verificado sobre 20.824 partidos reales** de 14 ligas, sin puntuar el holdout:
+  **RPS 0.2077** frente a 0.2230 de la referencia, y una calibración del empate que pasó de errar
+  5–8 pp a **±1,4 pp**. Contra el Elo anterior gana en el marcador exacto (p = 0,0005) y en el
+  hándicap, pero **no de forma medible en el 1X2** (p = 0,054): la mejora está en la forma de la
+  distribución de goles, no en acertar quién gana. Está escrito así en la ficha de la app.
+- **Tres señales que se probaron y se descartaron** —ataque/defensa *encima del Elo*, racha y
+  congestión de calendario— siguen en el código, apagadas y con su interruptor, para que el
+  resultado negativo se pueda reproducir en vez de tener que creérselo. Que el ataque/defensa sí
+  funcione dentro del Dixon-Coles y no como corrección del Elo no es una contradicción: allí son los
+  parámetros que se ajustan, aquí eran un parche multiplicativo sobre un número que ya los resumía.
+- **Información de todos los equipos**: clasificación por Elo con goles a favor y en contra, y ficha
+  por equipo (balance global / casa / fuera, puntos, últimos partidos).
+- **Ligas sin fuente de resultados** (Champions) muestran partidos y probabilidades del mercado,
+  diciéndolo claramente, en vez de inventar una predicción.
+
+## Qué incluye — ⚾ Béisbol
+
+- **El lanzador abridor como pieza central.** En ningún otro de los cinco deportes un solo
+  jugador pesa tanto, y —a diferencia de una alineación de fútbol— **se anuncia el día antes**, así
+  que el modelo puede tenerlo. Cada abridor lleva una razón de supresión de carreras ajustada por
+  rival, y si sabes quién lanza (o lo han cambiado) **lo eliges tú y se recalcula todo**.
+- **Las carreras no son Poisson y aquí no se finge que lo sean.** Una entrada acaba con tres outs,
+  no con el reloj, así que las entradas grandes se agrupan: media 4,47 carreras, varianza 9,49. Una
+  binomial negativa lo recoge; usar Poisson cuesta 1,3 puntos de acierto en el over/under.
+- **El estadio, medido.** Coors Field y Petco Park no son el mismo deporte, y hasta ahora el modelo
+  los trataba igual —con el dato ya descargado: la columna que nombra el estadio de los 37.262
+  partidos del archivo. Coors sale **×1.220** (+22 % al total) y Seattle **×0.917**; 2,89 carreras
+  entre los extremos, sobre un total de ~8,9. Validado hacia adelante en **seis cortes de 2014 a
+  2024, los seis mejoran**, y el over/under acertado pasa de **53,4 % a 54,9 %**. La mejora se
+  concentra **siete veces** en los parques extremos y es cero en los neutros: el modelo no se volvió
+  más listo, dejó de equivocarse en Denver.
+- **La diagonal de la rejilla está vacía a propósito**: un marcador final nunca queda empatado. Esa
+  probabilidad es la de irse a entradas extra y se reparte en las casillas de una carrera.
+- **Ganador, total, línea de carreras (±1.5), marcador exacto y diferencia**, todo sumado de la
+  misma distribución, así que no pueden contradecirse.
+- **Modelo verificado sobre 36.235 partidos reales de MLB** (2010–2025): **Brier 0.2431** contra
+  0.25 de una moneda, y una calibración clavada dentro de ±0,4 pp en todas las bandas.
+- **El contador de carreras se verifica solo**: los ficheros de Retrosheet traen las jugadas pero no
+  el marcador, así que `npm run verify:bsb` recuenta una temporada entera y la compara con el
+  registro oficial — 2.426 de 2.426 exactos, abridores incluidos.
+- **Información de todos los equipos**: Elo, carreras a favor y en contra, balance en casa y fuera,
+  **pitagórico** (lo que dicen sus carreras que debería ser su balance) y la rotación completa.
+
+## Qué incluye — 🏈 Fútbol americano (NFL)
+
+- **Los números clave del deporte, 3 y 7.** Un touchdown son 7 puntos y un field goal 3, así que
+  el margen final se amontona: acaba en 3 el **15.1 %** de las veces y en 9 solo el **1.6 %**. Todos
+  los demás deportes de la app valoran su hándicap con una curva suave; aquí eso se equivoca justo
+  donde le preguntan, porque −3 y −3.5 no son la misma apuesta. La distribución lleva una tabla de
+  pesos medidos, y vale **+0.141 nats por partido** (1.15× de verosimilitud) frente a la normal sola.
+- **La ventaja de campo la mide la liga, no la fija el código.** Valía +2.75 puntos en 1999–2007,
+  vale +1.92 en 2020–2025, y en 2020 con los estadios vacíos **el modelo la vio caer sola a +0.30**.
+  Se rastrea con dos temporadas de memoria: 0.6353 de log loss en la era moderna contra 0.6389 si se
+  deja fija.
+- **Quién juega de quarterback.** Era la mayor omisión del modelo y el dato ya venía en el fichero
+  que descargábamos: nflverse trae el titular de los **7276** partidos del archivo. Importa porque el
+  **52 %** de los equipos-temporada usa más de un titular, así que un solo número por equipo promedia
+  al titular con su suplente y está mal en las dos direcciones. Ahora el crédito de cada resultado se
+  reparte entre el equipo y su quarterback (λ = 0.35, la misma cifra en tres cortes distintos de
+  validación). Mejora el log loss un 0.46 % en general — y un **1.78 % en los partidos que empieza un
+  suplente**, que es exactamente donde tenía que notarse.
+- **El viento y el techo, sobre el total.** El residuo del total cae de forma monótona con el viento
+  (+0.6 puntos con 0–4 mph, −5.1 con más de 21) y bajo techo se anota 2.44 puntos de más. Los dos
+  términos son independientes: juntos bajan el RMSE del total de 13.614 a **13.525** fuera de muestra.
+- **El único deporte que se puede medir contra el mercado — y no lo bate.** nflverse publica el
+  spread y el total de cierre del **100 %** de los partidos desde 1999. El modelo se queda a 0.28
+  puntos de la línea (eran 0.34 antes del quarterback) y acierta el **50.6 %** contra el hándicap, por
+  debajo del 52.4 % que hace falta solo para cubrir la comisión. Está escrito en el panel de aciertos, no en la letra pequeña: es la
+  razón de que la app no venda sus «posibles value» como dinero seguro.
+- **La banda de incertidumbre calibrada contra algo externo.** El modelo se separa 7.3 pp de media
+  de la línea de cierre, así que la tarjeta dice ±7.3 pp. Es la única de las cinco pestañas donde ese
+  número no es un juicio razonable sino una medición.
+- **Los tres mercados que ponen las casas**, en el orden en que los ponen: hándicap (aquí es *el*
+  mercado), total y ganador. El hándicap se cotiza **en cualquier línea**, con su probabilidad de
+  **nulo** — que en una línea entera de 3 puntos ocurre una de cada trece veces.
+- **Funciona sin ninguna API key.** El mismo fichero trae el calendario de la temporada que viene
+  antes de jugarse, así que hay partidos reales que predecir aunque no tengas cuotas configuradas.
+- Además: bandas de «por cuánto gana» en unidades de anotación, marcadores más probables, historial
+  directo, pitagórico con el exponente 2.37 de la NFL y ficha por equipo.
+
+Detalles y todas las mediciones en **[docs/NFL.md](docs/NFL.md)**.
+
+## Qué incluye — 🏀 Baloncesto
+
+- **El hándicap y el total como probabilidades**, no solo como cifras. «Warriors −7.3» dice cuánto,
+  no cuánto de probable; el margen del baloncesto resulta ser casi exactamente normal (σ 11.72
+  medida sobre 58.281 partidos, ±1σ 70.1% contra el 68.3% teórico), así que de ahí salen la
+  probabilidad de cubrir, la de over/under y el desglose de por cuánto gana.
+- **Ligas apostables**, configurables en `config/basketball.json`: NBA, WNBA, NCAA masculino y
+  femenino, EuroLeague y NBL. Qué ligas aparecen lo decide The Odds API según lo que esté activo
+  ahora, no un calendario fijo.
+- **Información de todos los equipos**: tabla ordenada por Elo con puntos anotados, recibidos y
+  diferencial, y ficha por equipo (balance global / en casa / fuera, últimos partidos, Elo y su
+  puesto en la liga).
+- **Partidos próximos con cuotas** y, para cada uno, **tres cifras**: probabilidad de ganar,
+  **diferencia esperada** (comparable al spread de la casa) y **total de puntos**.
+- **Desglose completo**: por qué gana X en puntos de Elo (nivel, ventaja de campo, descanso), tabla
+  que **suma exactamente** el rating usado, marcador estimado, medias de anotación, forma, balance
+  por cancha, historial directo (con ventana reciente aparte) y comparación con el mercado.
+- **Modelo verificado sobre 36.965 partidos NBA reales**: **68.4% de acierto** (baseline «gana el
+  local»: 61.6%), Brier 0.2012 y error de margen de 9.2 puntos con sesgo cero. Y comparado contra
+  **la predicción que publicó FiveThirtyEight** en esos mismos partidos: empate técnico
+  (0.2012 vs 0.2014 de Brier).
+- **Fiabilidad y track record propios**, igual que en tenis — incluida la precisión del margen, que
+  es lo que importa si miras el handicap.
+- **Ligas sin fuente de resultados** (EuroLeague, NBL) muestran partidos y probabilidades del
+  mercado, diciendo claramente que no hay modelo Elo, en vez de inventar una predicción.
+
+## Qué incluye — 🎾 Tenis
+
+- **ATP y WTA**, singles. Torneos configurables (4 Grand Slams + Masters 1000 / WTA 1000 de
+  fábrica) en `config/tournaments.json` — se amplía agregando entradas, sin tocar la lógica.
+- **Elo general + por superficie** (dura / arcilla / hierba) con K-factor dinámico y ponderado por
+  el margen de victoria.
+- **Forma reciente**, **head-to-head** y **comparación contra el mercado** (probabilidad
+  implícita sin vig + detección de value).
+- **Probabilidad de victoria en grande** para cada jugador (con un decimal), y todas las cifras
+  consistentes entre sí: los dos lados siempre suman exactamente 100.0%.
+- **Datos de cada jugador en el partido**: ranking oficial ATP/WTA + puntos, país, edad y mano.
+  Se muestran aunque el modelo no pueda predecir (jugador sin partidos en el historial), y en ese
+  caso también se muestra la probabilidad implícita del mercado.
+- **Modelo calibrado y verificado:** `npm run backtest` mide la exactitud real — **65.2% de
+  acierto** y probabilidades calibradas dentro de ~1 pp, sobre **22.062 partidos ATP
+  out-of-sample** (2015–2026). Incluye baseline de ranking y análisis de las discrepancias con el
+  mercado. Ver [docs/MODEL.md](docs/MODEL.md).
+- **Elo que aprovecha el marcador:** la K se escala con el **margen de games** (un 6-0 6-0 no
+  informa lo mismo que un 7-6 6-7 7-6), penaliza la **inactividad** (volver de un parón largo hace
+  rendir peor de lo que dice el Elo — medido, no supuesto) y **calibra distinto al mejor de 3 que al
+  mejor de 5**. Cada cambio se aceptó solo tras verificar con el backtest que baja el Brier.
+- **Track record propio:** la app **anota cada predicción antes** de que se juegue el partido y la
+  puntúa cuando llega el resultado real, así que el dashboard muestra su acierto **en los partidos
+  que tú viste** — no solo en el backtest histórico. Incluye comparación contra el mercado en esos
+  mismos partidos. Ver [«Aciertos reales»](#aciertos-reales-de-la-app).
+- **Fiabilidad por predicción:** cada probabilidad viene con un semáforo (alta / media / baja) y un
+  **rango** (p. ej. *62% ± 3 pp*), calculado con cuántos partidos respaldan cada Elo, cuántos en esa
+  superficie y si los datos del jugador están viejos. Un 62% con 800 partidos detrás y un 62% con 8
+  ya no se ven iguales.
+- **Resumen "qué es lo más probable"** en cada partido: en lenguaje natural, con el favorito,
+  su probabilidad, el marcador probable y las razones (superficie, forma, H2H, saque, mercado).
+- **Probabilidad de cada marcador** (2-0, 3-1, …) derivada matemáticamente de la probabilidad del
+  partido, más probabilidad de set decisivo y de ganar sin ceder sets.
+- **Señales físicas** por jugador: retiros, walkovers, días sin competir y carga de partidos
+  (evidencia extraída de los resultados — no un diagnóstico médico ni una fuente de lesiones).
+- **Historial en el torneo**: récord, títulos y mejor ronda de cada jugador en ese evento.
+- **Desglose completo por partido**: explicación de *por qué* gana X (qué señal pesa más),
+  ranking por Elo, últimos 5 resultados, récord en la superficie, comparativa de saque/quiebre
+  (ace%, 1er saque, break points salvados) y marcador estimado.
+- **Partidos próximos reales + auto-actualización:** con una API key, la app descubre los
+  torneos de tenis activos ahora, trae sus partidos y refresca las odds sola cada pocas horas
+  (o al pulsar *Actualizar*).
+- **Dashboard** para elegir circuito y torneo, ver próximos partidos con barras
+  modelo-vs-mercado, perfil de jugador (Elo por superficie + saque/quiebre + últimos
+  resultados) y H2H.
+- Datos guardados localmente en **SQLite** (`data/tennis.db`) para no depender de llamadas
+  repetidas a las APIs.
+
+## Repaso visual: cuatro cosas que estorbaban
+
+Medido en el navegador antes y después, no a ojo.
+
+### El muro ámbar encima de cada deporte
+
+El aviso del panel de sugerencias es de lo más valioso de la app —dice contra qué se ha
+medido el modelo, con cuántos partidos y qué **no** demuestra— y estaba en un solo párrafo
+de hasta doce líneas, en ámbar, antes de cualquier dato. En fútbol ocupaba media pantalla.
+El resultado práctico de un muro de texto es que se salta entero: el formato conseguía lo
+contrario de lo que pretendía.
+
+No se ha recortado ni una palabra. La **primera frase** queda a la vista, porque lleva el
+veredicto («este modelo NO le gana a la línea de cierre»), y el resto se despliega con *Ver
+contra qué se ha medido*. Comprobado en los cinco deportes: fútbol recupera 1.513
+caracteres al abrirlo, la NFL 520.
+
+El corte busca la primera frase **completa** —punto seguido de espacio y mayúscula— y no un
+número de caracteres: partir por la mitad produce un resumen que miente por omisión, y
+además dejaría cortadas cifras como `0.2115`.
+
+### Una diferencia de cero, pintada de rojo
+
+La tabla de sugerencias de la NFL enseñaba filas con **`-0.0 pp` en rojo**. El modelo y el
+precio coincidían hasta la décima, que es justo lo contrario de lo que el color grita. Por
+debajo de media décima, ahora es `0,0 pp` en tinta neutra.
+
+### La comparación modelo/mercado había que leerla
+
+Dos barras apiladas idénticas: para saber si el modelo se aparta del mercado había que leer
+«72,7 %» arriba, «75,8 %» abajo y restar. El dato que la tarjeta existe para dar —¿discrepan?—
+era el único que no se veía.
+
+Ahora el corte del mercado se dibuja **sobre** la barra del modelo, así que **la distancia
+es la discrepancia**, con la cifra al lado («mercado, a 3.1 pp»). Cuando coinciden, lo dice.
+
+### 700 píxeles de selector antes del primer partido
+
+En un teléfono de 390 px, las 17 ligas del fútbol con `flex-wrap` producían **nueve filas
+de pastillas**: más de una pantalla entera de selector antes de llegar a un partido. El
+selector era el contenido.
+
+| | antes | después |
+| --- | --- | --- |
+| alto del selector en móvil | ~700 px | **37 px** |
+| en escritorio | 74 px | 74 px (sin cambios) |
+
+Una sola fila que se desliza en horizontal por debajo de `sm`, y el `flex-wrap` de siempre
+a partir de ahí, donde caben en dos filas y verlas todas de golpe sí ayuda a elegir.
+
+### Y los nueve motivos de cada tarjeta
+
+El modelo produce hasta nueve motivos por partido y se pintaban todos iguales, uno detrás
+de otro. Con dos tarjetas por fila son dieciocho líneas de prosa a la misma altura, y
+encontrar la que mueve la predicción cuesta leerlas todas. El generador **ya los devuelve
+ordenados por importancia** y esa información se tiraba al pintarlos idénticos.
+
+Ahora se ven los cuatro primeros y el resto se despliega con el número al lado («Ver 4
+motivos más»). Cuatro y no tres: las tres primeras son casi siempre Elo, historial y forma
+—el esqueleto de cualquier predicción— y la cuarta es la primera que distingue *este*
+partido de otro.
+
+## La clasificación por Elo salía plegada, y nadie la encontraba
+
+Estaba montada al final de cada pestaña, detrás de un título gris que era un botón, y con
+`defaultOpen = false`. El comentario del componente decía «plegada donde va al final de una
+página larga; **abierta cuando es lo que el usuario vino a ver**» — y la segunda mitad no
+se cableó nunca: ninguna de las cinco pestañas pasaba `defaultOpen`, así que estaba siempre
+cerrada, debajo de ocho tarjetas de partido.
+
+Una función que hay que descubrir no está entregada. Ahora **se abre sola**, y si la
+cierras se queda cerrada: la elección se guarda en `localStorage` con una clave por
+pestaña, porque cerrar la de la NFL no tiene por qué cerrar la del tenis.
+
+## «¿Por qué me aparece partido demo?»
+
+La app cae a cuotas de demostración —generadas por el propio modelo— por **tres motivos
+distintos**, y hasta ahora los tres se veían igual: la etiqueta `odds demo` y nada más.
+Solo se guardaba *que* había caído, no *por qué*.
+
+| razón | qué pasa | qué hacer |
+| --- | --- | --- |
+| `sin_clave` | falta `ODDS_API_KEY` | ponerla en `.env` y `npm run update-data` |
+| `fuente_falla` | la clave está, pero el proveedor no contestó: cuota agotada, clave inválida o sin internet | `npm run doctor` — lo dice sin gastar cuota |
+| `sin_eventos` | todo bien, pero no hay tenis en juego | **nada**: entre torneos no se publica nada |
+
+Eso importa porque el aviso decía siempre *«pon tu clave en ODDS_API_KEY»*, que es un
+consejo **equivocado en dos de los tres casos** — y el más frustrante, porque manda a
+revisar algo que ya está bien. `sin_eventos` es el caso normal entre torneos y no hay nada
+que arreglar; `fuente_falla` con la cuota agotada tampoco se arregla tocando la clave.
+
+Ahora la razón se guarda al refrescar (`odds_fallback_reason`), sale en `/api/meta` y la
+pantalla dice la de verdad. El detalle del error del proveedor se guarda solo mientras esa
+sea la causa: dejarlo puesto haría que se enseñara el mensaje de un fallo que ya no ocurre.
+
+Comprobado en el navegador con las cuatro ramas, incluida la neutra (clave puesta y razón
+desconocida, que es lo que ve una base anterior a este cambio). Y `fuente_falla` se
+registró sola en una prueba real: clave puesta, proveedor inalcanzable, `HTTP 403` guardado
+como detalle.
+
+## «Quiero las cuotas reales»: `npm run odds`
 
 ```bash
-npm install
-npm run dev
+npm run odds
 ```
 
-Then open the printed local URL in your browser.
+Pide las cuotas de los cinco deportes y dice, deporte a deporte, si han llegado y —cuando
+no— **por qué no**:
+
+```
+  Fútbol      ✓ 84 partidos con cuotas reales
+  Baloncesto  · 8 de demostración
+              ↳ no hay ningún partido con precio publicado
+  NFL         · sin línea publicada (el calendario sigue siendo real)
+  Tenis       ✓ 12 partidos con cuotas reales
+──────────────────────────────────────────────────────────────
+Parcial: 3 de 5 con cuotas reales (Fútbol, Béisbol, Tenis).
+```
+
+Existía un hueco que ni `update-all` ni `doctor` tapaban. `update-all` reingiere el
+**histórico** de los cinco deportes —un centenar de megas y dos minutos— para acabar
+refrescando las cuotas al final: si lo único que ha cambiado es que ahora hay una clave en
+el `.env`, ese histórico ya estaba bien y se vuelve a bajar entero para nada. Y `doctor`
+diagnostica pero no arregla, a propósito.
+
+Cuesta **5 peticiones**, una por deporte, y lo dice antes de gastarlas. Al terminar recuerda
+cuántas quedan.
+
+Tres detalles que no son de estilo:
+
+- **Un deporte que revienta no para a los otros cuatro.** Cada uno habla con un endpoint
+  distinto del proveedor, y el fallo de uno no dice nada de los demás.
+- **La NFL nunca aparece en «qué hacer».** Su estado sin precios es «sin línea publicada»,
+  y sus partidos siguen siendo reales: meterla en la lista de problemas mandaría a buscar
+  una avería que no existe.
+- **Sale con error solo si NINGUNO lo consigue.** Un parcial es un resultado legítimo —
+  tener cuotas de tres deportes y no de los otros dos suele ser el calendario — y devolver
+  error ahí rompería cualquier script que encadene esto.
+
+## Por qué ESTE deporte sale en demostración (`npm run doctor`)
+
+Cada deporte guardaba `*_odds_source = 'fixture'`, que dice **que** está en demostración.
+Las causas son cuatro y piden cosas opuestas — una se arregla y otra se espera — así que
+ahora se guarda también **cuál**:
+
+| causa | qué pasa | qué hacer |
+| --- | --- | --- |
+| `sin_clave` | falta `ODDS_API_KEY` | ponerla en `.env` |
+| `fuente_falla` | el proveedor no contestó: cuota agotada, clave inválida o sin red | mirar el detalle, que trae el error literal |
+| `sin_ligas` | el proveedor contestó y **ninguna** de las competiciones que ofrece es de las configuradas | nada en el `.env`: o no hay liga en juego, o al proveedor le cambió la clave del deporte |
+| `sin_eventos` | reconocimos la liga y no hay ni un partido con precio | esperar |
+
+`sin_ligas` era la que más falta hacía y la que **no se podía diagnosticar de ninguna
+manera**: la ingesta hace `if (!league) continue;` sobre cada competición que el proveedor
+lista, así que si ninguna casa las ofrece bajo la clave que el proyecto conoce, las 140
+filas del fútbol caen a demostración **sin una sola línea de log**. Por eso esa causa
+guarda además las claves que el proveedor sí ofreció, que es el dato con el que se
+arregla.
+
+`npm run doctor` lo enseña debajo de cada deporte:
+
+```
+✗ Fútbol      140 de DEMOSTRACIÓN
+  ↳ el proveedor no contestó (cuota agotada, clave inválida o sin red)
+    Odds API /sports: HTTP 403
+✗ Tenis        27 de DEMOSTRACIÓN
+  ↳ no hay ODDS_API_KEY
+```
+
+La NFL no aparece nunca aquí: su estado sin precios es «solo calendario», que no es una
+cuota inventada y no se cuenta como demostración.
+
+## «Solo me salen dos partidos»
+
+La cabecera dice 58.367 partidos y la lista enseña dos. Son dos cosas distintas y la
+pantalla no lo decía:
+
+- El **archivo histórico** es nuestro y está completo.
+- Los **próximos** los publican las casas de apuestas, con pocos días de antelación y solo
+  cuando les ponen precio.
+
+Así que dos partidos suele ser lo correcto. A mitad de un Grand Slam hay un único torneo
+activo y en las rondas finales le quedan dos o cuatro. Sin decirlo, se lee como que la app
+no cargó, y la reacción natural es volver a actualizar — que **gasta cuota y devuelve los
+mismos dos**. Ahora, cuando la lista baja de seis partidos, sale una línea que lo explica y
+que distingue los dos casos: cuotas de demostración (falta la clave) o el calendario real
+tal como está. Con seis o más no aparece, porque encima de treinta tarjetas sería relleno.
+
+## Banderas: 318 jugadores las llevaban de otro país
+
+La app pinta la bandera de cada jugador en la tarjeta del partido, en su perfil y en la
+clasificación por Elo, y la de la sede de cada liga en las pastillas de las otras cuatro
+pestañas. Antes eran emoji; ahora son SVG servidos desde `web/public/flags/`. El cambio no
+es estético, o no solo:
+
+**El problema.** El código que convertía el país en bandera tenía 28 países a mano y, para
+el resto, cortaba las dos primeras letras del código del COI y las trataba como ISO-3166.
+Funciona para `ESP`→`ES` y falla en silencio para una cuarta parte del circuito:
+
+| código | daba | es | jugadores |
+|--------|------|-----|-----------|
+| `RSA` Sudáfrica | 🇷🇸 Serbia | 🇿🇦 | 14 |
+| `CHI` Chile | 🇨🇭 Suiza | 🇨🇱 | 9 |
+| `EST` Estonia | 🇪🇸 España | 🇪🇪 | 11 |
+| `ESA` El Salvador | 🇪🇸 España | 🇸🇻 | 11 |
+| `SLO` Eslovenia | 🇸🇱 Sierra Leona | 🇸🇮 | 14 |
+| `UAE` Emiratos | 🇺🇦 Ucrania | 🇦🇪 | 1 |
+| `PAK` Pakistán · `PAR` Paraguay | 🇵🇦 Panamá, los dos | 🇵🇰 🇵🇾 | 17 |
+| … 35 países más | | | |
+
+**318 de 1.272 jugadores, y ninguno salía en blanco.** Todos salían con una bandera
+equivocada y segura de sí misma, que es peor que no poner ninguna: un hueco se lee como «no
+lo sé» y una bandera se lee como «es de aquí». Y en Windows no se veía nada de eso, porque
+Segoe UI Emoji no trae glifos de bandera y lo que aparecía eran las dos letras.
+
+**Lo que hay ahora.** Una tabla completa en `config/countries.json` —el juego entero del
+COI más los alias ISO-3 que el archivo mezcla (`PAR` y `PRY` son los dos Paraguay)— y
+**ninguna heurística de respaldo**, porque la heurística de respaldo es exactamente lo que
+produjo los 318. Un código que no está en la tabla no tiene bandera: sale una pastilla gris
+con sus tres letras.
+
+Los SVG (`lipis/flag-icons`, MIT, versión clavada) están **en el repo**, no enlazados a un
+CDN. Tres razones: la app sigue funcionando sin internet como el resto de ella, un CDN que
+se apague dentro de un año no haría saltar ningún check, y con los ficheros en disco
+`verify:data` puede afirmar que todos los países de la base tienen su bandera — contra una
+URL remota lo más que se puede comprobar es que la cadena está bien formada, y `RSA` →
+`rs.svg` está perfectamente bien formada.
+
+`verify:data` comprueba cuatro cosas (probadas inyectando cada fallo): que todos los
+códigos de la base resuelven, que su SVG existe, que los 14 casos que el prefijo fallaba
+apuntan a su país con el nombre escrito al lado, y que ningún ISO-2 tiene dos nombres de
+país distintos. Hoy: **1.272 de 1.274 jugadores con bandera propia** (los 2 restantes
+constan como `N/A` en el archivo).
+
+## Fuentes de datos
+
+| Tipo | Fuente | Por qué |
+|------|--------|---------|
+| Histórico ATP | [Tennismylife `TML-Database`](https://github.com/Tennismylife/TML-Database) | Gratis, sin API key, partido a partido desde 1968, con superficie, ronda, sets, estadísticas de saque/quiebre **y el ranking oficial de cada jugador en cada partido**. Mismo formato de columnas que el dataset clásico de Jeff Sackmann. **Ojo: el repo de GitHub se congeló en enero de 2026** — su propio README dice que la base viva se movió a `stats.tennismylife.org`, que no es GitHub. Así que llega a 2026-01-17 y ahí se queda. |
+| Histórico WTA | [tennis-data.co.uk](http://www.tennis-data.co.uk/alldata.php) | Los repos `JeffSackmann/tennis_atp` y `tennis_wta` dejaron de estar accesibles (404) y TML solo cubre ATP, así que la WTA viene de aquí: un `.xlsx` por temporada, gratis y sin API key, con superficie, ronda, marcador set a set, ranking y puntos. **Además trae las cuotas de cierre de cada partido.** No tiene estadísticas de saque. |
+| Cuotas históricas | [tennis-data.co.uk](http://www.tennis-data.co.uk/alldata.php) | Cuotas de cierre partido a partido (promedio entre casas). Es lo que permite medir de verdad si el modelo le gana al mercado — ver `npm run backtest -- --market`. |
+| Datos de jugador | Incluidos en el histórico | Ranking oficial + puntos, país y mano. (El ATP Tour no ofrece API pública, y hacer scraping de su web sería frágil y de legalidad dudosa.) |
+| Odds | [The Odds API](https://the-odds-api.com) | Cuotas head-to-head de partidos próximos, **de tenis y de baloncesto**, con la misma key. Plan gratuito (500 req/mes). |
+| Resultados de baloncesto | [ESPN API pública](https://site.api.espn.com) | Gratis y sin key. Cubre NBA, WNBA y NCAA (M y F). |
+| Histórico NBA profundo | [FiveThirtyEight `nba-elo`](https://github.com/fivethirtyeight/data/tree/master/nba-elo) | 59.008 partidos reales 1946–2015. Con esto se **ajusta y valida** el modelo de baloncesto; termina en 2015, así que nunca es la fuente de los ratings de hoy. Detalles en [docs/BASKETBALL.md](docs/BASKETBALL.md). |
+| Baloncesto: **temporada actual sin depender de ESPN** | [sportsdataverse `hoopR-nba-data`](https://github.com/sportsdataverse/hoopR-NBA-data) | Espejo del calendario de ESPN en un CSV público, 2002 → hoy. Cierra el hueco de once años que dejaba 538 **sin necesitar más que GitHub**: con esto el archivo llega a junio de 2026 en vez de junio de 2015. Cuesta una descarga de 37 MB la primera vez (un solo CSV con todas las temporadas), luego caché de 24 h. |
+| Fútbol: resultados + cuotas 1X2 | [football-data.co.uk](https://www.football-data.co.uk) | Fuente principal de fútbol: temporadas actuales de las grandes ligas **con cuotas de cierre 1X2**. |
+| Fútbol: **resultados hasta la temporada actual** | [openfootball/football.json](https://github.com/openfootball/football.json) | La fuente principal de resultados de fútbol. Gratis, sin key, solo GitHub, y llega a mayo de 2026. Añadió Serie A, Ligue 1, Eredivisie, Primeira, Liga MX y Argentina, que antes no tenían modelo: de 4 a 10 ligas con Elo y de 19.483 a 21.591 partidos. Trae también el marcador al descanso. |
+| Fútbol: **las temporadas que le faltan al mirror** | [repos de texto de openfootball](https://github.com/openfootball) (`espana`, `italy`, `deutschland`) | El mirror JSON tiene huecos: a `es.2` y `it.2` les faltan 2021-22, 2022-23 y 2023-24, y el formato Football.TXT sí las trae. Solo se usa cuando el JSON no tiene la temporada. Aportó 1.386 partidos a LaLiga Hypermotion y 1.167 a Serie B, y con ellos el salto de división pasó a medirse con 14 clubes en España (antes 9) y 17 en Italia (antes 9). |
+| Fútbol: histórico para ajustar | [footballcsv](https://github.com/footballcsv) | El espejo con el que se ajustó y validó el modelo. **Ya solo se usa como último recurso: se quedó en la temporada 2020-21.** |
+| Fútbol: plantillas y lesionados | [vaastav/Fantasy-Premier-League](https://github.com/vaastav/Fantasy-Premier-League) | Solo Premier League: minutos, goles y asistencias esperados por 90, y el parte de bajas del día. Dominio público, sin key. |
+| Béisbol: histórico **con abridores** | [Retrosheet](https://www.retrosheet.org) vía [chadwickbureau/retrosheet](https://github.com/chadwickbureau/retrosheet) | 37.262 partidos de MLB (2010–2025) con el abridor de cada uno. El marcador se cuenta de las jugadas y se verifica con `npm run verify:bsb`. |
+| Béisbol: temporada en curso + abridores anunciados | [MLB Stats API](https://statsapi.mlb.com) | Gratis y sin clave. Retrosheet publica al acabar la temporada, así que sin esto los Elo irían un año atrasados. |
+| Fútbol americano: resultados, **líneas de cierre** y calendario | [nflverse/nfldata](https://github.com/nflverse/nfldata) | 7.276 partidos (1999–2025) con el spread y el total de cierre en el 100 % y el moneyline desde 2006 — lo que convierte «¿es bueno el modelo?» en una comparación contra el precio real. Trae también el calendario de la temporada siguiente, así que la pestaña funciona sin API key. |
+
+
+### ¿Hasta cuándo llega cada deporte?
+
+Medido en agosto de 2026, con todo actualizado desde este repositorio:
+
+| Deporte | Último partido en la base | ¿Está al día? |
+|---|---|---|
+| ⚽ Fútbol | 2026-05-24 | **Sí.** Las grandes ligas europeas acabaron en mayo; la siguiente temporada arranca en agosto. |
+| 🏀 Baloncesto | 2026-06-14 | **Sí.** Final de la NBA. La siguiente arranca en octubre. |
+| 🏈 NFL | 2026-02-08 | **Sí.** Super Bowl LX. La temporada 2026 arranca en septiembre. |
+| 🎾 Tenis (ATP) | 2026-01-17 | **No: le faltan ~7 meses.** Ver abajo. |
+| 🎾 Tenis (WTA) | sin datos | **No.** Ver abajo. |
+| ⚾ Béisbol | 2025-09-28 | **No: la temporada 2026 se está jugando ahora.** Retrosheet publica al terminar la temporada; el hueco lo cubre la MLB Stats API, que no es GitHub. |
+
+Los tres primeros están al día de verdad: no es que la descarga fallara, es que
+esos deportes están en su parón entre temporadas.
+
+**Por qué el tenis y el béisbol no.** No es un problema de red ni de este código:
+
+* `JeffSackmann/tennis_atp` y `tennis_wta` — el dataset estándar del tenis, sobre el
+  que se diseñó esta app — **ya no existen**. Devuelven 404, y no es un bloqueo: otro
+  repo de la misma cuenta (`tennis_MatchChartingProject`) sí responde.
+* `Tennismylife/TML-Database`, que lo reemplazó para ATP, **se congeló en enero de
+  2026**: su README dice que la base viva se movió a su web, que no es GitHub. Y nunca
+  cubrió WTA.
+* Retrosheet publica los partidos de béisbol **al acabar** la temporada, por diseño.
+
+Lo que sí llega a la temporada en curso, desde tu máquina, son fuentes que **no**
+están en GitHub y que este sandbox no alcanza: `tennis-data.co.uk` (ATP **y** WTA, con
+cuotas de cierre) y `statsapi.mlb.com` (béisbol). Las dos están ya implementadas y
+`npm run update-data` / `update-data:bsb` las intentan solas. Desde una red normal
+deberían completar los dos huecos sin que toques nada.
+
+Mientras estén incompletos, la app **lo dice en la propia pestaña** con un aviso
+ámbar que indica cuántos meses de retraso lleva el historial; no finge estar al día.
+
+### Los partidos del día se quedan hasta medianoche
+
+Un partido que ya empezó **sigue en la lista el resto del día** — es cuando más
+quieres ver cómo va. Desaparece a medianoche, no seis horas después de empezar.
+
+Esto se rompió tres veces por mecanismos distintos y cada una pasó la auditoría,
+porque comprobaba las piezas y no el resultado. Ahora hay una comprobación que mete
+un partido de sonda que empezó hace dos horas y pregunta a la app si lo devuelve
+(`npm run audit`, sección «¿Se quedan los partidos del día?»). No puede pasar
+mientras el fallo exista.
+
+**Sin `ODDS_API_KEY` el calendario también se refresca solo.** Antes no: el servidor
+se saltaba el refresco entero sin clave, con el argumento de que las citas de
+demostración son estáticas. No lo son — sus horas se generan relativas a ahora, así
+que el calendario envejecía y la pestaña se quedaba vacía al día siguiente. Refrescar
+sin clave no hace ni una petición HTTP ni gasta cuota.
+
+---
+
+## Requisitos
+
+- **Node.js ≥ 22.5** (usa el módulo integrado `node:sqlite`, sin dependencias nativas).
+
+## Instalación
+
+```bash
+git clone <este-repo>
+cd <repo>
+npm install
+cp .env.example .env    # opcional: para odds reales, ver abajo
+```
+
+## Puesta en marcha rápida (con datos de demostración, sin internet)
+
+```bash
+npm run seed     # carga un dataset de muestra en data/tennis.db
+npm run dev      # levanta API (:7374) + frontend (:7373)
+```
+
+Abre **http://localhost:7373**. Elige ATP/WTA y un torneo (Wimbledon, US Open…), verás los
+próximos partidos con la predicción del modelo y las odds lado a lado.
+
+> El seed usa **datos sintéticos** (nombres reales, partidos simulados) para que la app
+> funcione end-to-end sin conexión. El badge "datos demo" lo indica. Reemplázalo con datos
+> reales usando `npm run update-data`.
+
+---
+
+## Los partidos de hoy se quedan hasta medianoche (arreglado)
+
+Un partido jugado por la mañana desaparecía por la tarde, y el filtro que debía conservarlo estaba
+bien: la causa era que **la fila ya no existía**.
+
+Cada refresco de cuotas hacía un `DELETE FROM …_upcoming` sin condiciones y reinsertaba lo que
+devolvía la fuente. Una fuente de partidos *próximos* nunca devuelve uno que ya empezó, así que el
+partido de la mañana se borraba de la base — y el refresco corre al arrancar el servidor. Toda la
+función de «los partidos de hoy se quedan» estaba filtrando una fila que ya no estaba.
+
+El borrado ahora tiene tres partes:
+
+| | |
+|---|---|
+| Partidos **futuros** | se borran: el refresco los va a reinsertar con cuotas frescas |
+| Anteriores a la ventana | se borran: nadie los va a mirar y son lo que hacía crecer la tabla sin fin |
+| **Todo lo demás** | **se queda**: ya empezaron pero son de hoy, y son justo los que quieres ver el resultado |
+
+Estaba en los cinco deportes, y la NFL además tenía una segunda copia del error: su calendario
+filtraba con una ventana propia de cuatro horas en vez de la de la app, y la más estrecha ganaba en
+silencio. Ahora las dos usan la misma regla.
+
+Verificado plantando un partido ya empezado en cada uno de los cinco y corriendo el refresco: los
+cinco sobreviven, y una fila de 2020 sigue limpiándose. El audit tiene una comprobación nueva para
+que no vuelva.
+
+---
+
+## Verificar los datos (`npm run verify:data`)
+
+Había dos comprobaciones en el proyecto y ninguna respondía a esta pregunta. `npm run audit`
+pregunta si la app cuenta con fidelidad lo que dijo el modelo; `npm run backtest:*` pregunta si el
+modelo es bueno. **Las dos pasan sobre una base a la que le falta media temporada.**
+
+Así que esta comprueba los **datos**, contra hechos de cada deporte que no dependen de ningún
+modelo:
+
+| | |
+|---|---|
+| Partidos por equipo y temporada | comparados con **las temporadas vecinas**, no con un número fijo |
+| Cuánto gana el local | 45 % / 26 % / 29 % en fútbol, 53,5 % en béisbol, 62 % en la NBA |
+| Marcadores posibles | y el suelo sale del archivo, no del juego moderno |
+| Duplicados, equipos huérfanos, marcadores vacíos | uno por partido, todos existen, ninguno nulo |
+| **Que los Elo se reproduzcan desde los partidos** | rehacerlos da la misma cifra: 0,00 de diferencia |
+
+Lo de las temporadas vecinas es el punto fino. Una constante «una temporada son N partidos» no
+funciona sobre un archivo que va de 1947 a hoy: la BAA de 1947-48 jugó 215 partidos donde sus
+vecinas jugaron 380, y eso parece una descarga rota hasta que ves que tenía **ocho** equipos en vez
+de doce — 54 partidos cada uno, perfectamente normal. La métrica es **partidos por equipo**: el
+tamaño de la liga cambia el total y no el calendario; una descarga a medias cambia los dos.
+
+Las temporadas que de verdad fueron cortas están **nombradas una por una** (la huelga del 94, el
+COVID del 2020, los cierres patronales de la NBA), que es la alternativa honesta a ensanchar la
+tolerancia hasta que no cace nada.
+
+Probado quitando 110 partidos de la temporada 2018 de la NFL: la comprobación falla con
+*«2018: 10 partidos por equipo frente a ~17 de sus vecinas»*.
+
+---
+
+## La navegación y la cabecera
+
+**Los deportes están a la izquierda** desde 1024 px, en un rail de 15 rem, y arriba por debajo de esa
+anchura. Es la mejor forma para seis elementos en pantalla ancha: las etiquetas se leen enteras en vez
+de pelearse por una tira horizontal, y todo el ancho de la página queda para el contenido. En un móvil
+de 390 px un rail se comería un tercio de la pantalla, así que ahí vuelve a ser una fila.
+
+Es **una sola lista en dos orientaciones**, no dos listas (`SportNav`): los mismos seis deportes, el
+mismo orden, el mismo color de acento marcando el activo, la misma semántica `role="tab"`. Dos copias
+se desincronizarían la primera vez que se añada un deporte.
+
+Un efecto secundario que salió gratis: el offset `--header-h` que usan las cabeceras de día pegajosas
+está **medido**, no fijado. Por encima de 1024 px la barra de arriba es `display: none`, así que su
+altura medida es 0 — y 0 es exactamente el offset correcto ahí, porque ya no hay nada encima del
+contenido. Un valor fijo habría dejado un hueco del tamaño de una cabecera que no está en pantalla.
+
+### La cabecera, plegada
+
+Cada pestaña abría con un muro de texto antes de una sola predicción: un párrafo explicando el
+modelo, una línea de origen de datos, otra de cuotas, un aviso de datos viejos de dos frases y el
+panel de aciertos. Todo cierto, todo leído una vez, y todo entre el lector y aquello para lo que
+abrió la app. En un portátil era casi la primera pantalla entera.
+
+Ahora se pliega —y arranca plegada— dejando arriba **los controles y los datos**:
+
+```
+[↻ Actualizar]  37.262 partidos · 32 equipos  [⚠️ datos de sept 2025]        Detalles ▼
+```
+
+**El aviso sobrevive al plegado a propósito.** El párrafo largo de datos viejos es la única parte de
+ese bloque que cambia lo que hay que *hacer*: dice que esos números describen a los equipos de la
+temporada pasada. Esconderlo en silencio dejaría la app engañando sin decirlo, que es justo el fallo
+que ese aviso existe para evitar. Así que el párrafo se pliega y una versión de cuatro palabras no.
+Nada importante desaparece; solo deja de ser un párrafo.
+
+La elección de abierto/cerrado se recuerda, y se recuerda **una vez para todos los deportes**: es una
+preferencia sobre cuánto adorno quieres, no un hecho sobre el béisbol.
+
+---
+
+## El ancho de la página
+
+La app usaba `max-w-3xl` — **768 px** —, que en un portátil es menos de la mitad de la ventana: se
+veía como una captura de móvil pegada en el centro del navegador. 768 px es la medida correcta para
+una **columna de texto**; es la medida equivocada para una página cuyo contenido son tarjetas,
+rejillas de marcadores y tablas de clasificación.
+
+Ahora son **1280 px**, y —esto es lo importante— **las tarjetas van a dos columnas** desde esa
+anchura. Ensanchar sin más habría sido peor que el bug: una tarjeta de 1280 px pone el «23,7 %» y el
+«76,3 %» en extremos opuestos del monitor con un palmo de nada en medio. El espacio extra tiene que
+comprar una segunda columna, no una más larga.
+
+| Ventana | Navegación | Contenido | |
+|---|---|---|---|
+| 1920 px | rail izquierdo | 1280 px | dos columnas de tarjetas |
+| 1280 px | rail izquierdo | 1040 px | dos columnas |
+| 1023 px | fila arriba | 1023 px | una columna |
+| 768 px | fila arriba | 768 px | una columna |
+| 390 px | fila arriba | 390 px | una columna |
+
+Verificado en las cinco, pestaña por pestaña: **cero desbordamiento horizontal**. El paso a rejilla trajo un bug propio
+que hubo que arreglar —una pista de CSS grid es `minmax(auto, 1fr)` por defecto, y ese `auto`
+significa «al menos lo más ancho que no pueda encogerse», así que una sola etiqueta con
+`whitespace-nowrap` dentro de una tarjeta empujaba la pista fuera de la pantalla: 5 px de scroll
+horizontal en un móvil de 390 px.
+
+---
+
+## Sugerencias por deporte («lo que el modelo destacaría»)
+
+Cada pestaña muestra una tarjeta por partido, que responde «¿qué pasa con este?». No respondía la
+pregunta con la que uno llega de verdad: **de todos estos, ¿en cuáles dice el modelo algo raro?**
+Averiguarlo obligaba a leerse veinte tarjetas.
+
+Arriba de cada deporte hay ahora una tabla de hasta seis filas. Cada fila es un mercado concreto de
+un partido concreto:
+
+| Partido | Apuesta | Modelo | Mercado | Dif. | Cuota mínima | Devolvería |
+|---|---|---|---|---|---|---|
+| Chicago Cubs @ San Diego Padres | **Chicago Cubs +1.5** · línea de carreras | 63.4 % | — | — | 1.58 | busca ≥ 1.58 |
+| Cleveland Guardians @ Boston Red Sox | **Over 8.5** · total de carreras | 56.5 % | — | — | 1.77 | busca ≥ 1.77 |
+
+**La «cuota mínima» es el número que ninguna casa te muestra**: 1 ÷ probabilidad del modelo. Por
+encima de esa cuota el modelo cree que el precio es generoso; por debajo, que es caro.
+
+Los mercados son los que **cada modelo produce de verdad**: 1X2, doble oportunidad, over/under 2.5 y
+ambos marcan en fútbol; ganador, total y línea ±1.5 en béisbol; ganador, hándicap y total en
+baloncesto y NFL; ganador en tenis. Los córneres y los «gana cualquier mitad» **no están**, porque
+esta app no tiene datos de córneres ni marcadores al descanso, y un número verosímil sin nada detrás
+es lo peor que podría enseñar esta tabla.
+
+Cuatro decisiones que hacen que la lista sirva:
+
+1. **Se ordena por la diferencia con el mercado, no por la confianza del modelo.** «El favorito gana
+   al 92 %» no es un hallazgo, es un precio. El único orden defendible es dónde el modelo y la casa
+   **discrepan**, porque es el único sitio donde el modelo puede estar aportando algo.
+2. **Una fila por partido y un tope por mercado.** Sin el tope la lista degeneraba: la doble
+   oportunidad es P(1)+P(X), estructuralmente ~75 % en casi cualquier partido, así que llenaba las
+   seis filas con seis números casi idénticos. El tope se calcula según cuántos mercados haya, para
+   no castigar al tenis —que solo produce uno— dejándolo con dos filas y cuatro huecos.
+3. **Las cuotas demo no cuentan como mercado.** Sin API key la app se inventa las cuotas *a partir
+   de la probabilidad del propio modelo* más un margen. Quitarles el margen devuelve el número del
+   modelo, así que la diferencia es cero por construcción: compararlas sería informar sobre su
+   propia aritmética. Se tratan como «sin cuota» y el panel lo dice.
+4. **Nunca sugiere un partido que ya empezó.** El calendario mantiene los partidos de hoy en
+   pantalla a propósito, que está bien para ver un resultado y mal para proponer una apuesta.
+
+Y el aviso va **encima** de la tabla, no en una nota al pie. En la pestaña de NFL ese aviso dice que
+el modelo **no le gana a la línea de cierre** (50,6 % contra el hándicap, con el equilibrio en
+52,4 %), que está medido y dice que no.
+
+---
+
+### La dirección de la app: 7373 (y por qué no 5173)
+
+**La app vive en `http://localhost:7373`** y su API en el `7374`. Esa dirección es estable:
+puedes guardarla en marcadores o en la pantalla de inicio del móvil y siempre será esta app.
+
+Antes eran el 5173 y el 4000, y eso era el problema: el 5173 es el puerto **por defecto de
+Vite**, así que lo quiere cualquier proyecto de Vite del ordenador, y el 4000 es el de la mitad
+de las APIs de Node que existen. Con dos proyectos, `http://localhost:5173` era una app
+distinta según lo que hubieras arrancado esa mañana — una dirección así no se puede guardar. El
+7373/7374 no es el defecto de ninguna herramienta común, los dos números son contiguos para que
+se recuerden juntos, y son solo de esta app.
+
+Si además el puerto elegido estuviera ocupado, el backend moría con
+`EADDRINUSE: address already in use 0.0.0.0:7374` **y el frontend cargaba igual**: una app
+perfectamente pintada sin un solo dato, que es un fallo bastante más confuso que un error claro.
+Así que `npm run dev` **elige los puertos antes de que nada se ate** y se los pasa a los dos
+procesos. Ese orden es todo el asunto: si cada proceso eligiera el suyo, el proxy `/api` del
+frontend apuntaría a un puerto donde el backend no acabó.
+
+```
+====================================================
+  App        http://localhost:7373
+  API        http://localhost:7374/api
+  En el móvil  http://192.168.1.34:7373
+====================================================
+```
+
+Con el 7373 ocupado (una segunda copia de esto, por ejemplo) lo dice y se corre, sin que nadie
+edite un archivo de configuración. Salta el 7375, que está reservado para `npm run preview`:
+
+```
+ℹ️  Puertos por defecto ocupados (¿otra app corriendo?), uso otros:
+   API  7374 → 7376
+   web  7373 → 7377
+```
+
+Verificado con otra app ocupando el 5173: esta arranca en el 7373/7374 y **no toca el 5173**.
+Y con dos copias a la vez, cada una recibe **puertos distintos** y —matando la API de la
+segunda— su web devuelve 500 mientras la primera sigue sirviendo: **cada proxy llega a su
+propia API**, que es la propiedad que importa.
+
+Si quieres números concretos, `PORT` y `WEB_PORT` en el `.env` los fijan. Un puerto fijado que
+esté ocupado **no se mueve**: se para y lo dice, porque si pediste el 7400 mereces una respuesta
+sobre el 7400.
+
+```bash
+npm run dev                            # 7373 + 7374, con red de seguridad si están ocupados
+PORT=7400 WEB_PORT=7401 npm run dev    # o los que tú digas (dos números distintos)
+npm run dev:fixed                      # 7373 y 7374 a pelo, sin red de seguridad
+```
+
+## Abrirla en el teléfono
+
+### `npm run phone` daba el puerto equivocado cuando más falta hacía
+
+`npm run dev` busca un puerto libre si el 7373 está ocupado — es lo que permite tener la
+app corriendo junto a otro proyecto. Pero `npm run phone` se lanza en **otra terminal**, no
+hereda el entorno de `dev`, y leía `WEB_PORT` de un sitio donde no está: caía a 7373
+siempre.
+
+O sea que justo en el caso para el que existe la búsqueda de puerto libre, la app quedaba
+en 7376 y esto mandaba a escribir **7373** en el teléfono. Una dirección que no carga,
+acompañada de un «la app no está corriendo» que era **falso**. Reproducido ocupando los dos
+puertos a mano:
+
+```
+dev eligió: 7376 / 7377
+phone decía: http://192.168.x.x:7373   ❌ la app está corriendo
+phone dice:  http://192.168.x.x:7377   ✅ la app está corriendo
+```
+
+Ahora `dev` escribe los puertos que acabó eligiendo en `data/.dev-ports.json` y `phone` los
+lee — pero **los comprueba antes de fiarse**, porque un puerto guardado no es un puerto
+vivo: si el servidor murió, el fichero sigue ahí mintiendo. Con nada corriendo enseña el
+puerto por defecto, no el de la sesión anterior, que ya no significa nada.
+
+
+Con la app corriendo (`npm run dev`):
+
+```bash
+npm run phone
+```
+
+Imprime la dirección que hay que escribir en el navegador del móvil —algo como
+`http://192.168.1.42:7373`— y comprueba que la app y la API estén levantadas. El teléfono tiene que
+estar en **la misma red Wi-Fi**; no se publica nada en internet.
+
+Una vez abierta, en el menú del navegador: **«Añadir a pantalla de inicio»**. Queda con su icono, a
+pantalla completa y sin barra de navegador, porque la app trae `manifest.webmanifest`, iconos de
+192/512 px y el de 180 px que pide iOS.
+
+**Si carga en el ordenador pero no en el teléfono**, casi siempre es el cortafuegos del sistema
+bloqueando el puerto 7373 (macOS: Ajustes → Red → Firewall; Windows: permitir Node.js en redes
+privadas).
+
+Un detalle que evita un problema: el teléfono **no necesita alcanzar la API**. Llama a `/api/…` sobre
+la misma dirección de la web, y el ordenador que sirve la página hace de proxy hacia el backend.
+
+Para que vaya más rápido en el móvil, sirve el build en vez del servidor de desarrollo:
+
+```bash
+npm run build
+npm run preview --workspace web    # queda en el puerto 7375
+```
+
+## Odds reales y partidos próximos (The Odds API)
+
+Los partidos próximos **reales** (los que se juegan hoy/esta semana) y sus cuotas vienen de
+The Odds API. Sin key, la app muestra un demo con partidos de ejemplo.
+
+1. Regístrate gratis en **https://the-odds-api.com** y copia tu API key (botón *Get API Key*).
+   El plan gratuito da 500 requests/mes.
+2. En tu archivo `.env`:
+
+   ```bash
+   ODDS_API_KEY=tu_clave_aqui
+   ODDS_REGIONS=eu
+   ```
+
+   (NUNCA subas tu `.env` — está en `.gitignore`. Para cambiar de clave basta con editar esa línea
+   y reiniciar; no hay nada que tocar en el código.)
+3. Ejecuta `npm run update-data`. La ingesta **descubre automáticamente los torneos de tenis
+   activos** en ese momento (Grand Slams, Masters/1000, 500…) y trae sus partidos, así aparece
+   lo que realmente se juega hoy — no una lista fija.
+
+### «Me aparecen cuotas de demostración»: `npm run doctor`
+
+Es un síntoma con **cinco** causas distintas y desde fuera se parecen todas: no hay `.env` en la
+raíz (o está en otra carpeta), la línea de la clave está mal escrita, The Odds API la rechaza,
+el plan del mes está agotado, o el servidor se arrancó **antes** de editar el `.env` — que solo
+se lee al arrancar.
+
+```bash
+npm run doctor
+```
+
+Comprueba las cinco en orden y termina diciendo cuál es y con qué comando se arregla. No gasta
+cuota: la única llamada es a `/v4/sports/`, que The Odds API documenta como gratuita y existe
+justo para validar una clave sin pagar por ello (`--sin-red` se salta incluso esa). Nunca imprime
+la clave entera —`6467••••••••a339`— porque esta salida es lo que uno pega en un chat al pedir
+ayuda. Y no edita el `.env` por ti: es el único dato del proyecto que no se puede regenerar solo.
+
+### El cupo gratuito, y cómo se agotó
+
+**The Odds API cobra un crédito por mercado y POR REGIÓN.** Una llamada pidiendo
+`h2h,spreads,totals` en `eu,uk` cuesta **seis** créditos, no uno. El listado `/sports` es gratis.
+
+Esa aritmética, que el código no estaba haciendo, agotaba el plan gratuito **en dos días y medio**:
+
+| Por ciclo de refresco (antes) | Créditos |
+|---|---:|
+| Tenis, ~4 torneos activos × 1 mercado × 2 regiones | 8 |
+| Baloncesto, 7 ligas × 1 × 2 | 14 |
+| Fútbol, 13 ligas × 1 × 2 | 26 |
+| **Total** | **48** |
+
+48 × 4 ciclos al día × 30 días = **5.760 al mes**, contra un cupo de 500.
+
+Lo que se cambió:
+
+1. **Una sola región** por defecto en vez de dos. `eu,uk` duplicaba el precio de cada llamada para
+   tener una segunda opinión sobre los mismos precios.
+2. **El cupo se lee y se recuerda.** Cada respuesta trae `x-requests-remaining`; ahora se guarda, se
+   comprueba antes de gastar y **se muestra en el pie de la app**, en todas las pestañas.
+3. **Una reserva** (2 % del plan, mínimo 25). Por debajo de ahí el refresco automático se abstiene,
+   para que los últimos créditos queden para el botón **↻ Actualizar** que pulses tú, y no se los
+   coma un temporizador a las 4 de la mañana.
+4. **El listado `/sports` se pide una vez y se comparte.** Es gratis, pero cinco deportes hacían cada
+   uno su llamada en cada ciclo.
+5. **La NFL filtraba mal**: era el único deporte que pedía todas sus ligas sin comprobar si estaban
+   en temporada, y encima con tres mercados. En marzo pagaba 6 créditos por no traer nada.
+6. **`AUTO_REFRESH_MINUTES=0` no desactivaba nada.** `Number('0') || 720` es 720, así que lo primero
+   que prueba cualquiera para frenar el gasto no hacía absolutamente nada. Arreglado.
+
+Resultado: **~8 créditos por ciclo, dos veces al día, unos 480 al mes** — dentro del plan gratuito.
+
+### Y cuando el plan crece, el ritmo crece solo
+
+Nada de lo anterior debería tener que reescribirse por cambiar de plan, así que ya no hace falta:
+**la app aprende cuánto puede gastar y se ajusta sola.**
+
+`x-requests-remaining` + `x-requests-used` **es** el tamaño del plan, y llega gratis en cada
+respuesta. Con ese número la app calcula tres cosas que antes eran constantes escritas a mano:
+
+| | Cómo sale | Plan de 500 | Plan de 20.000 |
+|---|---|---:|---:|
+| Reserva para el botón ↻ | 2 % del plan (mínimo 25) | 25 | **400** |
+| Presupuesto automático | 60 % del plan | 300 | **12.000** |
+| Intervalo de refresco | presupuesto ÷ coste de un ciclo | cada ~3,4 días | **cada ~2 h** |
+
+El coste de un ciclo también se mide en vez de suponerse: es la diferencia del contador `used` de
+la propia API entre el principio y el final del ciclo. Con las ligas de hoy sale **34 créditos**
+(13 de fútbol + 7 de baloncesto + 4 de béisbol + 6 de NFL + ~4 de tenis, a una región).
+
+El 40 % que no se presupuesta no es timidez: absorbe lo que una recta no puede prever — trece ligas
+de fútbol configuradas de las que juegan cinco en una semana cualquiera, y los refrescos que pidas
+tú a mano.
+
+**Dos límites, y hacen cosas distintas.** La reserva protege el *final* del plan; la **guarda de
+ritmo** protege la mitad del mes, que es donde un plan cuarenta veces mayor se pierde de verdad —
+no llegando a cero, sino gastando tres semanas en tres días. Si el gasto va por delante del
+calendario, el refresco automático se abstiene hasta que el mes lo alcance; **el botón ↻ nunca se
+bloquea por esto**.
+
+Si prefieres fijarlo tú, `AUTO_REFRESH_MINUTES` en el `.env` manda y el ajuste automático se aparta.
+
+**¿Y si mejor gasto los créditos en más casas de apuestas?** Es la otra opción legítima con un plan
+grande: `ODDS_REGIONS=eu,uk` duplica el coste de cada llamada pero cruza más casas, así que el
+consenso sin vig sale de más precios. Con 20.000 créditos cabe: el ciclo pasa a 68 y el intervalo a
+unas 4 h, todo calculado solo. No lo he cambiado por defecto porque **mueve todos los números de
+mercado de la app** y esa es una decisión tuya, no mía.
+
+### Que se actualice solo
+
+Con la key configurada, el servidor **refresca las odds automáticamente** mientras corre (al arrancar
+y cada `AUTO_REFRESH_MINUTES`, **12 h** por defecto), en los cinco deportes. Las ligas fuera de
+temporada no gastan nada. También puedes pulsar **↻ Actualizar** en el dashboard para refrescar al
+instante, y el pie de la app te dice cuántas peticiones te quedan.
+
+Para desactivarlo del todo: `AUTO_REFRESH_MINUTES=0`.
+
+## Actualizar datos (histórico + odds)
+
+```bash
+npm run update-data
+# opciones:
+npm run update-data -- --from 2015 --to 2025    # rango de temporadas
+npm run update-data -- --tour atp               # solo un circuito
+npm run update-data -- --skip-odds              # solo histórico
+npm run update-data -- --source tennis-data     # forzar tennis-data.co.uk (trae cuotas)
+npm run update-data -- --source tml             # forzar solo GitHub (comportamiento anterior)
+```
+
+**De dónde saca el histórico (`--source`)**
+
+| Valor | Qué hace |
+|---|---|
+| `auto` *(por defecto)* | Intenta GitHub (TML) para cada circuito y, si no puede servirlo, cae a tennis-data.co.uk. Es así como la **WTA obtiene datos**: TML es solo ATP. |
+| `tml` | Solo GitHub. Más estadísticas por partido (saque, break points), sin cuotas. |
+| `tennis-data` | Solo tennis-data.co.uk. **Con cuotas históricas** en todos los partidos, sin estadísticas de saque. |
+
+No es una fuente mejor que la otra: TML da más detalle por partido, tennis-data da cuotas. Con
+`auto` obtienes ATP detallado y WTA funcionando.
+
+Esto:
+1. Descarga los CSV del histórico para el rango de años (cacheados en `data/raw/`).
+2. Recalcula todos los ratings Elo.
+3. Descarga odds en vivo de The Odds API (o genera fixtures si no hay key / fuera de temporada).
+
+> `update-data` necesita acceso a internet (GitHub + The Odds API). En entornos sin red usa
+> `npm run seed`.
+
+### Descarga manual de tennis-data.co.uk
+
+Si tu red bloquea ese dominio (el mensaje de error lo dirá):
+
+1. Abre **http://www.tennis-data.co.uk/alldata.php**.
+2. Baja el `.xlsx` de cada temporada que quieras (columna ATP o WTA).
+3. Guárdalos en `data/raw/tennis-data/` con el circuito y el año en el nombre:
+   `wta-2024.xlsx`, `atp-2024.xlsx`, …
+4. Vuelve a ejecutar `npm run update-data`. Los detecta y los usa sin red.
+
+También acepta `.csv`: si prefieres, abre el `.xlsx` y guárdalo como CSV.
+
+### Método manual del histórico ATP (si la descarga automática falla)
+
+Funciona siempre, sin git y sin credenciales. Útil si tu red filtra GitHub o si `git` tiene
+credenciales guardadas que GitHub rechaza:
+
+1. Abre https://github.com/Tennismylife/TML-Database → botón verde **Code** → **Download ZIP**.
+2. Mueve el ZIP **sin renombrar ni descomprimir** a la carpeta `data/raw/` del proyecto.
+3. Ejecuta `npm run update-data`. La app detecta el ZIP, lo descomprime sola y lo usa.
+
+`npm run update-data -- --fresh` limpia la caché de descargas pero **conserva** los ZIP que hayas
+puesto a mano, así que puedes reintentar sin volver a descargarlos.
+
+---
+
+## Aciertos reales de la app
+
+El `npm run backtest` mide el modelo sobre 20 años de historial. Útil para ajustarlo, pero no
+responde la pregunta que de verdad importa: **¿ha acertado los partidos que yo miré?**
+
+Para eso la app lleva su propio registro:
+
+1. Cada vez que muestra una predicción de un partido **real** próximo, la **guarda** (probabilidad,
+   favorito, cuotas del momento, fiabilidad declarada).
+2. Ese registro **no se reescribe nunca**: la primera cifra servida es la que se puntúa, así que no
+   puede «mejorar» sola cuando se mueven las cuotas.
+3. Cuando el resultado real entra al historial (al correr `npm run update-data`), la predicción se
+   empareja con él y se puntúa.
+
+El dashboard lo muestra arriba, plegable: acierto, Brier, log loss, calibración (dicho vs ocurrido),
+**el mismo cálculo para el mercado en esos mismos partidos**, y el desglose por fiabilidad
+declarada. Con menos de 30 partidos resueltos avisa de que la muestra es pequeña.
+
+> El registro **sobrevive** a `npm run update-data`: reingerir el historial no borra tu track record.
+> Los partidos de demostración (`odds demo`) **no** se registran: nunca se juegan, así que puntuar
+> contra ellos no significaría nada.
+
+Sirve además como detector de averías: si los datos se rompen o quedan viejos, el acierto cae y lo
+ves, en vez de fallar en silencio.
+
+## Abrirla sin escribir nada: `scripts/abrir.command`
+
+En un Mac, **doble clic** en `scripts/abrir.command` y la app se abre. No hace falta la
+Terminal ni acordarse de la carpeta: el fichero se sitúa solo desde su propia ruta, así
+que funciona esté donde esté el proyecto.
+
+Arrástralo al Dock o haz un alias en el Escritorio y queda a un clic.
+
+Lo que hace que este `.command` funcione y la mayoría no: **el Finder lo lanza con un
+shell que no ha leído tu `~/.zshrc`**, así que un Node instalado con nvm —lo más habitual
+en un Mac— sencillamente no está en el PATH, y el doble clic abre una ventana que dice
+«command not found: npm» y se cierra. Este carga nvm si está, prueba las rutas de Homebrew
+(Apple Silicon e Intel) y de Volta, y si aun así no encuentra Node **lo dice, con el
+comando de la Terminal escrito**, en vez de cerrarse. La ventana tampoco se cierra sola al
+terminar: si algo falló, el motivo está justo encima.
+
+## Ponerla en línea (Fly.io)
+
+Para abrirla desde el móvil en cualquier sitio, no solo en tu wifi. Cuatro comandos una
+vez, y `npm run deploy` a partir de entonces.
+
+```bash
+brew install flyctl
+fly auth login
+fly launch --no-deploy          # escribe tu nombre de app en fly.toml
+fly volumes create datos --size 3
+fly secrets set APP_PASSWORD="una-frase-larga-y-tuya"
+fly secrets set ODDS_API_KEY="tu-clave"   # opcional: sin ella, cuotas de demostración
+npm run deploy
+```
+
+`npm run deploy` comprueba en dos segundos todo lo que `fly deploy` descubriría al final
+de una construcción de varios minutos: que estás autenticado, que la app y el volumen
+existen, que la contraseña está puesta y que hay base de datos que llevar.
+
+### Por qué lleva contraseña, y por qué no arranca sin ella
+
+En el portátil, «sin autenticación» significa «sin autenticación en localhost». En una URL
+pública significa otra cosa: la tabla `bets` guarda importe, beneficio y notas de cada
+apuesta, y `/api/refresh` dispara una llamada a The Odds API — cualquiera que lo pulse
+gasta tu cuota, y el plan gratuito son 500 al mes.
+
+Con `NODE_ENV=production` y sin `APP_PASSWORD`, **el servidor se niega a arrancar**. Un
+aviso en el log se lee una vez, en un despliegue que salió bien, y la app queda abierta
+durante meses funcionando perfectamente — que es justo el fallo que no da síntomas. Un
+despliegue que falla se arregla; uno que queda abierto no se entera nadie. En local no
+cambia nada.
+
+La única ruta sin contraseña es `/healthz`, porque Fly la usa para saber si la máquina
+vive: si respondiera 401 la daría por muerta y la reiniciaría en bucle. No toca la base ni
+devuelve nada más que `{ ok: true }`.
+
+### Tres cosas que se decidieron por un motivo concreto
+
+**La base vive en un disco aparte, no en la imagen.** Una imagen de contenedor se
+reemplaza entera en cada despliegue. Con la base dentro, cada `fly deploy` borraría el
+registro de apuestas y todo lo descargado — sin error y sin aviso, porque la app
+arrancaría perfectamente, vacía. Por eso `DATA_DIR` es configurable y el volumen se monta
+en `/data`. El arranque copia ahí la base de la imagen **solo si el disco está vacío**;
+copiarla siempre sería una línea más corta y machacaría tus datos en cada despliegue.
+
+**El servidor sirve el frontend.** En desarrollo hay dos servidores —Vite sirve la web y
+hace de proxy hacia Fastify—; en producción solo hay uno. Sin esto, el despliegue
+respondería a `/api/…` y daría 404 en la portada: una app «desplegada con éxito» que no se
+puede abrir. Pasó literalmente al probarlo, por otra causa: la ruta índice de la API
+también estaba en `/` y ganaba al `index.html`, así que abrir la URL devolvía un JSON
+describiendo la API. Ahora esa ruta solo se registra cuando no hay app que servir.
+
+**Supabase no servía para esto**, aunque sea lo primero que se piensa. Supabase es Postgres
+más auth y almacenamiento: no ejecuta un proceso Node persistente, y esta app *es* un
+proceso —cadenas de Markov, ajustes de Elo, el modelo de puntos—. Y usarlo solo para los
+datos costaría reescribir **355 llamadas `db.prepare(...)` repartidas por 80 ficheros**,
+para acabar necesitando igualmente dónde correr el servidor.
+
+## Un solo comando: `npm run go`
+
+```bash
+npm run go
+```
+
+Hace los seis pasos y arranca la app:
+
+1. **Node** — comprueba la versión y para si no llega a 22.5, diciendo cómo actualizarla.
+   Va primero porque es el único fallo cuyo síntoma no señala a la causa: `node:sqlite` no
+   existe antes de 22.5 y el error parece un problema de dependencias.
+
+   Y el comando **no lleva banderas de Node**, por un motivo que costó encontrar: la
+   primera versión era `node --experimental-sqlite … scripts/go.mjs`, y **Node 20 rechaza
+   esa bandera antes de leer el fichero** (`node: bad option`, código 9). Es decir que
+   quien tuviera Node viejo —exactamente a quien va dirigido este mensaje— veía un error
+   críptico sobre una bandera en lugar del aviso. El control estaba escrito y era
+   inalcanzable. Ahora no hay banderas, el import de `node:sqlite` es perezoso y el aviso
+   de «experimental» se silencia desde dentro. Comprobado contra un Node 20.20.2 real.
+2. **Rama** — se pone en `claude/tennis-prediction-app-jlhgxh`. La rama por defecto del
+   repositorio es otro proyecto, así que un clon nuevo **no tiene esta app**. Si tienes
+   cambios sin guardar no cambia de rama: descartar tu trabajo para arrancarte la app no
+   es un intercambio que un script de arranque tenga derecho a hacer.
+3. **Pull** — `--ff-only`, y solo si estás en la rama del proyecto. Antes de tirar
+   devuelve `package-lock.json` y `data/raw/.gitkeep` a su versión del repo si están
+   tocados: son ficheros generados, y bastaba con que tu `npm` fuese de otra versión para
+   que el lock cambiara y **todos** los pull se abortaran con «your local changes would be
+   overwritten by merge», dejando la app congelada. Ningún otro fichero se toca. Los fallos de red se
+   reintentan (2s, 4s, 8s, 16s); una divergencia no, porque reintentar no la arregla.
+4. **Dependencias** — `npm install` solo si el lock ha cambiado.
+5. **Base de datos** — si no hay, intenta la descarga rápida y, si la release no está
+   publicada todavía, la construye desde las fuentes. Si ya hay, dice **hasta cuándo
+   llegan los resultados**: una base de hace tres semanas abre igual, predice igual y no se
+   queja, así que enseña partidos de hace tres semanas con la misma seguridad que los de
+   ayer. La fecha se saca del último partido jugado y no del `mtime` del fichero, porque
+   actualizar y no recibir nada nuevo toca el fichero sin mover los datos — y entonces el
+   `mtime` diría «hoy» de una base de hace un mes. Pasados 5 días te da el comando.
+6. **Arranca** — y avisa si falta `ODDS_API_KEY` (la app funciona igual, con cuotas de
+   demostración).
+
+**No gasta cuota de The Odds API.** Ni una petición: si hay que construir la base se hace
+con `--skip-odds`. Refrescar precios cuesta (500 al mes en el plan gratuito) y no puede
+esconderse dentro de «arráncame la app».
+
+La regla que gobierna los seis pasos: **un paso que falla no puede parecer que fue bien, y
+uno que falla sin ser grave no puede impedir que la app arranque.** Son fatales Node viejo,
+`npm install` roto y quedarse sin base; son avisos la falta de red, los cambios locales y
+la falta de clave. Sin la primera mitad, «hazlo todo tú» se convierte en un script que se
+come los errores y deja una app rota sin decir dónde mirar. Sin la segunda, un avión sin
+wifi te deja sin app, cuando la base y el modelo son locales.
+
+Un bug que salió al probarlo, y que vale contar: la primera versión hacía
+`git pull origin <rama-del-proyecto>` sin comprobar en qué rama estabas. Cuando no podía
+cambiarse de rama —por tener cambios sin guardar— traía los commits del proyecto **encima
+de la rama en la que estuvieras**, mezclando dos historias sin mencionarlo. Se vio al
+probar ese caso concreto, no leyendo el código.
 
 ## Scripts
 
-- `npm run dev` – start the Vite dev server
-- `npm run build` – type-check and build for production
-- `npm run preview` – preview the production build
-- `npm run lint` – run Oxlint
+| Comando | Qué hace |
+|---------|----------|
+| `npm run deploy` | Sube la app a Fly.io, comprobando antes todo lo que fallaría al final del despliegue |
+| `npm run go` | **Todo en uno**: rama, pull, dependencias, base de datos y arranque. El único que hace falta saber |
+| `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
+| `npm run seed` | Tenis: carga el dataset de demostración |
+| `npm run fetch-data` | **Descarga la base ya construida** (9 MB) en vez de reconstruirla. `-- --force` reemplaza la que haya, conservando tus apuestas |
+| `npm run fetch-flags` | Baja al repo los SVG de las banderas (211, ~1,4 MB). **Solo hace falta una vez**: ya están commiteadas. Se vuelve a correr al añadir un país a `config/countries.json` |
+| `npm run update-all` | **Los cinco deportes de una tirada.** `-- --skip-odds` no gasta cuota; `-- --only fb,bb` limita a algunos. Un deporte que falle no para a los demás y el resumen dice cuál fue |
+| `npm run update-data` | Tenis: refresca histórico real + odds |
+| `npm run backtest` | Tenis: mide la exactitud del modelo |
+| `npm run update-data:bb` | **Baloncesto**: equipos, resultados, partidos próximos y cuotas |
+| `npm run backtest:bb` | **Baloncesto**: mide el modelo (incluye comparación con FiveThirtyEight) |
+| `npm run update-data:fb` | **Fútbol**: equipos, resultados, partidos próximos, cuotas y plantillas |
+| `npm run update-squads:fb` | **Fútbol**: solo las plantillas y el parte de lesionados (cambia a diario) |
+| `npm run update-data:bsb` | **Béisbol**: equipos, resultados, lanzadores, partidos próximos y cuotas |
+| `npm run backtest:bsb` | **Béisbol**: mide el modelo con Brier, calibración y error del total |
+| `npm run verify:bsb` | **Béisbol**: recuenta una temporada y la compara con el registro oficial |
+| `npm run update-data:naf` | **Fútbol americano**: equipos, resultados, líneas de cierre y calendario |
+| `npm run backtest:naf` | **Fútbol americano**: mide el modelo **contra la línea de cierre real** |
+| `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate (`--model elo` mide el camino de respaldo) |
+| `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
+| `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
+| `npm run study:points` | **Modelo jerárquico de puntos**: ajusta saque/resto por jugador con ajuste por rival y δ por superficie, y lo mide cara a cara contra el modelo de Elo |
+| `npm run study:live` | **Motor en vivo**: mide μ y κ del saque, y valida la cadena de Markov contra una simulación independiente |
+| `npm run study:correlation` | **Mide la correlación entre posiciones abiertas** con residuos tipificados fuera de muestra, con grupo de control y bootstrap por bloques. `--record` lo anota en el registro |
+| `npm run staking` | **La capa de decisión**: Kelly fraccional, topes, límites de pérdida y drawdown esperado |
+| `npm run study:calibration` | Mide el ECE por deporte y escribe lo que el módulo de riesgo lee para dimensionar |
+| `npm run experiments` | **El registro**: cuántas veces se han mirado estos datos, y qué resultados sobreviven a la corrección por comparaciones múltiples |
+| `npm run study:baselines` | **Lo primero que hay que mirar**: el modelo contra la línea de cierre, contra solo la ventaja de local y contra un Elo pelado, con intervalos por bootstrap |
+| `npm run study:devig` | Compara **multiplicativo vs. Shin vs. potencia** para quitar el margen de la casa, sobre 5.281 moneylines reales de la NFL |
+| `npm run study:features` | Mide cada feature del modelo de fútbol por **log loss fuera de muestra**: lo que no se gana el sitio, fuera |
+| `npm run study:sigma` | **Fútbol**: mide la escala del error del Elo (`ELO_SIGMA_C`), que fija el «± pp» de todas las tarjetas |
+| `npm run study:dc` | **Fútbol**: el Dixon-Coles jerárquico contra el modelo de Elo, con walk-forward, y los mercados que salen de la rejilla (over/under, ambos marcan, hándicap) |
+| `npm run study:postprocess` | **La capa entre el modelo y la pantalla**: ajusta la calibración (Platt vs. isotónica), el peso de la mezcla con el mercado y el encogimiento, y escribe `experiments/postprocess.json` |
+| `npm run study:thin` | **Mercados de menos liquidez**: mide la dispersión de cada conteo, ajusta la ν de la COM-Poisson y puntúa los mercados de mitades contra el modelo anterior |
+| `npm run news` | **El pipeline de noticias**: extrae estructura del texto libre con la API de Anthropic, la empareja con jugadores y mete las ausencias en la λ. `--text "..."` para un texto pegado, `--show` para ver qué le hace a cada partido |
+| `npm run latency` | **La latencia del escáner de líneas**, desglosada por etapa con su dueño, contra un objetivo declarado. `--probe` comprueba si el proveedor ofrece WebSocket; `--prune N` poda las muestras viejas |
+| `npm run doctor` | Diagnostica por qué la app muestra **cuotas de demostración**: `.env`, clave, cuota y qué hay guardado |
+| `npm run build` | Build de producción del frontend + typecheck del backend |
+| `npm run typecheck` | Chequeo de tipos de ambos workspaces |
+| `npm run lint` | Lint real (oxlint, solo la categoría **correctness**) |
+
+## Tener los datos al día sin hacer nada (`npm run fetch-data`)
+
+Hay un workflow (`.github/workflows/data.yml`) que cada noche reconstruye la base, la
+comprueba y la publica comprimida (**9 MB**) en una release rodante. Desde cualquier
+clon:
+
+```bash
+npm run fetch-data              # la baja si no hay ninguna
+npm run fetch-data -- --force   # reemplaza la que haya, conservando tus apuestas
+```
+
+De «repositorio recién clonado» a «todos los datos al día» en segundos, en vez de los
+~2 minutos y 100 MB de descargas que cuesta `npm run update-all`.
+
+### Las cuotas NO van dentro, y es a propósito
+
+Dos motivos:
+
+* Gastarían cuota de The Odds API **cada noche**, y el plan gratuito son 500 al mes.
+* Un precio de hace ocho horas no sirve para nada.
+
+Las cuotas las refresca el propio servidor mientras está arrancado, con una cadencia que
+se ajusta al tamaño de tu plan y acelera cuando hay un partido inminente. O sea: **si
+tienes el servidor en marcha, no tienes que actualizar cuotas nunca**.
+
+### El repositorio es público, así que la base publicada también
+
+Está bien para datos deportivos —son públicos de origen— y estaría **muy mal** para el
+registro de apuestas de alguien. En un runner limpio no hay apuestas, pero «no debería
+haber» no es una garantía, así que antes de subir corre `npm run check-publishable`, que
+falla si encuentra algo. Distingue los dos motivos, porque no son el mismo:
+
+* **privacidad** — `bets` con filas bloquea la publicación. Es dinero de una persona.
+* **integridad** — un `*_prediction_log` con filas significa que alguien arrancó la app
+  sobre esa base, o sea que no es una construcción limpia. No filtraría nada delicado;
+  bloquea porque indica que la base no es la que se cree.
+
+### Y la descarga se niega a destruir lo tuyo
+
+La base publicada se construye en un runner limpio, así que su tabla `bets` está
+**vacía**. Instalarla encima de la tuya borraría tus apuestas — y lo haría en silencio,
+porque la app arrancaría perfectamente después.
+
+Por eso `fetch-data` no toca una base existente sin `--force`, y ni con `--force` se
+pierde nada: guarda una copia con fecha y **copia tus tablas** (apuestas y track record)
+a la base nueva antes de dejarla en su sitio.
+
+Antes de instalar nada valida: SHA-256 contra el publicado, descomprime a un temporal,
+lo abre y cuenta filas. Un SQLite truncado **no falla al abrirse** — falla mucho más
+tarde, con una consulta cualquiera y un mensaje que no señala a la descarga.
+
+Probado con la release simulada en local: checksum incorrecto, fichero truncado y
+release inexistente dejan la base intacta, las apuestas intactas y ningún temporal.
+
+### El cron solo corre desde la rama por defecto
+
+GitHub ejecuta los `schedule` **únicamente desde la rama por defecto** del repositorio.
+Mientras este workflow viva solo en una rama de trabajo, la ejecución nocturna no se
+dispara: se puede lanzar a mano desde Actions → Datos → «Run workflow», pero el horario
+no existe hasta que el fichero llega a la rama por defecto.
+
+---
+
+## Actualizar todo (`npm run update-all`)
+
+Los cinco deportes en una tirada:
+
+```bash
+npm run update-all                   # todo, con cuotas
+npm run update-all -- --skip-odds    # solo el histórico, sin gastar cuota
+npm run update-all -- --only fb,bb   # solo algunos (fb, tennis, bb, bsb, naf)
+```
+
+```
+RESUMEN
+  ✅ ⚽ Fútbol           10 s
+  ✅ 🎾 Tenis             5 s
+  ✅ 🏀 Baloncesto       15 s
+  ✅ ⚾ Béisbol          66 s
+  ✅ 🏈 NFL               1 s
+
+  5/5 correctos en 98 s.
+```
+
+### Por qué un script y no cinco `&&`
+
+* **Un fallo no puede parar a los demás.** Encadenando con `&&`, si la fuente del
+  béisbol está caída la NFL no se actualiza — y no porque le pase nada, sino porque iba
+  detrás. Aquí cada deporte es independiente: el que falle se anota y se sigue, y el
+  código de salida es 1 para que un cron se entere.
+* **Hay que saber cuál falló.** Cinco comandos encadenados dejan un muro de salida; esto
+  deja una tabla con el comando exacto para repetir solo el que se rompió.
+* **El orden no es indiferente.** El fútbol va primero porque es el que más partes tiene
+  (histórico, próximos, cuotas y plantillas) y el que más tarda: si algo va a fallar,
+  mejor enterarse en el primer minuto.
+
+### La cuota, que es lo que de verdad cuesta
+
+«Actualizar todo» son cinco tiradas contra The Odds API y el plan gratuito son **500
+peticiones al mes**. Correrlo varias veces al día lo quema en una semana.
+
+El histórico de resultados cambia una vez por jornada y **no necesita precios**, así que
+para el uso diario `--skip-odds` es lo normal. Las cuotas ya se refrescan solas mientras
+el servidor está arrancado, con una cadencia que se ajusta al tamaño del plan y que
+acelera cuando hay un partido inminente.
+
+Lo que sí cambia a diario son las plantillas y el parte de lesionados:
+
+```bash
+npm run update-squads:fb    # mucho más barato que la actualización completa
+```
+
+### Un flag que no hacía nada
+
+`--skip-odds` lo aceptaban cuatro de los cinco scripts. El de la NFL no tomaba
+argumentos, así que lo recibía, lo **ignoraba en silencio** y pedía cuotas igualmente:
+una tirada que se creía gratis gastaba cuota solo ahí. Ahora los cinco lo respetan y el
+de la NFL lo dice en su salida.
+
+---
+
+## El modelo jerárquico de puntos (`npm run study:points`)
+
+Saque y resto por jugador ajustados por la calidad del rival, propagados por la cadena de
+Markov, con desviaciones por superficie encogidas. Y de ahí **todos** los mercados:
+partido, set, hándicap de juegos y total de juegos.
+
+### El resultado primero: NO reemplaza al modelo de partido
+
+El encargo era reemplazar el modelo de partido por este. Lo construí, lo medí cara a cara
+fuera de muestra con walk-forward, y **pierde**:
+
+Sobre 5.667 partidos de ATP desde 2024, walk-forward con reajuste trimestral:
+
+| modelo | log loss del ganador |
+| --- | --- |
+| Elo por jugador con ajuste de superficie (el publicado) | **0.558** |
+| modelo de puntos, mejor de 8 configuraciones (λ 0.20 · 1 año) | 0.663 |
+| modelo de puntos, peor de las 8 (λ 0.05 · sin decay) | 0.680 |
+
+No es un empate discutible: 0.68 está a un paso del 0.693 de la moneda. Forzar la
+sustitución habría sido cambiar un modelo medido por uno más elegante.
+
+**Por qué, con lo que se puede afirmar desde aquí:** las tasas de punto agregadas **tiran
+la información de quién ganó**. Se puede ganar el 63 % de los puntos al saque y perder el
+partido por haber perdido los importantes, y este modelo no distingue las dos cosas. El
+Elo aprende de victorias, que es justo lo que se está prediciendo.
+
+Y el modelo de Elo de esta app no es un Elo pelado: lleva forma reciente, fatiga, cara a
+cara y superficie, cada cosa medida por separado en su momento.
+
+### Comprobé que la ventaja del Elo no fuera un artefacto
+
+El Elo se evalúa con sus ratings **actuales**, que en principio podrían filtrar el
+futuro. Si eso lo estuviera inflando, los partidos más antiguos puntuarían mejor —el
+rating de hoy sabe cómo acabaron. Sale lo contrario:
+
+| periodo | log loss del Elo |
+| --- | --- |
+| 2023 H1 | 0.591 |
+| 2024 H1 | 0.556 |
+| 2025 H1 | 0.548 |
+| 2025 Q4+ | 0.535 |
+
+Mejora hacia el presente, que es lo que produce la *obsolescencia* del rating, no la
+filtración. Y aun en su peor periodo (0.591) le gana al mejor del modelo de puntos
+(0.663).
+
+### Lo que el modelo de puntos SÍ aporta, y es el motivo de que se publique
+
+Mercados que el modelo de partido **no puede producir en absoluto**. El Elo da un número:
+la probabilidad de ganar. No da una distribución de juegos, así que no hay hándicap ni
+total que derivar de él.
+
+El de puntos enumera el partido entero y de ahí sale todo:
+
+```
+GET /api/points?tour=atp&p1=…&p2=…&surface=Clay&bestOf=5&tourney=Roland+Garros
+
+  puntos: p1=0.6209 p2=0.5985      ← los DOS únicos números de entrada
+  partido 64.1 % · set 57.6 % · 40.9 juegos esperados
+  sets:      3-1 24.3% · 3-2 20.7% · 3-0 19.1%
+  totales:   +37.5 64% · +39.5 56% · +41.5 48% · +43.5 41%
+  hándicaps: −6.5 24% · −4.5 40% · −3.5 47% · −2.5 53% · −1.5 58%
+```
+
+**No pueden contradecirse.** Con modelos separados por mercado es perfectamente posible
+publicar un 70 % de ganar el partido y un total de juegos que implique un 60 %, y nadie
+se entera hasta que alguien lo suma a mano.
+
+Y el total de juegos **se puntuó contra el marcador real**, que es la única forma de
+defender que esto aporta algo. Sobre 5.472 partidos con marcador completo:
+
+| | log loss del total de juegos |
+| --- | --- |
+| modelo de puntos | **0.674** |
+| distribución marginal (no saber nada) | 0.724 |
+
+Aporta 0.050 sobre no saber nada. El Elo no aparece en esa tabla porque no puede: no
+produce una distribución de juegos.
+
+### El ajuste por rival, y por qué no basta restar medias
+
+«Este jugador gana el 68 % de sus puntos al saque» está contaminado: se midió contra los
+restadores que le tocaron. La versión anterior (`live/serve.ts`) restaba medias de
+carrera, que es la corrección de primer orden y arrastra el mismo sesgo — restar dos
+números contaminados no descontamina ninguno.
+
+Aquí se estiman **todos los saques y todos los restos a la vez**:
+
+```
+logit P(i gana un punto sacando contra j) = μ_superficie + s_i − r_j
+```
+
+Descenso de gradiente sobre la verosimilitud binomial, ~8.800 parámetros, 58.652
+observaciones. Y el resultado se valida solo:
+
+| mejor saque | | mejor resto | |
+| --- | --- | --- | --- |
+| Ivo Karlovic | +0.374 | Novak Djokovic | +0.267 |
+| John Isner | +0.357 | Rafael Nadal | +0.252 |
+| Milos Raonic | +0.330 | Carlos Alcaraz | +0.245 |
+| Roger Federer | +0.327 | Jannik Sinner | +0.212 |
+
+Son las listas canónicas, y el modelo no las recibió de nadie.
+
+### Las superficies salen del ajuste, no de una tabla
+
+Los interceptos por superficie: **hierba 66.0 % > dura 64.6 % > tierra 62.0 %** de puntos
+al saque. Es el orden conocido y el ajuste lo deriva de los datos — hay una comprobación
+en `verify:data` que falla si sale al revés, porque entonces el modelo estaría aprendiendo
+otra cosa.
+
+**¿Aportan las desviaciones por superficie?** Sí, pero solo con el encogimiento fuerte —
+y esa condición es el hallazgo:
+
+| configuración | log loss |
+| --- | --- |
+| λ 0.20 · 1 año (con δ, encogidas fuerte) | **0.66267** |
+| **sin δ de superficie** | 0.66580 |
+| λ 0.05 · 1 año (δ con poco encogimiento) | 0.66724 |
+
+Con encogimiento fuerte las superficies ganan 0.0031. Con encogimiento flojo son **peores
+que no tenerlas**: los δ de las muestras pequeñas dejan de ser especialización y pasan a
+ser ruido con nombre. El shrinkage no es un adorno del modelo, es lo que hace que la parte
+de superficie aporte algo en vez de restar.
+
+Y las desviaciones individuales, con λ = 0.05:
+
+| jugador | superficie | δ saque | δ resto |
+| --- | --- | --- | --- |
+| Nadal | tierra | +0.037 | **+0.096** |
+| Federer | tierra | +0.022 | −0.032 |
+| Federer | hierba | +0.050 | +0.039 |
+| Isner | tierra | +0.056 | **−0.068** |
+
+El δ más grande de la tabla es el resto de Nadal en tierra, que es exactamente donde
+está su dominio. Isner al resto en tierra es su peor casilla. Correcto en los dos casos.
+
+**Un error mío al leer esto:** primero resumí las superficies como `δ saque − δ resto` y
+Nadal salía *negativo* en tierra, que parecía invertido. La métrica compuesta era la
+equivocada — separados, el modelo dice lo correcto. Investigar antes de "arreglar" evitó
+romper un modelo que funcionaba.
+
+### Las variantes de tiebreak del set final
+
+No es un detalle: cambia el total de juegos esperado y, con dos sacadores parejos, también
+quién gana. Están en un solo sitio con su fecha, así que el pasado se puntúa con las
+reglas que regían entonces:
+
+* hasta 2018 — Wimbledon, Roland Garros y Australia: set largo
+* 2019-2021 — cada Grand Slam con su regla (Australia TB a 10, US Open TB a 7, Wimbledon
+  y Roland Garros efectivamente largos)
+* desde 2022 — los cuatro con **tiebreak a 10**
+
+### El decay se midió, no se supuso
+
+Sin decay, el modelo describe una carrera entera y no al jugador que juega mañana:
+
+Barrido sobre 1.460 partidos de 2025 con un solo ajuste previo (más rápido que el
+walk-forward, y suficiente para ordenar las opciones entre sí):
+
+| semivida | log loss |
+| --- | --- |
+| sin decay | 0.660 |
+| 4 años | 0.654 |
+| 2 años | 0.651 |
+| **1 año** | **0.650** |
+| 6 meses | 0.652 |
+
+Se publica un año, y el walk-forward lo confirma (0.663 con decay contra 0.676 sin, a
+λ 0.20).
+Ayuda, pero no cierra la distancia con el Elo — que es la parte importante del resultado.
+
+> Los números de esta tabla y los de la comparación de arriba **no son comparables entre
+> sí**: estos salen de un ajuste único sobre 2025 y aquellos de un walk-forward sobre
+> 2024-2026. Sirven para ordenar configuraciones, no para compararse con el Elo.
+
+### Una fila del barrido que no medía nada
+
+Para responder «¿aportan las desviaciones por superficie?» apagué las superficies poniendo
+λ = 10⁶. **No las apaga: hace divergir el ajuste.** Con λ = 100 ya salen 2.003 de 3.126
+desviaciones no finitas y la verosimilitud es NaN — el paso de la penalización es λ·δ·lr,
+o sea cincuenta veces δ en sentido contrario, así que oscila y explota.
+
+Lo que delató la fila fue que daba **1.05661 idéntico para los cuatro decays**. El decay
+tiene que cambiar algo; que no cambiara nada era la señal de que el número no venía de
+ningún modelo.
+
+Dos arreglos, y el segundo importa más que el primero:
+
+* `useSurface: false` apaga las desviaciones de verdad.
+* **`fitPoints` ya no devuelve un ajuste divergido en silencio.** Comprueba λ·lr antes de
+  gastar ocho segundos, y comprueba que la verosimilitud y los parámetros sean finitos
+  antes de devolver. Un modelo con NaN dentro sigue produciendo «probabilidades»
+  perfectamente pintables: `sigmoid(NaN)` es NaN, y un NaN comparado con un umbral es
+  siempre falso, así que acaba en un 0 % o un 50 % sin explicación.
+
+### Un fallo de rendimiento que hacía el modelo inservible
+
+`matchDistribution` al mejor de 5 tardaba **2,2 segundos**: 3,7 horas para evaluar una
+temporada. La causa era mía — el árbol guardaba un nodo por *camino*, y un set tiene ~14
+finales posibles, así que un mejor de 5 son 14⁵ ≈ 537.000 caminos.
+
+Dos caminos que llegan a los mismos sets, los mismos juegos y el mismo sacador son **el
+mismo estado**: lo que pase después no depende de cómo se llegó. Fusionándolos y cacheando
+la enumeración del set, 2.229 ms → **7 ms**. El modelo era correcto y completamente
+inservible.
+
+### Comprobado por conservación y contraste cruzado
+
+Una distribución mal repartida sigue pareciendo una distribución. Lo que se comprueba son
+las masas (todas suman 1 a 1e-9) y, sobre todo, que la **enumeración** de
+`points/markets.ts` y la **recursión** de `live/markov.ts` calculen la probabilidad de
+partido por caminos completamente distintos y coincidan a 1e-9. Dos implementaciones que
+se equivoquen igual son mucho menos probables que una que se equivoque sola.
+
+---
+
+## El motor en vivo (`npm run study:live`)
+
+Dado el marcador exacto —sets, juegos, puntos y quién saca— la probabilidad de victoria
+en tiempo real, con una cadena de Markov punto a punto.
+
+### No había ninguna cadena de Markov. Había que construirla
+
+El encargo decía «la misma cadena de Markov». No existía: el modelo de tenis va de Elo a
+una probabilidad de partido y de ahí **baja** a una por set invirtiendo una fórmula
+cerrada. Nunca modeló puntos, ni juegos, ni el saque.
+
+Para una predicción previa eso basta. Para una en vivo no sirve: con 4-5 y 30-40 en
+contra, lo que decide el partido es el punto que se juega ahora. Así que la cadena se
+construyó de abajo arriba —punto → juego → set → partido— y **todo se calcula desde
+cualquier estado**, que es la diferencia entre un modelo previo y uno en vivo.
+
+### Validada contra una simulación independiente
+
+Una cadena mal montada no lanza excepciones: devuelve números plausibles. Los 9 casos
+cuadran con 300.000 partidos simulados por una implementación separada que juega los
+puntos de verdad; mayor diferencia **0.0014**. Y con los valores de libro: `p = 0.60` da
+`0.7357` de ganar el juego, deuce da `0.6923`, `p = 0.50` da exactamente `0.5`.
+
+El 6-6 del tiebreak se resuelve **exacto**, no truncando: desde un empate, la
+probabilidad de llevarse los dos puntos siguientes no depende de quién saque primero de
+los dos, porque `p1·(1−p2)` es conmutativo. Por eso 20-20 devuelve idéntico a 6-6.
+
+**Un resultado que parecía un fallo y no lo era:** con el marcador empatado (0-0, 3-3,
+5-5) la función devuelve lo mismo saque quien saque, hasta el último decimal. La
+simulación reproduce los valores idénticos por su cuenta: desde un empate, cualquier
+continuación reparte los mismos juegos al saque entre los dos. "Arreglarlo" habría roto
+un modelo correcto.
+
+### Actualización bayesiana del saque: κ = 63 puntos, medido
+
+Un jugador va 1 de 12 con su saque. ¿Mal día o doce puntos? Las dos respuestas fáciles
+están mal: «ignorarlo» supone que el saque es una constante de la carrera, y «creérselo»
+convierte doce puntos en una probabilidad de partido.
+
+La respuesta es un peso, y el peso se mide. Descomposición de varianza sobre **58.732
+actuaciones al saque**:
+
+```
+varianza observada dentro de un jugador   0.006805
+componente binomial esperado             −0.003192
+─────────────────────────────────────────────────
+variación REAL partido a partido          0.003613  →  κ = 63 puntos
+```
+
+| puntos servidos hoy | peso frente a su carrera |
+| --- | --- |
+| 10 | 14 % |
+| 40 | 39 % |
+| 100 | 61 % |
+
+**Y el hallazgo que justifica la funcionalidad entera:** σ de un jugador entre partidos
+es **6.0 pp**; la que separa a los jugadores entre sí es **2.7 pp**. Un jugador varía más
+consigo mismo, de un día a otro, que lo que los jugadores se diferencian entre ellos.
+Comprobado por dos rutas — la descomposición agregada y las desviaciones individuales de
+Zverev (6.1), Djokovic (5.0), Bautista (6.2), Medvedev (5.5), Rublev (5.4) y Fritz (6.1).
+
+Con eso, un jugador sacando 20 pp por debajo de su media sobre 48 puntos pasa de
+**36.1 % a 15.5 %** de ganar el partido. Eso es «actualizar en vez de ignorarlo», a un
+ritmo que sale de los datos.
+
+### Situaciones: la etiqueta no es la información
+
+«Break point» en rojo no dice nada que no se vea en el marcador. Lo que importa es cuánto
+mueve el partido ese punto, y la cadena lo da exacto:
+
+| situación | vale |
+| --- | --- |
+| break point a 2-2 en el primer set | **6.5 pp** |
+| break point a 5-5 en el set decisivo | **41.8 pp** |
+| break point a 2-5, con el set perdido | **1.6 pp** |
+
+Los tres se llaman «break point». Solo el número los distingue.
+
+Se detectan break point (con cuántas bolas seguidas), punto de set, punto de partido,
+sacar para el set y sacar para el partido — comprobando qué pasaría si alguien ganara el
+punto, no reconociendo marcadores de memoria, así que no puede desincronizarse de las
+reglas que usa la cadena.
+
+### El momentum tras un quiebre: NO se ajusta, y se dice por qué
+
+Se detecta y se enseña, pero **no se aplica ningún ajuste de probabilidad**. Medir si un
+jugador recién quebrado saca peor en el juego siguiente exige datos **punto a punto**, y
+esta base tiene agregados por partido: 29.486 partidos con el total de puntos al saque,
+sin el orden en que ocurrieron. No hay forma de mirar el juego siguiente a un break
+porque no se sabe cuándo hubo breaks.
+
+Las opciones eran inventarse un multiplicador «porque todo el mundo sabe que el momentum
+existe» o decir que no se ha medido. La casilla queda marcada como pendiente, con lo que
+haría falta para llenarla.
+
+### Contra la cuota en vivo: discrepancia, no ventaja
+
+Se compara y se marcan las diferencias de 5 pp o más, con una advertencia que forma parte
+del resultado: **en vivo el mercado ve cosas que este modelo no puede ver** —un jugador
+cojeando, un fisio en pista, el viento— y va a discrepar más justo cuando tiene razón. Se
+llama «discrepancia» y no «valor» por eso.
+
+### Lo que rechaza
+
+Un marcador imposible produce una probabilidad perfectamente creíble, así que se valida
+siempre y se devuelve 400 con el motivo: 8-2 en juegos, dos sets a dos al mejor de tres,
+un tiebreak fuera de 6-6. Y un id de jugador sin datos de saque se rechaza con 404 en vez
+de caer en silencio a la media del circuito — que es exactamente lo que pasó al probar el
+endpoint con ids inventados: dos jugadores distintos con `p = 0.6369` clavado.
+
+### Un hueco en mis propias comprobaciones
+
+Rompí el cálculo de la ventaja (`p + (1−p)·D` → `D`) y **no falló ninguna comprobación**.
+El motivo: desde 0-0 la recursión nunca visita una ventaja, porque al llegar a 40-40 corta
+con la forma cerrada del deuce. Y la identidad «5-4 = 4-3» tampoco lo cazaba, porque los
+dos estados pasan por la misma rama rota. Hacía falta comprobar el **valor**, no solo la
+coherencia.
+
+---
+
+## La clasificación por Elo, en las cinco pestañas
+
+Cada deporte tiene su tabla de Elo, y las cinco usan el mismo componente
+(`web/src/components/EloRanking.tsx`) en vez de cinco copias que se van separando solas.
+
+### Tres cosas que hacen que sirva para analizar
+
+* **La probabilidad.** Un `1650` no se puede interpretar, y la escala cambia por liga.
+  La columna **«vs. medio»** dice la probabilidad de ganarle a un rival con el Elo
+  mediano de esa lista — que es exactamente lo mismo que el Elo, porque el rating existe
+  para producir ese número: `P = 1/(1 + 10^(−Δ/400))`. Los cinco deportes usan el mismo
+  divisor 400, así que una conversión sirve para todos.
+* **La barra.** El orden se ve en cualquier lista ordenada; los **huecos** no. Dos
+  equipos separados por 200 puntos y dieciocho apretados en 40 es una liga distinta de
+  una repartida por igual, y las dos producen la misma lista de nombres. La barra se
+  ancla al rango de la lista, no a un cero absoluto: desde cero, un 1500 y un 1900 se
+  ven casi iguales.
+* **La fiabilidad.** Un Elo sobre 4 partidos y otro sobre 400 se imprimen igual. El de
+  pocos se marca con `◦n`. Se marca, **no se oculta**: una fila que desaparece sin
+  explicación es peor que una con una advertencia.
+
+Y una línea arriba que resume la forma de la competición: *«el primero le ganaría al
+último el 87 % de las veces»*. Cerca del 50 % es igualdad; por encima del 90 %, un
+abismo.
+
+### Tenis: la tabla que puede comparar a alguien consigo mismo
+
+Es la única con **cuatro Elo por fila** — general, dura, tierra y hierba — así que el
+selector de superficie **reordena de verdad**, no añade una columna. Ahí es donde se
+contesta *«¿en cuál es mejor?»*.
+
+La columna **«Mejor sup.»** compara al jugador *consigo mismo*: cuánto sube su Elo en su
+mejor superficie respecto de su propio general. Un `+150` es un especialista claro; un
+`+10`, alguien igual de bueno en todas.
+
+### El retirado que salía cuarto del mundo
+
+Un Elo se queda **congelado en el último partido**. Sin filtro, la lista de la ATP salía
+así:
+
+```
+4. Roger Federer   2091   último partido: junio de 2021
+8. Rafael Nadal    2020   último partido: noviembre de 2024
+```
+
+Los dos números son correctos y la lista es inútil: preguntada *«¿quién es mejor
+ahora?»*, contesta con dos retirados. No es un dato erróneo — responde a otra pregunta,
+*«quién llegó más alto»* — y mezclar las dos sin decirlo es cómo alguien acaba analizando
+una superficie con un jugador que no la pisa desde hace cuatro años.
+
+Así que por defecto se piden los **activos** (algún partido en dos años, 205 de 500 en
+este archivo) y la lista histórica se puede pedir a propósito, con el botón «Histórico».
+Un jugador **sin fecha conocida no se descarta**: «no lo sé» no es «hace mucho».
+
+### Un defecto de los datos que solo se puede decir
+
+`player_rankings` guarda el último snapshot **de cada jugador**, no el ranking completo
+de un día. Esas fechas abarcan **4.031 días** en este archivo, así que la columna
+«Oficial» mezcla el ranking de agosto de uno con el de enero de otro — y salen **tres
+jugadores con «#5»**, que se lee como un fallo de la app.
+
+Marcarlo fila a fila no sirve: comparando con la fecha más nueva, el **100 %** de las
+filas sale «desfasada», y una marca que aparece en todas partes no informa de nada. Lo
+que sí informa es el rango, así que la tabla advierte una vez que la columna no es una
+foto de un día y cada celda lleva su fecha en el tooltip.
+
+Arreglarlo de verdad es traer el ranking completo de una fecha **en la ingesta**, no
+cambiar la consulta. Eso está dicho en el código y aquí, no disimulado.
+
+---
+
+## El pipeline de noticias (`npm run news`)
+
+Un pipeline que **cambia** las predicciones, no que las decore. Las ausencias entran
+antes de calcular los goles esperados, así que mueven el 1X2, el over/under, la rejilla
+entera y las props del jugador — y la tarjeta enseña cuánto puso cada una, en goles.
+
+```
+texto libre → [Anthropic API] → JSON → emparejar jugador → λ → 1X2, goles, props
+```
+
+### Qué se le pide al modelo, y qué no
+
+El feed de plantillas ya da `status` y `chance_next`, y para el 80 % de las notas eso es
+toda la información que hay. **Esas no pasan por el modelo**: dos reglas resuelven
+«Knee injury - Unknown return date» y «75% chance of playing», y el script dice cuántas
+fueron de cada tipo y cuánto costaron las que sí. Un pipeline que manda todo a un LLM
+funciona igual y cuesta cincuenta veces más; la diferencia no se ve hasta la factura.
+
+El modelo se reserva para lo que ninguna regla lee: una rueda de prensa («no forzaremos
+con Pedri, aunque entrenó ayer»), un once publicado en un tuit, un parte médico escrito
+en prosa. Y para una distinción que el feed **no** hace y que importa mucho:
+
+| texto | feed | modelo |
+|---|---|---|
+| «Has joined Rangers on loan» | `status: u` | `salida`, permanente |
+| «Knee injury - Unknown return» | `status: i` | `lesion`, puede resolverse el jueves |
+
+Las dos son «no disponible» para el feed y son cosas muy distintas para el modelo.
+
+La salida va restringida por **structured outputs** (`output_config.format`), así que el
+JSON valida por construcción: no hay que limpiar vallas de markdown ni reintentar por
+formato. Cada campo del esquema existe porque **cambia una predicción** — no hay
+«titular» ni «resumen», porque enseñar un dato que no se usa hace creer que el modelo lo
+tiene en cuenta.
+
+```bash
+npm run news                                   # las notas del feed
+npm run news -- --text "Guardiola confirmó que Rodri no viaja"
+npm run news -- --show                         # qué le hacen a cada partido
+```
+
+### El emparejado se niega a adivinar
+
+El modelo recibe los nombres de la plantilla y suele acertar, pero «suele» no basta para
+algo que mueve una λ. El emparejado es determinista: exacto, luego apellido, y **si dos
+jugadores comparten apellido no elige** — la noticia se guarda sin jugador, no mueve nada
+y sale marcada. Equivocarse de jugador no da un error, da una predicción distinta que
+nadie puede explicar.
+
+### Cuánto vale una ausencia, en goles
+
+No es una opinión sobre el jugador. Es una cadena en la que cada eslabón está medido:
+
+1. La **cuota** del jugador en el once habitual — qué parte de la producción ofensiva y
+   de los minutos representa.
+2. Los **pesos** de `players.ts` — 0,31 sobre el ataque y 0,38 sobre lo encajado,
+   ajustados sobre tres temporadas de alineaciones reales de la Premier con el rival y el
+   campo controlados. Es la única señal de este proyecto que le ganó al Elo.
+3. La **λ del partido** — el 5 % de ataque no vale lo mismo en un partido de 3,2 goles
+   que en uno de 1,9.
+
+El contrafactual es «¿cuánto valdría esto si **sí** jugara?», no «añádelo a la lista de
+bajas». La primera versión hacía lo segundo y daba **cero para todos**, porque la
+disponibilidad base ya trae aplicadas las bajas que publica la fuente: meter a un
+lesionado en la lista de bajas no cambia nada, ya estaba fuera.
+
+Verificado de punta a punta: marcando de baja a un titular del Arsenal, λ pasa de 2,52 a
+2,44, el 1X2 local de 76,3 % a 74,5 % y el over 2.5 de 64,4 % a 63,5 %.
+
+### Un cero viene con su motivo
+
+En la instantánea de la primera jornada, Saliba y Timber están lesionados y su impacto
+sale **cero** — porque llevan cero minutos, no están en el once observado, y el modelo no
+puede saber que eran titulares. Eso se dice en la tarjeta con esas palabras. Un cero sin
+explicación se lee como «esto da igual», y aquí significa lo contrario.
+
+Ese diagnóstico destapó un bug de verdad: la cuota de ataque salía de `xgi90`, que es
+null por debajo de 270 minutos jugados, así que a principio de temporada el denominador
+era **cero** y toda la maquinaria de ausencias estaba apagada sin avisar. Ahora la cuota
+usa producción acumulada y se encoge hacia la cuota de minutos cuando aún no hay
+producción — el mismo encogimiento que el resto del proyecto.
+
+### Alineación confirmada contra esperada
+
+Hasta una hora antes, quién juega es una suposición. Cuando el club publica el once, la
+**diferencia** con lo esperado es la noticia: un titular fijo que no está en la lista es
+información que ningún parte médico da, porque los clubes no anuncian «hoy descansa».
+Precedencia: lo que marcas tú > el once publicado > los partes.
+
+### Rotación por calendario: avisa, no ajusta
+
+La congestión se midió a nivel de equipo en este proyecto y salió **cero** — jugar cada
+tres días no hace peor al equipo de forma medible, porque el entrenador rota y el equipo
+rotado sigue siendo bueno. Ese resultado se respeta. Lo que sí cambia con el calendario
+es **quién** juega, que es otra cosa: `rotationRisk` ensancha la incertidumbre y avisa,
+y **no toca la λ**. Convertirlo en un ajuste de fuerza sería resucitar por la puerta de
+atrás un efecto que ya se midió y se descartó.
+
+### El reloj: ¿llegaste antes o después que el mercado?
+
+Cada precio observado se guarda con su hora (`fb_odds_history`, solo cuando cambia), y
+cada noticia con la suya. Con las dos series se puede responder la única pregunta que
+importa sobre una noticia:
+
+| veredicto | qué significa |
+|---|---|
+| **noticia-primero** | la línea se movió después. Hubo ventana. |
+| **mercado-primero** | la línea ya se había movido. El mercado lo sabía y llegas tarde. |
+| **sin-movimiento** | el precio no se movió: no importaba, o nadie la vio. |
+
+El segundo caso es el normal y es incómodo, así que se mide y se enseña. Lo que **no** se
+afirma es causalidad: que el precio se mueva después de una noticia no demuestra que se
+moviera por ella, y la tarjeta lo dice.
+
+Umbral de 1,5 puntos de probabilidad para contar como movimiento: por debajo de eso el
+precio se mueve solo, por redondeo y por qué casas están en la muestra. Un umbral más
+bajo llenaría la lista de ruido y siempre habría «un movimiento» cerca de cualquier
+noticia — que es como se fabrica una correlación.
+
+### Sin clave, no hay respaldo silencioso
+
+Sin `ANTHROPIC_API_KEY` la extracción de texto libre no funciona y lo dice. No hay un
+camino de respaldo con expresiones regulares que rellene el hueco: sería peor y
+silencioso, y nadie se enteraría de que la pieza buena lleva un mes sin funcionar. Las
+reglas baratas siguen funcionando, porque esas nunca dependieron del modelo.
+
+---
+
+## La latencia del escáner de líneas (`npm run latency`)
+
+Desde que una casa publica un precio hasta que ese precio está **en tu pantalla** hay
+cuatro tramos, y tienen dueños distintos. El total no es lo accionable: si tardas ocho
+minutos, lo único que sirve es saber en cuál de los cuatro se van.
+
+| etapa | qué mide | de quién depende | presupuesto |
+| --- | --- | --- | --- |
+| `origen` | la casa publica → lo tenemos | la cadencia de sondeo y el proveedor | 4 min |
+| `ingesta` | lo tenemos → escrito en la base | nuestro parseo y la base de datos | 30 s |
+| `servidor` | petición → respuesta | nuestra API | 20 s |
+| `cliente` | respuesta → pintado | la red y el navegador | 10 s |
+
+### Un check de latencia que dependía de lo que hubiera en la base
+
+La regla importante de la alerta es que **sin medición completa no se declara
+incumplimiento**: si falta una etapa, el total está por debajo del real y decir «se
+cumple» sería falso. Comprobar eso necesita un caso con el total pasado y alguna etapa sin
+medir, y ese caso se montaba escribiendo muestras en la base.
+
+El montaje era frágil de una forma que tardó en aparecer. El total suma el **p95** de cada
+etapa: con la tabla vacía, la única muestra inyectada *era* el p95 de su etapa y el total
+se pasaba del objetivo. Con la tabla ya poblada —después de tener el servidor un rato
+levantado— esa misma muestra caía entre doscientas y no movía el p95 ni un milisegundo, así
+que el montaje dejaba de montar nada. No producía un falso verde: rompía. Pero rompía por
+el andamio y no por el comportamiento que vigila, y un check que se rompe según lo que haya
+medido cada uno es un check que alguien acaba silenciando.
+
+Arreglado igual que se arregló antes `allocate` → `allocateFrom`: la decisión se separó de
+la lectura en `decideLatency(total, etapas, presupuesto)`, que no toca la base. Los tres
+casos se escriben a mano —total pasado con una etapa sin medir, el mismo total con las
+cuatro medidas, y uno dentro del objetivo— y el contraste entre los dos primeros es lo que
+demuestra que manda la guarda y no otra cosa. Comprobado quitando la guarda: falla.
+
+El objetivo por defecto es **5 minutos de punta a punta (p95)**, y el reparto es
+deliberadamente asimétrico: cuatro de los cinco minutos se le dan a `origen` porque ahí
+es donde se va el tiempo de verdad. `LATENCY_TARGET_MS` lo cambia y escala el reparto
+manteniendo las proporciones.
+
+Se publica el **p95**, no la media. Un ciclo que va bien 95 veces y se atasca 5 tiene una
+media estupenda y una experiencia mala, porque lo que se nota es justo el atasco.
+
+### Lo primero que dice el informe es si el objetivo es alcanzable
+
+Antes de reprocharle nada a nadie:
+
+```
+OBJETIVO: 5.0 min de punta a punta (p95)
+  ✗ NO alcanzable con este plan. 500 peticiones al mes y 10 por ciclo dan un sondeo
+    cada 864 min, o sea 432.0 min de antigüedad media frente a los 4.0 del objetivo.
+    Se arregla con un plan mayor o sondeando menos deportes, no con código.
+```
+
+La antigüedad media de un precio es **medio intervalo de sondeo** —llega uniformemente
+entre dos sondeos— así que el plan pone un suelo que ninguna optimización de parseo
+toca. Con el plan gratuito de 500 peticiones al mes, un precio tiene de media unas seis
+horas cuando lo lees. Decirlo primero evita mandar a alguien a optimizar serialización
+cuando lo que hay que cambiar es el plan.
+
+### La medición incompleta NO se pinta como un aprobado
+
+Cuando falta alguna etapa por medir, el total está por debajo del real. Un `✓` verde ahí
+sería una afirmación falsa, así que se marca con `·` y se dice qué falta:
+
+```
+· Medición incompleta: sin muestras de origen, cliente. El total de abajo es solo
+  de las etapas que sí se han medido.
+```
+
+Lo mismo con las etapas vacías: salen con `n = 0` y su motivo, nunca con un `0 ms` que
+se lee como un récord.
+
+Y la suma de cuatro p95 **no** es el p95 del total —solo sería cierto si se atascaran
+siempre a la vez— así que sale pesimista. Se usa así a propósito: para un objetivo de
+latencia, equivocarse por el lado pesimista es el lado correcto.
+
+### Sondeo adaptativo: el mismo presupuesto, gastado donde importa
+
+«Adaptativo» suena a «sondear más a menudo», y con The Odds API eso es imposible: son
+500 peticiones **al mes** en el plan gratuito, y sondear un solo deporte cada minuto
+serían 43.200. No hay ajuste fino que arregle un factor de ochenta y seis.
+
+Lo que sí se puede es gastar el mismo presupuesto de forma **desigual**. Antes todo se
+refrescaba cada N minutos: el partido que empieza en veinte minutos y la línea que lleva
+tres días quieta recibían la misma atención. Ahora pesan dos cosas:
+
+* **Proximidad** — decae como una exponencial con semivida de 6 horas. La forma importa
+  más que los números: un escalón («a partir de 60 minutos, ×10») produce un salto de
+  gasto en un instante y deja el minuto 61 tan desatendido como el día anterior.
+* **Movimiento reciente** — cada cambio observado en 24 h multiplica, con techo en ×4
+  para que una línea histérica no se lleve el presupuesto entero.
+
+Con techo también en la aceleración total (×8): gastar hoy ocho veces más es no tener
+nada mañana.
+
+**La unidad es el deporte, no el partido**, y hay que decirlo: la API cobra por petición
+y devuelve todos los eventos del deporte en cada una, así que «refrescar solo este
+partido» no existe. Pedir el Arsenal–City trae la Premier entera y cuesta lo mismo. Lo
+que se decide es cada cuánto se pide cada deporte, y la urgencia se hereda del partido
+que más la tenga.
+
+Las dos heurísticas son **declaradas, no medidas**, y se dicen así. Lo que sí es
+aritmética es la consecuencia: repartir un presupuesto fijo proporcionalmente a un peso
+baja la latencia media ponderada por ese peso.
+
+### WebSocket: se comprueba, no se supone
+
+El encargo decía «WebSockets donde la API los ofrezca». La parte importante de esa frase
+es *donde los ofrezca*, y averiguarlo es trabajo. Escribir un cliente contra un endpoint
+que no existe es peor que no escribirlo: parece que la funcionalidad está y falla en
+tiempo de ejecución en casa de otro.
+
+Así que hay una **sonda** que intenta el apretón de manos de verdad y guarda lo que
+contestó el servidor, con fecha:
+
+```
+npm run latency -- --probe
+```
+
+Un 404 o un 400 son respuestas válidas: dicen que ahí no hay WebSocket. Lo que **no** es
+una respuesta es un error de conexión, y la sonda distingue las dos cosas — «no pude
+comprobarlo» no es «no hay». La primera versión no distinguía y concluía «el proveedor
+es REST» desde una red que simplemente no alcanzaba el host: un veredicto sobre la red
+disfrazado de veredicto sobre la API.
+
+Entre **nuestro** servidor y el navegador sí hay empuje, y es SSE en vez de WebSocket
+porque el tráfico va en una sola dirección, el navegador reconecta solo y atraviesa
+proxies que a veces rompen los WebSocket. Son dos tramos distintos del recorrido y no
+hay que confundirlos.
+
+### Alertas push, no refresco manual
+
+Un precio puede llevar veinte minutos escrito en la base y no estar en la pantalla
+porque nadie ha pulsado nada. Ese hueco **cuenta igual que el resto**: si el objetivo es
+cinco minutos, un refresco manual lo hace inalcanzable por definición, porque depende de
+que alguien mire.
+
+El panel de la pestaña 🎟️ escucha el canal y se actualiza solo. Con permiso, además
+avisa con una notificación del sistema, etiquetada por partido para que un aviso nuevo
+**sustituya** al anterior en vez de apilarse — una línea que se mueve cinco veces deja
+si no cinco notificaciones casi idénticas, y la persona las silencia todas.
+
+El permiso **no** se pide al cargar. Un permiso denegado es permanente hasta que la
+persona lo cambie a mano en el navegador, así que pedirlo sin contexto no es un intento
+fallido: es haber gastado la única oportunidad. Se pide desde el botón.
+
+Y se **mide de todos, se avisa de algunos**. Cada precio nuevo es una muestra válida y
+tirarla sesgaría los percentiles, pero avisar de todos es otra cosa: el primer sondeo con
+una clave nueva ve por primera vez cada partido de cada liga, y sin techo eso son decenas
+de notificaciones de golpe. Se avisa de los cinco partidos más próximos —los accionables,
+porque una línea del sábado que se mueve el miércoles no exige mirar ahora mismo— y el
+resto va en un solo aviso que dice cuántos son. Un canal de alertas que se silencia el
+primer día es un canal de alertas que no existe.
+
+### La última etapa la mide el navegador, porque es la única que puede
+
+El servidor no sabe cuánto tardó la red del usuario ni cuánto tardó React en pintar. Sin
+esa medición, «de punta a punta» sería en realidad «hasta que salió de mi máquina», que
+es la parte fácil. Así que el cliente cierra el cronómetro y lo reporta.
+
+Dos detalles que no son adorno: se usa `performance.now()` y no `Date.now()` (el reloj
+del sistema puede saltar a mitad de la medición, y una latencia negativa en un panel es
+la clase de dato que hace desconfiar de todo el panel), y se cierra tras **dos**
+`requestAnimationFrame` anidados, porque el primero corre antes del pintado del fotograma
+y medir ahí daría un número sistemáticamente corto.
+
+### Lo que se sabía y estaba mal antes de esto
+
+Dos hallazgos de la investigación, porque explican de dónde salió el trabajo:
+
+* La ingesta **descartaba `last_update`**, que es la única marca de tiempo de origen que
+  el proveedor devuelve. Sin ella no había forma de medir la primera etapa, que es la
+  que se come el 80 % del presupuesto.
+* `AUTO_REFRESH_MINUTES` traía 720 por defecto — **12 horas**, o seis de antigüedad
+  media. La cadencia automática ya lo arreglaba en cuanto se conoce el plan, pero el
+  suelo seguía sin estar medido.
+
+Y una advertencia sobre `origen`: son en realidad dos cosas pegadas —«la casa publica →
+la API se entera» y «la API lo tiene → nosotros lo pedimos»— que **no se pueden
+separar**, porque el proveedor no sella cuándo lo recibió él: devuelve el `last_update`
+de la casa. Se mide la suma y se llama `origen` para no fingir una precisión que no hay.
+
+
+---
+
+## Mercados de menos liquidez (`npm run study:thin`)
+
+Cuatro familias de mercados que la app no tocaba, cada una con **su propia distribución**
+en vez de reciclar la del partido.
+
+### Las dos mitades — de 8,35 pp de error a 2,08
+
+El marcador al descanso llevaba ingerido desde el principio y había un modelo escrito,
+medido y **deliberadamente apagado**, con el motivo al lado: tomaba la λ del partido y la
+multiplicaba por la cuota de goles de la primera parte. Su diagnóstico era correcto —«la
+media es correcta por construcción; la FAMILIA de la distribución es la equivocada»— y
+pedía un trabajo que no se había hecho. Ahora está hecho, en tres partes:
+
+1. **Un Dixon-Coles propio por mitad.** Uno ajustado sobre los goles de la primera parte
+   y otro sobre los de la segunda, cada uno con su ataque, su defensa, su ventaja de campo
+   y su ρ. Un equipo que sale fuerte y se apaga no se describe con un solo par de números.
+2. **COM-Poisson en vez de Poisson.** Los goles de un equipo en una mitad están
+   **INFRA**dispersos: menos ceros y más unos de los que admite una Poisson con la misma
+   media. Medido sobre 24.778 partidos, un equipo se queda a cero en la primera parte el
+   47,93 % de las veces y la Poisson dice 51,98 %. La ν ajustada por máxima verosimilitud
+   sobre 40.828 muestras de entrenamiento sale **1,20** (>1 = infradispersa).
+3. **ρ ajustada, y sale positiva.** En el partido entero ρ es negativa; en una mitad sale
+   **+0,014 a +0,117** según la liga. No es un error de signo: lo que sobra en una mitad
+   respecto a la independencia no son los 0-0, son los 1-1.
+
+La ν ajustada sale **1,30**. Una medición anterior hecha a mano daba 1,20, porque usaba la
+λ del partido × la cuota de la primera parte en vez de la λ del ajuste de la mitad — que
+es exactamente el error que este módulo existe para no cometer. El número que se publica
+es el del script.
+
+Sobre 3.634 partidos de validación que el ajuste no vio, con las dos columnas medidas
+sobre los **mismos** partidos:
+
+| mercado | antes | ahora |
+|---|---|---|
+| descanso 1 | +3,81 | **+1,67** |
+| descanso X | −5,00 | **−1,72** |
+| descanso 2 | +1,19 | **+0,05** |
+| descanso +0,5 goles | +4,87 | **+2,26** |
+| descanso +1,5 goles | −1,75 | +1,01 |
+| el local gana una mitad | +6,70 | **+3,23** |
+| el visitante gana una mitad | +4,67 | **+1,78** |
+
+El peor mercado pasa de **6,70 pp a 3,23**, y cinco de los siete mejoran. (Ese «antes» ya
+es el mejor «antes» posible: usa λ del Dixon-Coles. La nota vieja del código llegaba a
+8,35 pp porque las suyas venían del Elo.)
+
+**Sigue siendo peor que el partido entero**, que está dentro de 1,5 pp en todo lo que
+publica. Así que se publica con el error medido **al lado de cada línea** en la tarjeta:
+un «+2,3 pp» quiere decir que en realidad pasa más de lo que dice el número.
+
+**Y lo que no mejora:** el log loss del 1X2 al descanso no se mueve — 1,06780 → 1,06693,
+IC 95 % [−0,0051, +0,0032], p = 0,67. Indistinguible. No es una contradicción: el log loss
+mide sobre todo **discriminar** (separar los partidos que acaban 1 de los que acaban X) y
+lo que ha mejorado es **calibrar** (que cuando dice 73 % pase el 73 %). Para estos
+mercados manda la segunda, porque el sesgo va siempre en la misma dirección y se paga en
+cada apuesta; pero el modelo nuevo no distingue mejor los partidos que el viejo, y eso
+también está escrito.
+
+### Props de jugador — la distribución de minutos, no su media
+
+«Marca 0,45 por 90 y juega unos 70 minutos, o sea 0,35 goles» da la media correcta y la
+probabilidad equivocada. Los 70 minutos no son 70: son 90 si es titular y aguanta, 25 si
+entra del banquillo y **0 si no juega**. Así que:
+
+```
+P(marca) = Σ_m  P(minutos = m) · [1 − e^(−tasa·m)]
+```
+
+La masa en «no juega» aporta exactamente cero, y aplastarla a un promedio infla todas las
+probabilidades. Las tasas van encogidas hacia el promedio de la posición (10 partidos de
+prior) y **la titularidad también** (5 partidos): sin eso, en la jornada 1 todo el que
+jugó tiene una titularidad del 100 % y las props salían con 79,9 minutos esperados y un
+0 % de no jugar **para toda la plantilla** — el suplente con la misma seguridad que el
+capitán.
+
+Solo la Premier League tiene datos de jugadores. Salen goles, asistencias, gol-o-asistencia
+y tarjetas; las tarjetas por jugador son una columna que la fuente publicaba y que nada
+leía hasta ahora.
+
+### Córners y tarjetas — el modelo está, los datos no
+
+El esqueleto es el mismo (nivel de liga × lo que genera este equipo × lo que concede el
+rival × localía) y la **familia se mide, no se elige**: `fitCounts` contrasta la
+dispersión y devuelve Poisson o binomial negativa según lo que salga. Que los córners y
+las tarjetas estén sobredispersos es razonable de esperar —el árbitro es un factor común
+a todo el partido— pero «razonable de esperar» no es una medición.
+
+**No hay datos.** Los publica football-data.co.uk (columnas HC/AC/HY/AY/HR/AR), la ingesta
+ya las lee y hay columnas y migración para ellas, pero ese sitio no es alcanzable desde
+donde se generaron estos datos, y las dos fuentes que sí lo son solo traen marcadores
+(el CSV de footballcsv tiene cinco columnas: `Round,Date,Team 1,FT,Team 2`). El modelo se
+queda **apagado y diciéndolo**, en vez de rellenar el hueco con una media inventada. En una
+máquina que alcance esa fuente, `npm run update-data:fb` las llena y se enciende solo.
+
+### Y por qué a estos mercados hay que exigirles más
+
+Toda la app se apoya en que discrepar del precio es interesante. En el 1X2 de la Premier
+eso es defendible: decenas de casas, margen del 4 %. En «córners del Betis por encima de
+5,5» puede haber dos casas, un margen del 15 % y un límite de veinte euros — y ahí se
+rompen las dos mitades a la vez, porque **la línea informa menos** (no ha pasado dinero
+informado por ella) y **el margen se come la ventaja**. Las dos apuntan igual: exigir más,
+no menos.
+
+| profundidad | umbral | ejemplos |
+|---|---|---|
+| profundo | 4 pp | 1X2, total de goles, ambos marcan |
+| medio | 6 pp | hándicap, marcador exacto, 1X2 al descanso, marca un gol |
+| fino | 10 pp | gana alguna mitad, descanso/final, córners, tarjetas, asistencia |
+| muy fino | 14 pp | ve tarjeta, marca 2 o más |
+
+Esos multiplicadores son **estructurales, no medidos**, y se declara así: traducen el
+margen típico de cada tipo de mercado, de forma que exigir el triple en un mercado de
+nicho es aproximadamente exigir la misma ventaja *neta*. Cuántas casas cotizan cada
+mercado **no se consulta**: el proveedor lo sirve por un endpoint por evento que se cobra
+aparte, y pedirlo para sesenta partidos gastaría la cuota de quien use la app sin
+preguntárselo. Por eso `books` es `null` —«no consultado»— y no `0`, que sería «ninguna».
+
+---
+
+## La capa entre el modelo y la pantalla (`npm run study:postprocess`)
+
+Lo que sale del modelo no es lo que se publica. En medio hay tres pasos, cada uno
+ajustado sobre predicciones históricas fuera de muestra, y **la tarjeta enseña las dos
+probabilidades** — la cruda y la final — con lo que se le hizo entre una y otra.
+
+```
+cruda  →  [1] calibrar  →  [2] mezclar con el mercado  →  [3] encoger  →  publicada
+```
+
+**[1] Calibración.** Se ajustan Platt y una regresión isotónica, y gana el que le gane a
+*no calibrar* fuera de muestra. Los tramos son tres, no dos: se AJUSTA con lo más
+antiguo, se ELIGE con la última temporada de entrenamiento y solo entonces se mide en
+validación. Elegir entre tres mirando validación y publicar el número de validación del
+ganador es exactamente el sesgo que el registro de experimentos existe para evitar.
+
+**[2] Mezcla.** En escala logarítmica, no aritmética: con 2 % y 20 % a partes iguales la
+aritmética da 11 % y la logarítmica 6,7 %, que respeta que la distancia entre 2 % y 20 %
+es la misma que entre 20 % y 75 %. El peso sale de una rejilla sobre el backtest, nunca a
+ojo.
+
+**[3] Encogimiento.** `w_efectivo = w / (1 + κ·d)`, con `d` = KL(modelo ‖ mercado). Cuando
+el modelo se aleja mucho del precio, la explicación más frecuente no es que haya visto
+algo, sino que le falta algo que el mercado sí tiene. Y son justo las tarjetas que más
+«valor» enseñan.
+
+### Lo que salió
+
+| | fútbol | NFL |
+|---|---|---|
+| calibrador elegido | **Platt** (a = 1,10) | **ninguno** |
+| log loss cruda → calibrada | 1,00785 → 1,00697 | 0,65216 (sin cambio) |
+| peso del modelo en la mezcla | — | **0,10** |
+| encogimiento κ | — | 4 |
+| log loss final | 1,00697 | **0,62807** |
+
+**El peso del modelo de la NFL es 0,10.** Dicho sin adornos: el backtest dice que la
+mejor forma de usar ese modelo es casi ignorarlo y copiar el precio. Y ni así mejora al
+mercado — la mezcla queda en 0,6294 frente a 0,6270 de la línea sola, una diferencia que
+cabe dentro del azar (IC [−0,0006, +0,0029]). La mezcla se aplica igualmente porque
+publicar el modelo crudo sería peor.
+
+**En el fútbol la mezcla está APAGADA**, y no por olvido: ajustar un peso exige cuotas de
+partidos ya jugados, y este archivo tiene cero. Poner el 0,10 de la NFL ahí sería
+inventarlo. Se enciende sola: cada predicción queda en `fb_prediction_log` con el precio
+del día, y en cuanto haya unos cientos resueltos, `npm run study:postprocess` la ajusta
+con tus datos.
+
+La mejora de Platt en el fútbol es de 0,0009 de log loss, con p = 0,0495 — pasa el listón
+nominal y **no** el de Bonferroni con 17 comparaciones sobre el mismo conjunto. El script
+lo escribe en su salida en vez de dejarlo en un decimal.
+
+---
+
+## Apuestas simultáneas: correlación, Kelly de cartera y topes (`npm run study:correlation`)
+
+El sizing dimensionaba cada apuesta **como si fuera la única**. Un sábado no lo es: hay
+ocho posiciones abiertas a la vez y, si fallan juntas, el banco no cae ocho veces un
+poco — cae una vez mucho.
+
+### Primero se midió, y salió lo contrario de lo esperado
+
+La hipótesis era la intuitiva: las apuestas de una misma liga y jornada se arrastran
+entre sí (mismo árbitro, mismo clima, mismo sesgo del modelo). Para comprobarlo se sacan
+las predicciones **fuera de muestra** del Dixon-Coles y se mira el residuo tipificado
+
+```
+z = (y − p) / √(p·q)
+```
+
+Con el modelo calibrado, E[z] = 0 y Var[z] = 1, así que la correlación entre dos
+apuestas es directamente E[z_i·z_j]: cero es independencia, positivo es fallar juntas.
+Medido: media de z = 0.016, varianza = 1.007. Sobre **65.505 predicciones**, 2.063
+jornadas, 13 ligas.
+
+| pareja | ρ | IC 95 % | pares |
+| --- | --- | --- | --- |
+| **mismo partido** · over 2.5 ~ ambos marcan | **+0.558** | [+0.546, +0.572] | 21.835 |
+| **mismo partido** · gana el local ~ over 2.5 | **+0.164** | [+0.151, +0.178] | 21.835 |
+| **mismo partido** · gana el local ~ ambos marcan | **−0.141** | [−0.154, −0.128] | 21.835 |
+| misma liga · misma jornada · mismo mercado | +0.0013 | [−0.0020, +0.0047] | 357.606 |
+| … y además el mismo lado (**mismo sesgo**) | +0.0007 | [−0.0038, +0.0053] | 225.362 |
+| **control**: ligas y días distintos | −0.0002 | — | 918.752 |
+
+La correlación que se fue a buscar **no existe**: entre partidos distintos de la misma
+liga y jornada no se distingue de cero, ni siquiera restringiendo a apuestas del mismo
+lado. La que sí existe es entre **mercados del mismo partido**, y es dos órdenes de
+magnitud mayor.
+
+### El control es la mitad del experimento
+
+Pares de ligas y días distintos. No hay mecanismo por el que el error del Betis en marzo
+deba parecerse al del Everton en noviembre, así que ese número **tiene** que salir ~0 — y
+sale −0.0002. Es lo que convierte el cero de arriba en una **medición** y no en falta de
+potencia: el mismo estimador detecta un 0.558 cuando lo hay.
+
+Sin el control, este script sería una máquina de fabricar números convincentes.
+
+### Y un error propio, en la primera versión
+
+El grupo «mercados distintos» salía significativo con ρ = 0.019 e **incluía pares del
+mismo partido**. Estaba midiendo el 1X2 contra el over del mismo marcador —correlacionado
+por construcción— y presentándolo como una propiedad de la jornada. Separados los dos
+casos, uno se desploma a cero y el otro sube a 0.19.
+
+### El error estándar no puede ser el ingenuo
+
+Un partido entra en muchos pares, así que N pares no son N observaciones. El intervalo
+sale de un **bootstrap por bloques** que remuestrea jornadas enteras. Con un bootstrap
+sobre pares, los intervalos saldrían varias veces más estrechos y el ruido pasaría por
+hallazgo.
+
+### El signo no es un detalle
+
+Las cifras están en dirección canónica (gana el local / hay over / marcan los dos).
+Respaldar el lado contrario en una de las dos **invierte el signo**.
+
+«Local + ambos marcan» sale **negativa**: es una cobertura parcial, no una concentración.
+Un modelo de correlación que tomara valores absolutos —que es lo que sale de suponer en
+vez de medir— recortaría justo ahí un tamaño que no hacía falta recortar.
+
+### Kelly de cartera
+
+Kelly maximiza el crecimiento del **banco**, y el banco es uno solo. Con varias
+posiciones lo que crece es `1 + Σ f_i·r_i`, y el logaritmo de esa suma no se separa en
+suma de logaritmos.
+
+Con la aproximación cuadrática, `f* = Σ⁻¹μ` — el problema de Markowitz. Pero esa
+aproximación **no coincide** con el Kelly exacto ni con una sola apuesta (a cuota 6.00
+pide un 13 % menos), así que no sustituye al sizing que ya había. Devuelve un **factor**:
+
+```
+factor_i = f_cartera,i / f_independiente,i
+```
+
+con las dos bajo la **misma** aproximación, de modo que el error de aproximación se
+cancela en el cociente y lo que queda es solo el efecto de la correlación. Ese factor
+multiplica el tamaño de siempre.
+
+**El factor nunca sube de 1.** Con correlación negativa el óptimo pediría apostar más; se
+recorta igualmente. Una estimación de correlación negativa es la menos fiable de todas y
+el premio por creérsela es pequeño, mientras que el castigo es apalancarse justo donde
+uno creía estar cubierto. Un módulo de riesgo que puede *aumentar* una apuesta es una vía
+nueva de perder dinero.
+
+Con cuatro apuestas —dos de ellas mercados del mismo partido— el efecto es visible:
+
+```
+apuesta                  en solitario   de cartera   factor
+A vs B — local                  15.17        12.74   ×0.84
+A vs B — over 2.5               17.23        14.97   ×0.87
+C vs D — local                  15.17        15.04   ×0.99
+E vs F — local                  15.17        15.16   ×1.00
+```
+
+### Exposición agregada real contra la suma ingenua
+
+Son **dos preguntas distintas** y hacen falta las dos:
+
+* **Suma ingenua** `Σf_i` — «¿cuánto puedo perder?». No depende de la correlación: si
+  fallan todas se pierde la suma. Gobierna los topes duros.
+* **Riesgo efectivo** `√(fᵀ·C·f)` — «¿cuánto riesgo corro?». Es el tamaño de *una*
+  apuesta con la misma varianza. Gobierna el tamaño, porque es lo que entra en el
+  crecimiento logarítmico.
+
+25 apuestas al 2 %: la ingenua es el 50 %, la efectiva el 10 % (√25 veces una, no 25).
+Con correlación perfecta las dos coinciden. Usar solo la ingenua rechaza carteras
+diversificadas sanas; usar solo la efectiva deja pasar una concentración que vacía el
+banco en una tarde.
+
+### Topes por día y por liga
+
+Dos puertas nuevas, la 7 y la 8:
+
+| tope | valor | protege de |
+| --- | --- | --- |
+| por evento | 2 % | una `p` disparatada en un partido |
+| total simultáneo | 10 % | demasiado vivo a la vez |
+| **por día** | **6 %** | que una tarde entera se liquide junta |
+| **por liga** | **5 %** | que el banco dependa de que el modelo de *una* liga esté bien |
+
+El tope por liga **no** protege de una dependencia medida — ya se ha dicho que es cero.
+Protege del **riesgo de modelo**: si el Dixon-Coles de una liga está roto (datos mal
+cargados, un ascenso mal sembrado), el fallo es de esa liga entera y se lleva todas sus
+posiciones por delante. La correlación de resultados es cero; la de «que mi modelo esté
+equivocado» no lo es, y esa no se puede estimar con los mismos datos que produjeron el
+modelo.
+
+Cuando un tope no da para todo, se recorta **proporcionalmente**, no por orden de
+llegada: servir por orden dejaría la última candidata a cero por el azar del orden de la
+consulta, y ese azar no es un criterio de riesgo.
+
+### La correlación tiene su propia familia de Bonferroni
+
+Bonferroni corrige por haber hecho muchas preguntas **parecidas** sobre los mismos datos.
+«¿Mejora el log loss?» preguntado dieciocho veces es una familia; «¿cuánto correlacionan
+dos apuestas?» no es la misma pregunta ni sobre la misma cantidad. Meterlas en la misma
+bolsa encarecía el listón de las comparaciones de predicción por medir algo que no compite
+con ellas, y hacía que **añadir una medición debilitara retroactivamente** conclusiones
+anteriores que no habían cambiado.
+
+No es una escapatoria: dentro de su familia se corrige igual, con divisor 2 y a la vista.
+Y la columna de dirección tuvo que aprender que en `corr` un delta positivo no es
+`EMPEORA` sino `MÁS dep.` — es el hallazgo, no un fracaso.
+
+### Un fallo que solo cazó la comprobación
+
+La tabla de correlaciones se indexaba con claves escritas a mano, y `over_under~btts` no
+encontraba nada: la búsqueda ordena alfabéticamente y genera `btts~over_under`. El par
+con la correlación **más alta de las tres** caía en el valor por defecto. No rompía nada
+visible porque el defecto es prudente — que es exactamente lo que hace que un fallo así
+sobreviva. Ahora las claves se construyen con la misma función que las busca.
+
+
+---
+
+## Modelo y decisión son dos cosas
+
+El modelo dice una probabilidad. Otra cosa distinta decide un dinero. Viven en
+carpetas separadas y `server/src/staking/` no importa ni un Elo: entran `p`, cuota,
+deporte y banco.
+
+La consecuencia práctica es la que importa: se puede **apretar el riesgo sin tocar el
+modelo**. Cuando las dos cosas viven en la misma función, subir un límite y mejorar una
+predicción se parecen demasiado.
+
+```bash
+npm run staking -- --bankroll 1000
+```
+
+### Las ocho puertas
+
+Una apuesta pasa por todas, en este orden:
+
+1. **¿Hay ventaja al precio ofrecido?** Con el margen dentro, no contra la cuota limpia.
+2. **¿Está el modelo calibrado?** Multiplica el tamaño y puede anularlo.
+3. **Kelly fraccional** — 1/4 o 1/5. `KellyFraction` es un tipo que **no admite 1**, así
+   que probar Kelly completo exige editar el fichero.
+4. **Tope duro por evento** — 2 % del banco.
+5. **Límites de pérdida diario y semanal** — que **cortan**, no recortan. Un límite que
+   reduce el tamaño se puede cruzar apostando más veces, y entonces no es un límite.
+6. **Exposición total simultánea** — 10 % del banco en riesgo a la vez, contando lo
+   pendiente. Las cinco primeras dimensionan cada apuesta como si fuera la única, y en
+   un sábado no lo es: sin esta puerta, 25 candidatas al 2 % sumaban el 50 % del banco.
+7. **Kelly de cartera** — un factor ≤ 1 por la correlación **medida** con el resto de
+   las posiciones abiertas. Ver la sección de apuestas simultáneas más arriba.
+8. **Topes por día y por liga** — 6 % y 5 %. Manda el más ajustado de los tres topes, no
+   el producto: son condiciones que hay que cumplir a la vez, no descuentos que se
+   acumulan.
+
+Las puertas 1–6 se evalúan por apuesta; las 7 y 8 **solo se pueden evaluar mirándolas
+todas juntas**, y por eso existe `decideBook` además de `decideStake`. Llamar n veces a
+la función de una deja las tres cosas nuevas sin gobierno, y el fallo no se ve: cada
+apuesta sale con su tamaño «prudente» y la cartera entera no lo es.
+
+Y antes de las ocho, una regla de entrada: **una sola selección por partido**. Los tres
+lados de un 1X2 son mutuamente excluyentes, así que se elige la de mayor **crecimiento
+esperado** —no la de mayor ventaja, que no es lo mismo: `f* = ventaja / (cuota − 1)`, y
+una selección a cuota larga puede tener más ventaja y un Kelly ridículo.
+
+### El tamaño baja solo cuando el modelo es peor
+
+`npm run study:calibration` mide el ECE de cada deporte y lo escribe en
+`experiments/calibration.json`. El módulo **falla cerrado**: sin medición, el tamaño es
+cero.
+
+| deporte | ECE | ¿mejor que el mercado? | multiplicador |
+|---|---|---|---|
+| fútbol | 0,72 pp | no medible (cero cuotas históricas) | **×0,50** |
+| NFL | 1,82 pp | **no**, +0.01609 de log loss | **×0,00** |
+
+La NFL sale a cero y no porque alguien lo decidiera: está medido que su modelo es peor
+que la línea de cierre, y apostar contra un precio mejor que tu propia estimación es
+perder por definición. El fútbol se queda a la mitad porque sin cuotas históricas no se
+puede descartar que le pase lo mismo.
+
+### El drawdown, no solo el retorno
+
+«+2 % esperado» no dice nada del camino. La tabla simula 5.000 caminos y enseña la caída
+mediana y la del percentil 95 — y lo hace **cuatro veces**, desplazando las
+probabilidades hacia la moneda:
+
+```
+  escenario                  retorno   caída mediana   caída p95   pierde
+  el modelo tiene razón       +2.03 %          7.80 %     15.13 %      50 %
+  el modelo se equivoca 1/4   +1.51 %          7.84 %     16.69 %      52 %
+  el modelo se equivoca 1/2   +0.98 %          7.84 %     16.73 %      54 %
+  el modelo no sabe nada      -0.04 %          7.91 %     16.79 %      59 %
+```
+
+La fila que importa no es la primera: esa supone que `p` es exacta, que es la hipótesis
+que Kelly necesita y que nunca se cumple. Y fíjate en que **la caída apenas cambia entre
+filas** — el retorno depende de acertar la probabilidad, la caída depende del tamaño que
+pusiste.
+
+## El registro de experimentos y el holdout final
+
+Un intervalo del 95 % significa «si esto fuera ruido, me equivocaría 1 de cada 20
+veces». Vale para **una** comparación. Cuando llevas veinte sobre los mismos partidos
+esperas una falsa por pura aritmética — y es justo la que se publica, porque es la que
+salió bonita.
+
+Este proyecto llevaba nueve valores del decay, cuatro pesos de Glicko, seis
+ablaciones, tres baselines y dos métodos de de-vig sobre el mismo archivo de fútbol,
+cada uno con su intervalo del 95 % citado como si fuera el único.
+
+```bash
+npm run experiments
+```
+
+Cada comparación se apunta en `experiments/registry.jsonl` —hipótesis, features,
+hiperparámetros, resultado, veredicto— **gane o pierda**: un registro donde solo se
+apuntan los aciertos cuenta mal el denominador, y el denominador es lo único que da
+sentido a un p de 0,03. Es un fichero versionado y no una tabla de la base de datos
+porque `data/` se borra al reingerir, y un contador que se puede perder no cuenta nada.
+
+El CLI aplica las dos correcciones, que contestan preguntas distintas: **Bonferroni**
+controla la probabilidad de cometer al menos un error en toda la familia —el listón
+para decir «esto es real»— y **Benjamini–Hochberg** controla la proporción de falsos
+entre los declarados buenos, que es el listón razonable para una lista de candidatos.
+
+Lo primero que dijo al encenderlo fue incómodo: de once experimentos sobre el fútbol,
+**dos cosas que están en producción no pasan Bonferroni**.
+
+### Tres conjuntos, no dos
+
+Hasta ahora había entrenamiento y «reservado». Y el reservado se miró en el barrido
+del decay, en los pesos de Glicko, en las ablaciones y en los baselines. Después de la
+primera mirada dejó de ser un holdout: si eliges entre veinte opciones por lo que hace
+un conjunto, ese conjunto ya está dentro de la decisión aunque no hayas entrenado sobre
+él.
+
+| | fútbol | NFL |
+|---|---|---|
+| entrenamiento | hasta 2024 | hasta 2022 |
+| validación (elige) | 2025 | 2023 |
+| **holdout final (cerrado)** | **2026 →** | **2024 →** |
+
+El candado es código, no un acuerdo: `assertNotFinalHoldout()` **lanza**, el holdout no
+entra ni en los agregados, y abrirlo exige `unlockFinalHoldout("motivo")` — que escribe
+la apertura en el registro. La constancia importa más que el candado: un candado se
+salta editando el fichero, pero el registro convierte esa edición en algo que hay que
+explicar.
+
+### Por qué `npm run lint` solo mira una categoría
+
+Porque antes no miraba **ninguna**: el script del raíz delegaba en los workspaces con
+`--if-present` y ninguno de los dos tenía script de lint, así que `npm run lint` salía
+en verde sin abrir un solo fichero. Eso es peor que no tener linter, porque el proyecto
+lo anunciaba como si comprobase algo.
+
+Ahora es oxlint de verdad, con `correctness` como error — la categoría de los fallos
+que son bugs y no gustos. Las categorías de estilo (`suspicious`, `perf`) están fuera
+a propósito: activándolas salen **172 avisos** de cosas como `Array#sort()` en vez de
+`toSorted()` sobre arrays recién creados, o `await` dentro de bucles que están
+secuenciados a posta para no reventar una API con límite de peticiones. Un lint que
+imprime 172 líneas cada vez es un lint que nadie lee, y eso lo devuelve al punto de
+partida: verde que no significa nada.
+
+Una regla apagada, `unicorn/no-new-array`, y con motivo: existe porque `new Array(5)`
+es ambiguo entre «cinco huecos» y «un elemento que vale 5», y los dos usos del proyecto
+son `new Array<number>(n).fill(0)` en la distribución de margen y total de la NFL,
+donde el parámetro de tipo y el `.fill` no dejan ninguna ambigüedad.
+
+### Comprobar que la información es correcta
+
+`npm run audit` no mide el acierto del modelo (para eso están los backtests): comprueba
+**propiedades que se tienen que cumplir por construcción**, en los cinco deportes a la vez. Un fallo
+ahí es un bug, nunca una cuestión de ajuste.
+
+Verifica, por deporte, que las probabilidades suman 1; que la rejilla de marcadores más su cola suma
+1; que los bloques de la rejilla coinciden **exactamente** con el 1X2 que muestra la cabecera de la
+tarjeta; que la distribución de márgenes suma 1 y que su casilla del 0 vale P(empate) en fútbol y
+cero en béisbol (un marcador final nunca queda empatado); que el marcador que anuncia la tarjeta es
+de verdad el máximo de la rejilla; que el balance mostrado coincide con lo que hay en la base de
+datos; que el pitagórico está bien calculado; que «cubrir el hándicap» nunca es más probable que
+ganar cuando el hándicap va en contra; que el veredicto es el resultado de mayor probabilidad; que
+el signo de la diferencia esperada concuerda con el favorito; y que no hay ids de partido repetidos
+ni fechas inválidas.
+
+En fútbol americano comprueba además dos cosas que solo tienen sentido ahí: que **un hándicap de 0 es
+exactamente la probabilidad de ganar** (lo que ata los dos mercados y habría cazado el error de signo
+que tuvo la línea), y que **los factores del «por qué» suman el margen del titular** — un panel de
+explicación cuyos términos no reconstruyen el número de arriba es decoración, no una explicación.
+
+```
+$ npm run audit
+▸ Fútbol      32 predicciones · 24 partidos próximos
+▸ Béisbol     12 predicciones · 8 partidos próximos
+▸ Baloncesto  12 predicciones · 8 partidos próximos
+▸ NFL         12 predicciones · 32 partidos próximos
+▸ Tenis       30 predicciones
+✅ 1.249 comprobaciones, todas correctas.
+```
+
+La primera vez que se ejecutó encontró cuatro fallos reales: en béisbol, la diagonal de la rejilla
+de carreras dejaba 5·10⁻⁶ de probabilidad en marcadores empatados, justo en el borde superior del
+rango, contradiciendo lo que la propia tarjeta afirma con palabras. Se arregló el reparto de esa
+masa en `runDistribution` en vez de relajar la comprobación.
+
+Y al extenderla al fútbol americano encontró otros dos, esta vez de verdad graves: el **lado
+visitante del hándicap** estaba mal calculado (se pedía la línea contraria al equipo local en vez de
+aplicar la línea al margen del visitante, así que «cubre» y «falla» no eran espejo: 0.284 contra
+0.469 en el mismo partido), y el panel del «por qué» **sumaba 7,3 puntos de razones bajo un
+pronóstico de 5,2**, porque usaba los Elo sin la regresión de pretemporada y colaba entre ellos el
+ataque y la defensa, que mueven el total y no el margen. Ninguno de los dos habría movido un solo
+punto de acierto en un backtest.
+
+### Medir cambios del modelo
+
+El backtest acepta banderas para **desactivar o reajustar** cada pieza y ver qué aporta, sobre los
+mismos partidos:
+
+```bash
+npm run backtest -- --tour atp --from 2015   # ventana de evaluación
+npm run backtest -- --mov 0                  # sin margen de victoria
+npm run backtest -- --rest 0                 # sin penalización por inactividad
+npm run backtest -- --bo3 0.7 --bo5 0.9      # otra calibración por formato
+npm run backtest -- --calibration 1          # curva Elo cruda, un solo factor
+npm run backtest -- --load 20                 # experimento: bonus por carga reciente
+npm run backtest -- --tour wta --market       # modelo contra las cuotas históricas
+```
+
+Así ninguna decisión del modelo depende de una intuición: se compara y se queda la que mide mejor.
+
+Con datos que traen cuotas (tennis-data.co.uk), el backtest imprime además la comparación
+**modelo vs mercado real** sobre los mismos partidos, incluyendo si las señales de *«posible value»*
+ganaron más de lo que el mercado les daba. Es la prueba honesta de si esas señales valen algo.
+
+## Puesta en marcha del baloncesto
+
+```bash
+npm run update-data:bb     # equipos + resultados + partidos próximos y cuotas
+npm run dev                # → abre la pestaña 🏀 Baloncesto
+```
+
+Opciones:
+
+```bash
+npm run update-data:bb -- --league nba        # solo una liga
+npm run update-data:bb -- --seasons 12        # más temporadas de histórico
+npm run update-data:bb -- --source 538        # histórico NBA real desde GitHub (llega a 2015)
+npm run update-data:bb -- --skip-odds         # solo resultados
+```
+
+`--source` decide de dónde salen los resultados: `auto` (por defecto) usa ESPN y, si no lo alcanza,
+cae al histórico NBA de FiveThirtyEight alojado en GitHub. Ese fichero es **real** pero termina en
+2015, así que la app avisa en pantalla de que los Elo no describen a las plantillas actuales — nunca
+lo presenta como datos al día.
+
+Las cuotas usan **la misma `ODDS_API_KEY`** que el tenis. Sin key, la pestaña funciona igualmente
+con una jornada de demostración etiquetada como tal.
+
+## Puesta en marcha del fútbol
+
+```bash
+npm run update-data:fb     # equipos + resultados + partidos próximos y cuotas
+npm run dev                # → abre la pestaña ⚽ Fútbol
+```
+
+Opciones:
+
+```bash
+npm run update-data:fb -- --league epl              # solo una liga
+npm run update-data:fb -- --seasons 12              # más temporadas
+npm run update-data:fb -- --source footballcsv      # espejo en GitHub (sin cuotas, va atrasado)
+npm run update-data:fb -- --skip-odds               # solo resultados
+npm run update-data:fb -- --skip-squads             # sin tocar las plantillas
+npm run update-squads:fb                            # solo lesionados y sanciones (a diario)
+```
+
+Por defecto usa **football-data.co.uk** (temporadas actuales *y* cuotas 1X2 históricas) y, si no lo
+alcanza, cae al espejo de GitHub. Las cuotas de partidos próximos usan la misma `ODDS_API_KEY`.
+
+## API REST (puerto 7374)
+
+Los tres deportes viven en espacios de nombres distintos: ningún endpoint puede devolver dos.
+
+| Endpoint | Descripción |
+|----------|-------------|
+| `GET /api/meta` | Fuente de datos y conteos |
+| `GET /api/track-record?tour=` | Acierto medido de la app en partidos ya jugados (+ mercado) |
+| `GET /api/tours` | Circuitos ATP/WTA con conteos |
+| `GET /api/points?tour=&p1=&p2=&surface=&bestOf=&tourney=` | **Los cuatro mercados del modelo de puntos**: partido, set, hándicap de juegos y total de juegos, todos de la misma distribución |
+| `POST /api/live` | **Probabilidad en vivo** desde el marcador exacto: `{state, tour, p1, p2, tally?, odds?}` |
+| `GET /api/power?tour=&limit=&minMatches=&activeDays=` | **Clasificación por Elo del circuito**, con Elo por superficie, ranking oficial y filtro de actividad (`activeDays=0` para la lista histórica) |
+| `GET /api/tours/:tour/players?q=` | Jugadores (búsqueda) |
+| `GET /api/players/:tour/:id` | Perfil: Elo general + por superficie + últimos resultados |
+| `GET /api/tournaments?tour=` | Torneos configurados y cuáles tienen partidos próximos |
+| `GET /api/matches/upcoming?tour=&tournament=` | Próximos partidos con odds y predicción |
+| `GET /api/h2h?tour=&p1=&p2=` | Head-to-head entre dos jugadores |
+| `GET /api/predictions/:id` | Predicción completa de un partido próximo |
+| `GET /api/predictions?tournament=` | Predicciones de todos los próximos de un torneo |
+| `POST /api/predict` | Predicción ad-hoc `{tour, p1, p2, surface, odds1?, odds2?}` |
+| `GET /api/basketball/leagues` | Ligas con conteos y si tienen modelo Elo |
+| `GET /api/basketball/games/upcoming?league=` | Partidos próximos con cuotas y predicción |
+| `GET /api/basketball/games/:id` | Un partido con su predicción completa |
+| `GET /api/basketball/teams/:league` | Todos los equipos de la liga |
+| `GET /api/basketball/teams/:league/:id` | Ficha del equipo (balance, forma, anotación) |
+| `GET /api/basketball/power?league=` | Ranking por Elo de todos los equipos |
+| `GET /api/basketball/track-record?league=` | Acierto medido, incluido el error de margen |
+| `POST /api/basketball/predict` | Predicción ad-hoc `{league, home, away, homeOdds?, awayOdds?}` |
+| `GET /api/football/leagues` | Ligas con conteos y si tienen modelo Elo |
+| `GET /api/football/fixtures/upcoming?league=` | Partidos próximos con 1X2, goles y cuotas |
+| `GET /api/football/teams/:league/:id` | Ficha del equipo (balance, goles, forma) |
+| `GET /api/football/power?league=` | Clasificación por Elo |
+| `GET /api/football/track-record?league=` | Acierto medido en RPS |
+| `POST /api/football/predict` | Predicción ad-hoc `{league, home, away, oddsHome?, oddsDraw?, oddsAway?}` |
+| `GET /api/latency?hours=` | Latencia por etapa, objetivo, si es alcanzable, transporte y reparto adaptativo |
+| `GET /api/latency/stream` | **SSE**: el servidor empuja los cambios de precio. Reemplaza al refresco manual |
+| `POST /api/latency/client` | El navegador reporta la última etapa `{ms, sport?, fixtureId?}` |
+| `GET /api/latency/stages` | Los cuatro tramos y sus etiquetas |
+| `GET /api/staking/book?bankroll=` | La cartera de hoy: tamaño de cartera contra tamaño en solitario, exposición agregada real contra la ingenua, topes que recortaron y correlaciones medidas |
+
+## Diseño
+
+Los cinco deportes comparten un solo lenguaje visual (`web/src/lib/theme.ts` y
+`web/src/components/ui/`), con una regla que importa: **los colores de datos son compartidos y están
+validados; la identidad de cada deporte es solo cromo** (la línea bajo la pestaña activa).
+
+Antes cada deporte había inventado su paleta, y la del fútbol estaba medida-mente rota: el azul del
+visitante y el gris del empate quedaban a ΔE 11.6 en visión normal, por debajo del suelo de 15 — las
+dos barras que más falta hace distinguir eran difíciles de distinguir incluso con visión de color
+completa. La paleta actual (azul local · turquesa empate · naranja visitante) pasa **todos** los
+pares en la superficie oscura de la app: separación CVD ΔE 9.4, visión normal 20.9, contraste ≥3:1.
+Local es azul y visitante naranja en los cinco deportes, así que el color significa lo mismo al
+cambiar de pestaña.
+
+Sobre esa base hay otras tres reglas, todas dirigidas a que la app se lea como una herramienta y no
+como un tablero de colores:
+
+**Un número nunca se pinta con el color de una serie.** Las cifras van en tinta; un punto de 6 px
+delante de la etiqueta dice de quién son. La tarjeta llegaba a tener el nombre del equipo en azul
+saturado, el 47.7 % en azul saturado y el segmento de la barra en azul saturado: tres marcas
+repitiendo un dato que la barra ya deja obvio, y un porcentaje más difícil de leer que en blanco. El
+color marca **quién**; la tinta dice **qué**.
+
+**Una sola caja y un solo radio.** La tarjeta era una caja con borde, brillo interior y sombra, que
+contenía paneles que eran cajas, que contenían casillas que eran cajas — tres rectángulos anidados
+alrededor de unas cifras que una línea fina y algo de espacio agrupan igual de bien. Ahora la
+tarjeta es la única caja rellena: dentro, las secciones se separan con filetes y aire.
+
+**Gris de verdad, no gris azulado.** El texto usaba `slate` de Tailwind, que tiene tinte azul: sobre
+un fondo azul-negro y con una serie azul, eso metía un tercer azul débil compitiendo con los dos que
+sí significan algo. La rampa de texto es neutra y el paso de las etiquetas (`#7b828d`) está subido
+para llegar a 4.7:1 sobre la tarjeta, por encima del mínimo AA para texto pequeño; antes estaba en
+3.4:1 y no lo cumplía.
+
+Las cinco pestañas comparten además un único tratamiento para las sub-pestañas (liga, circuito,
+torneo): había cuatro distintos, incluida una fila de subrayados justo debajo de la fila de
+subrayados de la app. Cada una lleva la bandera de su país, que los ficheros de configuración ya
+tenían.
+
+**Los escudos de equipo son la excepción a la paleta, y solo esa.** Cada equipo aparece con un disco
+en sus colores oficiales y su monograma: azul marino y verde para Seattle, granate y oro para los
+Cardinals, rojo para el Liverpool. Es el único sitio donde entra el color de un club — las barras,
+la rejilla y las bandas siguen con la paleta compartida, así que **el azul sigue siendo el local en
+los cinco deportes** juegue de lo que juegue cada equipo. Sin esa regla, un Seahawks–Chiefs tendría
+cuatro colores saturados peleándose con los dos que llevan el pronóstico.
+
+Los colores salen de [`jimniels/teamcolors`](https://github.com/jimniels/teamcolors) y solo se usan
+las ligas que se pudieron comprobar: NFL 32/32, MLB 32/32, NBA 28/45 (los 17 que faltan son
+franquicias desaparecidas en los años 40) y Premier League 20/20. **Lo que no se sabe se pinta en
+gris**, no en un color inventado: suponer que el Real Madrid es morado sería inventar información, y
+eso no se hace en ninguna otra parte de la app. Cuando la base de datos tiene un escudo real —el
+baloncesto los descarga— se superpone al disco, y si la imagen falla desaparece sola en vez de dejar
+el icono de imagen rota.
+
+## Qué incluye — 🎟️ Apuestas (tu registro)
+
+Las cinco pestañas anteriores dicen lo que piensa el **modelo**. Esta dice lo que hiciste **tú**, y
+están deliberadamente separadas: la precisión de un modelo no puede depender de a qué partidos te
+apeteció apostar, y tu beneficio no puede maquillarse contando solo los partidos que al modelo le
+gustaban.
+
+- **Registrar en dos clics, o a mano.** Eliges un partido de los próximos —los 99 que tenga cargados,
+  de los cinco deportes—, pulsas el lado al que apostaste, y escribes cuota y cantidad. La cuota se
+  pre-rellena con la del mercado si la hay, pero **siempre es editable**: la de tu boleto es la única
+  que cuenta. También puedes registrar cualquier cosa a mano.
+- **El beneficio no se guarda, se calcula.** Sale de (estado, cantidad, cuota, retorno) cada vez que
+  se lee, así que corregir un estado —lo que más se hace— nunca deja un número viejo detrás.
+  Ganada, perdida, **anulada**, **media ganada / media perdida** (hándicap asiático) y **cashout**.
+- **El ROI se calcula sobre lo que estuvo en riesgo**, no sobre todo lo apostado. Una anulada se
+  devuelve: ni ganó ni perdió, así que no infla el denominador. Con una ganada y cinco anuladas el
+  ROI sigue siendo +100 %, no +17 % — lo comprueba un test.
+- **Las pendientes valen `null`, no 0.** Un cero diría «empataste», y promediar lo que aún no se sabe
+  como ceros es exactamente cómo un tracker informa de un 0 % en una semana sin terminar.
+- **Calendario del mes** con el resultado de cada día, en verde/naranja según el signo y con la
+  intensidad proporcional al mayor día del mes. Pulsa un día para ver solo sus apuestas.
+- **¿Te sirvió seguir al modelo?** Cuando eliges la apuesta desde un partido de la app, se guarda lo
+  que pensaban el modelo y el mercado **en ese momento** — algo que no se puede recuperar después,
+  porque las cuotas se mueven y los ratings se recalculan. Con eso la pestaña separa tus apuestas en
+  «fui con el modelo» y «fui contra el modelo» y compara el ROI de cada grupo. Se oculta por debajo de
+  diez apuestas comparables: con cuatro, eso es ruido con titular.
+- **Sin símbolo de moneda.** Los mismos números sirvan euros, pesos o unidades; inventar una moneda
+  que no elegiste sería incorrecto en la mayoría de instalaciones.
+
+Todo vive en su propia tabla y su propio espacio de la API (`/api/bets`). Ningún modelo lee tus
+apuestas y las apuestas no puntúan a ningún modelo.
+
+## Fechas y horarios
+
+Los partidos van **agrupados por día**, no en una lista corrida. Cada grupo lleva una cabecera que se
+queda pegada arriba mientras lo recorres (`Hoy`, `Mañana`, `Ayer`, y para el resto la fecha larga —
+`Domingo, 13 de septiembre`— sin el año cuando es el año en curso), con el número de partidos de ese
+día al lado. Encima hay una fila de fichas, una por día con partidos, más `Todos`: pulsar una filtra
+a ese día, volver a pulsarla quita el filtro. Con 24 partidos de NFL repartidos en ocho días, eso es
+la diferencia entre buscar y mirar.
+
+En cada tarjeta ya no aparece la fecha completa repetida: basta **la hora** (`20:20`) y a cuánto está
+(`en 36 días`, `en 11 h`), porque el día ya lo dice la cabecera del grupo.
+
+Los días se cortan **en tu zona horaria**, no en UTC. Agrupar en UTC habría mandado los partidos de
+noche al día siguiente: un partido a las 22:00 en Madrid es 20:00 UTC el mismo día, pero uno a las
+01:30 es 23:30 UTC del día anterior, y habría aparecido bajo la cabecera equivocada.
+
+### El fallo de la hora de la NFL
+
+El calendario de la NFL publica el saque inicial como fecha y hora locales del este de Estados
+Unidos. Convertirlo estaba escrito como ``new Date(`${día}T${hora}:00-05:00`)`` — que es hora
+**estándar** del este, y la temporada de la NFL va de septiembre a febrero, así que casi todo el
+arranque cae en horario de **verano** (-04:00). **Todos los partidos desde la jornada 1 hasta
+noviembre se guardaban una hora tarde**: la tarjeta decía que un jueves por la noche empezaba a las
+21:20 cuando empieza a las 20:20.
+
+Un desplazamiento fijo está mal para cualquier ciudad con cambio de hora, y el signo del error se
+invierte dos veces al año. `server/src/timezone.ts` lo resuelve consultando el desplazamiento **de esa
+fecha concreta** en la base de datos de zonas horarias de la propia plataforma (`Intl`, sin
+dependencias), en dos pasadas: el desplazamiento depende del instante y el instante depende del
+desplazamiento, así que se estima con la lectura ingenua y se vuelve a comprobar en el instante
+corregido. Verificado en cuatro fechas, incluido el domingo del cambio de hora.
+
+### Los partidos de hoy duran todo el día, y traen su resultado
+
+Antes un partido desaparecía **6 horas después de empezar**, así que uno de las 11:00 ya no estaba a
+las 17:00 — justo la tarde en la que querías ver cómo acabó. Lo que uno entiende por «los partidos de
+hoy» es el **día del calendario**, no una ventana rodante.
+
+El corte es ahora **el más antiguo de dos límites**, así que conserva lo que cualquiera de los dos
+conservaría:
+
+- **las 00:00 de hoy, en hora local** — todo lo de hoy aguanta hasta medianoche y desaparece ahí;
+- **hace 6 horas** — para que un partido que empezó a las 23:30 siga ahí a la 01:00 mientras se
+  juega, en vez de cortarse a medianoche en mitad del partido.
+
+| Son las… | Corte | Un partido de hoy a las 11:00 |
+|---|---|---|
+| 15:00 | hoy 00:00 | **sigue** |
+| 23:00 | hoy 00:00 | **sigue** |
+| mañana 01:00 | ayer 19:00 | ya no |
+| mañana 09:00 | mañana 00:00 | ya no |
+
+Y en cuanto acaba, **la tarjeta muestra el resultado**: el marcador final arriba, en grande, con
+«✓ el modelo acertó» o «✕ el modelo falló». Tres estados, y confundir dos cualesquiera sería mentir:
+
+- **terminado con marcador** → se muestra, y si el modelo lo clavó;
+- **empezado y sin marcador** → «En juego, o el resultado aún no está descargado». Los resultados
+  llegan con `update-data`, así que esto es normal un rato y **no** es el modelo fallando;
+- **sin empezar** → no se muestra nada; el pronóstico es el contenido.
+
+En fútbol la comparación es a tres bandas (el empate es un resultado de verdad, no la ausencia de
+uno) y en tenis el resultado es un nombre y el marcador por sets, porque el archivo guarda un ganador
+y no dos marcadores.
+
+El emparejamiento «este partido programado ↔ aquel partido del archivo» es **el mismo que ya usaban
+los cinco puntuadores** de predicciones, no una segunda implementación: si fueran dos, la tarjeta y el
+panel de aciertos podrían discrepar sobre si el mismo partido ya terminó.
+
+`npm run audit` comprueba la coherencia de todos los números —**1325 comprobaciones**, todas verdes—
+y que ninguna fecha caiga más allá de 400 días.
+
+### La escala tipográfica
+
+La app tenía **doce tamaños de letra distintos** y 222 usos a 12 px o menos, incluido uno a 9 px.
+Eso son dos problemas a la vez: cuesta leerla, y doce niveles no son una jerarquía sino la
+ausencia de una.
+
+Ahora son **ocho niveles y todos más grandes**: 11 · 13 · 14 · 15 · 16 · 17 · 20 · 26 px. El
+cuerpo pasó de 12 a 14 px (+17 %) y las etiquetas de 10-11 a 13. El texto más pequeño que se
+lee en cualquier pestaña es de 11 px, comprobado en el navegador.
+
+Tres cosas se rompieron al agrandar, y las tres están arregladas:
+
+- **Las cabeceras pegajosas de cada día** iban a un `top` de 86 px escrito a mano, que era la
+  altura de la cabecera *antes*. Un número que describe el tamaño de otro elemento está mal en
+  cuanto ese elemento cambia, así que ahora la cabecera publica su altura real y las fechas se
+  cuelgan de ella. Se comprueba sola: mide 95 px en móvil y 100 px en escritorio.
+- **Las cinco pestañas ya no cabían** en un móvil. Los emojis y el subtítulo aparecen a partir de
+  640 px de ancho; por debajo manda la palabra, que es lo que identifica al deporte. Verificado
+  a 360, 390, 412, 640 y 900 px.
+- **Los nombres se cortaban**: «New Engl…», «Manchester United F…», «Madison Bumga…». Había 35
+  textos recortados. Los nombres de equipo y de jugador ahora se parten en dos líneas en vez de
+  perder letras — dos líneas cortas no cuestan nada, unos puntos suspensivos se comen justo el
+  dato por el que existe la tarjeta. **Cero textos recortados** en las cinco pestañas.
+
+## Estructura del proyecto
+
+```
+config/        tours.json + tournaments.json + basketball.json + football.json
+data/          SQLite + datos crudos + dataset seed
+docs/          MODEL.md (tenis) · BASKETBALL.md · FOOTBALL.md · BASEBALL.md · NFL.md
+server/
+  src/            tenis: ingesta, modelo Elo, API
+  src/basketball/ baloncesto: ingesta, modelo, backtest, track record propios
+  src/football/   fútbol: ingesta, modelo Poisson, backtest con RPS, track record
+  src/nfl/        fútbol americano: ingesta nflverse, números clave, backtest vs mercado
+web/
+  src/components/            tenis
+  src/components/basketball/ baloncesto
+  src/components/football/   fútbol (con sub-pestañas por liga)
+  src/components/nfl/        fútbol americano
+```
+
+Los cinco deportes están separados a propósito en todas las capas —tablas, modelo, endpoints y
+pestaña— porque discrepan justo en los campos que un modelo necesita: el tenis tiene superficie y no
+tiene campo propio; el baloncesto tiene cancha y margen de puntos; el fútbol tiene **empate** y
+mercados de goles; el béisbol tiene **abridor**; y el fútbol americano tiene un margen que se
+amontona en el 3 y el 7 en vez de seguir una curva. El razonamiento está en [docs/BASKETBALL.md](docs/BASKETBALL.md) y
+[docs/FOOTBALL.md](docs/FOOTBALL.md).
+
+## Cómo funciona el modelo
+
+Fútbol: **[docs/FOOTBALL.md](docs/FOOTBALL.md)** · Béisbol: **[docs/BASEBALL.md](docs/BASEBALL.md)** · Fútbol americano: **[docs/NFL.md](docs/NFL.md)** · Baloncesto: **[docs/BASKETBALL.md](docs/BASKETBALL.md)** ·
+Tenis: **[docs/MODEL.md](docs/MODEL.md)** para la explicación completa del cálculo del Elo, cómo
+se combinan las señales y las limitaciones. La lógica también está comentada en el código
+(`server/src/model/`).
