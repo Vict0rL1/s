@@ -1,0 +1,39 @@
+{
+  "football": {
+    "calibrator": "platt",
+    "platt": {
+      "a": 1.101213418686985,
+      "b": [
+        0,
+        0.046545497726911716,
+        0.037228865015733595
+      ],
+      "n": 13085
+    },
+    "blend": null,
+    "measured": {
+      "rawLogLoss": 1.0078492100455787,
+      "calibratedLogLoss": 1.0069732399046674,
+      "finalLogLoss": null,
+      "n": 4262,
+      "split": "validación 2025",
+      "blendNote": "sin cuotas históricas suficientes (0 en entrenamiento, 0 en validación; el registro de predicciones aporta 0). La mezcla queda APAGADA: el peso se ajusta por backtest o no se pone."
+    },
+    "measuredAt": "2026-09-03T04:41:30.402Z"
+  },
+  "nfl": {
+    "calibrator": "ninguno",
+    "blend": {
+      "w": 0.1,
+      "kappa": 4
+    },
+    "measured": {
+      "rawLogLoss": 0.652160199534993,
+      "calibratedLogLoss": 0.652160199534993,
+      "finalLogLoss": 0.6280709485854233,
+      "n": 285,
+      "split": "validación 2023"
+    },
+    "measuredAt": "2026-09-03T04:41:31.484Z"
+  }
+}

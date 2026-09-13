@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Matches the page surface, so a phone's browser chrome does not sit as a
+         bright bar above a dark app. -->
+    <meta name="theme-color" content="#0b0d11" />
+    <meta
+      name="description"
+      content="Predicciones de fútbol, béisbol, fútbol americano, baloncesto y tenis con modelos Elo explicables, medidos contra resultados reales."
+    />
+
+    <!-- Add to Home Screen.
+         With these, the app opens from a phone's home screen with its own icon
+         and no browser chrome, which on a page that is already a single scrolling
+         column of cards is most of the difference between "a website" and "an
+         app". iOS ignores the manifest's icons and wants its own PNG, which is
+         why both are here; iOS also ignores rounded corners and applies its own
+         mask, so the icon is full-bleed. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Predictor" />
+    <!-- "black" rather than "black-translucent": translucent lets the page run
+         UNDER the status bar, which looks better only if every safe-area inset is
+         handled perfectly and looks broken otherwise. A black bar above a
+         #0b0d11 page is already near-seamless, and it cannot go wrong. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <title>Sports Predictor · fútbol, béisbol, NFL, baloncesto y tenis</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
