@@ -5,6 +5,7 @@ import cors from '@fastify/cors';
 import { env, ROOT } from './config.ts';
 import path from 'node:path';
 import { readOddsReason, type SportPrefix } from './oddsReason.ts';
+import { inspectEnvFile } from './envFile.ts';
 import { getDb } from './db.ts';
 import { countRows } from './repo.ts';
 import { refreshOdds } from './ingest/odds.ts';
@@ -100,15 +101,34 @@ function avisoDeCuotas(estado: { nombre: string; vivo: boolean; prefijo: SportPr
     L.push('');
     L.push(`  ${nombres.join(', ')}`);
     switch (causa) {
-      case 'sin_clave':
+      case 'sin_clave': {
         // El caso de lejos más común, y el que más vueltas ha costado. Se dice la ruta
         // COMPLETA del fichero: «ponla en el .env» manda a crear un fichero que no se ve
         // en el Finder, y en la carpeta equivocada no lo lee nadie.
+        //
+        // Y antes de mandar a ESCRIBIR la clave, se mira si ya está escrita y solo está
+        // mal puesta. «Falta la clave» es verdad y es inútil cuando la clave está en el
+        // fichero sin el `ODDS_API_KEY=` delante: manda a poner algo que ya está puesto.
+        const pegas = inspectEnvFile(ENV_PATH);
+        if (pegas.length > 0) {
+          for (const p of pegas) {
+            L.push(`    ${p.titulo}`);
+            for (const d of p.detalle.split('\n')) L.push(`      ${d}`);
+            if (p.arreglo) {
+              L.push('    Se arregla con esto, sin tener que volver a escribir la clave:');
+              L.push(`      ${p.arreglo}`);
+            }
+          }
+          L.push('    Y después:   npm run odds');
+          break;
+        }
         L.push('    Falta ODDS_API_KEY. Tiene que estar en el .env de la RAÍZ del proyecto:');
         L.push(`      ${ENV_PATH}`);
         L.push('    Con una línea así dentro:   ODDS_API_KEY=tu-clave');
+        L.push('    OJO con `>` y `>>`: `>` BORRA el fichero y escribe encima, `>>` añade.');
         L.push('    Y después, en otra terminal y dentro de la carpeta:   npm run odds');
         break;
+      }
       case 'fuente_falla':
         L.push('    El proveedor no contestó: cuota del mes agotada, clave inválida o sin red.');
         L.push('    Poner la clave otra vez NO lo arregla.  npm run doctor  lo desglosa gratis.');

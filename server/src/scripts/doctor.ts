@@ -42,6 +42,7 @@ import { getDb, getMeta } from '../db.ts';
 import { ODDS_API_BASE } from '../oddsQuota.ts';
 import { DEMO_SOURCE } from '../freshness.ts';
 import { readOddsReason, REASON_TEXT, type SportPrefix } from '../oddsReason.ts';
+import { inspectEnvFile } from '../envFile.ts';
 
 const NO_NET = process.argv.includes('--sin-red') || process.argv.includes('--no-net');
 
@@ -121,10 +122,22 @@ if (hasEnvFile) {
   const line = raw.split(/\r?\n/).find((l) => /^\s*(export\s+)?ODDS_API_KEY\s*=/.test(l));
   if (!line) {
     bad('el .env existe pero no tiene ninguna línea ODDS_API_KEY=');
-    problem(
-      'Falta la línea de la clave en el .env',
-      `echo 'ODDS_API_KEY=tu-clave-aqui' >> "${envPath}"`,
-    );
+    // Antes de mandar a escribir la clave: ¿no estará ya escrita, solo que sin el nombre
+    // delante? «Falta la línea» es verdad y es inútil en ese caso — manda a añadir algo
+    // que ya está en el fichero, y encima con `>>`, dejando dos versiones de lo mismo.
+    const pegas = inspectEnvFile(envPath);
+    if (pegas.length > 0) {
+      for (const p of pegas) {
+        info(p.titulo);
+        for (const d of p.detalle.split('\n')) info(`  ${d}`);
+        if (p.arreglo) problem(p.titulo, p.arreglo);
+      }
+    } else {
+      problem(
+        'Falta la línea de la clave en el .env',
+        `echo 'ODDS_API_KEY=tu-clave-aqui' >> "${envPath}"`,
+      );
+    }
   } else {
     // Se diagnostica la línea CRUDA, no lo que dotenv haya conseguido entender. Es
     // la diferencia entre "no funciona" y "no funciona PORQUE tiene comillas".
@@ -147,6 +160,14 @@ if (hasEnvFile) {
     if (value.trim().length === 0) {
       bad('la línea ODDS_API_KEY está vacía');
       problem('Escribe tu clave después del = en el .env', `nano "${envPath}"`);
+    }
+    // Duplicados: no rompen nada hoy, y por eso conviene decirlo hoy. dotenv se queda
+    // con la primera, así que el día que alguien cambie la clave y edite la de abajo,
+    // la app seguirá usando la de arriba y nada lo señalará.
+    for (const p of inspectEnvFile(envPath)) {
+      info(p.titulo);
+      for (const d of p.detalle.split('\n')) info(`  ${d}`);
+      if (p.arreglo) problem(p.titulo, p.arreglo);
     }
   }
 }
