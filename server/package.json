@@ -43,7 +43,8 @@
     "study:correlation": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/_corr.ts",
     "study:live": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/_live.ts",
     "study:points": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/_points.ts",
-    "odds": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/odds.ts"
+    "odds": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/odds.ts",
+    "study:ablation": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx src/scripts/_ablation.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0",

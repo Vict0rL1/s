@@ -1220,6 +1220,7 @@ probar ese caso concreto, no leyendo el código.
 | `npm run backtest:fb` | **Fútbol**: mide el modelo con RPS y calibración del empate (`--model elo` mide el camino de respaldo) |
 | `npm run audit` | **Los cuatro**: comprueba que los números que muestra la app son coherentes entre sí |
 | `npm run verify:data` | Comprueba los **datos** contra hechos de cada deporte: partidos por temporada, cuánto gana el local, marcadores posibles, y que los Elo se reproduzcan |
+| `npm run study:ablation` | Apaga cada pieza del modelo de tenis y mide cuánto empeora al quitarla. Registra los seis resultados |
 | `npm run study:points` | **Modelo jerárquico de puntos**: ajusta saque/resto por jugador con ajuste por rival y δ por superficie, y lo mide cara a cara contra el modelo de Elo |
 | `npm run study:live` | **Motor en vivo**: mide μ y κ del saque, y valida la cadena de Markov contra una simulación independiente |
 | `npm run study:correlation` | **Mide la correlación entre posiciones abiertas** con residuos tipificados fuera de muestra, con grupo de control y bootstrap por bloques. `--record` lo anota en el registro |
@@ -1360,6 +1361,73 @@ una tirada que se creía gratis gastaba cuota solo ahí. Ahora los cinco lo resp
 de la NFL lo dice en su salida.
 
 ---
+
+## ¿Se gana el sitio cada pieza del modelo de tenis? (`npm run study:ablation`)
+
+El modelo de tenis es el buque insignia de esta app y **no tenía ni un solo experimento
+registrado sobre predicción**: los 20 que había en el registro eran de fútbol y de la NFL.
+Sus seis piezas —superficie, margen de victoria, forma, cara a cara, inactividad,
+calibración por formato— se midieron cada una en su momento, pero ninguna pasó por el
+registro, ni por un intervalo de confianza, ni por la corrección por comparaciones
+múltiples.
+
+Eso importa por una razón concreta: **con seis piezas aceptadas una a una a p<0,05, el azar
+regala una falsa cada tres estudios.** Así que se apagan una a una y se mide cuánto empeora
+el log loss al quitarlas.
+
+| pieza apagada | Δ log loss | IC 95 % | p | veredicto |
+| --- | --- | --- | --- | --- |
+| margen de victoria | **+0,00354** | [+0,00281, +0,00427] | 0,0020 | **se gana el sitio** |
+| calibración por formato (bo3/bo5) | **+0,00183** | [+0,00132, +0,00232] | 0,0020 | **se gana el sitio** |
+| cara a cara | **+0,00057** | [+0,00027, +0,00088] | 0,0020 | **se gana el sitio** |
+| penalización por inactividad | **+0,00054** | [+0,00024, +0,00084] | 0,0020 | **se gana el sitio** |
+| Elo por superficie | +0,00192 | [−0,00001, **+0,00402**] | 0,0559 | no se distingue de cero |
+| forma reciente | +0,00031 | [−0,00007, +0,00069] | 0,1079 | no se distingue de cero |
+
+Δ positivo = quitarla **empeora** = la pieza sirve. Las cuatro primeras pasan Bonferroni
+y Benjamini–Hochberg sobre las seis comparaciones.
+
+### Las dos que no se resuelven, y qué NO se ha hecho con ellas
+
+**Nada.** Las dos tienen la estimación puntual positiva, y el Elo por superficie la tiene
+grande: +0,00192, con un intervalo que solo toca el cero por abajo (−0,00001). Borrar una
+pieza por un resultado nulo es el mismo error que añadirla por uno: en los dos casos se
+está decidiendo con evidencia que no alcanza.
+
+Lo que sí dice el dato es dónde mirar. El Elo por superficie tiene el intervalo **más ancho
+de los seis** —de −0,00001 a +0,00402— y eso encaja con lo que se sabe del tenis: la
+superficie decide en la gira de tierra y en la de hierba, y no dice casi nada en un año de
+pista dura. El efecto medio es real; lo que no es estable es *por torneo*, y el bootstrap
+por bloques de torneo es justo lo que lo capta.
+
+La forma reciente es otra cosa: +0,00031 es pequeño además de incierto. Sigue apareciendo
+en la tarjeta («llega con 10 victorias seguidas») porque **describe** algo cierto y útil de
+leer, pero conviene saber que su efecto sobre el número no está demostrado.
+
+### Por qué estos negativos son creíbles
+
+Un resultado negativo solo vale si lo que se apagó era de verdad lo que está en producción.
+Por eso el estudio **se niega a publicar** si su réplica del modelo se desvía de
+`npm run backtest` en más de 0,0002:
+
+```
+Modelo publicado: log loss 0.61510 sobre 22062 partidos
+Coincide con `npm run backtest` (0.6151) · desvío 0.000001
+```
+
+Comprobado que la guarda muerde: cambiando el peso de superficie de 0,7 a 0,5 en la réplica,
+el estudio aborta con «se han separado» en vez de publicar una ablación de un modelo que no
+existe.
+
+Dos detalles del método que cambian el resultado:
+
+- **Bootstrap por bloques de torneo, no por partido.** Los partidos de una misma edición
+  comparten superficie, bolas, altura y semana. Remuestrear partidos sueltos trataría 22.062
+  observaciones como 22.062 casos independientes e inflaría la significación. Se remuestrean
+  las 1.004 ediciones enteras.
+- **Con 200 remuestreos el p mínimo posible es 0,00995**, por encima del listón de Bonferroni
+  (0,00833). Cuatro resultados salían clavados en ese suelo y no habrían podido pasar la
+  corrección aunque el efecto fuese enorme. Con 1.000 el suelo baja a 0,002 y se resuelven.
 
 ## El modelo jerárquico de puntos (`npm run study:points`)
 
