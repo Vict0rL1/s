@@ -227,6 +227,28 @@ Detalles y todas las mediciones en **[docs/NFL.md](docs/NFL.md)**.
 - Datos guardados localmente en **SQLite** (`data/tennis.db`) para no depender de llamadas
   repetidas a las APIs.
 
+## La comparación con el mercado, visible en las cinco pestañas
+
+Es para lo que existe la tarjeta —¿el modelo se aparta del precio?— y era lo único que no
+se veía:
+
+- En **baloncesto** había dos barras apiladas: la del modelo y otra más fina debajo,
+  «Mercado, sin vig», **sin un solo número**. Comparar a ojo dos rectángulos casi iguales
+  no es comparar: tres puntos porcentuales son once píxeles.
+- En **NFL, béisbol y fútbol** ni siquiera había segunda barra. La probabilidad del mercado
+  estaba en el desglose, a dos clics.
+
+Ahora hay **una sola barra** con el corte del mercado marcado encima, así que la distancia
+entre el corte de color y la marca blanca **es** la discrepancia, con la cifra al lado
+(«mercado, a 3.1 pp»). Cuando coinciden, lo dice en palabras.
+
+La marca se dibuja sobre la misma fracción que los segmentos, no sobre 100: con segmentos
+que suman 0,98 —que pasa con los redondeos— dibujarla sobre 100 la desplazaría un punto
+entero.
+
+Y de paso la tarjeta de baloncesto pierde la segunda barra: 700 → 690 px, y una cosa menos
+que mirar.
+
 ## Repaso visual: cuatro cosas que estorbaban
 
 Medido en el navegador antes y después, no a ojo.

@@ -496,13 +496,34 @@ export function CompareRow({
 export function ProbabilityBar({
   segments,
   height = 10,
+  marker,
 }: {
   segments: { value: number; color: string; label: string }[];
   height?: number;
+  /**
+   * Dónde cortaría la MISMA barra según el mercado, dibujado encima.
+   *
+   * ===========================================================================
+   * LA COMPARACIÓN ERA LO IMPORTANTE Y ERA LO ÚNICO QUE NO SE VEÍA
+   * ===========================================================================
+   * Las tarjetas enseñaban dos barras apiladas —modelo arriba, «mercado sin vig» debajo,
+   * más fina— y la de abajo NO llevaba ni un número. Para saber si el modelo se apartaba
+   * del precio había que comparar a ojo dos rectángulos de anchuras parecidas, y eso no
+   * se puede hacer: una diferencia de tres puntos porcentuales son once píxeles.
+   *
+   * Con la marca encima, LA DISTANCIA ES LA DISCREPANCIA. Y quien la pinta añade al lado
+   * cuántos puntos son, que es el número que se acaba queriendo.
+   *
+   * La fracción es respecto del MISMO total que los segmentos, para que las dos cosas
+   * midan lo mismo: dibujarla sobre 100 cuando los segmentos suman 0,98 la desplazaría
+   * un punto entero.
+   */
+  marker?: number | null;
 }) {
   const total = segments.reduce((a, s) => a + s.value, 0) || 1;
+  const markerPct = marker != null ? (marker / total) * 100 : null;
   return (
-    <div className="flex w-full gap-[2px] overflow-hidden rounded-full" style={{ height }}>
+    <div className="relative flex w-full gap-[2px] overflow-hidden rounded-full" style={{ height }}>
       {segments.map((s, i) => (
         <div
           key={i}
@@ -511,7 +532,37 @@ export function ProbabilityBar({
           title={`${s.label}: ${(s.value * 100).toFixed(1)}%`}
         />
       ))}
+      {markerPct != null && (
+        // Blanca con un halo oscuro para que se lea igual sobre los dos colores de la
+        // barra, que es la razón de no usar ninguno de los dos.
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 w-[2px] bg-white/85"
+          style={{ left: `calc(${markerPct}% - 1px)`, boxShadow: '0 0 0 1px rgba(0,0,0,0.5)' }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * La leyenda de esa marca: cuánto se aparta el modelo del mercado, en puntos.
+ *
+ * Separada del componente de la barra porque el texto va en la fila del título, que cada
+ * deporte monta a su manera. Por debajo de medio punto no se anuncia una diferencia:
+ * «+0,0 pp» ocupa sitio para decir que no hay ninguna.
+ */
+export function MarketGap({ model, market }: { model: number; market: number | null | undefined }) {
+  if (market == null) return null;
+  const pp = (model - market) * 100;
+  if (Math.abs(pp) < 0.5) {
+    return <span className="text-[12px] text-[#7b828d]">coincide con el mercado</span>;
+  }
+  return (
+    <span className="text-[12px] tabular-nums text-[#7b828d]">
+      <span className="mr-1 inline-block h-[9px] w-[2px] translate-y-[1px] bg-white/85" />
+      mercado, a {Math.abs(pp).toFixed(1)} pp
+    </span>
   );
 }
 

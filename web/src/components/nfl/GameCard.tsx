@@ -29,6 +29,7 @@ import {
   StatRow,
   StatTile,
   TeamCrest,
+  MarketGap,
 } from '../ui';
 
 /**
@@ -140,11 +141,18 @@ export default function GameCard({
             />
           </div>
           <div className="mt-2.5">
+            {/* El mercado, MARCADO SOBRE la barra del modelo. Antes la comparación
+                —que es para lo que existe esta tarjeta— no estaba en ninguna parte:
+                había que abrir el desglose y leer dos porcentajes. */}
+            <div className="mb-1 flex items-center justify-end">
+              <MarketGap model={probs.away} market={prediction?.market.market?.away} />
+            </div>
             <ProbabilityBar
               segments={[
                 { value: probs.away, color: AWAY_COLOR, label: game.away_name },
                 { value: probs.home, color: HOME_COLOR, label: game.home_name },
               ]}
+              marker={prediction?.market.market?.away}
             />
           </div>
 

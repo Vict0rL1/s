@@ -15,6 +15,7 @@ import {
   StatRow,
   StatTile,
   TeamCrest,
+  MarketGap,
 } from '../ui';
 import GameDetail from './GameDetail';
 import { realMarket } from '../../lib/picks';
@@ -130,28 +131,27 @@ export default function GameCard({
               align="right"
             />
           </div>
+          {/* UNA barra, con el mercado marcado encima — no dos apiladas.
+              La segunda barra («Mercado, sin vig») era más fina, no llevaba ni un número,
+              y para saber si el modelo se apartaba del precio había que comparar a ojo
+              dos rectángulos casi iguales. Tres puntos porcentuales son once píxeles: eso
+              no se compara mirando. Ahora la distancia entre el corte y la marca ES la
+              discrepancia, y la cifra va al lado. */}
           <div className="mt-2.5">
+            <div className="mb-1 flex items-center justify-end">
+              <MarketGap
+                model={prediction.model.probAway}
+                market={prediction.market.market?.implied2}
+              />
+            </div>
             <ProbabilityBar
               segments={[
                 { value: prediction.model.probAway, color: AWAY_COLOR, label: game.away_name },
                 { value: prediction.model.probHome, color: HOME_COLOR, label: game.home_name },
               ]}
+              marker={prediction.market.market?.implied2}
             />
           </div>
-          {prediction.market.market && (
-            <div className="mt-1.5">
-              <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b828d]">
-                Mercado, sin vig
-              </div>
-              <ProbabilityBar
-                height={5}
-                segments={[
-                  { value: prediction.market.market.implied2, color: AWAY_COLOR, label: 'mercado visitante' },
-                  { value: prediction.market.market.implied1, color: HOME_COLOR, label: 'mercado local' },
-                ]}
-              />
-            </div>
-          )}
 
           {/* The numbers a basketball bettor looks at — as probabilities now, not
               just point estimates. A spread with no likelihood attached invites
