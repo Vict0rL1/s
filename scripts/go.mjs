@@ -165,6 +165,94 @@ function diasDeRetraso() {
 }
 
 
+/**
+ * En qué estado están las cuotas de los cinco deportes, LEYENDO LA BASE.
+ *
+ * ===========================================================================
+ * SIN GASTAR UNA SOLA PETICIÓN
+ * ===========================================================================
+ * Esto no habla con The Odds API: cuenta filas y lee la causa que la última ingesta
+ * registró. Es importante que sea gratis, porque si costara cuota no podría salir en
+ * cada arranque, y si no sale en cada arranque hay que acordarse de ir a buscarlo — que
+ * es exactamente lo que pasaba.
+ *
+ * El servidor refresca las cuotas al arrancar (index.ts, `void run()`), así que este
+ * informe describe el estado ANTERIOR a ese refresco. Se dice así, y no «las cuotas de
+ * ahora», porque afirmar lo segundo sería mentir en el primer arranque del día.
+ */
+function estadoCuotas() {
+  const deportes = [
+    ['Fútbol', 'fb_upcoming', 'odds_home', 'fb_'],
+    ['Baloncesto', 'bb_upcoming', 'home_odds', 'bb_'],
+    ['Béisbol', 'bsb_upcoming', 'odds_home', 'bsb_'],
+    ['NFL', 'naf_upcoming', 'odds_home', 'naf_'],
+    ['Tenis', 'upcoming_matches', 'p1_odds', ''],
+  ];
+  try {
+    // Misma carga perezosa que en `diasDeRetraso`: un import estático de `node:sqlite`
+    // reventaría con Node viejo antes de que corriera el control de versión del paso 1.
+    const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+    const db = new DatabaseSync(DB, { readOnly: true });
+    const meta = (k) => {
+      try {
+        return db.prepare('SELECT value FROM meta WHERE key = ?').get(k)?.value ?? '';
+      } catch {
+        return '';
+      }
+    };
+    const reales = [];
+    const sinPrecio = [];
+    for (const [nombre, tabla, precio, prefijo] of deportes) {
+      try {
+        const r = db.prepare(
+          `SELECT SUM(CASE WHEN source <> 'fixture' AND ${precio} IS NOT NULL THEN 1 ELSE 0 END) AS reales
+           FROM ${tabla}`,
+        ).get();
+        if ((r?.reales ?? 0) > 0) {
+          reales.push(`${nombre} ${r.reales}`);
+        } else {
+          const causa = meta(`${prefijo}odds_fallback_reason`);
+          // La NFL sin causa registrada NO es un problema: nunca inventa cuotas, así que
+          // «sin precio» ahí significa «no hay línea publicada» y su calendario sigue
+          // siendo real. Meterla en la lista de pendientes inventaría una avería.
+          if (prefijo === 'naf_' && !causa) continue;
+          sinPrecio.push([nombre, causa]);
+        }
+      } catch {
+        // Una tabla que aún no existe no es un problema del que informar aquí.
+      }
+    }
+    db.close();
+    if (reales.length === 0 && sinPrecio.length === 0) return null;
+    const CAUSA = {
+      sin_clave: 'falta la clave',
+      fuente_falla: 'el proveedor no contestó',
+      sin_ligas: 'ninguna liga configurada en juego',
+      sin_eventos: 'sin partidos con precio',
+    };
+    const lineas = [];
+    if (reales.length > 0) lineas.push(`cuotas reales: ${reales.join(' · ')}`);
+    if (sinPrecio.length > 0) {
+      // Agrupadas por causa: cinco nombres con la misma coletilla no se leen.
+      const porCausa = new Map();
+      for (const [n, c] of sinPrecio) {
+        const k = CAUSA[c] ?? 'sin causa registrada';
+        porCausa.set(k, [...(porCausa.get(k) ?? []), n]);
+      }
+      for (const [causa, nombres] of porCausa) {
+        lineas.push(`sin cuotas: ${nombres.join(', ')} — ${causa}`);
+      }
+    }
+    return lineas;
+  } catch (e) {
+    // Devolver null en silencio es lo correcto para el usuario —esto es una línea
+    // informativa y no puede impedir arrancar— pero tragarse el error entero ya costó
+    // un ciclo de depuración: un `ReferenceError` mío parecía «no hay nada que decir».
+    // Así que se dice que falló, sin detalle.
+    return [`no he podido leer el estado de las cuotas (${e instanceof Error ? e.message.slice(0, 60) : e})`];
+  }
+}
+
 // ===========================================================================
 // 1. NODE
 // ===========================================================================
@@ -386,6 +474,10 @@ titulo('Base de datos');
     // dice cuándo se escribió, no hasta cuándo llegan los partidos — y son cosas
     // distintas en cuanto alguien corre una actualización que no trae nada nuevo.
     nota(diasDeRetraso());
+    // Y en qué estado están las cuotas, que es la pregunta que más ha costado responder
+    // en este proyecto. Gratis: se lee de la base, no del proveedor.
+    const cuotas = estadoCuotas();
+    if (cuotas) for (const l of cuotas) nota(l);
   } else {
     nota('no hay base. Intento la descarga rápida (9 MB)…');
     if (corre('npm', ['run', 'fetch-data'])) {
