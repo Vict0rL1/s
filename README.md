@@ -53,10 +53,42 @@ necesitarías** para que la apuesta valga la pena según el modelo. Ver
 Todo lo demás de este README es detalle. Esto es lo que se escribe:
 
 ```bash
+cd ~/s           # ← PRIMERO ESTO. La terminal se abre en tu carpeta personal,
+                 #   no en la del proyecto, y ahí npm no encuentra nada.
 npm run go       # abrir y actualizar la app. El único que hace falta saber.
+```
+
+Los otros dos, ya dentro de la carpeta:
+
+```bash
 npm run odds     # pedir las cuotas reales, cuando salen «de demostración».
 npm run phone    # abrirla en el móvil, en la misma wifi.
 ```
+
+> **Si escribes `npm run go` y no pasa nada**, o sale un error largo que empieza por
+> `npm error`, casi siempre es que falta el `cd`. La terminal siempre arranca en tu
+> carpeta personal (`~`), y `npm run go` solo existe dentro del proyecto. Esta línea lo
+> dice sin margen de duda — pégala tal cual y lee la última palabra:
+>
+> ```bash
+> pwd && ls package.json >/dev/null 2>&1 && echo "ESTÁS DENTRO" || echo "NO estás dentro"
+> ```
+>
+> Si el proyecto no está en `~/s`, esta línea lo encuentra esté donde esté:
+> ```bash
+> find ~ -maxdepth 4 -name go.mjs -path '*/scripts/*' 2>/dev/null
+> ```
+> Te contesta algo como `/Users/tu-nombre/s/scripts/go.mjs`: la carpeta a la que hay que
+> entrar es esa sin `/scripts/go.mjs`, o sea `cd /Users/tu-nombre/s`.
+>
+> **El atajo que nunca falla en un Mac:** escribe `cd ` (con el espacio), **arrastra la
+> carpeta del proyecto desde el Finder hasta la ventana de la Terminal** y suelta. La ruta
+> se escribe sola, correcta y sin faltas. Pulsa Enter y ya estás dentro.
+>
+> Y si no quieres acordarte de nada: **doble clic en `scripts/abrir.command`** desde el
+> Finder. Hace lo mismo que `npm run go` y se encarga del `cd` él solo — incluso encuentra
+> Node cuando lo instalaste con nvm, que es donde el doble clic suele fallar. Ver
+> [«Abrirla sin escribir nada»](#abrirla-sin-escribir-nada-scriptsabrircommand).
 
 **`npm run go`** hace todo: se pone en la rama correcta, se trae los cambios, instala lo
 que falte, comprueba la base de datos y arranca. Si algo no está, lo dice y dice cómo se
