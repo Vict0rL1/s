@@ -58,7 +58,16 @@ import type {
   TourId,
 } from '../types.ts';
 
-const SURFACE_WEIGHT = 0.5; // weight on surface Elo vs overall Elo (ver docs/MODEL.md: barrido 0.3/0.5/0.7)
+/**
+ * Peso del Elo de superficie frente al general. Medido, no elegido a ojo: ver el barrido
+ * en docs/MODEL.md.
+ *
+ * EXPORTADO a propósito. Este número estaba copiado a mano en cinco sitios, y al bajarlo
+ * de 0,7 a 0,5 se quedaron dos atrás —el generador de cuotas de demostración y su
+ * consulta de ordenación—, así que la demo empezó a describir un modelo que ya no se
+ * servía. Quien lo necesite lo importa de aquí.
+ */
+export const SURFACE_WEIGHT = 0.5;
 
 export const DISCLAIMER =
   'Estimación estadística basada en Elo, forma reciente, head-to-head y odds de mercado. ' +

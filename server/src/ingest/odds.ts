@@ -17,6 +17,7 @@ import { env, tournamentsConfig } from '../config.ts';
 import type { OddsReason } from '../oddsReason.ts';
 import { assertCanSpend, creditCost, listSports, recordQuota, OddsBudgetSkip } from '../oddsQuota.ts';
 import { expectedScore } from '../model/elo.ts';
+import { SURFACE_WEIGHT } from '../model/predict.ts';
 import type { Surface, TourId } from '../types.ts';
 
 const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
@@ -148,7 +149,7 @@ function topRated(tour: TourId, surface: Surface, limit: number): RatedPlayer[] 
       `SELECT p.id, p.name, r.overall, r.hard, r.clay, r.grass
        FROM player_ratings r JOIN players p ON p.tour = r.tour AND p.id = r.player_id
        WHERE r.tour = ? AND r.matches_played > 0
-       ORDER BY (0.7 * r.${col} + 0.3 * r.overall) DESC
+       ORDER BY (${SURFACE_WEIGHT} * r.${col} + ${1 - SURFACE_WEIGHT} * r.overall) DESC
        LIMIT ?`,
     )
     .all(tour, limit) as unknown as RatedPlayer[];
@@ -188,8 +189,12 @@ function generateFixtures(): number {
       }
       pairs.forEach((pair, pi) => {
         const [a, b] = pair;
-        const effA = 0.7 * a[surface.toLowerCase() as 'hard'] + 0.3 * a.overall;
-        const effB = 0.7 * b[surface.toLowerCase() as 'hard'] + 0.3 * b.overall;
+        // La misma mezcla que `predict.ts`, importada y no copiada: las cuotas de
+        // demostración tienen que salir del modelo que la app SIRVE. Si divergen, la
+        // pestaña compara la predicción contra una cuota de otro modelo distinto.
+        const S = SURFACE_WEIGHT;
+        const effA = S * a[surface.toLowerCase() as 'hard'] + (1 - S) * a.overall;
+        const effB = S * b[surface.toLowerCase() as 'hard'] + (1 - S) * b.overall;
         const pa = expectedScore(effA, effB);
         const margin = 1.05; // bookmaker overround (~5%): implied probs sum to >1
         // tiny deterministic bias so market != model exactly
