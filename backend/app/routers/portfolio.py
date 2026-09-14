@@ -131,6 +131,40 @@ def _series_cacheadas(
     return salida
 
 
+PUNTOS_SPARK = 32
+
+
+def _spark_cacheado(
+    service: MarketDataService, symbol: str, sesiones: int = 252
+) -> list[float] | None:
+    """Un año de precio en 32 puntos, SOLO de lo que ya está en caché.
+
+    La forma del año dice de un vistazo si una posición viene de subida o de
+    caída, que es lo que una columna de «P&L %» no cuenta: un +4 % que viene de
+    un +30 % y otro que viene de un −20 % se leen igual en la tabla y no son lo
+    mismo.
+
+    Nunca descarga. El histórico ya lo bajan Cartera y el estrés, así que esto
+    es gratis; si no está, la fila sale sin gráfico en vez de costar una llamada
+    por posición cada vez que abres el portafolio.
+    """
+    cache = getattr(service, "cache", None)
+    if cache is None:
+        return None
+    payload = cache.get("price_history_long", {"symbol": symbol}) or cache.get(
+        "price_history", {"symbol": symbol, "interval": "1day", "outputsize": 252}
+    )
+    cierres = [
+        float(b["close"])
+        for b in (payload or {}).get("bars") or []
+        if b.get("close")
+    ][-sesiones:]
+    if len(cierres) < PUNTOS_SPARK:
+        return None
+    paso = (len(cierres) - 1) / (PUNTOS_SPARK - 1)
+    return [round(cierres[round(i * paso)], 2) for i in range(PUNTOS_SPARK)]
+
+
 def _price_of(service: MarketDataService, symbol: str) -> float | None:
     try:
         return service.get("quote", symbol=symbol).get("price")
@@ -225,6 +259,7 @@ def get_watchlist(
                 "notes": item.notes,
                 "added_at": item.added_at.isoformat(),
                 "quote": quote,
+                "spark": _spark_cacheado(service, instrument.symbol),
             }
         )
     return {"name": watchlist.name, "items": rows}
@@ -375,6 +410,7 @@ def get_portfolio(
                 "opened_at": position.opened_at.isoformat(),
                 "stop": stop,
                 "price": price,
+                "spark": _spark_cacheado(service, instrument.symbol),
                 **metrics,
             }
         )

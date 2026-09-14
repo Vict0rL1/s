@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { CompanyLogo } from '../components/CompanyLogo'
+import { CurvaDeCrisis } from '../components/Sparkline'
 import type {
   CaracteristicasDeCartera,
   ConcentracionReal,
@@ -438,6 +439,10 @@ function Crisis({ c }: { c: CrisisEstresada }) {
           </div>
         </div>
       </div>
+
+      {/* El camino, no solo el destino: el punto rojo es el suelo, que es
+          donde se abandona. */}
+      {c.curva && <CurvaDeCrisis puntos={c.curva} />}
 
       <p className="mt-2 text-xs leading-relaxed text-slate-600">{c.nota}</p>
       <p className="mt-1 text-[11px] text-slate-400">{c.contexto}</p>

@@ -359,6 +359,8 @@ export interface WatchlistItem {
   notes: string | null
   added_at: string
   quote: Quote | null
+  /** Un año de precio en 32 puntos, de lo ya cacheado. null si no hay. */
+  spark: number[] | null
 }
 
 export interface PortfolioPosition {
@@ -374,6 +376,7 @@ export interface PortfolioPosition {
   market_value: number | null
   unrealized_pnl: number | null
   unrealized_pct: number | null
+  spark: number[] | null
 }
 
 export interface ClosedPosition {
@@ -958,6 +961,18 @@ export interface RuleBacktestResponse {
   nota?: string
   universo: string[]
   sin_datos: string[]
+  /** Percentiles y forma del resultado. Se servía y la pantalla no lo usaba. */
+  distribucion?: {
+    n: number
+    p10?: number
+    p25?: number
+    mediana?: number
+    p75?: number
+    p90?: number
+    media?: number
+    nota?: string
+    histograma?: HistogramaDistribucion
+  }
   periodo: { desde: string; hasta: string }
   comparativa_sin_filtro_tendencia: {
     n_operaciones: number
@@ -1615,6 +1630,8 @@ export interface CrisisEstresada {
   posiciones_totales?: number
   sesiones?: number
   titular_fiable?: boolean
+  /** El recorrido en base 100, remuestreado sin perder el suelo. */
+  curva?: { fecha: string | null; valor: number }[]
 }
 
 export interface RiesgoDeCartera {
@@ -1778,4 +1795,14 @@ export interface SeñalesDeOpciones {
   sin_precios?: boolean
   nota_precios?: string | null
   fallo_calendario?: string | null
+}
+
+export interface HistogramaDistribucion {
+  disponible: boolean
+  nota: string
+  barras?: { desde: number; hasta: number; n: number }[]
+  ancho?: number
+  n?: number
+  perdedoras?: number
+  suficiente?: boolean
 }

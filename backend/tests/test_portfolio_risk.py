@@ -412,3 +412,85 @@ def test_sin_suficientes_sesiones_la_volatilidad_no_se_inventa():
     """Una volatilidad de diez días no es una volatilidad anual."""
     dias = _dias(date(2024, 1, 1), date(2024, 1, 20))
     assert pr.volatilidad_anualizada(_serie(dias, 1)) is None
+
+
+# --- La curva del recorrido ---------------------------------------------------
+
+
+def test_el_estres_devuelve_la_curva_y_no_solo_el_numero_final(calendario, factor_comun):
+    """Un −45 % en línea recta y otro que baja un 60 %, rebota y acaba en −45 %
+    son experiencias distintas, y la segunda es la que hace vender abajo."""
+    r = pr.estres_en_crisis(
+        [{"symbol": "A", "peso_pct": 100.0}],
+        {"A": _serie(calendario, 1, 1.0, factor_comun)},
+    )
+    c2008 = next(c for c in r["crisis"] if c["clave"] == "2008")
+    curva = c2008["curva"]
+
+    assert len(curva) > 10
+    assert all("fecha" in p and "valor" in p for p in curva)
+    assert curva[0]["fecha"] < curva[-1]["fecha"]
+    # Base 100, para que dos crisis se puedan mirar en la misma escala.
+    assert 50 < curva[0]["valor"] < 150
+
+
+def test_el_remuestreo_nunca_se_salta_el_suelo():
+    """Si el dibujo enseñara una caída más suave que la del titular de al lado,
+    los dos números se contradirían en la misma tarjeta — y gana el dibujo."""
+    # Un valle muy estrecho: un solo punto malísimo entre 500 planos.
+    curva = [1.0] * 500
+    curva[237] = 0.41
+    fechas = [date(2008, 1, 1) + timedelta(days=i) for i in range(500)]
+
+    puntos = pr._remuestrear(curva, fechas, 60)
+    assert len(puntos) <= 64
+    assert min(p["valor"] for p in puntos) == pytest.approx(41.0)
+
+
+def test_el_remuestreo_conserva_los_extremos_y_el_orden():
+    curva = [1.0 + i * 0.01 for i in range(300)]
+    fechas = [date(2020, 1, 1) + timedelta(days=i) for i in range(300)]
+    puntos = pr._remuestrear(curva, fechas, 30)
+
+    assert puntos[0]["valor"] == pytest.approx(100.0)
+    assert puntos[-1]["valor"] == pytest.approx(curva[-1] * 100, abs=0.01)
+    assert [p["fecha"] for p in puntos] == sorted(p["fecha"] for p in puntos)
+
+
+def test_una_curva_corta_no_se_remuestrea():
+    curva = [1.0, 0.9, 0.95]
+    fechas = [date(2020, 3, 1), date(2020, 3, 2), date(2020, 3, 3)]
+    assert len(pr._remuestrear(curva, fechas, 60)) == 3
+
+
+def test_la_curva_coincide_con_el_drawdown_que_se_reporta(calendario, factor_comun):
+    """El dibujo y el número salen del mismo cálculo: si se separan, uno miente."""
+    r = pr.estres_en_crisis(
+        [{"symbol": "A", "peso_pct": 100.0}],
+        {"A": _serie(calendario, 3, 1.0, factor_comun)},
+    )
+    for c in r["crisis"]:
+        if not c.get("medible"):
+            continue
+        valores = [p["valor"] for p in c["curva"]]
+        pico, peor = 100.0, 0.0
+        for v in valores:
+            pico = max(pico, v)
+            peor = min(peor, v / pico - 1)
+        # La curva remuestreada no puede enseñar MENOS caída que la reportada.
+        assert peor * 100 <= c["max_drawdown_pct"] + 0.5
+
+
+def test_una_curva_que_solo_sube_no_tiene_suelo_que_marcar():
+    """Si el mínimo es el primer punto, la cartera nunca bajó de donde empezó.
+    La UI omite el marcador ahí: señalarlo dejaba medio anillo contra el borde."""
+    crisis = [{
+        "clave": "prueba", "nombre": "Solo sube", "desde": date(2020, 1, 1),
+        "hasta": date(2020, 12, 31), "caida_sp500_pct": -10.0, "contexto": "sintética",
+    }]
+    dias = _dias(date(2020, 1, 1), date(2020, 12, 31))
+    sube = [(d, 100.0 * (1.002**i)) for i, d in enumerate(dias)]
+    r = pr.estres_en_crisis([{"symbol": "A", "peso_pct": 100.0}], {"A": sube}, crisis)["crisis"][0]
+
+    valores = [p["valor"] for p in r["curva"]]
+    assert valores.index(min(valores)) == 0

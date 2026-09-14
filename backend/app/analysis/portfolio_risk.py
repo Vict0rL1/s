@@ -569,6 +569,11 @@ def estres_en_crisis(
                 "sin_datos": sin_datos,
                 "sesiones": len(orden),
                 "titular_fiable": cobertura >= COBERTURA_MINIMA,
+                # El recorrido, no solo el destino. Un −45 % que llega en línea
+                # recta y otro que baja un 60 %, rebota y se queda en −45 % son
+                # experiencias distintas, y la segunda es la que hace vender en
+                # el peor momento. El dato ya estaba calculado aquí dentro.
+                "curva": _remuestrear(curva, orden[1:]),
                 "nota": _leer_cobertura(cobertura, sin_datos, c, retorno),
             }
         )
@@ -586,6 +591,48 @@ def estres_en_crisis(
             "próxima caída."
         ),
     }
+
+
+PUNTOS_CURVA = 60
+
+
+def _remuestrear(
+    curva: list[float], fechas: list[date], n: int = PUNTOS_CURVA
+) -> list[dict]:
+    """Adelgaza la curva para que quepa en el payload, SIN perder el suelo.
+
+    Diecisiete meses de 2008 son ~370 sesiones, y tres crisis a resolución
+    completa engordan la respuesta para pintar una línea de 300 píxeles.
+
+    Lo que no puede pasar es que el remuestreo se salte el mínimo. Coger una de
+    cada seis sesiones tiene bastantes papeletas de perderse justo el día del
+    suelo, y entonces el gráfico enseñaría una caída más suave que la que dice
+    el titular de al lado: dos números contradiciéndose en la misma tarjeta, y
+    el que parece más creíble es el dibujo. El mínimo y el máximo se fuerzan
+    dentro siempre.
+    """
+    if not curva:
+        return []
+    total = len(curva)
+    if total <= n:
+        indices = list(range(total))
+    else:
+        paso = (total - 1) / (n - 1)
+        indices = {round(i * paso) for i in range(n)}
+        indices.add(0)
+        indices.add(total - 1)
+        indices.add(min(range(total), key=lambda i: curva[i]))  # el suelo
+        indices.add(max(range(total), key=lambda i: curva[i]))  # el techo
+        indices = sorted(indices)
+
+    return [
+        {
+            "fecha": fechas[i].isoformat() if i < len(fechas) else None,
+            # Base 100: comparable entre crisis sin que nadie divida nada.
+            "valor": round(curva[i] * 100, 2),
+        }
+        for i in indices
+    ]
 
 
 def _meta(c: dict) -> dict:

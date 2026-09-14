@@ -35,6 +35,7 @@ leer los números:
 
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
 
 from app.analysis.backtest import (
@@ -484,6 +485,69 @@ def _percentil(valores: list[float], q: float) -> float | None:
     return round(ordenados[bajo] * (1 - peso) + ordenados[alto] * peso, 2)
 
 
+MIN_PARA_FORMA = 30
+ANCHOS_BONITOS = (1.0, 2.0, 2.5, 5.0, 10.0, 20.0, 25.0, 50.0)
+
+
+def histograma(netos: list[float], objetivo_barras: int = 14) -> dict:
+    """La forma del resultado, que los percentiles no enseñan.
+
+    p10/p50/p90 describen tres puntos y esconden todo lo demás: si el resultado
+    es una campana, si tiene dos jorobas, o si la media sale de dos operaciones
+    enormes y el resto pierde. Eso solo se ve dibujado.
+
+    El ancho de barra se redondea a un número legible (1, 2, 5, 10…) porque un
+    eje de «−3,7 % a −1,2 %» no se lee, y los extremos entran siempre: un
+    histograma que recorta las colas niega justo lo que se venía a mirar.
+    """
+    if not netos:
+        return {"disponible": False, "nota": "Sin operaciones no hay distribución."}
+
+    bajo, alto = min(netos), max(netos)
+    if bajo == alto:
+        return {
+            "disponible": False,
+            "nota": f"Las {len(netos)} operaciones dan el mismo resultado ({bajo:.1f} %).",
+        }
+
+    crudo = (alto - bajo) / objetivo_barras
+    ancho = next((a for a in ANCHOS_BONITOS if a >= crudo), ANCHOS_BONITOS[-1])
+    # Bordes anclados a múltiplos del ancho: así el 0 % cae en una frontera y
+    # se ve de un vistazo qué parte de la masa pierde dinero.
+    inicio = math.floor(bajo / ancho) * ancho
+    fin = math.ceil(alto / ancho) * ancho
+    n_barras = max(1, int(round((fin - inicio) / ancho)))
+
+    barras = [
+        {"desde": round(inicio + i * ancho, 2), "hasta": round(inicio + (i + 1) * ancho, 2), "n": 0}
+        for i in range(n_barras)
+    ]
+    for v in netos:
+        i = int((v - inicio) // ancho)
+        barras[min(max(i, 0), n_barras - 1)]["n"] += 1
+
+    perdedoras = sum(b["n"] for b in barras if b["hasta"] <= 0)
+    return {
+        "disponible": True,
+        "barras": barras,
+        "ancho": ancho,
+        "n": len(netos),
+        "perdedoras": perdedoras,
+        "suficiente": len(netos) >= MIN_PARA_FORMA,
+        "nota": (
+            f"{len(netos)} operaciones en barras de {ancho:g} puntos. "
+            + (
+                "La forma es lo que los percentiles no cuentan: dónde está la masa "
+                "y de qué tamaño son las colas."
+                if len(netos) >= MIN_PARA_FORMA
+                else f"Con menos de {MIN_PARA_FORMA} operaciones esto PARECE una "
+                "distribución y es un puñado de puntos: la forma cambia entera al "
+                "añadir dos operaciones más."
+            )
+        ),
+    }
+
+
 def distribucion(operaciones: list[dict]) -> dict:
     """La forma completa del resultado, no solo su media.
 
@@ -496,6 +560,7 @@ def distribucion(operaciones: list[dict]) -> dict:
         return {"n": 0}
     return {
         "n": len(netos),
+        "histograma": histograma(netos),
         "p10": _percentil(netos, 0.10),
         "p25": _percentil(netos, 0.25),
         "mediana": _percentil(netos, 0.50),

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Histograma } from '../components/Sparkline'
 import { api } from '../api/client'
 import type {
   BacktestResponse,
@@ -587,6 +588,32 @@ function RuleBacktestPanel({ result }: { result: RuleBacktestResponse }) {
           hint="¿aguantarías eso?"
         />
       </div>
+
+      {/* La distribución se calculaba y se servía, y la pantalla no la
+          enseñaba: media y Sharpe esconden justo las colas, que es de lo que
+          va el riesgo. */}
+      {result.distribucion?.histograma?.disponible && (
+        <div className="mt-4 rounded-lg border border-slate-200 p-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h4 className="text-xs font-semibold text-slate-700">
+              Distribución de las {result.distribucion.n} operaciones
+            </h4>
+            <span className="text-[11px] tabular-nums text-slate-400">
+              p10 {pct(result.distribucion.p10)} · mediana{' '}
+              {pct(result.distribucion.mediana)} · p90 {pct(result.distribucion.p90)}
+            </span>
+          </div>
+          <div className="mt-2">
+            <Histograma barras={result.distribucion.histograma.barras ?? []} />
+          </div>
+          <p className="mt-2 text-[11px] leading-snug text-slate-500">
+            {result.distribucion.histograma.nota}
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-slate-500">
+            {result.distribucion.nota}
+          </p>
+        </div>
+      )}
 
       {result.salidas && (
         <p className="mt-4 text-xs text-slate-600">

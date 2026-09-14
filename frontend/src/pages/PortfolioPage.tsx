@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CompanyLogo } from '../components/CompanyLogo'
+import { Sparkline } from '../components/Sparkline'
 import { api } from '../api/client'
 import type {
   Estres,
@@ -297,7 +298,10 @@ function PortfolioTab() {
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs text-slate-400">
-                    {['Ticker', 'Sector', 'Acciones', 'Coste', 'Precio', 'Valor', 'No realizado', 'Peso', ''].map(
+                    {/* «1 año» y no una cabecera vacía: `key={h}` haría colisión
+                        con la columna en blanco del final, y además dice qué
+                        periodo dibuja la línea. */}
+                    {['Ticker', '1 año', 'Sector', 'Acciones', 'Coste', 'Precio', 'Valor', 'No realizado', 'Peso', ''].map(
                       (h) => (
                         <th key={h} className="px-2 py-1 font-normal">
                           {h}
@@ -319,6 +323,9 @@ function PortfolioTab() {
                             <CompanyLogo symbol={p.symbol} size="sm" />
                             {p.symbol}
                           </Link>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Sparkline valores={p.spark} width={64} height={20} />
                         </td>
                         <td className="px-2 py-1.5 text-xs text-slate-500">{p.sector}</td>
                         <td className="px-2 py-1.5 tabular-nums">{fmtNumber(p.quantity, 0)}</td>
@@ -450,6 +457,7 @@ function WatchlistTab() {
                   {item.name ?? ''} {item.sector ? `· ${item.sector}` : ''}
                 </span>
                 </div>
+                <Sparkline valores={item.spark} width={64} height={20} className="ml-1" />
               </div>
               <div className="flex items-center gap-4">
                 {item.quote ? (

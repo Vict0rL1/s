@@ -757,6 +757,45 @@ alguien la va a buscar. Lo que no se hizo fue rellenar el hueco del 200 en la
 paleta: `border-amber-200` se usa en catorce sitios como borde visible de las
 cajas de aviso, y oscurecerlo habría roto los catorce para arreglar dos.
 
+## Tres gráficos que enseñan lo que un número esconde
+
+Todo en SVG a mano (`frontend/src/components/Sparkline.tsx`): cabe en unos
+cientos de píxeles y no necesita ejes ni leyendas, así que una librería de
+charts serían cientos de KB para apagar lo que no hace falta.
+
+**La curva de cada crisis.** Las tarjetas de 2008/2020/2022 daban el destino
+(−45 %) y no el camino. Un −45 % en línea recta y otro que baja un 60 %, rebota
+y acaba en −45 % son experiencias distintas, y la segunda es la que hace vender
+en el suelo. El dato ya se calculaba dentro de `estres_en_crisis` y se tiraba.
+
+Se remuestrea a ~60 puntos para no engordar la respuesta, **forzando el mínimo y
+el máximo dentro**: coger una de cada seis sesiones se salta el suelo con
+bastante probabilidad, y entonces el dibujo enseñaría menos caída que el titular
+de al lado. Dos números contradiciéndose en la misma tarjeta, y gana el dibujo.
+
+**Sparkline por fila** en cartera y watchlist, de lo ya cacheado y sin gastar una
+llamada. La columna de P&L dice el mismo «+17,6 %» para una posición que viene
+de subida y otra que viene de caída; la forma del año las separa de un vistazo.
+
+**Histograma del backtest.** `distribucion()` calculaba percentiles, el endpoint
+los servía, y **la pantalla no los enseñaba**. Media y Sharpe esconden justo las
+colas, que es de lo que va el riesgo. Las barras se anclan en múltiplos del
+ancho para que el 0 % caiga en una frontera exacta, y las que pierden van en
+rojo.
+
+### Dos cosas que solo se vieron mirando la pantalla
+
+1. **El marcador del suelo era invisible.** Lo pinté rojo sobre una línea roja,
+   es decir, justo en las crisis que caen — las únicas en las que alguien busca
+   el fondo. Ahora es un anillo con el relleno en el tono 50 (que el tema
+   invierte), así que contrasta en claro y en oscuro. Y si el mínimo es el primer
+   punto no se dibuja: no hay suelo que señalar y quedaba medio anillo cortado
+   contra el borde, que se lee como un fallo de render.
+2. **La etiqueta «0 %» del histograma estaba centrada**, y con un rango
+   asimétrico (−40 a +50) el cero real cae bastante a la izquierda. El corte de
+   color marca el cero exacto y la etiqueta decía otra cosa: un eje mal rotulado
+   desmiente al propio dibujo. Ahora se posiciona donde cae.
+
 ## Logos e icono: imágenes sin abrirle la puerta a nadie
 
 Logo de cada empresa junto a su tícker en la ficha, la cartera, la watchlist y
