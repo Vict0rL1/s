@@ -37,7 +37,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { env, ROOT, DB_PATH } from '../config.ts';
+import {
+  env, ROOT, DB_PATH,
+  footballConfig, basketballConfig, baseballConfig, nflConfig, tournamentsConfig,
+} from '../config.ts';
 import { getDb, getMeta } from '../db.ts';
 import { ODDS_API_BASE } from '../oddsQuota.ts';
 import { DEMO_SOURCE } from '../freshness.ts';
@@ -194,6 +197,14 @@ if (key) {
 section(3, 'Qué dice The Odds API');
 // ===========================================================================
 let remaining: number | null = null;
+/**
+ * Lo que el proveedor contestó en /sports, para el paso 4.
+ *
+ * Se guardaba solo el código de estado y se tiraba el cuerpo, que es justamente la
+ * lista de qué está en juego. Esa llamada es gratuita y ya se hacía: el dato estaba
+ * descargado y se descartaba.
+ */
+let listado: { key: string; active: boolean }[] | null = null;
 if (!key) {
   info('sin clave que comprobar, me salto este paso');
 } else if (NO_NET) {
@@ -208,6 +219,11 @@ if (!key) {
       remaining = Number(res.headers.get('x-requests-remaining'));
       const used = Number(res.headers.get('x-requests-used'));
       ok('la clave es válida');
+      try {
+        listado = (await res.json()) as { key: string; active: boolean }[];
+      } catch {
+        // Un cuerpo que no es JSON no puede tumbar el diagnóstico: el paso 4 se salta.
+      }
       if (Number.isFinite(remaining) && Number.isFinite(used)) {
         info(`peticiones restantes este mes: ${remaining}   ·   usadas: ${used}`);
         if (remaining <= 0) {
@@ -354,6 +370,82 @@ if (!fs.existsSync(DB_PATH)) {
       '# entero —cien megas y dos minutos— para acabar haciendo esto mismo al final.',
       '# El histórico no tiene nada que ver con que faltara la clave y ya estaba bien.',
     );
+  }
+}
+
+
+// ===========================================================================
+section(4, 'Qué competiciones ofrece tu clave AHORA MISMO');
+// ===========================================================================
+// EL PASO QUE FALTABA, Y QUE NO CUESTA NADA
+// ===========================================================================
+// «La clave es válida» y «quedan 14.800 peticiones» son dos verdades que conviven
+// perfectamente con «no sale ni un partido», y entre las dos no hay forma de saber por
+// qué. La pregunta que nadie estaba haciendo es la más simple: de las competiciones que
+// esta app sabe pedir, ¿CUÁLES dice tu clave que están en juego?
+//
+// La respuesta ya venía en el cuerpo de la llamada del paso 3, que es gratuita, y se
+// estaba tirando: solo se miraba el código de estado. Así que esto no cuesta ni una
+// petición más — solo leer lo que ya se había descargado.
+//
+// Y separa las dos averías que se veían iguales:
+//
+//   · la liga NO aparece en la lista → al proveedor le cambió la clave del deporte, o
+//     no la cubre tu plan. Se arregla en config/*.json y lo dice esta tabla.
+//   · la liga SÍ aparece y aun así no llegan partidos → el problema está en la
+//     petición de cuotas, no en qué competiciones hay.
+if (key && !NO_NET && listado !== null) {
+  const activas = new Set(listado.filter((s) => s.active).map((s) => s.key));
+  const todas = new Set(listado.map((s) => s.key));
+  console.log(`  el proveedor lista ${listado.length} competiciones, ${activas.size} en juego\n`);
+
+  const config: { deporte: string; claves: string[] }[] = [
+    { deporte: 'Fútbol', claves: footballConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
+    { deporte: 'Baloncesto', claves: basketballConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
+    { deporte: 'Béisbol', claves: baseballConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
+    { deporte: 'NFL', claves: nflConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
+    {
+      deporte: 'Tenis',
+      // El tenis las guarda como { atp: clave, wta: clave } y no como lista.
+      claves: tournamentsConfig.tournaments.flatMap((t) => Object.values(t.oddsSportKeys ?? {})),
+    },
+  ];
+
+  let algunaEnJuego = false;
+  for (const { deporte, claves } of config) {
+    const enJuego = claves.filter((k) => activas.has(k));
+    const listadaApagada = claves.filter((k) => todas.has(k) && !activas.has(k));
+    if (enJuego.length > 0) algunaEnJuego = true;
+    const marca = enJuego.length > 0 ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m';
+    console.log(
+      `  ${marca} ${deporte.padEnd(11)} ${enJuego.length} de ${claves.length} configuradas en juego` +
+        (enJuego.length > 0 ? `: ${enJuego.slice(0, 6).join(', ')}${enJuego.length > 6 ? '…' : ''}` : ''),
+    );
+    if (enJuego.length === 0) {
+      // Lo que el proveedor SÍ ofrece de ese deporte y nosotros no sabemos pedir. Es el
+      // dato con el que se arregla: si aquí sale `soccer_epl_2` y nosotros pedimos
+      // `soccer_epl`, el fallo está en config/football.json y se ve de un vistazo.
+      const familia = claves[0]?.split('_')[0] ?? '';
+      const suyas = [...activas].filter((k) => k.startsWith(familia) && !claves.includes(k));
+      if (listadaApagada.length > 0) {
+        info(`fuera de temporada según el proveedor: ${listadaApagada.slice(0, 6).join(', ')}`);
+      }
+      if (suyas.length > 0) {
+        info(`el proveedor SÍ tiene, y nosotros no pedimos: ${suyas.slice(0, 8).join(', ')}`);
+        problem(
+          `${deporte}: ninguna de las claves configuradas está en juego, pero el proveedor ofrece otras`,
+          `# compara los oddsSportKeys de config/ con: ${suyas.slice(0, 4).join(', ')}`,
+        );
+      } else if (listadaApagada.length === 0) {
+        info('el proveedor no lista ninguna competición de este deporte ahora mismo');
+      }
+    }
+  }
+
+  if (!algunaEnJuego) {
+    console.log('');
+    bad('NINGUNA de las competiciones configuradas está en juego según tu clave');
+    info('Con esto, que no salgan cuotas reales es la consecuencia, no el fallo.');
   }
 }
 
