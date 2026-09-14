@@ -38,3 +38,7 @@ lerna-debug.log*
 *.sln
 *.sw?
 data/.dev-ports.json
+# Generado por `npm run auto`: lleva dentro la ruta absoluta de ESTA máquina, así que
+# commitearlo le daría a otra persona un guion que apunta a una carpeta que no existe.
+data/auto-actualizar.sh
+data/tennis.db.backup-*

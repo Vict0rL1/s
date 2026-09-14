@@ -107,6 +107,34 @@ Detalle en [«Quiero las cuotas reales»](#quiero-las-cuotas-reales-npm-run-odds
 
 Y si algo sigue sin cuadrar, **`npm run doctor`** diagnostica sin gastar ni una petición.
 
+### Que se actualice solo: `npm run auto`
+
+```bash
+npm run auto              # una vez, y ya no hay que acordarse de nada
+npm run auto -- --estado  # ¿funciona? ¿qué hizo la última vez?
+npm run auto -- --hora=7  # cambiar la hora (por defecto, las 9:00)
+npm run auto -- --quitar  # desinstalarlo
+```
+
+Conviene saber qué se actualizaba solo ya y qué no:
+
+- **Las cuotas ya se refrescaban solas** mientras el servidor está en marcha, a un ritmo
+  que se ajusta al tamaño de tu plan. Esa parte nunca hizo falta tocarla.
+- **El histórico no**, y es el que envejece peor: una base de hace tres semanas abre
+  igual, predice igual y no se queja. Enseña resultados de hace tres semanas con la misma
+  seguridad que los de ayer, y los Elo que salen de ahí son los de hace tres semanas.
+
+`npm run auto` pone eso en el calendario del sistema. Descarga la base ya construida
+—9 MB, unos segundos— y, si nadie la ha publicado todavía, la reconstruye desde las
+fuentes. **Conserva tus apuestas y tu histórico de aciertos**, y deja copia de la
+anterior. No gasta ni una petición de The Odds API.
+
+En un Mac usa **launchd y no cron**, y no es una preferencia: si el portátil está dormido
+a la hora de la cita, cron se salta esa cita y launchd la lanza al despertar. Para un
+portátil que se cierra por la noche, es la diferencia entre actualizarse y no
+actualizarse nunca. En Linux el comando no instala nada: imprime la línea de cron
+equivalente, con ese aviso.
+
 ---
 
 ## Qué incluye — ⚽ Fútbol
@@ -1262,6 +1290,7 @@ probar ese caso concreto, no leyendo el código.
 |---------|----------|
 | `npm run deploy` | Sube la app a Fly.io, comprobando antes todo lo que fallaría al final del despliegue |
 | `npm run go` | **Todo en uno**: rama, pull, dependencias, base de datos y arranque. El único que hace falta saber |
+| `npm run auto` | Instala la actualización diaria de los datos (launchd en macOS) y deja de hacer falta acordarse |
 | `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
 | `npm run seed` | Tenis: carga el dataset de demostración |
 | `npm run fetch-data` | **Descarga la base ya construida** (9 MB) en vez de reconstruirla. `-- --force` reemplaza la que haya, conservando tus apuestas |

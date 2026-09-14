@@ -348,9 +348,11 @@ if (!fs.existsSync(DB_PATH)) {
     // deporte suelto sin gastar en los otros cuatro.
     problem(
       'La clave funciona, pero lo guardado se descargó sin ella (o antes de ponerla)',
-      'npm run update-all',
-      '# ↑ los cinco deportes de una tirada. Gasta 5 peticiones de tu plan.',
-      '# Si solo quieres uno: update-data:fb · :bb · :bsb · :naf · o `npm run update-data` (tenis)',
+      'npm run odds',
+      '# ↑ pide SOLO las cuotas de los cinco deportes. 5 peticiones y unos segundos.',
+      '# Este consejo decía `npm run update-all`, que además reingiere el histórico',
+      '# entero —cien megas y dos minutos— para acabar haciendo esto mismo al final.',
+      '# El histórico no tiene nada que ver con que faltara la clave y ya estaba bien.',
     );
   }
 }
