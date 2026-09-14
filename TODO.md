@@ -90,9 +90,13 @@ número:
       app local sin proceso en marcha. Un cron + notificación de escritorio
       sería el siguiente paso.
 - [ ] **Una sola watchlist** ("Principal"). El esquema soporta varias.
-- [ ] **Sin divisas.** Una posición en CAD y otra en USD se suman como si
-      fueran la misma moneda. Si mezclas mercados, esto es lo primero que hay
-      que arreglar.
+- [x] ~~**Sin divisas.**~~ Hecho. Todo se convierte a USD antes de sumar, con
+      tipos de FRED (gratis, 24 h de caché, una serie por divisa presente). Lo
+      que no se puede convertir queda FUERA del total y se nombra en pantalla.
+      **Pendiente de verificar con datos reales**: la dirección de cada serie de
+      FRED está escrita a mano con su título al lado y un test la comprueba,
+      pero nadie la ha contrastado contra un tipo real. Mira una vez que
+      1 USD ≈ 1,3-1,4 CAD y no ≈ 0,7.
 - [ ] **Sin historial de precios de la cartera**: el P&L es puntual, no hay
       curva de valor en el tiempo.
 

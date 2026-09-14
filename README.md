@@ -757,6 +757,49 @@ alguien la va a buscar. Lo que no se hizo fue rellenar el hueco del 200 en la
 paleta: `border-amber-200` se usa en catorce sitios como borde visible de las
 cajas de aviso, y oscurecerlo habría roto los catorce para arreglar dos.
 
+## Divisas: sumar dólares con euros es la peor clase de error
+
+La cartera sumaba `market_value` de todas las posiciones sin mirar la moneda.
+Una posición canadiense y otra estadounidense se sumaban como si un dólar fuera
+el otro, y eso no daba un aviso ni un hueco: daba **un número perfectamente
+creíble y equivocado**, del que además cuelgan los pesos, la concentración y el
+presupuesto de riesgo. `TODO.md` lo tenía marcado como lo primero que arreglar.
+
+En una cartera de prueba con siete posiciones en USD, dos en CAD y una en JPY:
+
+| | |
+|---|---|
+| Suma cruda (lo que hacía antes) | **102.440** |
+| Total realmente convertido | **45.362** |
+
+Más del doble. La posición japonesa contaba 56.000 ¥ como 56.000 $ — un 147 %
+de más ella sola.
+
+### La trampa está en la dirección, no en la conversión
+
+FRED publica los tipos pero **sin dirección uniforme**:
+
+    DEXCAUS  =  dólares canadienses por UN dólar estadounidense   (1,37)
+    DEXUSEU  =  dólares estadounidenses por UN euro               (1,08)
+
+Los dos son «el cambio con el dólar» y van en sentidos opuestos. Leer uno del
+revés convierte 1,37 en 0,73 y la cartera sale casi al doble o casi a la mitad,
+sin fallar ni avisar. Así que en `analysis/fx.py` la dirección va **escrita a
+mano en cada entrada con el título literal de FRED al lado**, y hay un test que
+lee ese título y comprueba que coincide con la dirección declarada: invertir una
+sola entrada hace fallar cuatro tests.
+
+Encima hay una segunda red: bandas de cordura por divisa, tan anchas que ningún
+movimiento real las cruza y tan estrechas que una serie invertida las cruza
+siempre. No validan el mercado — detectan la inversión.
+
+### Lo que no se puede convertir no se suma
+
+Sin tipo, la posición queda **fuera del total** y se nombra en pantalla con su
+motivo, en vez de convertirse a la par o sumarse a pelo. Un total parcial que se
+sabe parcial sirve; uno que se cree completo, no. La divisa, por cierto, siempre
+venía en la cotización y el portafolio se quedaba solo con el precio.
+
 ## Tres gráficos que enseñan lo que un número esconde
 
 Todo en SVG a mano (`frontend/src/components/Sparkline.tsx`): cabe en unos

@@ -377,6 +377,21 @@ export interface PortfolioPosition {
   unrealized_pnl: number | null
   unrealized_pct: number | null
   spark: number[] | null
+  currency: string | null
+  /** Importe ya convertido a la divisa base. null = no se pudo convertir. */
+  market_value_base: number | null
+  invested_base: number | null
+  /** Motivo por el que quedó fuera de los totales, si quedó fuera. */
+  sin_convertir?: string
+}
+
+export interface DivisasDeCartera {
+  base: string
+  mezcla_de_divisas: boolean
+  monedas: Record<string, number>
+  sin_convertir: { symbol?: string; moneda?: string; motivo: string }[]
+  tipos_usados: Record<string, { por_usd: number; fecha: string | null; serie: string }>
+  nota: string
 }
 
 export interface ClosedPosition {
@@ -414,6 +429,7 @@ export interface Estres {
 }
 
 export interface Portfolio {
+  divisas?: DivisasDeCartera
   risk_budget: RiskBudget
   estres: Estres
   positions: PortfolioPosition[]

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.analysis import portfolio_risk
+from app.analysis import fx, portfolio_risk
 from app.analysis.decision import _stop_pct
 from app.analysis.risk_budget import presupuesto_de_riesgo
 from app.analysis.sizing import con_caida_esperada, peor_ventana
@@ -165,11 +165,44 @@ def _spark_cacheado(
     return [round(cierres[round(i * paso)], 2) for i in range(PUNTOS_SPARK)]
 
 
-def _price_of(service: MarketDataService, symbol: str) -> float | None:
+def _precio_y_divisa(service: MarketDataService, symbol: str) -> tuple[float | None, str | None]:
+    """El precio Y la moneda en que está.
+
+    La cotización siempre trajo `currency` y este módulo se quedaba solo con el
+    precio, así que la cartera sumaba dólares canadienses con estadounidenses
+    como si fueran lo mismo. El dato estaba; faltaba leerlo.
+    """
     try:
-        return service.get("quote", symbol=symbol).get("price")
+        q = service.get("quote", symbol=symbol)
+        return q.get("price"), q.get("currency")
     except (DataNotFoundError, AllProvidersFailedError):
-        return None
+        return None, None
+
+
+def _price_of(service: MarketDataService, symbol: str) -> float | None:
+    return _precio_y_divisa(service, symbol)[0]
+
+
+def tipos_de_cambio(service: MarketDataService, monedas: set[str]) -> dict[str, dict]:
+    """Tipos de FRED para las monedas que hay en la cartera, y solo esas.
+
+    FRED es gratis y sin límite práctico, y el TTL de `macro` es de 24 h: una
+    llamada por divisa y día. El dólar no necesita tipo — es la pata común— y
+    las monedas sin serie configurada no se piden.
+    """
+    salida: dict[str, dict] = {}
+    desde = fx.inicio_de_ventana()
+    for moneda in sorted(monedas):
+        if moneda == fx.BASE or moneda not in fx.SERIES:
+            continue
+        try:
+            payload = service.get("macro", series_id=fx.SERIES[moneda]["serie"], start=desde)
+            salida[moneda] = fx.tipo_desde_observaciones(moneda, payload.get("points") or [])
+        except (DataNotFoundError, AllProvidersFailedError, fx.SinTipo) as exc:
+            # Sin tipo no se convierte y la posición queda fuera del total, con
+            # su motivo. Inventar una paridad sería el error que esto evita.
+            salida[moneda] = {"por_usd": None, "error": str(exc)[:200]}
+    return salida
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +423,7 @@ def get_portfolio(
                 }
             )
             continue
-        price = _price_of(service, instrument.symbol)
+        price, divisa = _precio_y_divisa(service, instrument.symbol)
         metrics = position_metrics(
             {"quantity": position.quantity, "cost_basis": position.cost_basis}, price
         )
@@ -410,26 +443,54 @@ def get_portfolio(
                 "opened_at": position.opened_at.isoformat(),
                 "stop": stop,
                 "price": price,
+                "currency": divisa,
                 "spark": _spark_cacheado(service, instrument.symbol),
                 **metrics,
             }
         )
 
-    summary = portfolio_summary(open_positions)
-    by_position = allocation_weights(open_positions, "symbol")
-    by_sector = allocation_weights(open_positions, "sector")
+    # CONVERTIR ANTES DE SUMAR. Hasta aquí `market_value` está cada uno en su
+    # moneda; sumarlos directamente daba un total creíble y equivocado, y de ese
+    # total cuelgan los pesos, la concentración y el presupuesto de riesgo.
+    monedas = {m for p in open_positions if (m := fx.normalizar(p.get("currency")))}
+    tipos = tipos_de_cambio(service, monedas)
+    divisas = fx.convertir_cartera(open_positions, tipos)
+
+    # A partir de aquí se trabaja con los importes YA convertidos, y lo que no
+    # se pudo convertir sencillamente no está en la lista.
+    convertidas = [
+        {**p, "market_value": p.get("market_value_base"), "invested": p.get("invested_base")}
+        for p in divisas["posiciones"]
+    ]
+    summary = portfolio_summary(convertidas)
+    by_position = allocation_weights(convertidas, "symbol")
+    by_sector = allocation_weights(convertidas, "sector")
 
     # Qué le habría pasado a ESTA composición en el peor tramo del histórico
     # disponible. No son escenarios inventados: son los pesos que tienes hoy
     # aplicados al pasado que hay guardado, con sus fechas y con el aviso de qué
     # crisis quedan fuera de la cobertura.
     estres = peor_ventana(
-        {p["symbol"]: p["market_value"] for p in open_positions if p.get("market_value")},
-        _series_cacheadas(service, [p["symbol"] for p in open_positions]),
+        {p["symbol"]: p["market_value"] for p in convertidas if p.get("market_value")},
+        _series_cacheadas(service, [p["symbol"] for p in convertidas]),
     )
     return {
-        "positions": open_positions,
+        "positions": [
+            {**p, "market_value_base": p.get("market_value_base"),
+             "invested_base": p.get("invested_base")}
+            for p in divisas["posiciones"]
+        ]
+        + [
+            # Las que no se pudieron convertir siguen visibles en la tabla —con
+            # su importe en su moneda— pero fuera de todos los totales.
+            {**next(o for o in open_positions if o["symbol"] == s_["symbol"]),
+             "market_value_base": None, "invested_base": None,
+             "sin_convertir": s_["motivo"]}
+            for s_ in divisas["sin_convertir"]
+            if any(o["symbol"] == s_["symbol"] for o in open_positions)
+        ],
         "closed_positions": closed,
+        "divisas": {k: v for k, v in divisas.items() if k != "posiciones"},
         # El retorno nunca viaja solo: `con_caida_esperada` le engancha la caída
         # que esta misma cartera habría sufrido. Un «+12 %» y un «+12 % con un
         # −45 % por el camino» son propuestas distintas, y quien solo ve la
@@ -444,11 +505,12 @@ def get_portfolio(
         # Cada idea se dimensiona para arriesgar un 1 %; lo que no hacía nadie
         # era sumar. Ocho posiciones al 1 % son un 8 % en riesgo simultáneo.
         "risk_budget": presupuesto_de_riesgo(
-            open_positions, summary.get("total_market_value")
+            convertidas, summary.get("total_market_value")
         ),
         "note": (
             "Las posiciones sin precio disponible se excluyen de los totales y "
-            "de los pesos; el resumen indica sobre cuántas se calculó."
+            "de los pesos; el resumen indica sobre cuántas se calculó. "
+            + divisas["nota"]
         ),
     }
 

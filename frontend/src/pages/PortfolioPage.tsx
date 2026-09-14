@@ -4,6 +4,7 @@ import { CompanyLogo } from '../components/CompanyLogo'
 import { Sparkline } from '../components/Sparkline'
 import { api } from '../api/client'
 import type {
+  DivisasDeCartera,
   Estres,
   Portfolio,
   PriceAlert,
@@ -145,6 +146,58 @@ function RiskBudgetPanel({ risk }: { risk: RiskBudget }) {
   )
 }
 
+
+/** Qué divisas hay y a qué tipo se convirtieron.
+ *
+ *  Solo aparece cuando hay más de una: en una cartera de una sola moneda esto
+ *  sería ruido, y el caso normal no debe pagar por el caso raro. */
+function DivisasPanel({ d }: { d: DivisasDeCartera }) {
+  if (!d.mezcla_de_divisas && d.sin_convertir.length === 0) return null
+  return (
+    <section className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-sky-900">
+          {Object.keys(d.monedas).length} divisas · todo convertido a {d.base}
+        </h3>
+        {/* Estos importes están YA en la base: son «cuánto de tu cartera, medido
+            en USD, viene de activos en cada divisa». Ponerlos como «CAD 2903» a
+            secas se lee como 2903 dólares canadienses, que es otra cifra. */}
+        <span className="text-[11px] tabular-nums text-sky-800">
+          en {d.base}, por divisa de origen:{' '}
+          {Object.entries(d.monedas)
+            .map(([m, v]) => `${m} → ${fmtNumber(v, 0)}`)
+            .join(' · ')}
+        </span>
+      </div>
+
+      {Object.keys(d.tipos_usados).length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-[11px] text-sky-900">
+          {Object.entries(d.tipos_usados).map(([m, t]) => (
+            <li key={m} className="tabular-nums">
+              1 {d.base} = {fmtNumber(t.por_usd, 4)} {m}
+              <span className="ml-2 text-sky-700">
+                ({t.serie}{t.fecha ? ` · ${t.fecha}` : ''})
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {d.sin_convertir.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-[11px] text-amber-800">
+          {d.sin_convertir.map((x, i) => (
+            <li key={i}>
+              <strong>{x.symbol}</strong> fuera del total: {x.motivo}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-2 text-[11px] leading-relaxed text-sky-800">{d.nota}</p>
+    </section>
+  )
+}
+
 function Pnl({ value, pct }: { value: number | null; pct: number | null }) {
   if (value === null) return <span className="text-slate-400">—</span>
   const up = value >= 0
@@ -275,6 +328,7 @@ function PortfolioTab() {
             </p>
           )}
 
+          {data.divisas && <DivisasPanel d={data.divisas} />}
           {data.risk_budget && <RiskBudgetPanel risk={data.risk_budget} />}
 
           {data.estres && <EstresPanel estres={data.estres} />}
@@ -314,7 +368,13 @@ function PortfolioTab() {
                   {data.positions.map((p) => {
                     const weight = data.allocation_by_position.find((a) => a.label === p.symbol)
                     return (
-                      <tr key={p.id} className="border-b border-slate-100">
+                      <tr
+                        key={p.id}
+                        className={`border-b border-slate-100 ${
+                          p.sin_convertir ? 'bg-amber-50' : ''
+                        }`}
+                        title={p.sin_convertir ?? undefined}
+                      >
                         <td className="px-2 py-1.5">
                           <Link
                             to={`/ticker/${p.symbol}`}
@@ -322,6 +382,17 @@ function PortfolioTab() {
                           >
                             <CompanyLogo symbol={p.symbol} size="sm" />
                             {p.symbol}
+                            {p.currency && p.currency !== data.divisas?.base && (
+                              <span
+                                className={`rounded px-1 py-0.5 text-[9px] font-medium ${
+                                  p.sin_convertir
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                {p.currency}
+                              </span>
+                            )}
                           </Link>
                         </td>
                         <td className="px-2 py-1.5">
