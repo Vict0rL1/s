@@ -110,6 +110,26 @@ export const env = {
    * overrule a deliberate setting with its own estimate.
    */
   autoRefreshMinutesExplicit: !!process.env.AUTO_REFRESH_MINUTES?.trim(),
+  /**
+   * ¿Se pueden inventar partidos y cuotas cuando no llegan los de verdad?
+   *
+   * ===========================================================================
+   * POR QUÉ ESTO SE PUEDE APAGAR
+   * ===========================================================================
+   * Con la app recién clonada, sin clave y sin internet, una pestaña vacía parece
+   * rota: no hay forma de saber si el modelo funciona. Por eso existe el generador
+   * de demostración, y para ESE caso está bien.
+   *
+   * Para quien ya tiene una clave de pago está mal, y no por un matiz. Un partido
+   * inventado ocupa el sitio de uno real, se mezcla con los reales en la misma
+   * lista y lleva un precio que no es de nadie. Quien abre la app quiere saber qué
+   * se juega; una imitación plausible de eso es peor que no tener nada, porque no
+   * se puede distinguir de un vistazo y porque invita a fiarse.
+   *
+   * `DEMO_FIXTURES=off` lo apaga: sin cuotas reales, la pestaña se queda vacía y
+   * dice por qué. Una pantalla vacía con su motivo es una respuesta honesta.
+   */
+  demoFixtures: !/^(off|0|false|no)$/i.test(process.env.DEMO_FIXTURES?.trim() ?? ''),
 };
 
 export function tourById(id: string) {

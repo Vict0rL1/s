@@ -103,6 +103,8 @@ export async function registerNflRoutes(app: FastifyInstance): Promise<void> {
       // es un aviso. Ver `oddsReason.ts`.
       oddsFallbackReason: getMeta('naf_odds_fallback_reason') || null,
       oddsFallbackDetail: getMeta('naf_odds_fallback_detail') || null,
+      // Si está apagado, una pestaña vacía NO es un fallo: es lo que se pidió.
+      demoFixtures: env.demoFixtures,
       hasOddsKey: !!env.oddsApiKey,
       autoRefreshMinutes: env.autoRefreshMinutes,
       counts: { teams: countTeams(), games: countGames() },

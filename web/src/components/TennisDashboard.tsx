@@ -12,7 +12,7 @@ import TrackRecordPanel from './TrackRecordPanel';
 import TennisEloPanel from './TennisEloPanel';
 import {
   DayFilter, DayHeading, pillClass, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate, SlateTable,
+  EmptySlate, SlateTable, VacioPorqueNoHayCuotas,
 } from './ui';
 import { staleLabel, staleness } from '../lib/staleness';
 import { CAVEATS, rankPicks, tennisPicks } from '../lib/picks';
@@ -154,6 +154,15 @@ export default function TennisDashboard() {
       <PicksPanel {...picks} caveat={CAVEATS.tennis} demoOdds={demoOdds} stake={stake} onStakeChange={setStake} />
 
       <SlateTable rows={slate} demoOdds={demoOdds} />
+
+      {matches.length === 0 && !loading && (
+        <VacioPorqueNoHayCuotas
+          reason={meta?.oddsFallbackReason}
+          detail={meta?.oddsFallbackDetail}
+          hasKey={meta?.hasOddsKey ?? false}
+          demoFixtures={meta?.demoFixtures ?? true}
+        />
+      )}
 
       {error && (
         <div className="mb-4 rounded-lg border border-rose-800 bg-rose-950/50 p-3 text-[16px] text-rose-300">

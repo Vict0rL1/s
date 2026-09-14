@@ -106,6 +106,8 @@ export async function registerFootballRoutes(app: FastifyInstance): Promise<void
     // cuatro causas piden cosas distintas y desde la pantalla se ven todas iguales.
     oddsFallbackReason: getMeta('fb_odds_fallback_reason') || null,
     oddsFallbackDetail: getMeta('fb_odds_fallback_detail') || null,
+    // Si está apagado, una pestaña vacía NO es un fallo: es lo que se pidió.
+    demoFixtures: env.demoFixtures,
     oddsRefreshedAt: getMeta('fb_odds_refreshed_at'),
     hasOddsKey: !!env.oddsApiKey,
     squads: {

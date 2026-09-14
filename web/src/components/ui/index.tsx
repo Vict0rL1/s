@@ -1753,3 +1753,64 @@ export function SlateTable({
     </section>
   );
 }
+
+/**
+ * POR QUÉ ESTA PESTAÑA ESTÁ VACÍA, CUANDO LO ESTÁ A PROPÓSITO
+ * ===========================================================================
+ * Con `DEMO_FIXTURES=off` la app deja de inventarse partidos, que es lo que se le ha
+ * pedido. Pero una pestaña vacía se parece muchísimo a una pestaña rota: no hay forma de
+ * distinguir «no hay nada que enseñar» de «no ha cargado» mirándola.
+ *
+ * Un vacío deliberado tiene que decir que es deliberado, y decir qué falta para que deje
+ * de estarlo. Esto es lo que separa apagar la demostración —una decisión— de que la app
+ * parezca averiada.
+ */
+export function VacioPorqueNoHayCuotas({
+  reason,
+  detail,
+  hasKey,
+  demoFixtures,
+}: {
+  reason: string | null | undefined;
+  detail?: string | null;
+  hasKey: boolean;
+  demoFixtures: boolean;
+}) {
+  // Con la demostración encendida, un vacío significa otra cosa (no hay datos del
+  // deporte) y lo explica `EmptySlate`. Esta nota es solo para el vacío deliberado.
+  if (demoFixtures) return null;
+
+  return (
+    <div className="mb-6 rounded-xl border border-white/[0.09] bg-white/[0.02] px-4 py-4 text-[14px] leading-relaxed text-[#9aa1ac]">
+      <p className="mb-2 text-[15px] font-semibold text-[#e8eaed]">
+        No hay partidos con cuotas reales ahora mismo
+      </p>
+      <p>
+        Y esta pestaña está vacía <strong className="text-[#c3c9d1]">a propósito</strong>: has
+        apagado los partidos de demostración, así que la app no se inventa nada para llenar el
+        hueco.{' '}
+        {reason === 'sin_eventos'
+          ? 'Las casas no tienen precio publicado para ninguna de las competiciones configuradas. Entre jornadas es lo normal.'
+          : reason === 'sin_ligas'
+            ? 'El proveedor no ofrece ninguna de las competiciones configuradas ahora mismo.'
+            : reason === 'presupuesto'
+              ? 'La app se frenó sola para repartir el plan del mes y no llegó a preguntar — esto NO se arregla esperando: npm run odds las pide saltándose el freno.'
+              : reason === 'fuente_falla'
+                ? 'El proveedor de cuotas no contestó: cuota del mes agotada, clave inválida o sin conexión.'
+                : reason === 'sin_clave' || !hasKey
+                  ? 'Falta ODDS_API_KEY en el .env de la raíz.'
+                  : 'Sin causa registrada; npm run doctor la desglosa sin gastar cuota.'}
+      </p>
+      {detail && (
+        <p className="mt-2 text-[13px] opacity-70">
+          <span className="font-mono">{detail}</span>
+        </p>
+      )}
+      <p className="mt-3 text-[13px] text-[#7b828d]">
+        El modelo, los Elo y el historial siguen ahí y son reales — lo que falta son los precios
+        con los que compararlos. Para volver a tener partidos de relleno:{' '}
+        <code>npm run demo -- --on</code>
+      </p>
+    </div>
+  );
+}

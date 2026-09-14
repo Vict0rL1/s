@@ -117,6 +117,9 @@ async function fetchLive(sportKey: string, manual: boolean): Promise<AggregatedE
  * NOT real games and are never written to the track record.
  */
 function generateFixtures(league: LeagueId, count = 8): AggregatedEvent[] {
+  // DEMO_FIXTURES=off: no se inventa nada. La tabla se queda vacía a propósito y la
+  // pestaña lo explica con la causa real. Ver `env.demoFixtures` en config.ts.
+  if (!env.demoFixtures) return [];
   const teams = getDb()
     .prepare(
       `SELECT r.team_id AS id, t.name, r.elo FROM bb_team_ratings r

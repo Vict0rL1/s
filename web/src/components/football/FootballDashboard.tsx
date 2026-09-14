@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { reportClientLatency } from '../../lib/liveOdds';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate, LeagueFlag, DemoOddsNote, SlateTable} from '../ui';
+  EmptySlate, LeagueFlag, DemoOddsNote, SlateTable, VacioPorqueNoHayCuotas} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, footballPicks } from '../../lib/picks';
 import { footballSlate } from '../../lib/slate';
@@ -281,6 +281,15 @@ export default function FootballDashboard() {
       )}
 
       <SlateTable rows={slate} demoOdds={demoOdds} />
+
+      {fixtures.length === 0 && !loading && (
+        <VacioPorqueNoHayCuotas
+          reason={meta?.oddsFallbackReason}
+          detail={meta?.oddsFallbackDetail}
+          hasKey={meta?.hasOddsKey ?? false}
+          demoFixtures={meta?.demoFixtures ?? true}
+        />
+      )}
 
       {loading ? (
         <SkeletonList />

@@ -63,7 +63,8 @@
     "study:live": "npm run study:live --workspace server --",
     "study:points": "npm run study:points --workspace server --",
     "study:ablation": "npm run study:ablation --workspace server --",
-    "auto": "node scripts/auto.mjs"
+    "auto": "node scripts/auto.mjs",
+    "demo": "node scripts/demo.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

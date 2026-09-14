@@ -107,6 +107,34 @@ Detalle en [«Quiero las cuotas reales»](#quiero-las-cuotas-reales-npm-run-odds
 
 Y si algo sigue sin cuadrar, **`npm run doctor`** diagnostica sin gastar ni una petición.
 
+### «No quiero partidos inventados»: `npm run demo -- --off`
+
+```bash
+npm run demo              # ¿están encendidos o apagados?
+npm run demo -- --off     # que la app no invente nada
+npm run demo -- --on      # volver a tenerlos
+```
+
+Sin cuotas reales, la app genera partidos plausibles a partir de su propio Elo con un
+precio que no es de ninguna casa. Para una instalación recién hecha, sin clave y sin
+internet, eso evita que la app parezca rota. **Con una clave que funciona, estorba**: un
+partido inventado ocupa el sitio de uno real, se mezcla con los reales en la misma lista
+y lleva un precio que no es de nadie.
+
+Apagado, las pestañas sin cuotas reales se quedan **vacías y diciendo por qué**, con la
+causa concreta y las ligas que se consultaron. Una pantalla vacía con su motivo es una
+respuesta; una imitación plausible de la realidad no lo es.
+
+Lo que NO se va al apagarlo: la NFL conserva sus partidos, porque nunca se inventó
+ninguno — su calendario viene de nflverse y es real, con línea de cierre o sin ella. Y el
+modelo, los Elo, el historial y la clasificación siguen exactamente igual en los cinco
+deportes: lo único que desaparece son las filas que no correspondían a ningún partido.
+
+El comando edita `DEMO_FIXTURES` en el `.env` **leyendo el fichero y reescribiéndolo
+entero**, nunca sobrescribiéndolo a ciegas: tu clave no se mueve de donde está. (Un
+`echo … > .env` hecho a mano ya se llevó por delante una clave bien puesta en este
+proyecto; de ahí el comando.)
+
 ### Que se actualice solo: `npm run auto`
 
 ```bash
@@ -1291,6 +1319,7 @@ probar ese caso concreto, no leyendo el código.
 | `npm run deploy` | Sube la app a Fly.io, comprobando antes todo lo que fallaría al final del despliegue |
 | `npm run go` | **Todo en uno**: rama, pull, dependencias, base de datos y arranque. El único que hace falta saber |
 | `npm run auto` | Instala la actualización diaria de los datos (launchd en macOS) y deja de hacer falta acordarse |
+| `npm run demo` | Enciende o apaga los partidos inventados. `-- --off` deja solo lo real |
 | `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
 | `npm run seed` | Tenis: carga el dataset de demostración |
 | `npm run fetch-data` | **Descarga la base ya construida** (9 MB) en vez de reconstruirla. `-- --force` reemplaza la que haya, conservando tus apuestas |

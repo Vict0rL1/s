@@ -143,6 +143,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     // suponer la causa, y suponía la equivocada dos de cada tres veces.
     oddsFallbackReason: getMeta('odds_fallback_reason') || null,
     oddsFallbackDetail: getMeta('odds_fallback_detail') || null,
+    // Si está apagado, una pestaña vacía NO es un fallo: es lo que se pidió.
+    demoFixtures: env.demoFixtures,
     oddsRefreshedAt: getMeta('odds_refreshed_at'),
     autoRefreshMinutes: env.autoRefreshMinutes,
     hasOddsKey: !!env.oddsApiKey,

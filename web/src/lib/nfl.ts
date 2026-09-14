@@ -166,6 +166,8 @@ export interface NflMeta {
   oddsFallbackReason: string | null;
   /** El error del proveedor, cuando la causa fue que no contestó. */
   oddsFallbackDetail: string | null;
+  /** `DEMO_FIXTURES=off`: la app no inventa partidos, así que una pestaña vacía es lo esperado. */
+  demoFixtures: boolean;
   hasOddsKey: boolean;
   autoRefreshMinutes: number;
   counts: { teams: number; games: number };

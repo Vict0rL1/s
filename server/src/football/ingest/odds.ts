@@ -110,6 +110,9 @@ async function fetchLive(sportKey: string, manual: boolean): Promise<Aggregated[
 
 /** Demo fixtures from current Elo, so the tab works with no key / out of season. */
 function generateFixtures(league: LeagueId, count = 6): Aggregated[] {
+  // DEMO_FIXTURES=off: no se inventa nada. La tabla se queda vacía a propósito y la
+  // pestaña lo explica con la causa real. Ver `env.demoFixtures` en config.ts.
+  if (!env.demoFixtures) return [];
   const teams = getDb()
     .prepare(
       `SELECT r.team_id AS id, t.name, r.elo FROM fb_team_ratings r

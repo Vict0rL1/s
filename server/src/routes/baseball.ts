@@ -101,6 +101,8 @@ export async function registerBaseballRoutes(app: FastifyInstance): Promise<void
     // cuatro causas piden cosas distintas y desde la pantalla se ven todas iguales.
     oddsFallbackReason: getMeta('bsb_odds_fallback_reason') || null,
     oddsFallbackDetail: getMeta('bsb_odds_fallback_detail') || null,
+    // Si está apagado, una pestaña vacía NO es un fallo: es lo que se pidió.
+    demoFixtures: env.demoFixtures,
     oddsRefreshedAt: getMeta('bsb_odds_refreshed_at'),
     probables: Number(getMeta('bsb_probables') ?? 0),
     hasOddsKey: !!env.oddsApiKey,

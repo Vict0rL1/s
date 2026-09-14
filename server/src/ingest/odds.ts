@@ -157,7 +157,14 @@ function topRated(tour: TourId, surface: Surface, limit: number): RatedPlayer[] 
 
 function generateFixtures(): number {
   const db = getDb();
+  // Se vacía SIEMPRE, incluso con la demostración apagada: si no, los partidos
+  // inventados de una pasada anterior sobreviven y la app sigue enseñándolos después
+  // de haberlos desactivado, que es justo lo que se quería evitar.
   clearUpcoming();
+  // DEMO_FIXTURES=off: no se inventa nada. La tabla se queda vacía a propósito y la
+  // pestaña lo explica con la causa real. Ver `env.demoFixtures` en config.ts.
+  if (!env.demoFixtures) return 0;
+
   const insert = db.prepare(
     `INSERT INTO upcoming_matches (
        id, tour, tournament_id, tournament_name, surface, commence_time,

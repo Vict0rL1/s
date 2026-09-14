@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate, LeagueFlag, DemoOddsNote, SlateTable} from '../ui';
+  EmptySlate, LeagueFlag, DemoOddsNote, SlateTable, VacioPorqueNoHayCuotas} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, basketballPicks } from '../../lib/picks';
 import { basketballSlate } from '../../lib/slate';
@@ -162,6 +162,15 @@ export default function BasketballDashboard() {
       )}
 
       <SlateTable rows={slate} demoOdds={demoOdds} />
+
+      {games.length === 0 && !loading && (
+        <VacioPorqueNoHayCuotas
+          reason={meta?.oddsFallbackReason}
+          detail={meta?.oddsFallbackDetail}
+          hasKey={meta?.hasOddsKey ?? false}
+          demoFixtures={meta?.demoFixtures ?? true}
+        />
+      )}
 
       {error && (
         <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[15px] text-rose-200">
