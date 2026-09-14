@@ -33,10 +33,23 @@ import { getQuota } from '../oddsQuota.ts';
 
 const C = { bold: '\x1b[1m', dim: '\x1b[2m', red: '\x1b[31m', green: '\x1b[32m', amber: '\x1b[33m', off: '\x1b[0m' };
 
+// ===========================================================================
+// ESTO ES UN REFRESCO MANUAL, Y HASTA AHORA NO LO ERA
+// ===========================================================================
+// Cada `run` pasa `true`: lo ha pedido una persona, escribiendo el comando. La distinción
+// no es decorativa — la app tiene un guardia de ritmo mensual que reparte el plan a lo
+// largo del mes y frena el gasto AUTOMÁTICO cuando va adelantado. Su propio comentario
+// dice «las actualizaciones manuales nunca se frenan por esto», y era falso: estas
+// funciones no recibían la marca, así que el comando más manual de la app —éste— se
+// frenaba con el presupuesto del timer de fondo.
+//
+// Y el resultado de ese freno era una lista de eventos vacía, indistinguible de «no hay
+// partidos», así que salía «entre jornadas es lo normal, vuelve a probar en unos días»
+// con el plan al 74 % sin gastar. Esperar no lo arreglaba: al día siguiente, lo mismo.
 const DEPORTES: { nombre: string; prefijo: SportPrefix; run: () => Promise<{ source: string; count: number }> }[] = [
-  { nombre: 'Fútbol', prefijo: 'fb_', run: refreshFootballOdds },
-  { nombre: 'Baloncesto', prefijo: 'bb_', run: refreshBasketballOdds },
-  { nombre: 'Béisbol', prefijo: 'bsb_', run: refreshBaseballOdds },
+  { nombre: 'Fútbol', prefijo: 'fb_', run: () => refreshFootballOdds(true) },
+  { nombre: 'Baloncesto', prefijo: 'bb_', run: () => refreshBasketballOdds(true) },
+  { nombre: 'Béisbol', prefijo: 'bsb_', run: () => refreshBaseballOdds(true) },
   {
     nombre: 'NFL',
     prefijo: 'naf_',
@@ -45,11 +58,11 @@ const DEPORTES: { nombre: string; prefijo: SportPrefix; run: () => Promise<{ sou
     // hay línea publicada» — su calendario sigue siendo real. Por eso se adapta aquí en
     // vez de cambiar su firma: el resto del proyecto depende de que devuelva un número.
     run: async () => {
-      const n = await refreshNfl();
+      const n = await refreshNfl(true);
       return { source: n > 0 ? 'live' : 'schedule', count: n };
     },
   },
-  { nombre: 'Tenis', prefijo: '', run: refreshTennis },
+  { nombre: 'Tenis', prefijo: '', run: () => refreshTennis(true) },
 ];
 
 console.log(`\n${C.bold}Pidiendo cuotas reales a The Odds API${C.off}`);
@@ -166,6 +179,11 @@ if (sinCuotas.length > 0) {
         break;
       case 'sin_clave':
         console.log(`    ${C.dim}Falta ODDS_API_KEY en el .env de la raíz.${C.off}`);
+        break;
+      case 'presupuesto':
+        console.log(`    ${C.dim}NO se llegó a preguntar: la app se frenó sola para repartir el plan`);
+        console.log(`    a lo largo del mes. No es el calendario y esperar no lo cambia.`);
+        console.log(`    El detalle de arriba dice cuántas peticiones llevas y cuántas tocaban.${C.off}`);
         break;
       default:
         console.log(`    ${C.dim}Sin causa registrada. \`npm run doctor\` lo desglosa.${C.off}`);

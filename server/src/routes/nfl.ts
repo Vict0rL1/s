@@ -226,7 +226,10 @@ export async function registerNflRoutes(app: FastifyInstance): Promise<void> {
         .code(409)
         .send({ error: 'No hay datos de fútbol americano. Corre `npm run update-data:naf` primero.' });
     }
-    const stored = await refreshOdds();
+    // `true` = refresco MANUAL: alguien ha pulsado el botón. Sin esa marca, el guardia
+    // de ritmo mensual —que existe para frenar el TIMER de fondo— frenaba también lo
+    // que una persona acababa de pedir, y encima lo reportaba como «no hay partidos».
+    const stored = await refreshOdds(true);
     return { ok: true, stored };
   });
 }

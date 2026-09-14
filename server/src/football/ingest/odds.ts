@@ -11,7 +11,7 @@ import { getDb, setMeta } from '../../db.ts';
 import { recordOddsReason, type OddsReason } from '../../oddsReason.ts';
 import { pruneUpcoming } from '../../freshness.ts';
 import { env, footballConfig } from '../../config.ts';
-import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
+import { assertCanSpend, creditCost, listSports, recordQuota, OddsBudgetSkip } from '../../oddsQuota.ts';
 import { demoKickoffs } from '../../demoSchedule.ts';
 import { eloExpectation, HOME_ADVANTAGE } from '../model.ts';
 import { buildTeamIndex as buildNameIndex, resolveTeam as resolve } from './teamNames.ts';
@@ -62,17 +62,16 @@ async function fetchActive(): Promise<{ key: string }[]> {
   return all.filter((s) => s.active && !s.has_outrights && known.has(s.key));
 }
 
-async function fetchLive(sportKey: string): Promise<Aggregated[]> {
+async function fetchLive(sportKey: string, manual: boolean): Promise<Aggregated[]> {
   const url =
     `${ODDS_API_BASE}/sports/${sportKey}/odds/?apiKey=${encodeURIComponent(env.oddsApiKey)}` +
     `&regions=${encodeURIComponent(env.oddsRegions)}&markets=h2h&oddsFormat=decimal`;
   // The guard comes BEFORE the request, obviously: checking afterwards would be
   // checking whether we could afford something already bought.
-  const allowed = canSpend(creditCost('h2h'));
-  if (!allowed.ok) {
-    console.warn(`[odds] ${sportKey} saltado: ${allowed.reason}`);
-    return [];
-  }
+  //
+  // LANZA, no devuelve vacío. Devolver `[]` hacía que un freno nuestro se leyera como
+  // «el proveedor no tiene partidos» — ver OddsBudgetSkip en oddsQuota.ts.
+  assertCanSpend(creditCost('h2h'), manual);
   const res = await fetch(url);
   // Every response carries x-requests-remaining, so this is free knowledge.
   recordQuota(res);
@@ -177,7 +176,7 @@ export interface FootballOddsResult {
   promoted: number;
 }
 
-export async function refreshFootballOdds(): Promise<FootballOddsResult> {
+export async function refreshFootballOdds(manual = false): Promise<FootballOddsResult> {
   const db = getDb();
   const insert = db.prepare(
     `INSERT INTO fb_upcoming
@@ -231,15 +230,23 @@ export async function refreshFootballOdds(): Promise<FootballOddsResult> {
       reconocidas.push(s.key);
       motivo = 'sin_eventos';
       try {
-        const events = await fetchLive(s.key);
+        const events = await fetchLive(s.key, manual);
         if (events.length) {
           perLeague.set(league, [...(perLeague.get(league) ?? []), ...events]);
           source = 'live';
         }
       } catch (e) {
-        motivo = 'fuente_falla';
-        detalle = `${s.key}: ${(e as Error).message}`;
-        process.stderr.write(`  odds de ${s.key} fallaron: ${(e as Error).message}\n`);
+        if (e instanceof OddsBudgetSkip) {
+          // No preguntamos. Decir «sin_eventos» aquí mandaría a esperar a que el mundo
+          // cambie cuando lo que hay que cambiar es nuestro propio freno.
+          motivo = 'presupuesto';
+          detalle = e.message;
+          process.stderr.write(`  ${s.key} saltado: ${e.message}\n`);
+        } else {
+          motivo = 'fuente_falla';
+          detalle = `${s.key}: ${(e as Error).message}`;
+          process.stderr.write(`  odds de ${s.key} fallaron: ${(e as Error).message}\n`);
+        }
       }
     }
     if (motivo === 'sin_ligas') {

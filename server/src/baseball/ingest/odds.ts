@@ -16,7 +16,7 @@ import { getDb, setMeta } from '../../db.ts';
 import { recordOddsReason, type OddsReason } from '../../oddsReason.ts';
 import { pruneUpcoming } from '../../freshness.ts';
 import { env, baseballConfig } from '../../config.ts';
-import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
+import { assertCanSpend, creditCost, listSports, recordQuota, OddsBudgetSkip } from '../../oddsQuota.ts';
 import { demoKickoffs } from '../../demoSchedule.ts';
 import { eloExpectation, HOME_ADVANTAGE } from '../model.ts';
 import { findPitcherByName } from '../repo.ts';
@@ -53,17 +53,16 @@ async function fetchActive(): Promise<{ key: string }[]> {
   return all.filter((s) => s.active && !s.has_outrights && known.has(s.key));
 }
 
-async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
+async function fetchLive(sportKey: string, manual: boolean): Promise<AggregatedEvent[]> {
   const url =
     `${ODDS_API_BASE}/sports/${sportKey}/odds/?apiKey=${encodeURIComponent(env.oddsApiKey)}` +
     `&regions=${encodeURIComponent(env.oddsRegions)}&markets=h2h&oddsFormat=decimal`;
   // The guard comes BEFORE the request, obviously: checking afterwards would be
   // checking whether we could afford something already bought.
-  const allowed = canSpend(creditCost('h2h'));
-  if (!allowed.ok) {
-    console.warn(`[odds] ${sportKey} saltado: ${allowed.reason}`);
-    return [];
-  }
+  //
+  // LANZA, no devuelve vacío: un freno nuestro no puede leerse como «el proveedor no
+  // tiene partidos». Ver OddsBudgetSkip en oddsQuota.ts.
+  assertCanSpend(creditCost('h2h'), manual);
   const res = await fetch(url);
   // Every response carries x-requests-remaining, so this is free knowledge.
   recordQuota(res);
@@ -250,7 +249,7 @@ export interface BaseballOddsResult {
 }
 
 /** Refresh bsb_upcoming for every configured baseball league. */
-export async function refreshBaseballOdds(): Promise<BaseballOddsResult> {
+export async function refreshBaseballOdds(manual = false): Promise<BaseballOddsResult> {
   const db = getDb();
   const insert = db.prepare(
     `INSERT INTO bsb_upcoming
@@ -291,15 +290,22 @@ export async function refreshBaseballOdds(): Promise<BaseballOddsResult> {
       }
       for (const s of activos) {
         const league = byKey.get(s.key)!;
-        const events = await fetchLive(s.key);
+        const events = await fetchLive(s.key, manual);
         if (events.length === 0) continue;
         perLeague.set(league, [...(perLeague.get(league) ?? []), ...events]);
         source = 'live';
       }
     } catch (e) {
-      motivo = 'fuente_falla';
-      detalle = (e as Error).message;
-      console.warn(`⚠️  Odds API falló, se usarán partidos demo: ${(e as Error).message}`);
+      if (e instanceof OddsBudgetSkip) {
+        // No preguntamos: la causa es nuestro freno, no el calendario.
+        motivo = 'presupuesto';
+        detalle = e.message;
+        console.warn(`⚠️  Béisbol saltado: ${e.message}`);
+      } else {
+        motivo = 'fuente_falla';
+        detalle = (e as Error).message;
+        console.warn(`⚠️  Odds API falló, se usarán partidos demo: ${(e as Error).message}`);
+      }
     }
   }
   if (perLeague.size === 0) {

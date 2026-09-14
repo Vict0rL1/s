@@ -229,6 +229,9 @@ export async function registerBaseballRoutes(app: FastifyInstance): Promise<void
         .code(409)
         .send({ error: 'No hay datos de béisbol. Corre `npm run update-data:bsb` primero.' });
     }
-    return { ok: true, ...(await refreshBaseballOdds()) };
+    // `true` = refresco MANUAL: alguien ha pulsado el botón. Sin esa marca, el guardia
+    // de ritmo mensual —que existe para frenar el TIMER de fondo— frenaba también lo
+    // que una persona acababa de pedir, y encima lo reportaba como «no hay partidos».
+    return { ok: true, ...(await refreshBaseballOdds(true)) };
   });
 }

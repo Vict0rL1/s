@@ -14,7 +14,8 @@ import { getDb, setMeta } from '../db.ts';
 import { demoKickoffs } from '../demoSchedule.ts';
 import { pruneUpcoming } from '../freshness.ts';
 import { env, tournamentsConfig } from '../config.ts';
-import { canSpend, creditCost, listSports, recordQuota } from '../oddsQuota.ts';
+import type { OddsReason } from '../oddsReason.ts';
+import { assertCanSpend, creditCost, listSports, recordQuota, OddsBudgetSkip } from '../oddsQuota.ts';
 import { expectedScore } from '../model/elo.ts';
 import type { Surface, TourId } from '../types.ts';
 
@@ -54,7 +55,7 @@ async function fetchActiveTennisSports(): Promise<TennisSport[]> {
     .map((s) => ({ key: s.key as string, title: s.title as string }));
 }
 
-async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
+async function fetchLive(sportKey: string, manual: boolean): Promise<AggregatedEvent[]> {
   const url =
     `${ODDS_API_BASE}/sports/${sportKey}/odds/` +
     `?apiKey=${encodeURIComponent(env.oddsApiKey)}` +
@@ -62,11 +63,10 @@ async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
     `&markets=h2h&oddsFormat=decimal`;
   // The guard comes BEFORE the request, obviously: checking afterwards would be
   // checking whether we could afford something already bought.
-  const allowed = canSpend(creditCost('h2h'));
-  if (!allowed.ok) {
-    console.warn(`[odds] ${sportKey} saltado: ${allowed.reason}`);
-    return [];
-  }
+  //
+  // LANZA, no devuelve vacío: un freno nuestro no puede leerse como «el proveedor no
+  // tiene partidos». Ver OddsBudgetSkip en oddsQuota.ts.
+  assertCanSpend(creditCost('h2h'), manual);
   const res = await fetch(url);
   // Every response carries x-requests-remaining, so this is free knowledge.
   recordQuota(res);
@@ -283,12 +283,18 @@ function guessSurface(sportKey: string, title: string): string {
  * consejo equivocado en dos de los tres casos — y el más frustrante, porque manda a
  * revisar algo que ya está bien.
  */
-export type FallbackReason = 'sin_clave' | 'fuente_falla' | 'sin_eventos' | null;
+/**
+ * El tenis tenía su propia lista de causas, más corta que la compartida, y por eso no
+ * podía nombrar «presupuesto»: el tipo no lo admitía. Ahora usa la de `oddsReason.ts`,
+ * que es la que leen la pantalla, `npm run odds` y `npm run doctor`.
+ */
+export type FallbackReason = OddsReason;
 
-export async function ingestOdds(): Promise<{
+export async function ingestOdds(manual = false): Promise<{
   source: 'live' | 'fixture';
   count: number;
   reason: FallbackReason;
+  detail?: string;
 }> {
   if (!env.oddsApiKey) {
     const count = generateFixtures();
@@ -317,6 +323,8 @@ export async function ingestOdds(): Promise<{
   const nameIndex: Partial<Record<TourId, Map<string, number>>> = {};
   clearUpcoming();
   let total = 0;
+  /** El motivo del freno de presupuesto, si alguno de los torneos lo encontró. */
+  let frenado: string | null = null;
 
   for (const sport of sports) {
     const tour = tourFromKey(sport.key);
@@ -325,9 +333,16 @@ export async function ingestOdds(): Promise<{
 
     let events: AggregatedEvent[] = [];
     try {
-      events = await fetchLive(sport.key);
+      events = await fetchLive(sport.key, manual);
     } catch (e) {
-      process.stderr.write(`  odds fetch failed for ${sport.key}: ${(e as Error).message}\n`);
+      if (e instanceof OddsBudgetSkip) {
+        // No preguntamos. Se recuerda para que el final no lo llame «sin_eventos», que
+        // es lo que mandaba a esperar a que el mundo cambiase.
+        frenado = e.message;
+        process.stderr.write(`  ${sport.key} saltado: ${e.message}\n`);
+      } else {
+        process.stderr.write(`  odds fetch failed for ${sport.key}: ${(e as Error).message}\n`);
+      }
       continue;
     }
 
@@ -373,22 +388,36 @@ export async function ingestOdds(): Promise<{
   // Nothing live at all → keep a working demo with Elo-derived fixtures.
   if (total === 0) {
     const count = generateFixtures();
+    // Si nos frenamos nosotros, la causa es ESA. «No hay partidos con precio» sería
+    // describir el mundo cuando el que no preguntó fue este proceso.
+    if (frenado) return { source: 'fixture', count, reason: 'presupuesto', detail: frenado };
     return { source: 'fixture', count, reason: 'sin_eventos' };
   }
   return { source: 'live', count: total, reason: null };
 }
 
 /** Refresh odds and record when it happened. Used by the timer and /api/refresh. */
-export async function refreshOdds(): Promise<{ source: 'live' | 'fixture'; count: number }> {
-  const result = await ingestOdds();
+export async function refreshOdds(
+  manual = false,
+): Promise<{ source: 'live' | 'fixture'; count: number }> {
+  const result = await ingestOdds(manual);
   setMeta('odds_source', result.source);
   setMeta('odds_fallback_reason', result.reason ?? '');
   setMeta('odds_refreshed_at', new Date().toISOString());
-  // El detalle del error solo tiene sentido mientras la causa sea esa. Si la siguiente
-  // pasada va bien o cae por otro motivo, dejarlo puesto haría que la pantalla enseñara
-  // el mensaje de un fallo que ya no ocurre.
-  if (result.reason !== 'fuente_falla') setMeta('odds_fallback_detail', '');
-  return result;
+  // El detalle solo tiene sentido mientras la causa sea esa. Si la siguiente pasada va
+  // bien o cae por otro motivo, dejarlo puesto haría que la pantalla enseñara el mensaje
+  // de un fallo que ya no ocurre.
+  //
+  // `presupuesto` también trae detalle —el número exacto de peticiones y el ritmo que se
+  // ha pasado—, y sin él el aviso diría «me frené» sin decir por cuánto.
+  if (result.reason === 'fuente_falla') {
+    // el detalle de red ya lo dejó puesto la propia ingesta
+  } else if (result.detail) {
+    setMeta('odds_fallback_detail', result.detail.slice(0, 240));
+  } else {
+    setMeta('odds_fallback_detail', '');
+  }
+  return { source: result.source, count: result.count };
 }
 
 function round2(n: number): number {

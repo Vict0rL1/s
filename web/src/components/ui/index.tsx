@@ -1524,6 +1524,14 @@ export function DemoOddsNote({
         en juego, <code>npm run doctor</code> enseña las claves que la casa ofrece, que es
         el dato con el que se arregla.
       </>
+    ) : reason === 'presupuesto' ? (
+      <>
+        y esto <strong className="text-[#9aa1ac]">no se arregla esperando</strong>: no se ha
+        llegado a preguntar. La app reparte el plan del mes y se frenó sola, así que el
+        refresco automático seguirá frenado mañana. Pídelas a mano con{' '}
+        <code>npm run odds</code>, que sí pasa el freno.
+        {detail ? <span className="block opacity-70">{detail}</span> : null}
+      </>
     ) : reason === 'fuente_falla' ? (
       <>
         porque el proveedor de cuotas no contestó.{' '}
@@ -1578,6 +1586,11 @@ export function NflNoLineNote({
         <>
           la NFL no está en temporada. El calendario y las probabilidades del modelo son
           reales; lo que falta es el precio con el que compararlas.
+        </>
+      ) : reason === 'presupuesto' ? (
+        <>
+          la app se frenó sola para repartir el plan del mes y no llegó a preguntar. No es
+          el calendario: <code>npm run odds</code> las pide saltándose el freno.
         </>
       ) : reason === 'fuente_falla' ? (
         <>

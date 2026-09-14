@@ -233,6 +233,9 @@ export async function registerFootballRoutes(app: FastifyInstance): Promise<void
         .code(409)
         .send({ error: 'No hay datos de fútbol. Corre `npm run update-data:fb` primero.' });
     }
-    return { ok: true, ...(await refreshFootballOdds()) };
+    // `true` = refresco MANUAL: alguien ha pulsado el botón. Sin esa marca, el guardia
+    // de ritmo mensual —que existe para frenar el TIMER de fondo— frenaba también lo
+    // que una persona acababa de pedir, y encima lo reportaba como «no hay partidos».
+    return { ok: true, ...(await refreshFootballOdds(true)) };
   });
 }

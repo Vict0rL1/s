@@ -15,6 +15,15 @@
 //                  hay liga en juego, o la clave de deporte del proveedor cambió.
 //   sin_eventos    reconocimos la liga y no había ni un partido con precio. Entre
 //                  jornadas y entre torneos es lo normal.
+//   presupuesto    NO SE LLEGÓ A PREGUNTAR. La app se frena sola para no quemar el plan
+//                  del mes de golpe, y esta vez el freno saltó.
+//
+// `presupuesto` es la que faltaba, y su ausencia costó cara. El guardia de presupuesto
+// devolvía «cero eventos», que es indistinguible de «pregunté y no había ninguno», así
+// que la app decía «no hay partidos con precio, entre jornadas es normal, prueba en unos
+// días» cuando lo que pasaba era que se había frenado ella sola. Eso manda a esperar a
+// que se arregle algo que NO se arregla esperando: al día siguiente vuelve a frenarse.
+// Un freno propio nunca puede presentarse como una condición del mundo exterior.
 //
 // `sin_ligas` es la que más falta hacía y la que era imposible de diagnosticar: la
 // ingesta de fútbol hace `if (!league) continue;` sobre cada competición que el proveedor
@@ -24,7 +33,13 @@
 
 import { setMeta, getMeta } from './db.ts';
 
-export type OddsReason = 'sin_clave' | 'fuente_falla' | 'sin_ligas' | 'sin_eventos' | null;
+export type OddsReason =
+  | 'sin_clave'
+  | 'fuente_falla'
+  | 'sin_ligas'
+  | 'sin_eventos'
+  | 'presupuesto'
+  | null;
 
 /** Los prefijos de meta de cada deporte. El tenis no lleva, por ser el primero. */
 export type SportPrefix = '' | 'fb_' | 'bb_' | 'bsb_' | 'naf_';
@@ -59,4 +74,5 @@ export const REASON_TEXT: Record<NonNullable<OddsReason>, string> = {
   fuente_falla: 'el proveedor no contestó (cuota agotada, clave inválida o sin red)',
   sin_ligas: 'el proveedor no ofrece ninguna de las ligas configuradas ahora mismo',
   sin_eventos: 'no hay ningún partido con precio publicado',
+  presupuesto: 'la app se frenó sola para no gastar el plan del mes de golpe (no llegó a preguntar)',
 };

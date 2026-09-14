@@ -141,6 +141,14 @@ function avisoDeCuotas(estado: { nombre: string; vivo: boolean; prefijo: SportPr
         L.push('    Ninguna casa tiene precio publicado todavía. Entre jornadas es lo normal:');
         L.push('    no hay nada que arreglar, aparecerán solas.');
         break;
+      case 'presupuesto':
+        // Esta causa NO manda a esperar. Es la única de las cinco que se arregla
+        // escribiendo algo, y la única que empeora si se ignora: el refresco automático
+        // seguirá frenado mañana y pasado.
+        L.push('    NO se ha llegado a preguntar: la app se frenó sola para repartir el plan');
+        L.push('    del mes. Esto NO lo arregla esperar — el refresco automático seguirá');
+        L.push('    frenado. Pídelas a mano, que sí pasa el freno:   npm run odds');
+        break;
       default:
         L.push('    Sin causa registrada.  npm run doctor  lo desglosa sin gastar cuota.');
     }

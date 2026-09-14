@@ -405,6 +405,18 @@ function DemoReason({ meta }: { meta: Meta | null }) {
       </>
     );
   }
+  if (razon === 'presupuesto') {
+    // La única de las causas que NO se arregla esperando, y por eso va aparte: el
+    // refresco automático seguirá frenado mañana y pasado.
+    return (
+      <>
+        son de <strong className="text-[#9aa1ac]">demostración</strong> porque la app se
+        frenó sola para repartir el plan del mes —{' '}
+        <strong className="text-[#9aa1ac]">no llegó a preguntar</strong>. Esperar no lo
+        cambia. <code>npm run odds</code> las pide saltándose el freno.
+      </>
+    );
+  }
   if (razon === 'fuente_falla') {
     return (
       <>

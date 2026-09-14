@@ -363,7 +363,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         .code(409)
         .send({ error: 'No hay datos. Corre `npm run seed` o `npm run update-data` primero.' });
     }
-    const result = await refreshOdds();
+    // `true` = refresco MANUAL: alguien ha pulsado el botón. Sin esa marca, el guardia
+    // de ritmo mensual —que existe para frenar el TIMER de fondo— frenaba también lo
+    // que una persona acababa de pedir, y encima lo reportaba como «no hay partidos».
+    const result = await refreshOdds(true);
     return { ok: true, ...result };
   });
 

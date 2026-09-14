@@ -255,6 +255,45 @@ export function creditCost(markets: string): number {
  * Returns a reason when the answer is no, so callers can log something useful
  * instead of failing silently.
  */
+/**
+ * El freno de presupuesto, cuando salta, tiene que DOLER — no devolver una lista vacía.
+ *
+ * ===========================================================================
+ * «NO PREGUNTÉ» NO ES «PREGUNTÉ Y NO HABÍA NADA»
+ * ===========================================================================
+ * Las cuatro ingestas hacían esto:
+ *
+ *     const allowed = canSpend(creditCost('h2h'));
+ *     if (!allowed.ok) { console.warn(...); return []; }
+ *
+ * Esa lista vacía es indistinguible de «el proveedor contestó y no había ni un partido
+ * con precio». Y como el contador de causas sube a `sin_eventos` en cuanto se reconoce
+ * una liga, la app acababa diciendo, con toda seguridad:
+ *
+ *     No hay ningún partido con precio publicado. NO es un fallo:
+ *     entre jornadas y entre torneos es lo normal. Vuelve a probar en unos días.
+ *
+ * …con 14.800 peticiones en el plan, la clave funcionando, y la Premier y la MLB en
+ * plena temporada. El consejo era «espera», y esperar no lo arregla: al día siguiente
+ * el freno vuelve a saltar igual. Un freno PROPIO jamás puede presentarse como una
+ * condición del mundo exterior.
+ *
+ * Por eso lanza en vez de devolver vacío: quien llame tiene que decidir qué hacer, y no
+ * puede confundirlo con el caso normal por descuido.
+ */
+export class OddsBudgetSkip extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = 'OddsBudgetSkip';
+  }
+}
+
+/** Como `canSpend`, pero lanza `OddsBudgetSkip` en vez de devolver un booleano. */
+export function assertCanSpend(credits: number, manual = false): void {
+  const allowed = canSpend(credits, manual);
+  if (!allowed.ok) throw new OddsBudgetSkip(allowed.reason);
+}
+
 export function canSpend(credits: number, manual = false): { ok: true } | { ok: false; reason: string } {
   const { remaining } = getQuota();
   if (remaining == null) return { ok: true }; // never called yet — find out by trying

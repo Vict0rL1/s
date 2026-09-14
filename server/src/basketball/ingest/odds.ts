@@ -19,7 +19,7 @@ import { getDb, setMeta } from '../../db.ts';
 import { recordOddsReason, type OddsReason } from '../../oddsReason.ts';
 import { pruneUpcoming } from '../../freshness.ts';
 import { basketballConfig, env } from '../../config.ts';
-import { canSpend, creditCost, listSports, recordQuota } from '../../oddsQuota.ts';
+import { assertCanSpend, creditCost, listSports, recordQuota, OddsBudgetSkip } from '../../oddsQuota.ts';
 import { demoKickoffs } from '../../demoSchedule.ts';
 import { buildNameIndex, resolve } from './teamNames.ts';
 import { homeWinProbability } from '../elo.ts';
@@ -67,7 +67,7 @@ function median(xs: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
+async function fetchLive(sportKey: string, manual: boolean): Promise<AggregatedEvent[]> {
   const url =
     `${ODDS_API_BASE}/sports/${sportKey}/odds/` +
     `?apiKey=${encodeURIComponent(env.oddsApiKey)}` +
@@ -75,11 +75,10 @@ async function fetchLive(sportKey: string): Promise<AggregatedEvent[]> {
     `&markets=h2h&oddsFormat=decimal`;
   // The guard comes BEFORE the request, obviously: checking afterwards would be
   // checking whether we could afford something already bought.
-  const allowed = canSpend(creditCost('h2h'));
-  if (!allowed.ok) {
-    console.warn(`[odds] ${sportKey} saltado: ${allowed.reason}`);
-    return [];
-  }
+  //
+  // LANZA, no devuelve vacío: un freno nuestro no puede leerse como «el proveedor no
+  // tiene partidos». Ver OddsBudgetSkip en oddsQuota.ts.
+  assertCanSpend(creditCost('h2h'), manual);
   const res = await fetch(url);
   // Every response carries x-requests-remaining, so this is free knowledge.
   recordQuota(res);
@@ -173,7 +172,7 @@ export interface BasketballOddsResult {
 }
 
 /** Refresh bb_upcoming for every configured basketball league. */
-export async function refreshBasketballOdds(): Promise<BasketballOddsResult> {
+export async function refreshBasketballOdds(manual = false): Promise<BasketballOddsResult> {
   const db = getDb();
   const insert = db.prepare(
     `INSERT INTO bb_upcoming
@@ -218,15 +217,22 @@ export async function refreshBasketballOdds(): Promise<BasketballOddsResult> {
       if (!league) continue;
       motivo = 'sin_eventos';
       try {
-        const events = await fetchLive(sport.key);
+        const events = await fetchLive(sport.key, manual);
         if (events.length) {
           perLeague.set(league, [...(perLeague.get(league) ?? []), ...events]);
           source = 'live';
         }
       } catch (e) {
-        motivo = 'fuente_falla';
-        detalle = `${sport.key}: ${(e as Error).message}`;
-        process.stderr.write(`  odds de ${sport.key} fallaron: ${(e as Error).message}\n`);
+        if (e instanceof OddsBudgetSkip) {
+          // No preguntamos: la causa es nuestro freno, no el calendario.
+          motivo = 'presupuesto';
+          detalle = e.message;
+          process.stderr.write(`  ${sport.key} saltado: ${e.message}\n`);
+        } else {
+          motivo = 'fuente_falla';
+          detalle = `${sport.key}: ${(e as Error).message}`;
+          process.stderr.write(`  odds de ${sport.key} fallaron: ${(e as Error).message}\n`);
+        }
       }
     }
     if (motivo === 'sin_ligas') {

@@ -246,6 +246,7 @@ function estadoCuotas() {
       fuente_falla: 'el proveedor no contestó',
       sin_ligas: 'ninguna liga configurada en juego',
       sin_eventos: 'sin partidos con precio',
+      presupuesto: 'la app se frenó sola (no llegó a preguntar)',
     };
     const lineas = [];
     if (reales.length > 0) lineas.push(`cuotas reales: ${reales.join(' · ')}`);
@@ -283,6 +284,10 @@ function estadoCuotas() {
           );
         } else if (causas.has('fuente_falla')) {
           lineas.push('el proveedor no contestó: npm run doctor lo desglosa sin gastar cuota');
+        } else if (causas.has('presupuesto')) {
+          // Va ANTES que las dos de «no hay nada que arreglar», porque sí lo hay y es
+          // la única que no se cura sola: el refresco automático seguirá frenado.
+          lineas.push('no es el calendario, es un freno propio. Pídelas a mano: npm run odds');
         } else if (causas.has('sin_eventos')) {
           lineas.push('no hay nada que arreglar: ninguna casa tiene precio publicado ahora mismo');
         } else if (causas.has('sin_ligas')) {

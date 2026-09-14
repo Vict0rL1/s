@@ -213,7 +213,10 @@ export async function registerBasketballRoutes(app: FastifyInstance): Promise<vo
         .code(409)
         .send({ error: 'No hay datos de baloncesto. Corre `npm run update-data:bb` primero.' });
     }
-    const result = await refreshBasketballOdds();
+    // `true` = refresco MANUAL: alguien ha pulsado el botón. Sin esa marca, el guardia
+    // de ritmo mensual —que existe para frenar el TIMER de fondo— frenaba también lo
+    // que una persona acababa de pedir, y encima lo reportaba como «no hay partidos».
+    const result = await refreshBasketballOdds(true);
     return { ok: true, ...result };
   });
 }
