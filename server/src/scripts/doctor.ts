@@ -42,7 +42,7 @@ import {
   footballConfig, basketballConfig, baseballConfig, nflConfig, tournamentsConfig,
 } from '../config.ts';
 import { getDb, getMeta } from '../db.ts';
-import { ODDS_API_BASE } from '../oddsQuota.ts';
+import { ODDS_API_BASE, withinMonthlyPace, planTotal, recordQuota } from '../oddsQuota.ts';
 import { DEMO_SOURCE } from '../freshness.ts';
 import { readOddsReason, REASON_TEXT, type SportPrefix } from '../oddsReason.ts';
 import { inspectEnvFile } from '../envFile.ts';
@@ -236,6 +236,37 @@ if (!key) {
           info('⚠ quedan muy pocas: la app se reserva un margen y deja de refrescar sola.');
         }
       }
+      // El freno lee los contadores GUARDADOS, así que primero se guardan los que acaba
+      // de devolver esta llamada. Sin esto, el diagnóstico juzgaría con los números de la
+      // última vez que corrió la app, que pueden ser de hace días.
+      recordQuota(res);
+      // ===========================================================================
+      // ¿ESTÁ EL FRENO DE LA PROPIA APP APAGANDO EL REFRESCO AUTOMÁTICO?
+      // ===========================================================================
+      // Nada lo decía, y es una pregunta que la gente se hace sola en cuanto ve el
+      // síntoma: «se han parado las cuotas, ¿será que me he pasado del límite?». La app
+      // tiene un freno de ritmo mensual —reparte el plan a lo largo del mes y detiene el
+      // gasto AUTOMÁTICO cuando va adelantado— y hasta ahora ese freno era invisible: se
+      // notaba solo porque las cuotas dejaban de llegar.
+      //
+      // Un freno que no se anuncia es indistinguible de una avería. Peor: invita a
+      // buscarla donde no está.
+      const pace = withinMonthlyPace(1);
+      if (!pace.ok) {
+        info('');
+        bad('el freno de ritmo de la propia app está deteniendo el refresco AUTOMÁTICO');
+        info(pace.reason);
+        info('No es un límite de The Odds API —su plan es MENSUAL y te queda de sobra—,');
+        info('es esta app repartiendo el plan a lo largo del mes para no quemarlo en una');
+        info('semana. Los refrescos que pides A MANO se lo saltan:');
+        problem(
+          'La app se ha frenado sola: vas por delante del reparto mensual del plan',
+          'npm run odds',
+          '# ↑ manual, así que pasa el freno. El automático vuelve solo según avanza el mes.',
+        );
+      } else if (planTotal() != null) {
+        ok('el freno de ritmo mensual de la app NO está activo');
+      }
     } else if (res.status === 401) {
       bad('The Odds API RECHAZA la clave (401)');
       info('La clave se lee bien pero no es válida: caducada, revocada, o mal copiada.');
@@ -271,7 +302,82 @@ if (!key) {
 }
 
 // ===========================================================================
-section(4, 'Qué hay guardado ahora mismo');
+section(4, 'Qué competiciones ofrece tu clave AHORA MISMO');
+// ===========================================================================
+// EL PASO QUE FALTABA, Y QUE NO CUESTA NADA
+// ===========================================================================
+// «La clave es válida» y «quedan 14.800 peticiones» son dos verdades que conviven
+// perfectamente con «no sale ni un partido», y entre las dos no hay forma de saber por
+// qué. La pregunta que nadie estaba haciendo es la más simple: de las competiciones que
+// esta app sabe pedir, ¿CUÁLES dice tu clave que están en juego?
+//
+// La respuesta ya venía en el cuerpo de la llamada del paso 3, que es gratuita, y se
+// estaba tirando: solo se miraba el código de estado. Así que esto no cuesta ni una
+// petición más — solo leer lo que ya se había descargado.
+//
+// Y separa las dos averías que se veían iguales:
+//
+//   · la liga NO aparece en la lista → al proveedor le cambió la clave del deporte, o
+//     no la cubre tu plan. Se arregla en config/*.json y lo dice esta tabla.
+//   · la liga SÍ aparece y aun así no llegan partidos → el problema está en la
+//     petición de cuotas, no en qué competiciones hay.
+if (key && !NO_NET && listado !== null) {
+  const activas = new Set(listado.filter((s) => s.active).map((s) => s.key));
+  const todas = new Set(listado.map((s) => s.key));
+  console.log(`  el proveedor lista ${listado.length} competiciones, ${activas.size} en juego\n`);
+
+  const config: { deporte: string; claves: string[] }[] = [
+    { deporte: 'Fútbol', claves: footballConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
+    { deporte: 'Baloncesto', claves: basketballConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
+    { deporte: 'Béisbol', claves: baseballConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
+    { deporte: 'NFL', claves: nflConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
+    {
+      deporte: 'Tenis',
+      // El tenis las guarda como { atp: clave, wta: clave } y no como lista.
+      claves: tournamentsConfig.tournaments.flatMap((t) => Object.values(t.oddsSportKeys ?? {})),
+    },
+  ];
+
+  let algunaEnJuego = false;
+  for (const { deporte, claves } of config) {
+    const enJuego = claves.filter((k) => activas.has(k));
+    const listadaApagada = claves.filter((k) => todas.has(k) && !activas.has(k));
+    if (enJuego.length > 0) algunaEnJuego = true;
+    const marca = enJuego.length > 0 ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m';
+    console.log(
+      `  ${marca} ${deporte.padEnd(11)} ${enJuego.length} de ${claves.length} configuradas en juego` +
+        (enJuego.length > 0 ? `: ${enJuego.slice(0, 6).join(', ')}${enJuego.length > 6 ? '…' : ''}` : ''),
+    );
+    if (enJuego.length === 0) {
+      // Lo que el proveedor SÍ ofrece de ese deporte y nosotros no sabemos pedir. Es el
+      // dato con el que se arregla: si aquí sale `soccer_epl_2` y nosotros pedimos
+      // `soccer_epl`, el fallo está en config/football.json y se ve de un vistazo.
+      const familia = claves[0]?.split('_')[0] ?? '';
+      const suyas = [...activas].filter((k) => k.startsWith(familia) && !claves.includes(k));
+      if (listadaApagada.length > 0) {
+        info(`fuera de temporada según el proveedor: ${listadaApagada.slice(0, 6).join(', ')}`);
+      }
+      if (suyas.length > 0) {
+        info(`el proveedor SÍ tiene, y nosotros no pedimos: ${suyas.slice(0, 8).join(', ')}`);
+        problem(
+          `${deporte}: ninguna de las claves configuradas está en juego, pero el proveedor ofrece otras`,
+          `# compara los oddsSportKeys de config/ con: ${suyas.slice(0, 4).join(', ')}`,
+        );
+      } else if (listadaApagada.length === 0) {
+        info('el proveedor no lista ninguna competición de este deporte ahora mismo');
+      }
+    }
+  }
+
+  if (!algunaEnJuego) {
+    console.log('');
+    bad('NINGUNA de las competiciones configuradas está en juego según tu clave');
+    info('Con esto, que no salgan cuotas reales es la consecuencia, no el fallo.');
+  }
+}
+
+// ===========================================================================
+section(5, 'Qué hay guardado ahora mismo');
 // ===========================================================================
 if (!fs.existsSync(DB_PATH)) {
   bad(`no existe la base de datos (${DB_PATH})`);
@@ -373,81 +479,6 @@ if (!fs.existsSync(DB_PATH)) {
   }
 }
 
-
-// ===========================================================================
-section(4, 'Qué competiciones ofrece tu clave AHORA MISMO');
-// ===========================================================================
-// EL PASO QUE FALTABA, Y QUE NO CUESTA NADA
-// ===========================================================================
-// «La clave es válida» y «quedan 14.800 peticiones» son dos verdades que conviven
-// perfectamente con «no sale ni un partido», y entre las dos no hay forma de saber por
-// qué. La pregunta que nadie estaba haciendo es la más simple: de las competiciones que
-// esta app sabe pedir, ¿CUÁLES dice tu clave que están en juego?
-//
-// La respuesta ya venía en el cuerpo de la llamada del paso 3, que es gratuita, y se
-// estaba tirando: solo se miraba el código de estado. Así que esto no cuesta ni una
-// petición más — solo leer lo que ya se había descargado.
-//
-// Y separa las dos averías que se veían iguales:
-//
-//   · la liga NO aparece en la lista → al proveedor le cambió la clave del deporte, o
-//     no la cubre tu plan. Se arregla en config/*.json y lo dice esta tabla.
-//   · la liga SÍ aparece y aun así no llegan partidos → el problema está en la
-//     petición de cuotas, no en qué competiciones hay.
-if (key && !NO_NET && listado !== null) {
-  const activas = new Set(listado.filter((s) => s.active).map((s) => s.key));
-  const todas = new Set(listado.map((s) => s.key));
-  console.log(`  el proveedor lista ${listado.length} competiciones, ${activas.size} en juego\n`);
-
-  const config: { deporte: string; claves: string[] }[] = [
-    { deporte: 'Fútbol', claves: footballConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
-    { deporte: 'Baloncesto', claves: basketballConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
-    { deporte: 'Béisbol', claves: baseballConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
-    { deporte: 'NFL', claves: nflConfig.leagues.flatMap((l) => l.oddsSportKeys ?? []) },
-    {
-      deporte: 'Tenis',
-      // El tenis las guarda como { atp: clave, wta: clave } y no como lista.
-      claves: tournamentsConfig.tournaments.flatMap((t) => Object.values(t.oddsSportKeys ?? {})),
-    },
-  ];
-
-  let algunaEnJuego = false;
-  for (const { deporte, claves } of config) {
-    const enJuego = claves.filter((k) => activas.has(k));
-    const listadaApagada = claves.filter((k) => todas.has(k) && !activas.has(k));
-    if (enJuego.length > 0) algunaEnJuego = true;
-    const marca = enJuego.length > 0 ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m';
-    console.log(
-      `  ${marca} ${deporte.padEnd(11)} ${enJuego.length} de ${claves.length} configuradas en juego` +
-        (enJuego.length > 0 ? `: ${enJuego.slice(0, 6).join(', ')}${enJuego.length > 6 ? '…' : ''}` : ''),
-    );
-    if (enJuego.length === 0) {
-      // Lo que el proveedor SÍ ofrece de ese deporte y nosotros no sabemos pedir. Es el
-      // dato con el que se arregla: si aquí sale `soccer_epl_2` y nosotros pedimos
-      // `soccer_epl`, el fallo está en config/football.json y se ve de un vistazo.
-      const familia = claves[0]?.split('_')[0] ?? '';
-      const suyas = [...activas].filter((k) => k.startsWith(familia) && !claves.includes(k));
-      if (listadaApagada.length > 0) {
-        info(`fuera de temporada según el proveedor: ${listadaApagada.slice(0, 6).join(', ')}`);
-      }
-      if (suyas.length > 0) {
-        info(`el proveedor SÍ tiene, y nosotros no pedimos: ${suyas.slice(0, 8).join(', ')}`);
-        problem(
-          `${deporte}: ninguna de las claves configuradas está en juego, pero el proveedor ofrece otras`,
-          `# compara los oddsSportKeys de config/ con: ${suyas.slice(0, 4).join(', ')}`,
-        );
-      } else if (listadaApagada.length === 0) {
-        info('el proveedor no lista ninguna competición de este deporte ahora mismo');
-      }
-    }
-  }
-
-  if (!algunaEnJuego) {
-    console.log('');
-    bad('NINGUNA de las competiciones configuradas está en juego según tu clave');
-    info('Con esto, que no salgan cuotas reales es la consecuencia, no el fallo.');
-  }
-}
 
 // ===========================================================================
 console.log('\n' + '─'.repeat(70));
