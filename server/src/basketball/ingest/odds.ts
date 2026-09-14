@@ -212,12 +212,14 @@ export async function refreshBasketballOdds(manual = false): Promise<BasketballO
       detalle = (e as Error).message;
       process.stderr.write(`  no pude listar deportes de baloncesto: ${(e as Error).message}\n`);
     }
+    const porClave: string[] = [];
     for (const sport of sports) {
       const league = known.get(sport.key);
       if (!league) continue;
       motivo = 'sin_eventos';
       try {
         const events = await fetchLive(sport.key, manual);
+        porClave.push(`${sport.key}=${events.length}`);
         if (events.length) {
           perLeague.set(league, [...(perLeague.get(league) ?? []), ...events]);
           source = 'live';
@@ -234,6 +236,15 @@ export async function refreshBasketballOdds(manual = false): Promise<BasketballO
           process.stderr.write(`  odds de ${sport.key} fallaron: ${(e as Error).message}\n`);
         }
       }
+    }
+    // Ver la nota en football/ingest/odds.ts: `sin_eventos` sin detalle es un
+    // diagnóstico que no se puede seguir. Esto dice a qué se preguntó y qué vino.
+    if (motivo === 'sin_eventos') {
+      detalle =
+        `se preguntó a ${porClave.length} liga(s) y ninguna devolvió partidos con precio: ` +
+        porClave.slice(0, 12).join(', ') +
+        (porClave.length > 12 ? '…' : '') +
+        ` · regiones=${env.oddsRegions}`;
     }
     if (motivo === 'sin_ligas') {
       detalle =

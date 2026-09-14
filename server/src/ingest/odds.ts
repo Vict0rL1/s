@@ -330,6 +330,8 @@ export async function ingestOdds(manual = false): Promise<{
   let total = 0;
   /** El motivo del freno de presupuesto, si alguno de los torneos lo encontró. */
   let frenado: string | null = null;
+  /** Cuántos eventos devolvió cada torneo. Ver la nota en football/ingest/odds.ts. */
+  const porClave: string[] = [];
 
   for (const sport of sports) {
     const tour = tourFromKey(sport.key);
@@ -387,6 +389,7 @@ export async function ingestOdds(manual = false): Promise<{
       total++;
     }
     db.exec('COMMIT');
+    porClave.push(`${sport.key}=${events.length}`);
     if (events.length) process.stdout.write(`  ${sport.key}: ${events.length} events\n`);
   }
 
@@ -396,7 +399,27 @@ export async function ingestOdds(manual = false): Promise<{
     // Si nos frenamos nosotros, la causa es ESA. «No hay partidos con precio» sería
     // describir el mundo cuando el que no preguntó fue este proceso.
     if (frenado) return { source: 'fixture', count, reason: 'presupuesto', detail: frenado };
-    return { source: 'fixture', count, reason: 'sin_eventos' };
+    // Si el proveedor no listó ni un torneo de tenis, la causa NO es «no hay partidos
+    // con precio»: es que no había a quién preguntar. Son cosas distintas y entre
+    // torneos la primera es lo normal, así que confundirlas esconde la de verdad.
+    if (porClave.length === 0) {
+      return {
+        source: 'fixture',
+        count,
+        reason: 'sin_ligas',
+        detail:
+          `el proveedor lista ${sports.length} clave(s) de tenis y ninguna es de un ` +
+          `circuito que sepamos traducir${sports.length ? ': ' + sports.map((s) => s.key).slice(0, 8).join(', ') : ''}`,
+      };
+    }
+    return {
+      source: 'fixture',
+      count,
+      reason: 'sin_eventos',
+      detail:
+        `se preguntó a ${porClave.length} torneo(s) y ninguno devolvió partidos con ` +
+        `precio: ${porClave.slice(0, 12).join(', ')} · regiones=${env.oddsRegions}`,
+    };
   }
   return { source: 'live', count: total, reason: null };
 }

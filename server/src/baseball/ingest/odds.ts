@@ -288,12 +288,22 @@ export async function refreshBaseballOdds(manual = false): Promise<BaseballOddsR
       if (activos.length === 0) {
         detalle = 'el proveedor no lista ninguna liga de béisbol de las configuradas';
       }
+      const porClave: string[] = [];
       for (const s of activos) {
         const league = byKey.get(s.key)!;
         const events = await fetchLive(s.key, manual);
+        porClave.push(`${s.key}=${events.length}`);
         if (events.length === 0) continue;
         perLeague.set(league, [...(perLeague.get(league) ?? []), ...events]);
         source = 'live';
+      }
+    // Ver la nota en football/ingest/odds.ts: `sin_eventos` sin detalle es un
+    // diagnóstico que no se puede seguir. Esto dice a qué se preguntó y qué vino.
+      if (motivo === 'sin_eventos' && porClave.length > 0) {
+        detalle =
+          `se preguntó a ${porClave.length} liga(s) y ninguna devolvió partidos con precio: ` +
+          porClave.slice(0, 12).join(', ') +
+          ` · regiones=${env.oddsRegions}`;
       }
     } catch (e) {
       if (e instanceof OddsBudgetSkip) {

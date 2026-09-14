@@ -121,7 +121,7 @@ for (const d of DEPORTES) {
     );
     if (!vivo && reason) {
       console.log(`${' '.repeat(14)}${C.dim}↳ ${REASON_TEXT[reason]}${C.off}`);
-      if (detail) console.log(`${' '.repeat(16)}${C.dim}${detail.slice(0, 160)}${C.off}`);
+      if (detail) console.log(`${' '.repeat(16)}${C.dim}${detail.slice(0, 240)}${C.off}`);
     }
   } catch (e) {
     // Un deporte que revienta NO puede parar a los otros cuatro: cada uno habla con un

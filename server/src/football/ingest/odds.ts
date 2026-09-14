@@ -224,6 +224,8 @@ export async function refreshFootballOdds(manual = false): Promise<FootballOddsR
       process.stderr.write(`  no pude listar ligas de fútbol: ${(e as Error).message}\n`);
     }
     const reconocidas: string[] = [];
+    /** Cuántos eventos devolvió cada clave. Es EL dato que faltaba: ver abajo. */
+    const porClave: string[] = [];
     for (const s of sports) {
       const league = known.get(s.key);
       if (!league) continue;
@@ -231,6 +233,7 @@ export async function refreshFootballOdds(manual = false): Promise<FootballOddsR
       motivo = 'sin_eventos';
       try {
         const events = await fetchLive(s.key, manual);
+        porClave.push(`${s.key}=${events.length}`);
         if (events.length) {
           perLeague.set(league, [...(perLeague.get(league) ?? []), ...events]);
           source = 'live';
@@ -248,6 +251,26 @@ export async function refreshFootballOdds(manual = false): Promise<FootballOddsR
           process.stderr.write(`  odds de ${s.key} fallaron: ${(e as Error).message}\n`);
         }
       }
+    }
+    // ===========================================================================
+    // `sin_eventos` NO GUARDABA NINGÚN DETALLE, Y ASÍ NO SE PUEDE ARREGLAR NADA
+    // ===========================================================================
+    // `sin_ligas` sí lo hacía —«el proveedor ofrece N y ninguna coincide»— y por eso es
+    // diagnosticable. `sin_eventos` se quedaba en «no hay partidos con precio», sin
+    // decir a QUÉ ligas se preguntó ni qué contestó cada una, así que ante un
+    // «la Premier está en temporada y esto dice que no hay nada» no había ni un dato
+    // con el que seguir: ni siquiera se sabía si a la Premier se le había preguntado.
+    //
+    // Con esto, la línea dice exactamente qué se pidió y qué vino: si aparece
+    // `soccer_epl=0` en septiembre, el problema está en el proveedor o en la petición;
+    // si la Premier no sale en la lista, es que no se le preguntó y el problema es
+    // nuestro. Son dos averías distintas que antes se veían igual.
+    if (motivo === 'sin_eventos') {
+      detalle =
+        `se preguntó a ${porClave.length} liga(s) y ninguna devolvió partidos con precio: ` +
+        porClave.slice(0, 12).join(', ') +
+        (porClave.length > 12 ? '…' : '') +
+        ` · regiones=${env.oddsRegions}`;
     }
     if (motivo === 'sin_ligas') {
       // EL DATO CON EL QUE SE ARREGLA: qué ofreció el proveedor frente a lo que sabemos
