@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import type { Fundamentals, History, HistoryRange, Profile, Quote } from '../api/types'
 import { FundamentalsGrid } from '../components/FundamentalsGrid'
+import { CompanyLogo } from '../components/CompanyLogo'
 import { PriceChart } from '../components/PriceChart'
 import { SourceBadge } from '../components/SourceBadge'
 import { DeepDiveSection } from '../components/ticker/DeepDiveSection'
@@ -143,7 +144,9 @@ export function TickerPage() {
         <>
           <header className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div>
+              <div className="flex items-start gap-3">
+                <CompanyLogo symbol={quote.symbol} size="lg" className="mt-1" />
+                <div>
                 <h1 className="text-xl font-semibold text-slate-900">
                   {data?.profile?.name ?? quote.symbol}
                   <span className="ml-2 text-sm font-normal text-slate-400">
@@ -167,6 +170,7 @@ export function TickerPage() {
                     {quote.change !== null && quote.change > 0 ? '+' : ''}
                     {fmtNumber(quote.change)} ({fmtChangePct(quote.change_pct)})
                   </span>
+                </div>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1 text-right">

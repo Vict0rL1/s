@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { CompanyLogo } from '../components/CompanyLogo'
 import { api } from '../api/client'
 import type {
   Estres,
@@ -311,7 +312,11 @@ function PortfolioTab() {
                     return (
                       <tr key={p.id} className="border-b border-slate-100">
                         <td className="px-2 py-1.5">
-                          <Link to={`/ticker/${p.symbol}`} className="font-medium hover:underline">
+                          <Link
+                            to={`/ticker/${p.symbol}`}
+                            className="flex items-center gap-2 font-medium hover:underline"
+                          >
+                            <CompanyLogo symbol={p.symbol} size="sm" />
                             {p.symbol}
                           </Link>
                         </td>
@@ -435,13 +440,16 @@ function WatchlistTab() {
               key={item.id}
               className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3"
             >
-              <div>
+              <div className="flex items-center gap-2.5">
+                <CompanyLogo symbol={item.symbol} size="md" />
+                <div>
                 <Link to={`/ticker/${item.symbol}`} className="font-medium hover:underline">
                   {item.symbol}
                 </Link>
                 <span className="ml-2 text-xs text-slate-400">
                   {item.name ?? ''} {item.sector ? `· ${item.sector}` : ''}
                 </span>
+                </div>
               </div>
               <div className="flex items-center gap-4">
                 {item.quote ? (

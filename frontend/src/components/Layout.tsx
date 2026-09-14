@@ -40,7 +40,25 @@ export function Layout() {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200 bg-white px-3 py-5">
-        <div className="mb-6 px-3">
+        <div className="mb-6 flex items-start gap-2.5 px-3">
+          {/* El mismo dibujo que el favicon, en línea y no como <img>: así hereda
+              el color del tema y no cuesta una petición. */}
+          <svg
+            viewBox="0 0 32 32"
+            aria-hidden="true"
+            className="mt-0.5 h-7 w-7 shrink-0 rounded-md bg-slate-900"
+          >
+            <polyline
+              points="5,22 10,17 14,19 19,11 23,14 27,7"
+              fill="none"
+              stroke="#38bdf8"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <circle cx="27" cy="7" r="2.6" fill="#38bdf8" />
+          </svg>
+          <div>
           <div className="text-sm font-semibold tracking-tight text-slate-900">
             Análisis Bursátil
           </div>
@@ -48,6 +66,7 @@ export function Layout() {
               de las dos mentía. La app sí da señales; lo que no hace es
               predecir. */}
           <div className="text-[11px] text-slate-400">reglas, no predicciones</div>
+          </div>
         </div>
 
         <nav className="flex flex-col gap-5">

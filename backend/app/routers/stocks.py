@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 
 from app.analysis.fundamentals import (
     derive_ratio_series,
@@ -13,10 +15,12 @@ from app.analysis.fundamentals import (
     total_debt,
 )
 from app.analysis.health import health_snapshot
+from app.analysis import logos
 from app.analysis.indicators import macd, rsi, sma
 from app.analysis.risk import annualized_volatility, beta, daily_returns, max_drawdown
 from app.analysis.valuation import dcf, scenario_set, sensitivity_grid
 from app.cache.cache import MarketDataService
+from app.config import settings
 from app.deps import get_service
 from app.providers.base import DataNotFoundError
 from app.providers.router import AllProvidersFailedError
@@ -77,6 +81,66 @@ def get_profile(symbol: str, service: MarketDataService = Depends(get_service)):
 @router.get("/{symbol}/fundamentals", response_model=FundamentalsResponse)
 def get_fundamentals(symbol: str, service: MarketDataService = Depends(get_service)):
     return _fetch(service, "fundamentals", symbol=_validate_symbol(symbol))
+
+
+def _directorio_de_logos() -> Path:
+    """Junto a la base de datos, que es donde ya vive lo que es tuyo y local.
+
+    `backend/data/` está en .gitignore, así que los logos descargados no acaban
+    en el repositorio por accidente.
+    """
+    return Path(settings.database_path).parent / "logos"
+
+
+@router.get("/{symbol}/logo")
+def get_logo(symbol: str, service: MarketDataService = Depends(get_service)):
+    """El logo de la empresa, servido desde TU disco.
+
+    El backend lo descarga una vez y lo guarda; el navegador nunca habla con un
+    tercero. Un 404 aquí es la respuesta normal para la mayoría de las empresas
+    pequeñas —no tienen logo en ninguna fuente gratuita— y la UI pinta un
+    monograma con las iniciales en vez de dejar un hueco que parece un error.
+    """
+    symbol = _validate_symbol(symbol)
+    directorio = _directorio_de_logos()
+
+    # 1. ¿Ya está en disco? Un logo no cambia; esto no caduca a propósito.
+    encontrado = logos.buscar_en_disco(directorio, symbol)
+    if encontrado:
+        ruta, mime = encontrado
+        return FileResponse(
+            ruta,
+            media_type=mime,
+            headers={"Cache-Control": "public, max-age=604800"},
+        )
+
+    # 2. La URL sale del perfil, que ya está cacheado 24 h: sin llamada extra.
+    try:
+        perfil = service.get("profile", symbol=symbol)
+    except (DataNotFoundError, AllProvidersFailedError) as exc:
+        raise HTTPException(status_code=404, detail=f"Sin perfil para {symbol}: {exc}") from exc
+
+    url = perfil.get("logo_url")
+    if not url:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"{symbol} no tiene logo en la fuente. Es lo normal fuera de las "
+                "grandes: la UI pinta las iniciales."
+            ),
+        )
+
+    try:
+        datos, mime, ext = logos.descargar(url)
+    except logos.LogoRechazado as exc:
+        # El motivo viaja al cliente a propósito: «no se ve el logo» sin más es
+        # imposible de diagnosticar, y aquí las causas son muy distintas entre sí.
+        raise HTTPException(status_code=404, detail=f"Logo no utilizable: {exc}") from exc
+
+    ruta = logos.guardar(directorio, symbol, datos, ext)
+    return FileResponse(
+        ruta, media_type=mime, headers={"Cache-Control": "public, max-age=604800"}
+    )
 
 
 @router.get("/{symbol}/history", response_model=HistoryResponse)

@@ -757,6 +757,53 @@ alguien la va a buscar. Lo que no se hizo fue rellenar el hueco del 200 en la
 paleta: `border-amber-200` se usa en catorce sitios como borde visible de las
 cajas de aviso, y oscurecerlo habría roto los catorce para arreglar dos.
 
+## Logos e icono: imágenes sin abrirle la puerta a nadie
+
+Logo de cada empresa junto a su tícker en la ficha, la cartera, la watchlist y
+la lista de «Hoy», más un icono propio de la app (que no tenía: `index.html` no
+declaraba ninguno y el navegador pedía un `/favicon.ico` que daba 404).
+
+### El logo pasa por tu backend, no por tu navegador
+
+`<img src="https://cdn-de-un-tercero/AAPL.png">` habría sido una línea. El
+precio de esa línea es que **tu navegador** le pide una imagen a un tercero cada
+vez que abres un valor, con tu IP y tu referer, y ese tercero acaba con la lista
+de qué acciones miras y cuándo. Toda la app está montada sobre lo contrario —el
+navegador solo habla con `localhost`— y un adorno no es razón para romperlo.
+
+Así que `GET /api/stocks/{symbol}/logo` lo descarga una vez, lo guarda en
+`backend/data/logos/` (que ya está en .gitignore) y lo sirve. La red externa la
+toca el servidor. La URL sale del perfil de Finnhub que **ya se pedía**: el
+campo `logo` estaba en la respuesta y se tiraba, así que capturarlo no cuesta
+ninguna llamada.
+
+### Descargar una URL que te da un tercero es SSRF si no se acota
+
+Esa URL es entrada no confiable y quien la descarga es un proceso dentro de tu
+red. Sin límites, un `logo` apuntando a `http://169.254.169.254/` o a tu propio
+`localhost:8000` convertiría el endpoint en una forma de leer desde dentro.
+Cuatro defensas, en `backend/app/analysis/logos.py`, todas con test:
+
+| Defensa | Por qué |
+|---|---|
+| **Solo https** | `file://` sería leer ficheros del servidor |
+| **Nada de IPs privadas** | se resuelve el nombre y se rechazan loopback, enlace local, privadas y reservadas — y se exige que **todas** las direcciones del nombre sean públicas, no solo la primera |
+| **Sin seguir redirecciones** | el destino de un 302 no pasa por ninguna comprobación |
+| **Tamaño y tipo reales** | se corta por lo que LLEGA (un `Content-Length` mentido es gratis) y el formato se decide por los bytes de cabecera, no por el `Content-Type` |
+
+Un detalle del último: `RIFF` también es WAV y AVI, así que para WebP hay que
+mirar el byte 8. Hay un test con un WAV disfrazado.
+
+### Cuando no hay logo, hay monograma
+
+Es el caso NORMAL fuera de las grandes: la mayoría de las empresas no tienen
+logo en ninguna fuente gratuita. Un hueco en blanco en una tabla se lee como
+«esto está roto», no como «no hay imagen», así que se pinta un cuadro con las
+dos iniciales. El color sale del propio tícker de forma determinista —AAPL es
+siempre del mismo color— porque así funciona como identificador de un vistazo;
+uno aleatorio sería solo ruido. Solo tonos 100/800, por la restricción de
+paleta documentada en `index.css`.
+
 ## Señales del mercado de opciones, al lado del fundamental
 
 El mercado de opciones cotiza algo que el fundamental no cotiza: cuánto se

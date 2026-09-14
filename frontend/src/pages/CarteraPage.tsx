@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { CompanyLogo } from '../components/CompanyLogo'
 import type {
   CaracteristicasDeCartera,
   ConcentracionReal,
@@ -237,6 +238,9 @@ function LookThrough({ lt }: { lt: LookThroughEtf }) {
             return (
               <tr key={e.symbol} className={duplicada ? 'bg-amber-50' : undefined}>
                 <td className="py-1.5 font-medium text-slate-800">
+                  <span className="mr-2 inline-block align-middle">
+                    <CompanyLogo symbol={e.symbol} size="sm" />
+                  </span>
                   {e.symbol}
                   {duplicada && (
                     <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">

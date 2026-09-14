@@ -75,6 +75,7 @@ class ProfileResponse(Sourced):
     country: str | None = None
     ipo: str | None = None
     website: str | None = None
+    logo_url: str | None = None
 
 
 class FundamentalsResponse(Sourced):

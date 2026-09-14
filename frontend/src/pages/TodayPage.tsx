@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import { CompanyLogo } from '../components/CompanyLogo'
 import type {
   DailySignal,
   Conviction,
@@ -620,10 +621,13 @@ function SignalRow({
           {signal.rank}
         </span>
 
-        <span className="w-40 shrink-0">
-          <span className="font-medium text-slate-900">{signal.symbol}</span>
-          <span className="block truncate text-xs text-slate-400">
-            {signal.context.name ?? signal.context.sector_name ?? '—'}
+        <span className="flex w-40 shrink-0 items-center gap-2">
+          <CompanyLogo symbol={signal.symbol} size="sm" />
+          <span className="min-w-0">
+            <span className="font-medium text-slate-900">{signal.symbol}</span>
+            <span className="block truncate text-xs text-slate-400">
+              {signal.context.name ?? signal.context.sector_name ?? '—'}
+            </span>
           </span>
         </span>
 

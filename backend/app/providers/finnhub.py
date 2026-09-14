@@ -115,6 +115,10 @@ class FinnhubProvider(DataProvider):
             "country": data.get("country"),
             "ipo": data.get("ipo"),
             "website": data.get("weburl"),
+            # Finnhub devuelve la URL del logo en el mismo perfil que ya se
+            # pedía: capturarla no cuesta una llamada. Si el campo no viniera,
+            # queda None y la UI pinta el monograma — nada se rompe.
+            "logo_url": data.get("logo") or None,
             "as_of": iso_utc(),
         }
 
