@@ -92,10 +92,21 @@ function avisoDeCuotas(estado: { nombre: string; vivo: boolean; prefijo: SportPr
   // Agrupadas por causa, porque cada una se arregla de una forma distinta y cinco
   // líneas iguales no se leen.
   const porCausa = new Map<string, string[]>();
+  // El DETALLE, además de la causa. La causa dice qué tipo de problema es; el detalle
+  // dice cuál en concreto —a qué ligas se preguntó y qué contestó cada una— y es lo
+  // único con lo que se puede seguir cuando la frase genérica no cuadra con la
+  // realidad («la Premier está en temporada y esto dice que no hay partidos»).
+  //
+  // Va aquí y no solo en `npm run odds` porque `npm run dev` es una forma
+  // perfectamente legítima de arrancar, y era la que estaba usando quien tenía el
+  // problema: pedirle la salida de otro comando para ver un dato que este ya conoce es
+  // mandarle a repetir trabajo que la app puede ahorrarle.
+  const detallePorCausa = new Map<string, string>();
   for (const s of demo) {
-    const { reason } = readOddsReason(s.prefijo);
+    const { reason, detail } = readOddsReason(s.prefijo);
     const k = reason ?? 'sin_causa';
     porCausa.set(k, [...(porCausa.get(k) ?? []), s.nombre]);
+    if (detail && !detallePorCausa.has(k)) detallePorCausa.set(k, detail);
   }
   for (const [causa, nombres] of porCausa) {
     L.push('');
@@ -151,6 +162,14 @@ function avisoDeCuotas(estado: { nombre: string; vivo: boolean; prefijo: SportPr
         break;
       default:
         L.push('    Sin causa registrada.  npm run doctor  lo desglosa sin gastar cuota.');
+    }
+    const d = detallePorCausa.get(causa);
+    // Se parte a lo ancho de la caja en vez de cortarlo: la lista de ligas consultadas
+    // es justo lo que hay que leer entero, y truncarla a una línea deja fuera las del
+    // final, que son las que suelen faltar.
+    if (d) {
+      L.push('');
+      for (const trozo of d.match(/.{1,68}(\s|$)/g) ?? [d]) L.push(`      ${trozo.trim()}`);
     }
   }
 
