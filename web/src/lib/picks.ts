@@ -171,7 +171,14 @@ export function realMarket(source: string | undefined): boolean {
   return source !== 'fixture';
 }
 
-function devig2(oddsA: number, oddsB: number): [number, number] {
+/**
+ * Quita el margen de la casa de un mercado de DOS salidas.
+ *
+ * Exportada para que `slate.ts` use exactamente la misma aritmética: si la tabla de
+ * partidos y la de mercados quitaran el margen de formas distintas, enseñarían dos
+ * probabilidades de mercado diferentes para el mismo partido en la misma pantalla.
+ */
+export function devig2(oddsA: number, oddsB: number): [number, number] {
   const a = 1 / oddsA;
   const b = 1 / oddsB;
   const s = a + b;

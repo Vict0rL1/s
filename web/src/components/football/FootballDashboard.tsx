@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { reportClientLatency } from '../../lib/liveOdds';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate, LeagueFlag, DemoOddsNote} from '../ui';
+  EmptySlate, LeagueFlag, DemoOddsNote, SlateTable} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, footballPicks } from '../../lib/picks';
+import { footballSlate } from '../../lib/slate';
 import { useStake } from '../../lib/useStake';
 import {
   fbApi,
@@ -160,6 +161,7 @@ export default function FootballDashboard() {
   const picks = useMemo(() => rankPicks(footballPicks(fixtures)), [fixtures]);
   const [stake, setStake] = useStake();
   // Every price on screen invented by this app rather than fetched — see picks.ts.
+  const slate = useMemo(() => footballSlate(fixtures), [fixtures]);
   const demoOdds = fixtures.length > 0 && fixtures.every((r) => r.fixture.source === 'fixture');
   // A day that no longer exists after switching league would filter everything
   // away and look like "no fixtures", so the choice is dropped rather than kept.
@@ -277,6 +279,8 @@ export default function FootballDashboard() {
           comando="npm run odds"
         />
       )}
+
+      <SlateTable rows={slate} demoOdds={demoOdds} />
 
       {loading ? (
         <SkeletonList />

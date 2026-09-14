@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate, LeagueFlag, DemoOddsNote} from '../ui';
+  EmptySlate, LeagueFlag, DemoOddsNote, SlateTable} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, basketballPicks } from '../../lib/picks';
+import { basketballSlate } from '../../lib/slate';
 import { useStake } from '../../lib/useStake';
 import { dayChipLabel, groupByDay } from '../../lib/format';
 import {
@@ -110,6 +111,7 @@ export default function BasketballDashboard() {
   const picks = useMemo(() => rankPicks(basketballPicks(games)), [games]);
   const [stake, setStake] = useStake();
   // Every price on screen invented by this app rather than fetched — see picks.ts.
+  const slate = useMemo(() => basketballSlate(games), [games]);
   const demoOdds = games.length > 0 && games.every((r) => r.game.source === 'fixture');
   // A day that no longer exists after switching league would filter everything
   // away and look like "no games", so the choice is dropped rather than kept.
@@ -158,6 +160,8 @@ export default function BasketballDashboard() {
           comando="npm run odds"
         />
       )}
+
+      <SlateTable rows={slate} demoOdds={demoOdds} />
 
       {error && (
         <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[15px] text-rose-200">

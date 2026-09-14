@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   pillClass, SkeletonList, TeamCrest, DayFilter, DayHeading, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate, LeagueFlag, NflNoLineNote} from '../ui';
+  EmptySlate, LeagueFlag, NflNoLineNote, SlateTable} from '../ui';
 import { staleLabel, staleness } from '../../lib/staleness';
 import { CAVEATS, rankPicks, nflPicks } from '../../lib/picks';
+import { nflSlate } from '../../lib/slate';
 import { useStake } from '../../lib/useStake';
 import { dayChipLabel, groupByDay } from '../../lib/format';
 import {
@@ -115,6 +116,7 @@ export default function NflDashboard() {
   );
   const [stake, setStake] = useStake();
   // Every price on screen invented by this app rather than fetched — see picks.ts.
+  const slate = useMemo(() => nflSlate(games), [games]);
   const demoOdds = games.length > 0 && games.every((r) => r.game.source === 'fixture');
   // A day that no longer exists after switching league would filter everything
   // away and look like "no games", so the choice is dropped rather than kept.
@@ -172,6 +174,12 @@ export default function NflDashboard() {
         detail={meta?.oddsFallbackDetail}
         hasKey={meta?.hasOddsKey ?? false}
       />
+
+      {/* La NFL es la razón por la que esta tabla existe: es el único deporte que no se
+          inventa cuotas, así que `PicksPanel` se retira entera cuando no hay línea y la
+          pestaña se quedaba sin ninguna vista de conjunto. `demoOdds` aquí es siempre
+          falso —nunca hay precios inventados— pero se pasa igual por coherencia. */}
+      <SlateTable rows={slate} demoOdds={demoOdds} />
 
       {error && (
         <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-[15px] text-rose-200">

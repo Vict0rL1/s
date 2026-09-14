@@ -12,10 +12,11 @@ import TrackRecordPanel from './TrackRecordPanel';
 import TennisEloPanel from './TennisEloPanel';
 import {
   DayFilter, DayHeading, pillClass, StaleHistoryWarning, PicksPanel, DashboardHeader,
-  EmptySlate,
+  EmptySlate, SlateTable,
 } from './ui';
 import { staleLabel, staleness } from '../lib/staleness';
 import { CAVEATS, rankPicks, tennisPicks } from '../lib/picks';
+import { tennisSlate } from '../lib/slate';
 import { useStake } from '../lib/useStake';
 import { dayChipLabel, groupByDay } from '../lib/format';
 
@@ -85,6 +86,7 @@ export default function TennisDashboard() {
   // Ranked markets, from the rows already fetched. Recomputed only when those
   // change: it is pure arithmetic over what is on screen, no extra request.
   const picks = useMemo(() => rankPicks(tennisPicks(matches)), [matches]);
+  const slate = useMemo(() => tennisSlate(matches), [matches]);
   const [stake, setStake] = useStake();
   // Every price on screen invented by this app rather than fetched — see picks.ts.
   const demoOdds = matches.length > 0 && matches.every((r) => r.match.source === 'fixture');
@@ -150,6 +152,8 @@ export default function TennisDashboard() {
       {/* The ranked-markets panel. Built from the SAME rows the cards below
           render, so the two can never disagree about a number. */}
       <PicksPanel {...picks} caveat={CAVEATS.tennis} demoOdds={demoOdds} stake={stake} onStakeChange={setStake} />
+
+      <SlateTable rows={slate} demoOdds={demoOdds} />
 
       {error && (
         <div className="mb-4 rounded-lg border border-rose-800 bg-rose-950/50 p-3 text-[16px] text-rose-300">

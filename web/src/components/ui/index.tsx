@@ -16,6 +16,7 @@ import {
   UNKNOWN_COUNTRY,
 } from '../../lib/countries';
 import { relativeTime, shortTime } from '../../lib/format';
+import type { SlateRow } from '../../lib/slate';
 
 // ---------------------------------------------------------------------------
 // Surfaces
@@ -1610,5 +1611,145 @@ export function NflNoLineNote({
         </>
       )}
     </p>
+  );
+}
+
+/**
+ * LA TABLA DE PARTIDOS: qué se juega y qué dice el modelo, haya precios o no.
+ * ===========================================================================
+ * `PicksPanel` es una tabla de MERCADOS ordenada por discrepancia con el precio, y se
+ * retira entera cuando no hay ninguna discrepancia que enseñar. En la NFL eso pasa
+ * siempre que las casas no han publicado línea, porque es el único deporte que no se
+ * inventa cuotas: la pestaña se quedaba sin vista de conjunto y parecía que faltaba algo.
+ *
+ * Esta contesta otra pregunta, y una que no depende de las cuotas: «¿qué hay y a quién
+ * ve favorito el modelo?». Por eso las dos columnas de mercado son opcionales por
+ * diseño. Cuando no hay precio dicen «—», que es una respuesta; una tabla que no aparece
+ * no lo es.
+ *
+ * Va DEBAJO del panel de discrepancias y ENCIMA de las tarjetas: resume lo que las
+ * tarjetas detallan, y quien quiera el desglose de un partido lo abre ahí.
+ */
+export function SlateTable({
+  rows,
+  demoOdds = false,
+  maxRows = 12,
+}: {
+  rows: SlateRow[];
+  /** Los precios existen pero se los ha inventado la app: la columna no dice nada. */
+  demoOdds?: boolean;
+  maxRows?: number;
+}) {
+  const [open, setOpen] = useState(true);
+  const [todas, setTodas] = useState(false);
+  if (rows.length === 0) return null;
+
+  const orden = [...rows].sort((a, b) => a.when.localeCompare(b.when));
+  const vistas = todas ? orden : orden.slice(0, maxRows);
+  const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
+  // Un mercado inventado por la app NO es un mercado. Se trata igual que no tener
+  // ninguno en vez de enseñar un número que solo puede confundir.
+  const hayMercado = !demoOdds && orden.some((r) => r.marketProb != null);
+
+  return (
+    <section className="mb-6 overflow-hidden rounded-xl border border-white/[0.09] bg-white/[0.02]">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-white/[0.03]"
+      >
+        <span className="min-w-0">
+          <span className="block text-[16px] font-semibold text-[#e8eaed]">Los partidos</span>
+          <span className="block text-[13px] text-[#7b828d]">
+            {rows.length === 1 ? '1 partido' : `${rows.length} partidos`} · a quién ve favorito el
+            modelo
+            {hayMercado ? ' y qué dice el mercado' : ''}
+          </span>
+        </span>
+        <span aria-hidden className="shrink-0 text-[#7b828d]">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-white/[0.07]">
+          {/* El scroll horizontal vive en la tabla, nunca en la página: una fila ancha no
+              puede empujar el resto de la pantalla de lado en un móvil. */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-[14px]">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-[#7b828d]">
+                  <th className="px-4 py-2 font-medium">Cuándo</th>
+                  <th className="px-4 py-2 font-medium">Partido</th>
+                  <th className="px-4 py-2 font-medium">Favorito del modelo</th>
+                  <th className="px-4 py-2 text-right font-medium">Mercado</th>
+                  <th className="px-4 py-2 text-right font-medium">Cuota</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vistas.map((r) => {
+                  const dif = r.marketProb != null ? r.pickProb - r.marketProb : null;
+                  return (
+                    <tr key={r.id} className="border-t border-white/[0.05]">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-[#9aa1ac]">
+                        {new Date(r.when).toLocaleString('es', {
+                          day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </td>
+                      <td className="px-4 py-2.5 text-[#c3c9d1]">{r.match}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="text-[#e8eaed]">{r.pick}</span>{' '}
+                        <span className="font-semibold text-[#e8eaed]">{pct(r.pickProb)}</span>
+                        {r.drawProb != null && (
+                          <span className="block text-[12px] text-[#7b828d]">
+                            empate {pct(r.drawProb)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right text-[#9aa1ac]">
+                        {r.marketProb == null ? (
+                          <span className="text-[#5c636e]">—</span>
+                        ) : (
+                          <>
+                            {pct(r.marketProb)}
+                            {dif != null && Math.abs(dif) >= 0.04 && (
+                              <span className="block text-[12px] text-[#7b828d]">
+                                {dif > 0 ? '+' : ''}
+                                {(dif * 100).toFixed(1)} pp
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right text-[#9aa1ac]">
+                        {r.odds == null ? <span className="text-[#5c636e]">—</span> : r.odds.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {orden.length > maxRows && (
+            <button
+              onClick={() => setTodas(!todas)}
+              className="w-full border-t border-white/[0.05] px-4 py-2.5 text-[13px] text-[#9aa1ac] transition hover:bg-white/[0.03]"
+            >
+              {todas ? 'Ver solo los próximos' : `Ver los ${orden.length} partidos`}
+            </button>
+          )}
+
+          {/* Por qué las dos últimas columnas están vacías. Sin esta línea, un guion en
+              todas las filas se lee como que la app no ha cargado algo. */}
+          {!hayMercado && (
+            <p className="border-t border-white/[0.05] px-4 py-2.5 text-[13px] leading-relaxed text-[#7b828d]">
+              Sin columna de mercado:{' '}
+              {demoOdds
+                ? 'las cuotas que hay se las ha inventado la app, así que compararlas con el modelo sería compararlo consigo mismo.'
+                : 'las casas no han publicado precio para estos partidos. El calendario y la probabilidad del modelo no dependen de eso.'}
+            </p>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
