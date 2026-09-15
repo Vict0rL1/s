@@ -108,6 +108,7 @@ import { decideBook, type BookCandidate } from '../staking/book.ts';
 import { halfMarkets, HALF_NU } from '../football/halves.ts';
 import { getHalfParams } from '../football/halvesRepo.ts';
 import { getTeamCounts } from '../football/teamCounts.ts';
+import { bancoActual, BANCO_INICIAL } from '../paper/bankroll.ts';
 import {
   minutesDistribution,
   propDistribution,
@@ -1136,6 +1137,140 @@ function auditExperimentRegistry(): void {
 //
 // Cada puerta se prueba haciéndola disparar. Una puerta que nunca se ha visto cerrar
 // no se sabe si cierra.
+/**
+ * El banco de papel del modelo.
+ *
+ * ===========================================================================
+ * LAS CUATRO FORMAS QUE TIENE DE MENTIR SIN QUE SE NOTE
+ * ===========================================================================
+ * Este experimento produce UN número —cuánto ha ganado el modelo— y ese número es de los
+ * que se citan. Las formas de que salga bonito por accidente no se ven mirando la
+ * pantalla, porque una tabla de apuestas con beneficio positivo tiene el mismo aspecto
+ * esté bien o mal calculada:
+ *
+ *   1. apostar sobre una cuota que se inventó la app. El modelo encontraría «valor» en
+ *      su propio precio y el banco subiría por construcción;
+ *   2. apostar dos veces al mismo partido, que es lo que pasaría si cada ciclo de
+ *      refresco volviera a colocar las mismas candidatas;
+ *   3. un beneficio que no cuadre con importe × (cuota − 1), por ejemplo por liquidar
+ *      con la cuota de hoy en vez de con la de cuando se apostó;
+ *   4. un banco que no sea exactamente el inicial más la suma de lo liquidado.
+ *
+ * Las cuatro se comprueban aquí en vez de confiar en que el código de al lado esté bien.
+ * La 1 y la 2 tienen además una defensa en la propia base —`event_id` es UNIQUE— y eso
+ * NO hace redundante la comprobación: una restricción protege de una escritura nueva y
+ * esto protege también de las filas que ya estén guardadas de una versión anterior.
+ */
+function auditPaperBankroll(): void {
+  console.log('\n▸ El banco de papel del modelo');
+  const db = getDb();
+  const bets = db.prepare('SELECT * FROM paper_bets').all() as unknown as {
+    id: number; sport: string; event_id: string; selection: string;
+    p_model: number; p_market: number; odds: number; stake: number;
+    bankroll_at: number; status: string; profit: number | null;
+  }[];
+
+  console.log(`  ${bets.length} apuesta(s) registradas`);
+  if (bets.length === 0) {
+    // Cero apuestas es el estado normal sin cuotas reales, no un fallo. Lo que sí sería
+    // un fallo es que la tabla no existiera, y llegar hasta aquí ya lo descarta.
+    check('banco de papel: la tabla existe y se puede leer', true);
+    return;
+  }
+
+  // --- 1. Ninguna apuesta sobre una cuota inventada ---
+  // Se comprueba contra las tablas de próximos: si la fila que originó la apuesta sigue
+  // ahí marcada como 'fixture', la apuesta no debería existir.
+  const tablas = ['upcoming_matches', 'fb_upcoming', 'bb_upcoming', 'bsb_upcoming', 'naf_upcoming'];
+  let sobreDemo = 0;
+  for (const t of tablas) {
+    try {
+      const r = db
+        .prepare(
+          `SELECT COUNT(*) c FROM paper_bets b JOIN ${t} u ON u.id = b.event_id WHERE u.source = 'fixture'`,
+        )
+        .get() as { c: number };
+      sobreDemo += r.c;
+    } catch {
+      // Una tabla que no existe todavía no puede contener filas que contradigan nada.
+    }
+  }
+  check(
+    'banco de papel: ninguna apuesta sobre cuotas de demostración',
+    sobreDemo === 0,
+    `${sobreDemo} apuesta(s) sobre precios que se inventó la app`,
+  );
+
+  // --- 2. Un partido, una apuesta ---
+  const ids = new Set(bets.map((b) => b.event_id));
+  check(
+    'banco de papel: un partido, una apuesta',
+    ids.size === bets.length,
+    `${bets.length} apuestas para ${ids.size} partidos distintos`,
+  );
+
+  // --- 3. El beneficio cuadra con el importe y la cuota GUARDADAS ---
+  let malCalculadas = 0;
+  for (const b of bets) {
+    const esperado =
+      b.status === 'won'
+        ? b.stake * (b.odds - 1)
+        : b.status === 'lost'
+          ? -b.stake
+          : b.status === 'void'
+            ? 0
+            : null;
+    if (esperado === null) continue;
+    if (Math.abs((b.profit ?? 0) - esperado) > 0.011) malCalculadas++;
+  }
+  check(
+    'banco de papel: el beneficio cuadra con importe y cuota',
+    malCalculadas === 0,
+    `${malCalculadas} apuesta(s) con un beneficio que no sale de sus propios números`,
+  );
+
+  // --- 4. El banco es exactamente el inicial más lo liquidado ---
+  const suma = bets
+    .filter((b) => b.status !== 'pending')
+    .reduce((s, b) => s + (b.profit ?? 0), 0);
+  check(
+    'banco de papel: banco = inicial + suma de lo liquidado',
+    Math.abs(bancoActual() - (BANCO_INICIAL + suma)) < 0.011,
+    `${bancoActual().toFixed(2)} contra ${(BANCO_INICIAL + suma).toFixed(2)}`,
+  );
+
+  // --- 5. Nada dimensionado por encima del tope por evento ---
+  // El tope es del 2 % del banco DE ENTONCES, no del de ahora: por eso se guarda
+  // `bankroll_at`. Comparar con el banco actual daría falsos positivos en cuanto el
+  // banco bajara.
+  const pasados = bets.filter((b) => b.stake > b.bankroll_at * DEFAULT_CONFIG.maxPerEvent + 0.011);
+  check(
+    'banco de papel: ninguna apuesta pasa el tope por evento',
+    pasados.length === 0,
+    `${pasados.length} por encima del ${(DEFAULT_CONFIG.maxPerEvent * 100).toFixed(0)} % del banco de ese momento`,
+  );
+
+  // --- 6. Se apostó donde el modelo veía ventaja ---
+  // Una apuesta con p_model <= p_market es una apuesta contra la propia opinión del
+  // modelo. No la puede producir la política, así que si aparece es que la fila se
+  // escribió con los lados cambiados — un fallo que en la pantalla se ve perfecto.
+  const contraSiMismo = bets.filter((b) => b.p_model <= b.p_market);
+  check(
+    'banco de papel: ninguna apuesta contra la opinión del propio modelo',
+    contraSiMismo.length === 0,
+    `${contraSiMismo.length} con la probabilidad del modelo por debajo de la del mercado`,
+  );
+
+  const liq = bets.filter((b) => b.status !== 'pending');
+  if (liq.length > 0) {
+    const arriesgado = liq.reduce((s, b) => s + b.stake, 0);
+    console.log(
+      `  ${liq.length} liquidadas · ${(suma >= 0 ? '+' : '')}${suma.toFixed(2)} sobre ` +
+        `${arriesgado.toFixed(2)} arriesgados · banco ${bancoActual().toFixed(2)}`,
+    );
+  }
+}
+
 function auditStaking(): void {
   console.log('\n▸ Módulo de riesgo (Kelly, topes y límites)');
   const cfg = DEFAULT_CONFIG;
@@ -3452,6 +3587,7 @@ function main(): void {
   auditFootballTxtParser();
   auditExperimentRegistry();
   auditStaking();
+  auditPaperBankroll();
   auditDixonColes();
   auditPostprocess();
   auditThinMarkets();
