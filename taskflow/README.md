@@ -3,9 +3,9 @@
 App personal de productividad de Victor: agenda del día, tareas por área, notas
 rápidas y rutinas. Un solo usuario. Next.js + Supabase, desplegada en Vercel.
 
-**Estado: Fase 1 construida.** Paridad con `reference/cumbre.html`, pero con
-Postgres y login en vez de `localStorage`. Falta conectarla a tu proyecto de
-Supabase y desplegarla — los pasos están abajo.
+**Estado: fases 1 y 2 construidas.** La app completa con Postgres y login, más
+el sync de Canvas. Falta conectarla a tu proyecto de Supabase y desplegarla —
+los pasos están abajo.
 
 - `PLAN.md` — el plan completo: stack, las 4 fases, Canvas y Google Calendar
 - `CLAUDE.md` — las reglas del proyecto
@@ -49,7 +49,28 @@ son de fases posteriores y pueden quedarse vacías.
 
 `.env.local` está en `.gitignore` desde el primer commit y nunca se commitea.
 
-### 4. Correr
+### 4. Canvas (fase 2)
+
+Opcional para arrancar; sin esto la app funciona, sólo que los deadlines los
+capturas a mano o los importas por `.ics`.
+
+1. En Canvas: **Account → Settings → + New Access Token**. Ponle fecha de
+   expiración y copia el token — sólo se muestra una vez.
+2. En `.env.local`:
+
+   ```
+   CANVAS_BASE_URL=https://canvas.sfu.ca/api/v1
+   CANVAS_TOKEN=el-token-que-acabas-de-generar
+   ```
+
+3. Lo mismo en las variables de entorno de Vercel.
+4. En la app, **Ajustes → Canvas → Sincronizar ahora**.
+
+El token vive sólo en el servidor: el sync es un route handler porque el token
+no puede tocar el navegador, y porque Canvas bloquea CORS de todos modos. Si se
+te filtra, revócalo en Canvas y genera otro — borrar el commit no basta.
+
+### 5. Correr
 
 ```bash
 npm install
@@ -59,7 +80,7 @@ npm run dev
 Si abres <http://localhost:3000> sin configurar nada, la app te manda al login y
 te muestra este mismo instructivo en vez de un error.
 
-### 5. Desplegar
+### 6. Desplegar
 
 Importa el repo en Vercel. Como el proyecto vive en una subcarpeta, en la
 configuración del proyecto pon **Root Directory: `taskflow`**. Carga las dos
@@ -76,7 +97,7 @@ variables `NEXT_PUBLIC_*` en *Environment Variables* y agrega la URL de
 |---|---|
 | `npm run dev` | servidor de desarrollo |
 | `npm run build` | build de producción (incluye el chequeo de tipos) |
-| `npm run test` | los tests de `lib/parse.ts` |
+| `npm run test` | los tests del parser y del mapeo de Canvas |
 | `npm run typecheck` | sólo TypeScript |
 | `npm run lint` | ESLint |
 
@@ -88,6 +109,7 @@ variables `NEXT_PUBLIC_*` en *Environment Variables* y agrega la URL de
 app/
   (app)/             las seis vistas, con el riel y la captura rápida
     hoy/ tareas/ semana/ notas/ rutinas/ ajustes/
+  api/sync/canvas/   route handler del sync de Canvas (POST)
   auth/callback/     canje del código de OAuth por la sesión
   auth/signout/      cerrar sesión
   login/             entrar con Google, o el instructivo si falta configurar
@@ -98,6 +120,8 @@ lib/
   date.ts            fechas y zonas horarias
   parse.ts           captura rápida — portado del reference
   ics.ts             importador .ics de respaldo
+  canvas.ts          Canvas: paginación y mapeo a tareas (puro, testeado)
+  canvas-sync.ts     el sync en sí: trae de Canvas y escribe en la base
   data.ts            lectura desde Supabase (sólo servidor)
   supabase/          clientes de navegador y de servidor
 proxy.ts             refresca la sesión y protege las rutas
@@ -120,8 +144,11 @@ fechas en UTC sobre strings `YYYY-MM-DD` para no tropezar con el horario de
 verano.
 
 **El sync respeta lo que tocas a mano.** Cada mutación manual pone
-`user_edited_at`. Desde la fase 2, el sync sólo podrá refrescar título y fecha de
-esas filas — nunca `done`, `priority`, `area` ni `est_minutes`.
+`user_edited_at`. El sync de Canvas manda dos `upsert` distintos: uno con las
+columnas del sync para sus propias filas, y otro con sólo título y fecha para
+las que tú tocaste. Lo que no viaja en el objeto es exactamente lo que Postgres
+no toca, así que `done`, `priority`, `area` y `est_minutes` sobreviven intactos.
+Hay un test que lo fija.
 
 **`focus_day` en `tasks`.** El "enfoque del día" del reference vivía en las prefs
 locales. Aquí es una columna, agregada a `supabase/schema.sql` con un
@@ -168,8 +195,6 @@ Lo que `PLAN.md` pedía confirmar antes de escribir código:
 
 ## Lo que sigue
 
-- **Fase 2 — Canvas.** `POST /api/sync/canvas` con el token personal del lado del
-  servidor. La regla de `user_edited_at` ya está implementada del lado de la app.
 - **Fase 3 — Google Calendar.** Scopes de Calendar en el login y lectura de
   eventos con `singleEvents=true`.
 - **Fase 4 — Que trabaje sola.** Vercel Cron, Web Push y el botón de "Planear mi
