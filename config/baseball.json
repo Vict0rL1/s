@@ -1,0 +1,51 @@
+{
+  "$comment": "Baseball leagues. Add one by appending an entry — nothing in the model or API hardcodes these ids. `oddsSportKeys` are The Odds API sport keys (upcoming games + bookmaker prices). `retrosheet` marks the leagues with a real results feed; a league without one still shows upcoming games and MARKET probabilities, and the UI says so rather than inventing a model. Only MLB has an open, game-by-game public archive — NPB and KBO simply do not, and pretending otherwise would be worse than admitting it.",
+  "history": {
+    "$comment": "Seasons of results to ingest by default. Baseball rosters turn over slowly and a season is 2,430 games, so eight seasons is already ~19k games — more than enough for stable ratings, and the ingest stays under a couple of minutes.",
+    "seasons": 8,
+    "$comment_retrosheet": "Retrosheet event files mirrored on GitHub by the Chadwick Baseball Bureau. One file per team per season holding that team's HOME games, so 30 files cover a season exactly once. They carry the starting pitchers — which is the single most important fact about a baseball game — but not the final score, which is counted off the plays. See docs/BASEBALL.md for how that parser was validated.",
+    "retrosheetBase": "https://raw.githubusercontent.com/chadwickbureau/retrosheet/master/seasons",
+    "$comment_gamelog": "Retrosheet's own game logs, which DO carry official final scores. Used to verify the event parser rather than as a data source: gl2011 is the file the parser was checked against, game by game.",
+    "gamelogVerifyUrl": "https://raw.githubusercontent.com/maxtoki/baseball_R/master/data/gl2011.txt",
+    "$comment_probables": "MLB's own public Stats API — no key, no rate limit worth worrying about. It is where tomorrow's ANNOUNCED STARTING PITCHERS come from, which is what makes a same-day forecast worth anything. Blocked in the environment this was built in; see the docs.",
+    "mlbStatsApi": "https://statsapi.mlb.com/api/v1"
+  },
+  "leagues": [
+    {
+      "id": "mlb",
+      "name": "MLB",
+      "label": "MLB · Estados Unidos",
+      "country": "US",
+      "oddsSportKeys": ["baseball_mlb"],
+      "retrosheet": true,
+      "innings": 9
+    },
+    {
+      "id": "npb",
+      "name": "NPB",
+      "label": "NPB · Japón",
+      "country": "JP",
+      "oddsSportKeys": ["baseball_npb"],
+      "retrosheet": false,
+      "innings": 9
+    },
+    {
+      "id": "kbo",
+      "name": "KBO",
+      "label": "KBO · Corea del Sur",
+      "country": "KR",
+      "oddsSportKeys": ["baseball_kbo"],
+      "retrosheet": false,
+      "innings": 9
+    },
+    {
+      "id": "ncaa",
+      "name": "NCAA",
+      "label": "NCAA · Universitario (EE. UU.)",
+      "country": "US",
+      "oddsSportKeys": ["baseball_ncaa"],
+      "retrosheet": false,
+      "innings": 9
+    }
+  ]
+}

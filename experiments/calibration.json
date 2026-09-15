@@ -1,0 +1,37 @@
+{
+  "football": {
+    "ece": 0.007202943495946995,
+    "n": 71319,
+    "beatsMarket": null,
+    "vsMarketLogLoss": null,
+    "measuredAt": "2026-09-01T16:16:55.669Z"
+  },
+  "nfl": {
+    "ece": 0.018178692075637076,
+    "n": 6692,
+    "beatsMarket": false,
+    "vsMarketLogLoss": 0.01608971673725701,
+    "measuredAt": "2026-09-01T16:16:55.669Z"
+  },
+  "tennis": {
+    "ece": 0.006445679411496139,
+    "n": 22062,
+    "beatsMarket": null,
+    "vsMarketLogLoss": null,
+    "measuredAt": "2026-09-15T15:54:11.438Z"
+  },
+  "basketball": {
+    "ece": 0.00766319596188494,
+    "n": 85562,
+    "beatsMarket": null,
+    "vsMarketLogLoss": null,
+    "measuredAt": "2026-09-15T16:21:19.567Z"
+  },
+  "baseball": {
+    "ece": 0.011225486644599457,
+    "n": 14337,
+    "beatsMarket": null,
+    "vsMarketLogLoss": null,
+    "measuredAt": "2026-09-15T16:21:20.366Z"
+  }
+}
