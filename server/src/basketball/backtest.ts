@@ -37,6 +37,7 @@ import { loadGames, replayGames } from './ratings.ts';
 import { getMarginSigma } from './repo.ts';
 import { parseFiveThirtyEight } from './ingest/fivethirtyeight.ts';
 import type { LeagueId } from './types.ts';
+import { readCalibration, writeCalibration } from '../staking/calibration.ts';
 
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
@@ -226,6 +227,32 @@ function main() {
           `real ${obs.toFixed(1)}%  (${d >= 0 ? '+' : ''}${d.toFixed(1)} pp)`,
       );
     });
+
+  // ===========================================================================
+  // LA CALIBRACIÓN, ESCRITA DONDE LA LEE LA POLÍTICA DE SIZING
+  // ===========================================================================
+  // Mismo motivo que en el backtest de tenis: `staking/policy.ts` falla cerrado y sin una
+  // calibración MEDIDA no dimensiona ni una apuesta. El baloncesto no tenía entrada, así
+  // que el banco de papel no podía apostar aquí — no por prudencia, por falta de dato.
+  //
+  // El dato ya se calculaba: estas cubetas SON la medición. Faltaba escribirla.
+  //
+  // `beatsMarket` va en null y no es un descuido: para saber si el modelo le gana al
+  // precio hacen falta cuotas históricas, y de baloncesto no hay guardadas. La comparación
+  // de arriba es contra FiveThirtyEight, que es otra predicción y no un precio — ganarle
+  // a otro modelo no dice nada sobre si se le gana al mercado. La política lee ese null
+  // como «posible, sin comprobar» y limita el tamaño a la mitad.
+  {
+    let ece = 0;
+    for (const b of buckets.values()) ece += (b.n / scored) * Math.abs(b.won / b.n - b.pred / b.n);
+    const cal = readCalibration();
+    cal.basketball = { ece, n: scored, beatsMarket: null, vsMarketLogLoss: null, measuredAt: new Date().toISOString() };
+    writeCalibration(cal);
+    console.log(
+      `\nCalibración registrada para el sizing: ECE ${(ece * 100).toFixed(2)} pp sobre ${scored} ` +
+        'predicciones · contra el mercado: sin cuotas históricas para comprobarlo',
+    );
+  }
 
   if (bmN > 0) {
     console.log(`\nContra la predicción publicada por FiveThirtyEight (${bmN} partidos idénticos):`);

@@ -47,6 +47,7 @@ import {
 } from './model.ts';
 import { factorsFrom, type ParkAccumulator } from './parkFactors.ts';
 import { firstSeasonRunAverage, loadGames, replayGames } from './ratings.ts';
+import { readCalibration, writeCalibration } from '../staking/calibration.ts';
 
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
@@ -315,6 +316,31 @@ function main() {
           `real ${obs.toFixed(1)}%  (${obs - pred >= 0 ? '+' : ''}${(obs - pred).toFixed(1)} pp)`,
       );
     });
+
+  // Ver la nota en el backtest de baloncesto: la política de sizing falla cerrado y sin
+  // calibración medida no apuesta. Estas cubetas son la medición; faltaba escribirla.
+  //
+  // Se descartan las cubetas con menos de 200 partidos, igual que en la tabla de arriba:
+  // una cubeta de treinta juegos aporta más ruido que señal al ECE y lo empuja hacia
+  // arriba, que aquí significa apostar MENOS de lo que la evidencia justifica.
+  {
+    let ece = 0;
+    let usados = 0;
+    for (const b of bands.values()) if (b.n >= 200) usados += b.n;
+    if (usados > 0) {
+      for (const b of bands.values()) {
+        if (b.n < 200) continue;
+        ece += (b.n / usados) * Math.abs(b.obs / b.n - b.pred / b.n);
+      }
+      const cal = readCalibration();
+      cal.baseball = { ece, n: usados, beatsMarket: null, vsMarketLogLoss: null, measuredAt: new Date().toISOString() };
+      writeCalibration(cal);
+      console.log(
+        `\nCalibración registrada para el sizing: ECE ${(ece * 100).toFixed(2)} pp sobre ${usados} ` +
+          'predicciones · contra el mercado: sin cuotas históricas para comprobarlo',
+      );
+    }
+  }
 
   console.log(
     '\nNota: mide rendimiento histórico con los abridores REALES de cada partido.\n' +

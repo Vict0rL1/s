@@ -19,5 +19,19 @@
     "beatsMarket": null,
     "vsMarketLogLoss": null,
     "measuredAt": "2026-09-15T15:54:11.438Z"
+  },
+  "basketball": {
+    "ece": 0.00766319596188494,
+    "n": 85562,
+    "beatsMarket": null,
+    "vsMarketLogLoss": null,
+    "measuredAt": "2026-09-15T16:21:19.567Z"
+  },
+  "baseball": {
+    "ece": 0.011225486644599457,
+    "n": 14337,
+    "beatsMarket": null,
+    "vsMarketLogLoss": null,
+    "measuredAt": "2026-09-15T16:21:20.366Z"
   }
 }

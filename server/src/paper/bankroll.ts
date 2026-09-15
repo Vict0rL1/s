@@ -294,13 +294,85 @@ function candidatasFutbol(): Candidato[] {
   }));
 }
 
+/**
+ * Candidatas del baloncesto y del béisbol. Dos salidas y la misma forma.
+ *
+ * Se escriben con una sola función porque las dos tablas se diferencian en los NOMBRES
+ * de las columnas y en nada más. Dos copias casi idénticas de esto es la clase de código
+ * donde un arreglo se aplica a una y se olvida en la otra.
+ *
+ * Ojo con el baloncesto: su log usa `game_key` donde los otros cuatro usan `match_key`,
+ * y sus puntos son `home_pts`, no `home_points`. Son las dos cosas que más fácilmente
+ * se copian mal de un deporte a otro.
+ */
+function candidatasDosSalidas(cfg: {
+  sport: string;
+  tablaLog: string;
+  tablaUp: string;
+  clave: string;
+  resuelto: string;
+  oddsCasa: string;
+  oddsFuera: string;
+}): Candidato[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT l.${cfg.clave} AS match_key, l.upcoming_id, l.home_name, l.away_name,
+              l.prob_home, l.market_prob_home,
+              u.${cfg.oddsCasa} AS odds_home, u.${cfg.oddsFuera} AS odds_away
+         FROM ${cfg.tablaLog} l
+         JOIN ${cfg.tablaUp} u ON u.id = l.upcoming_id
+        WHERE l.${cfg.resuelto} IS NULL
+          AND l.market_prob_home IS NOT NULL
+          AND u.source <> 'fixture'
+          AND u.${cfg.oddsCasa} IS NOT NULL AND u.${cfg.oddsFuera} IS NOT NULL
+          AND u.commence_time > ?
+          AND l.upcoming_id NOT IN (SELECT event_id FROM paper_bets)`,
+    )
+    .all(new Date().toISOString()) as unknown as {
+    match_key: string;
+    upcoming_id: string;
+    home_name: string;
+    away_name: string;
+    prob_home: number;
+    market_prob_home: number;
+    odds_home: number;
+    odds_away: number;
+  }[];
+
+  return rows.map((r) => ({
+    sport: cfg.sport,
+    match_key: r.match_key,
+    event_id: r.upcoming_id,
+    label: `${r.home_name} vs ${r.away_name}`,
+    salidas: [
+      { label: r.home_name, p: r.prob_home, odds: r.odds_home, pMarket: r.market_prob_home },
+      { label: r.away_name, p: 1 - r.prob_home, odds: r.odds_away, pMarket: 1 - r.market_prob_home },
+    ],
+  }));
+}
+
+const BALONCESTO = {
+  sport: 'basketball', tablaLog: 'bb_prediction_log', tablaUp: 'bb_upcoming',
+  clave: 'game_key', resuelto: 'home_pts', oddsCasa: 'home_odds', oddsFuera: 'away_odds',
+};
+const BEISBOL = {
+  sport: 'baseball', tablaLog: 'bsb_prediction_log', tablaUp: 'bsb_upcoming',
+  clave: 'match_key', resuelto: 'home_runs', oddsCasa: 'odds_home', oddsFuera: 'odds_away',
+};
+
 export function place(): { colocadas: number; motivo: string | null; detalle: string[] } {
   const db = getDb();
   if (!getMeta(KEY_INICIO)) setMeta(KEY_INICIO, new Date().toISOString());
 
   let candidatas: Candidato[] = [];
   try {
-    candidatas = [...candidatasTenis(), ...candidatasNfl(), ...candidatasFutbol()];
+    candidatas = [
+      ...candidatasTenis(),
+      ...candidatasNfl(),
+      ...candidatasFutbol(),
+      ...candidatasDosSalidas(BALONCESTO),
+      ...candidatasDosSalidas(BEISBOL),
+    ];
   } catch (e) {
     return { colocadas: 0, motivo: `no pude leer las candidatas: ${(e as Error).message}`, detalle: [] };
   }
@@ -398,6 +470,13 @@ export function settle(): { liquidadas: number } {
     `SELECT home_name, away_name, home_goals, away_goals
        FROM fb_prediction_log WHERE match_key = ? AND resolved_at IS NOT NULL`,
   );
+  const dosSalidas = (log: string, clave: string, casa: string, fuera: string) =>
+    db.prepare(
+      `SELECT home_name, away_name, ${casa} AS pc, ${fuera} AS pf
+         FROM ${log} WHERE ${clave} = ? AND ${casa} IS NOT NULL`,
+    );
+  const bb = dosSalidas('bb_prediction_log', 'game_key', 'home_pts', 'away_pts');
+  const bsb = dosSalidas('bsb_prediction_log', 'match_key', 'home_runs', 'away_runs');
   const nfl = db.prepare(
     `SELECT home_name, away_name, home_points, away_points
        FROM naf_prediction_log WHERE match_key = ? AND home_points IS NOT NULL`,
@@ -434,6 +513,20 @@ export function settle(): { liquidadas: number } {
           : r.away_goals > r.home_goals
             ? r.away_name
             : 'Empate';
+    } else if (a.sport === 'basketball' || a.sport === 'baseball') {
+      const r = (a.sport === 'basketball' ? bb : bsb).get(a.match_key) as
+        | { home_name: string; away_name: string; pc: number; pf: number }
+        | undefined;
+      if (!r) continue;
+      // Ni el baloncesto ni el béisbol admiten empate: se juega hasta que alguien gana.
+      // Si aun así llegara un empate —dato corrupto—, se anula en vez de adjudicarlo a
+      // la casa por defecto, que es lo que haría un `>` a secas.
+      if (r.pc === r.pf) {
+        upd.run('void', ahora, 0, a.id);
+        liquidadas++;
+        continue;
+      }
+      ganador = r.pc > r.pf ? r.home_name : r.away_name;
     } else if (a.sport === 'nfl') {
       const r = nfl.get(a.match_key) as
         | { home_name: string; away_name: string; home_points: number; away_points: number }

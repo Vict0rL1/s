@@ -144,13 +144,24 @@ una calibración medida, no dimensiona. Eso deja tres situaciones distintas:
 
 | Deporte | Calibración medida | ¿Apuesta? |
 | --- | --- | --- |
-| **Fútbol** | ECE 0,72 pp sobre 71.319 predicciones | **sí**, con tamaño a la mitad |
-| **Tenis** | ECE 0,64 pp sobre 22.062 predicciones | **sí**, con tamaño a la mitad |
+| **Tenis** | ECE 0,64 pp · 22.062 predicciones | **sí**, tamaño a la mitad |
+| **Fútbol** | ECE 0,72 pp · 71.319 predicciones | **sí**, tamaño a la mitad |
+| **Baloncesto** | ECE 0,77 pp · 85.562 predicciones | **sí**, tamaño a la mitad |
+| **Béisbol** | ECE 1,12 pp · 14.337 predicciones | **sí**, tamaño a la mitad |
 | **NFL** | ECE 1,82 pp, y medido **peor que la línea de cierre** | **nunca** |
-| Baloncesto y béisbol | sin medir | no, hasta que se midan |
 
-El fútbol es donde este banco puede funcionar de verdad: tres salidas por partido, trece
-ligas y la calibración medida sobre más predicciones que ningún otro. Y ahí el empate
+Los cinco backtests escriben ahora su propia calibración donde la lee la política
+(`npm run backtest`, `:bb`, `:bsb`, `:fb`). Se escribe desde el backtest y no desde un
+script aparte a propósito: duplicar el cálculo habría creado dos ECE del mismo deporte
+que se separan en cuanto uno de los dos se toque.
+
+El «tamaño a la mitad» de los cuatro que apuestan no es prudencia decorativa. Un modelo
+puede estar impecablemente calibrado consigo mismo y ser peor que el precio — es
+exactamente lo que le pasa al de la NFL, bien calibrado y perdiendo dinero. Sin cuotas
+históricas con las que comprobarlo, esa posibilidad sigue abierta y el tamaño lo refleja.
+
+El fútbol y el baloncesto son donde este banco tiene más que hacer: trece ligas el uno y
+siete el otro, y la calibración medida sobre 71.319 y 85.562 predicciones. Y ahí el empate
 compite en igualdad con los dos equipos en vez de ganar por tener siempre la cuota más
 alta — lo elige `bestSelection`, que aplica el mínimo de ventaja, y no un «la de más
 ventaja» a secas.
