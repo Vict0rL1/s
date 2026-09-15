@@ -1,24 +1,26 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# Secretos y configuración local
+.env
+.env.local
 
-node_modules
-dist
-dist-ssr
-*.local
+# Base de datos local
+*.db
+*.db-journal
+*.sqlite3
+backend/data/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Editor / SO
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+.idea/
+.vscode/
