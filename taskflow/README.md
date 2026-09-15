@@ -189,6 +189,7 @@ app/
   (app)/             las seis vistas, con el riel y la captura rápida
     hoy/ tareas/ semana/ notas/ rutinas/ ajustes/
   api/sync/canvas/   route handler del sync de Canvas (POST)
+  api/export/        baja todos tus datos en JSON (GET)
   auth/callback/     canje del código de OAuth por la sesión
   auth/signout/      cerrar sesión
   login/             entrar con Google, o el instructivo si falta configurar
@@ -216,6 +217,18 @@ reference con sus custom properties.
 ---
 
 ## Decisiones que vale la pena conocer
+
+**La semana vive en la URL.** `/semana?w=2` es dentro de dos semanas, igual que
+el filtro de área en Tareas. Se recarga, se comparte y se puede marcar. El
+desplazamiento se limita a un año en cada sentido y los valores raros caen a la
+semana actual.
+
+**Hay respaldo, no hay «borrar todo».** `GET /api/export` baja todas tus filas
+en JSON. Lo que no porté del artifact es el botón de borrar todo: ahí hacía
+falta porque los datos vivían en `localStorage` y no había otra forma de
+limpiarlos; aquí viven en tu Postgres, donde puedes borrar lo que quieras desde
+el panel de Supabase, y un botón así en la interfaz es sólo un riesgo sin
+ventaja.
 
 **Editar una tarea es volver a escribirla.** Tocas el título y se vuelve un
 campo; lo que escribes pasa por el mismo parser de la captura rápida, así que

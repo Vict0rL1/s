@@ -304,6 +304,11 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
   .authcard .brand{display:flex}
 }
 
+/* ---- navegación entre semanas ---- */
+.weeknav{display:flex;gap:4px}
+.weeknav .btn{min-width:32px;text-align:center;padding-left:9px;padding-right:9px}
+.weeknav .btn[aria-current="page"]{border-color:var(--accent);color:var(--accent)}
+
 /* ---- título de tarea editable ---- */
 .ttitle.edit{display:block;width:100%;text-align:left;font:inherit;color:inherit;word-break:break-word;border-radius:5px;padding:0;background:none}
 .ttitle.edit:hover{box-shadow:0 0 0 4px var(--surface-2);background:var(--surface-2)}

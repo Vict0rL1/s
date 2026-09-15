@@ -101,6 +101,21 @@ export default async function AjustesPage() {
 
           <div className="panel">
             <div className="ph">
+              <h2>Tus datos</h2>
+            </div>
+            <div className="pb">
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--ink-2)" }}>
+                Tus datos ya viven en tu propio proyecto de Supabase. Esto es para tener una
+                copia a mano, mirarla, o llevártela si algún día cambias de base.
+              </p>
+              <a className="btn line sm" href="/api/export" download>
+                Descargar todo en JSON
+              </a>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="ph">
               <h2>Cómo sacar tu .ics</h2>
             </div>
             <div className="pb" style={{ fontSize: 13, color: "var(--ink-2)" }}>
