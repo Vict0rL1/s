@@ -24,3 +24,10 @@ export function requireSupabaseEnv(): { url: string; anonKey: string } {
   }
   return { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY };
 }
+
+/* --------------------------------------------------------------- Web Push */
+
+/** Pública por diseño: el navegador la necesita para suscribirse. */
+export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
+export const pushConfigured = () => Boolean(VAPID_PUBLIC_KEY);

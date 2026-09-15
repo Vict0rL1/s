@@ -44,3 +44,14 @@ export function requireServiceRoleKey(): string {
 export const CRON_SECRET = process.env.CRON_SECRET;
 
 export const cronConfigured = () => Boolean(CRON_SECRET);
+
+/* --------------------------------------------------------------- Web Push */
+
+/** La mitad privada del par VAPID. Firma los envíos; nunca sale del servidor. */
+export const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+
+/** Contacto que el servicio de push usa si algo va mal. `mailto:` o una URL. */
+export const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:nadie@example.com";
+
+export const pushSendConfigured = () =>
+  Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);

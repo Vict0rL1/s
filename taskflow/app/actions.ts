@@ -326,6 +326,50 @@ export async function syncCanvasNow(): Promise<ActionResult> {
   }
 }
 
+/* -------------------------------------------------------------- Web Push */
+
+/** Guarda (o refresca) la suscripción de este navegador. */
+export async function savePushSubscription(
+  _prev: ActionResult | null,
+  fd: FormData,
+): Promise<ActionResult> {
+  const endpoint = str(fd, "endpoint");
+  const p256dh = str(fd, "p256dh");
+  const auth = str(fd, "auth");
+  if (!endpoint || !p256dh || !auth) return fail("La suscripción llegó incompleta");
+
+  const ctx = await getCtx();
+  const { error } = await ctx.supabase.from("push_subscriptions").upsert(
+    {
+      endpoint,
+      user_id: ctx.userId,
+      p256dh,
+      auth,
+      user_agent: str(fd, "user_agent").slice(0, 200) || null,
+    },
+    { onConflict: "endpoint" },
+  );
+  if (error) return fail("No se pudo guardar la suscripción");
+
+  refresh();
+  return ok("Listo: te avisamos cada mañana");
+}
+
+export async function removePushSubscription(
+  _prev: ActionResult | null,
+  fd: FormData,
+): Promise<ActionResult> {
+  const endpoint = str(fd, "endpoint");
+  const ctx = await getCtx();
+  // Sin endpoint, se dan de baja todos los navegadores de este usuario.
+  const q = ctx.supabase.from("push_subscriptions").delete().eq("user_id", ctx.userId);
+  const { error } = endpoint ? await q.eq("endpoint", endpoint) : await q;
+  if (error) return fail("No se pudo dar de baja");
+
+  refresh();
+  return ok("Avisos desactivados");
+}
+
 /* ------------------------------------------------------------ importar .ics */
 
 export async function importIcs(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {

@@ -145,6 +145,22 @@ create table if not exists public.blocks (
 
 create index if not exists blocks_day_idx on public.blocks (user_id, day, start_min);
 
+-- ------------------------------------------------- suscripciones de push
+
+-- Un navegador que aceptó recibir avisos. La clave es el endpoint que da el
+-- servicio de push, así que reinstalar la app en el mismo navegador actualiza
+-- la fila en vez de duplicarla.
+create table if not exists public.push_subscriptions (
+  endpoint   text primary key,
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  p256dh     text not null,
+  auth       text not null,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists push_subs_user_idx on public.push_subscriptions (user_id);
+
 -- ------------------------------------------------------ estado del sync
 
 create table if not exists public.sync_state (
@@ -198,6 +214,7 @@ alter table public.habits     enable row level security;
 alter table public.habit_log  enable row level security;
 alter table public.blocks     enable row level security;
 alter table public.sync_state enable row level security;
+alter table public.push_subscriptions enable row level security;
 
 drop policy if exists own_profile on public.profiles;
 create policy own_profile on public.profiles
@@ -229,4 +246,8 @@ create policy own_blocks on public.blocks
 
 drop policy if exists own_sync_state on public.sync_state;
 create policy own_sync_state on public.sync_state
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists own_push_subscriptions on public.push_subscriptions;
+create policy own_push_subscriptions on public.push_subscriptions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

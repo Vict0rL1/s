@@ -2,8 +2,10 @@ import { deleteIcsSource } from "@/app/actions";
 import { ViewHead } from "@/components/TaskRow";
 import { AreasForm, HoursForm, ImportIcs, TimezoneForm } from "@/components/SettingsForms";
 import { CanvasPanel } from "@/components/CanvasPanel";
+import { PushPanel } from "@/components/PushPanel";
 import { getCtx, loadIcsSources, loadSyncState } from "@/lib/data";
 import { canvasConfigured } from "@/lib/env.server";
+import { VAPID_PUBLIC_KEY } from "@/lib/env";
 import { MONTHS_SHORT, dayOfMonth, minsToHHMM, monthOf, zonedDayMinute } from "@/lib/date";
 
 export const metadata = { title: "Ajustes · TaskFlow" };
@@ -96,6 +98,16 @@ export default async function AjustesPage() {
             </div>
             <div className="pb">
               <TimezoneForm timezone={ctx.profile.timezone} />
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="ph">
+              <h2>Avisos</h2>
+              <span className="sub">fase 4</span>
+            </div>
+            <div className="pb">
+              <PushPanel vapidPublicKey={VAPID_PUBLIC_KEY ?? null} />
             </div>
           </div>
 
