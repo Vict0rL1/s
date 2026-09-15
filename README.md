@@ -107,6 +107,45 @@ Detalle en [«Quiero las cuotas reales»](#quiero-las-cuotas-reales-npm-run-odds
 
 Y si algo sigue sin cuadrar, **`npm run doctor`** diagnostica sin gastar ni una petición.
 
+### El modelo apostando solo: 1.000 $ de papel
+
+En la pestaña de Apuestas, separado de tu propio registro. El modelo arranca con 1.000 $
+y apuesta por su cuenta, con la misma política que la app recomienda: **Kelly a un
+cuarto, 2 % máximo por evento** y topes de exposición por día y totales. No es dinero
+real y no es una recomendación — es la única forma de contestar a la pregunta que importa
+de un modelo de apuestas: *si le hubiera hecho caso, ¿cuánto habría ganado?*
+
+**La trampa que hay que desactivar antes que nada.** Cuatro de los cinco deportes se
+inventan las cuotas cuando no llegan las reales, y las inventan a partir del propio
+modelo con un margen encima. Apostar contra esas cuotas es apostar contra uno mismo: el
+modelo encontraría «valor» en su propio precio, la diferencia sería el margen que él
+mismo puso, y el banco subiría de forma constante **por construcción**. Un 1.000 → 1.400
+así no dice nada del modelo; dice que sabe sumar.
+
+Así que el banco **se niega a apostar sobre cualquier cuota de demostración**, y cuando
+no hay ninguna real lo dice en vez de dar números:
+
+> **Todavía no ha apostado nada.** No hay ningún partido con cuotas reales por delante.
+> Con cuotas de demostración este banco no apuesta: el modelo encontraría valor en su
+> propio precio y el resultado no diría nada.
+
+**Es hacia delante, no una simulación del pasado.** Se podría recorrer el histórico y
+calcular qué habría pasado, pero no hay cuotas históricas de tenis guardadas y el log
+resuelto con precio son 15 partidos de la NFL — una muestra con la que cualquier ROI es
+ruido. Hacia delante es más lento y es lo único defendible: la apuesta se registra
+**antes** del partido, con el precio de ese momento, y se liquida con el resultado real.
+
+**Dos deportes no apuestan, y por buenas razones.** La política de sizing falla cerrado:
+sin una calibración medida, no dimensiona. La NFL está medida como **peor que la línea de
+cierre**, así que su multiplicador es cero y no apostará nunca — apostar contra un precio
+mejor que tu propia estimación es perder por definición. El tenis sí apuesta, pero con el
+tamaño limitado a la mitad porque no hay cuotas históricas con las que comprobar si le
+gana al mercado; ese `null` no es un «probablemente sí».
+
+De paso, `npm run backtest` ahora **escribe** la calibración del tenis donde la lee la
+política (ECE 0,64 pp sobre 22.062 predicciones). Antes no existía esa entrada y el banco
+no podía apostar en el deporte principal de la app — no por prudencia, por falta de dato.
+
 ### Preguntar a los datos, sin que nada se los invente
 
 En la pestaña de tenis hay un recuadro donde se escribe una pregunta y sale una

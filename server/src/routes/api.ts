@@ -28,6 +28,7 @@ import { impliedProbabilities, type MarketProbabilities } from '../model/market.
 import { buildPrediction, type Prediction } from '../model/predict.ts';
 import { refreshOdds } from '../ingest/odds.ts';
 import { responder } from '../ask/router.ts';
+import { place, settle, resumen } from '../paper/bankroll.ts';
 import { evaluate } from '../live/engine.ts';
 import { matchupServe } from '../live/serve.ts';
 import { describe as describeState, type LiveState } from '../live/state.ts';
@@ -371,6 +372,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     // que una persona acababa de pedir, y encima lo reportaba como «no hay partidos».
     const result = await refreshOdds(true);
     return { ok: true, ...result };
+  });
+
+  // --- el banco de papel del modelo ---
+  app.get('/paper', async () => {
+    // Se liquida al leer, no solo en el ciclo de refresco: alguien que abre la app tras
+    // dos días de no abrirla tiene resultados nuevos esperando, y ver «pendiente» en un
+    // partido que se jugó el sábado hace dudar de todo lo demás.
+    settle();
+    const r = place();
+    return resumen(r.motivo);
   });
 
   // --- el asistente: pregunta en texto, respuesta desde la base ---

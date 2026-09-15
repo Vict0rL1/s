@@ -12,5 +12,12 @@
     "beatsMarket": false,
     "vsMarketLogLoss": 0.01608971673725701,
     "measuredAt": "2026-09-01T16:16:55.669Z"
+  },
+  "tennis": {
+    "ece": 0.006445679411496139,
+    "n": 22062,
+    "beatsMarket": null,
+    "vsMarketLogLoss": null,
+    "measuredAt": "2026-09-15T15:54:11.438Z"
   }
 }

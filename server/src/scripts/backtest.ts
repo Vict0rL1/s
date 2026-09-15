@@ -33,6 +33,7 @@ import {
 import { computeForm, type FormResult } from '../model/form.ts';
 import { computeReliability } from '../model/reliability.ts';
 import { VALUE_THRESHOLD } from '../model/market.ts';
+import { readCalibration, writeCalibration } from '../staking/calibration.ts';
 
 interface Row {
   id: number;
@@ -406,6 +407,46 @@ function main() {
             `(${diff >= 0 ? '+' : ''}${diff.toFixed(1)} pp)`,
         );
       });
+
+    // ===========================================================================
+    // LA CALIBRACIÓN DEL TENIS, ESCRITA DONDE LA LEE LA POLÍTICA DE SIZING
+    // ===========================================================================
+    // `staking/policy.ts` falla cerrado: sin una calibración MEDIDA para un deporte, no
+    // dimensiona ni una apuesta. Y el tenis no tenía entrada, así que el banco de papel
+    // no podía apostar en el deporte principal de la app — no por prudencia, por falta
+    // de dato.
+    //
+    // El dato ya se calculaba aquí: estas mismas cubetas son la medición de la
+    // calibración del tenis, sobre 22.000 partidos walk-forward. Lo que faltaba era
+    // escribirlo. Se escribe desde el backtest y no desde el script de calibración a
+    // propósito: duplicar el cálculo habría creado dos ECE del tenis que se separan en
+    // cuanto uno de los dos se toque.
+    //
+    // `beatsMarket` se queda en NULL, y eso NO es un descuido: para saber si el modelo
+    // le gana al precio hacen falta cuotas históricas, y de tenis no hay guardadas. La
+    // política interpreta ese null como «posible, sin comprobar» y limita el tamaño a la
+    // mitad. Es exactamente lo que la evidencia sostiene.
+    if (tour.id === 'atp' && scored > 0) {
+      // ECE ponderado por tamaño de cubeta: el error medio que se comete al decir un
+      // número, no el de la cubeta con más suerte.
+      let ece = 0;
+      for (const b of buckets.values()) {
+        ece += (b.n / scored) * Math.abs(b.won / b.n - b.pred / b.n);
+      }
+      const cal = readCalibration();
+      cal.tennis = {
+        ece,
+        n: scored,
+        beatsMarket: mkN > 0 ? mkModelLog / mkN < mkMarketLog / mkN : null,
+        vsMarketLogLoss: mkN > 0 ? mkModelLog / mkN : null,
+        measuredAt: new Date().toISOString(),
+      };
+      writeCalibration(cal);
+      console.log(
+        `\nCalibración registrada para el sizing: ECE ${(ece * 100).toFixed(2)} pp sobre ` +
+          `${scored} predicciones · contra el mercado: ${mkN > 0 ? (mkModelLog / mkN < mkMarketLog / mkN ? 'gana' : 'pierde') : 'sin cuotas históricas para comprobarlo'}`,
+      );
+    }
 
     if (mkN > 0) {
       console.log(`\nContra el MERCADO REAL (${mkN} partidos con cuotas históricas):`);

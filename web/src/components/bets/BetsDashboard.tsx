@@ -22,6 +22,7 @@ import ExposurePanel from '../ExposurePanel';
 import BetCalendar from './BetCalendar';
 import ProfitCurve from './ProfitCurve';
 import BetForm from './BetForm';
+import PaperBankroll from './PaperBankroll';
 
 /**
  * The bet log.
@@ -105,6 +106,10 @@ export default function BetsDashboard() {
           pregunta sobre TU dinero, no sobre un partido: cuánto hay en juego a la vez y
           cuánto riesgo es eso de verdad. */}
       <ExposurePanel />
+
+      {/* El banco del modelo va ANTES del formulario y separado del registro propio:
+          son dos cuentas distintas y mezclarlas haría imposible leer ninguna de las dos. */}
+      <PaperBankroll />
 
       {(adding || editing) && (
         <BetForm

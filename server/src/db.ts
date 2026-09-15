@@ -786,6 +786,48 @@ function createSchema(d: DatabaseSync): void {
     -- a second source of truth that goes stale the moment a status is corrected,
     -- and correcting a status is the single most common edit here.
     -- ==================================================================
+    -- ===========================================================================
+    -- EL BANCO DE PAPEL DEL MODELO
+    -- ===========================================================================
+    -- Distinto de la tabla "bets", que es el registro de las apuestas DE LA PERSONA.
+    -- Esta es la del modelo apostando solo, con 1.000 de partida, para contestar a la
+    -- única pregunta que de verdad importa de un modelo de apuestas: si se le hubiera
+    -- hecho caso, ¿cuánto se habría ganado o perdido?
+    --
+    -- Dos reglas viven en la TABLA y no en el código, porque son las que hacen que el
+    -- número signifique algo:
+    --
+    --   · "odds" se guarda tal cual estaba al apostar. Liquidar con el precio de hoy
+    --     sería cobrar la apuesta al precio de después del partido.
+    --   · "event_id" es UNIQUE. Sin eso, cada ciclo de refresco volvería a apostar al
+    --     mismo partido y el banco se multiplicaría por las veces que alguien abrió
+    --     la app. Es la clase de fallo que no se ve: los números salen bonitos.
+    CREATE TABLE IF NOT EXISTS paper_bets (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      placed_at    TEXT NOT NULL,
+      sport        TEXT NOT NULL,
+      -- La identidad estable del partido en el log de predicciones.
+      match_key    TEXT NOT NULL,
+      -- Un partido, una apuesta. Ver arriba.
+      event_id     TEXT NOT NULL UNIQUE,
+      label        TEXT NOT NULL,
+      selection    TEXT NOT NULL,
+      -- Probabilidad del modelo para esta selección, al apostar.
+      p_model      REAL NOT NULL,
+      -- Probabilidad del mercado sin margen, al apostar.
+      p_market     REAL NOT NULL,
+      -- Cuota decimal ofrecida, al apostar.
+      odds         REAL NOT NULL,
+      stake        REAL NOT NULL,
+      -- El banco ANTES de esta apuesta, para poder auditar el sizing después.
+      bankroll_at  REAL NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      settled_at   TEXT,
+      profit       REAL
+    );
+    CREATE INDEX IF NOT EXISTS idx_paper_status ON paper_bets (status, placed_at);
+
+
     CREATE TABLE IF NOT EXISTS bets (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at  TEXT NOT NULL,

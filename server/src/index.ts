@@ -6,6 +6,7 @@ import { env, ROOT } from './config.ts';
 import path from 'node:path';
 import { readOddsReason, type SportPrefix } from './oddsReason.ts';
 import { inspectEnvFile } from './envFile.ts';
+import { place, settle } from './paper/bankroll.ts';
 import { getDb } from './db.ts';
 import { countRows } from './repo.ts';
 import { refreshOdds } from './ingest/odds.ts';
@@ -302,6 +303,15 @@ function startAutoRefresh(log: (msg: string) => void): void {
       }
     } catch {
       // Comprobar la latencia no puede romper el ciclo de odds.
+    }
+
+    // El banco de papel: liquidar antes de apostar, para que el sizing use el banco
+    // actualizado y no el de antes de saber cómo acabaron los partidos del fin de semana.
+    try {
+      settle();
+      place();
+    } catch (e) {
+      log(`Banco de papel: ${(e as Error).message}`);
     }
 
     // Solo en el primer ciclo: ver `avisoDeCuotas`. Repetido cada doce horas sería ruido,
