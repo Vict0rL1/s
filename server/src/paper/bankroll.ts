@@ -34,7 +34,7 @@
 // dos políticas que se separan con el primer cambio.
 
 import { getDb, getMeta, setMeta } from '../db.ts';
-import { decideStake, DEFAULT_CONFIG } from '../staking/policy.ts';
+import { decideEvent, DEFAULT_CONFIG } from '../staking/policy.ts';
 
 /** El banco inicial del experimento. Se guarda para que cambiarlo sea deliberado. */
 export const BANCO_INICIAL = 1000;
@@ -133,15 +133,21 @@ export function resumen(motivo: string | null = null): Resumen {
 // ---------------------------------------------------------------------------
 // APOSTAR
 // ---------------------------------------------------------------------------
+/**
+ * Un partido con sus salidas EXCLUYENTES, sin elegir todavía.
+ *
+ * La primera versión elegía aquí el lado de más ventaja y luego pedía el importe. Eso
+ * duplicaba una regla que ya vive en `staking/policy.ts` (`bestSelection`), y dos copias
+ * de la misma regla acaban discrepando: la pantalla diría que se juega un lado y el
+ * informe de cartera el otro, sin que nada avise. Ahora se entregan las salidas y elige
+ * la política.
+ */
 interface Candidato {
   sport: string;
   match_key: string;
   event_id: string;
   label: string;
-  selection: string;
-  pModel: number;
-  pMarket: number;
-  odds: number;
+  salidas: { label: string; p: number; odds: number; pMarket: number }[];
 }
 
 /**
@@ -177,31 +183,20 @@ function candidatasTenis(): Candidato[] {
     p2_odds: number;
   }[];
 
-  const out: Candidato[] = [];
-  for (const r of rows) {
-    // Se apuesta al lado donde el modelo ve MÁS ventaja, no al favorito. Son cosas
-    // distintas: el favorito puede estar caro y el otro lado barato.
-    const lados = [
-      { nombre: r.p1_name, p: r.prob1, pm: r.market_prob1, odds: r.p1_odds },
-      { nombre: r.p2_name, p: 1 - r.prob1, pm: 1 - r.market_prob1, odds: r.p2_odds },
-    ];
-    const mejor = lados.reduce((a, b) => (b.p - b.pm > a.p - a.pm ? b : a));
-    out.push({
-      // La clave del deporte tiene que ser LA MISMA que la de experiments/calibration.json,
-      // porque `decideStake` la usa para buscar la calibración medida y falla cerrado si no
-      // la encuentra. Con 'tenis' en castellano no la encontraba y se negaba a apostar
-      // dando «calibración insuficiente» — un mensaje correcto para una causa falsa.
-      sport: 'tennis',
-      match_key: r.match_key,
-      event_id: r.upcoming_id,
-      label: `${r.p1_name} vs ${r.p2_name}`,
-      selection: mejor.nombre,
-      pModel: mejor.p,
-      pMarket: mejor.pm,
-      odds: mejor.odds,
-    });
-  }
-  return out;
+  return rows.map((r) => ({
+    // La clave del deporte tiene que ser LA MISMA que la de experiments/calibration.json,
+    // porque `decideStake` la usa para buscar la calibración medida y falla cerrado si no
+    // la encuentra. Con 'tenis' en castellano no la encontraba y se negaba a apostar
+    // dando «calibración insuficiente» — un mensaje correcto para una causa falsa.
+    sport: 'tennis',
+    match_key: r.match_key,
+    event_id: r.upcoming_id,
+    label: `${r.p1_name} vs ${r.p2_name}`,
+    salidas: [
+      { label: r.p1_name, p: r.prob1, odds: r.p1_odds, pMarket: r.market_prob1 },
+      { label: r.p2_name, p: 1 - r.prob1, odds: r.p2_odds, pMarket: 1 - r.market_prob1 },
+    ],
+  }));
 }
 
 /** Candidatas de la NFL. Misma forma, otra tabla. */
@@ -230,23 +225,73 @@ function candidatasNfl(): Candidato[] {
     odds_away: number;
   }[];
 
-  return rows.map((r) => {
-    const lados = [
-      { nombre: r.home_name, p: r.prob_home, pm: r.market_prob_home, odds: r.odds_home },
-      { nombre: r.away_name, p: 1 - r.prob_home, pm: 1 - r.market_prob_home, odds: r.odds_away },
-    ];
-    const mejor = lados.reduce((a, b) => (b.p - b.pm > a.p - a.pm ? b : a));
-    return {
-      sport: 'nfl',
-      match_key: r.match_key,
-      event_id: r.upcoming_id,
-      label: `${r.away_name} @ ${r.home_name}`,
-      selection: mejor.nombre,
-      pModel: mejor.p,
-      pMarket: mejor.pm,
-      odds: mejor.odds,
-    };
-  });
+  return rows.map((r) => ({
+    sport: 'nfl',
+    match_key: r.match_key,
+    event_id: r.upcoming_id,
+    label: `${r.away_name} @ ${r.home_name}`,
+    salidas: [
+      { label: r.home_name, p: r.prob_home, odds: r.odds_home, pMarket: r.market_prob_home },
+      { label: r.away_name, p: 1 - r.prob_home, odds: r.odds_away, pMarket: 1 - r.market_prob_home },
+    ],
+  }));
+}
+
+/**
+ * Candidatas del fútbol: TRES salidas, y por eso importa que elija la política.
+ *
+ * El empate no es una nota al pie —es el resultado de uno de cada cuatro partidos— y su
+ * cuota suele ser la más alta de las tres. Un criterio de «la de más ventaja» a secas se
+ * iría al empate con demasiada frecuencia; `bestSelection` aplica además el mínimo de
+ * ventaja, que es lo que hay que exigir cuando hay tres precios sobre la mesa.
+ *
+ * El fútbol es, de los cinco, el único con calibración medida sobre 71.319 predicciones
+ * y sin un veredicto de «peor que el mercado», así que es donde este banco puede
+ * funcionar de verdad.
+ */
+function candidatasFutbol(): Candidato[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT l.match_key, l.upcoming_id, l.home_name, l.away_name,
+              l.prob_home, l.prob_draw, l.prob_away,
+              l.market_prob_home, l.market_prob_draw, l.market_prob_away,
+              u.odds_home, u.odds_draw, u.odds_away, u.source, u.commence_time
+         FROM fb_prediction_log l
+         JOIN fb_upcoming u ON u.id = l.upcoming_id
+        WHERE l.resolved_at IS NULL
+          AND l.market_prob_home IS NOT NULL
+          AND u.source <> 'fixture'
+          AND u.odds_home IS NOT NULL AND u.odds_draw IS NOT NULL AND u.odds_away IS NOT NULL
+          AND u.commence_time > ?
+          AND l.upcoming_id NOT IN (SELECT event_id FROM paper_bets)`,
+    )
+    .all(new Date().toISOString()) as unknown as {
+    match_key: string;
+    upcoming_id: string;
+    home_name: string;
+    away_name: string;
+    prob_home: number;
+    prob_draw: number;
+    prob_away: number;
+    market_prob_home: number;
+    market_prob_draw: number;
+    market_prob_away: number;
+    odds_home: number;
+    odds_draw: number;
+    odds_away: number;
+  }[];
+
+  return rows.map((r) => ({
+    sport: 'football',
+    match_key: r.match_key,
+    event_id: r.upcoming_id,
+    label: `${r.home_name} vs ${r.away_name}`,
+    salidas: [
+      { label: r.home_name, p: r.prob_home, odds: r.odds_home, pMarket: r.market_prob_home },
+      { label: 'Empate', p: r.prob_draw, odds: r.odds_draw, pMarket: r.market_prob_draw },
+      { label: r.away_name, p: r.prob_away, odds: r.odds_away, pMarket: r.market_prob_away },
+    ],
+  }));
 }
 
 export function place(): { colocadas: number; motivo: string | null; detalle: string[] } {
@@ -255,7 +300,7 @@ export function place(): { colocadas: number; motivo: string | null; detalle: st
 
   let candidatas: Candidato[] = [];
   try {
-    candidatas = [...candidatasTenis(), ...candidatasNfl()];
+    candidatas = [...candidatasTenis(), ...candidatasNfl(), ...candidatasFutbol()];
   } catch (e) {
     return { colocadas: 0, motivo: `no pude leer las candidatas: ${(e as Error).message}`, detalle: [] };
   }
@@ -273,8 +318,10 @@ export function place(): { colocadas: number; motivo: string | null; detalle: st
     };
   }
 
-  // Ordenadas por ventaja: si los topes de exposición cortan, que corten las peores.
-  candidatas.sort((a, b) => b.pModel - b.pMarket - (a.pModel - a.pMarket));
+  // Ordenadas por la mejor ventaja del partido: si los topes de exposición cortan, que
+  // corten las peores. La ventaja de un partido es la de su mejor salida.
+  const ventaja = (c: Candidato) => Math.max(...c.salidas.map((s) => s.p - s.pMarket));
+  candidatas.sort((a, b) => ventaja(b) - ventaja(a));
 
   const ins = db.prepare(
     `INSERT OR IGNORE INTO paper_bets
@@ -288,24 +335,35 @@ export function place(): { colocadas: number; motivo: string | null; detalle: st
   const detalle: string[] = [];
 
   for (const c of candidatas) {
-    const d = decideStake(
-      { sport: c.sport, p: c.pModel, odds: c.odds, bankroll: banco, openExposure: abierto },
+    // `decideEvent` elige la salida Y la dimensiona, con la regla de la política. Para
+    // el fútbol esto es lo que hace que el empate compita en igualdad con los dos
+    // equipos en vez de ganar por tener siempre la cuota más alta.
+    const d = decideEvent(
+      c.salidas.map((s) => ({ label: s.label, p: s.p, odds: s.odds })),
+      { sport: c.sport, bankroll: banco, openExposure: abierto },
       DEFAULT_CONFIG,
     );
-    if (d.stake <= 0) {
-      detalle.push(`${c.label}: no se apuesta — ${d.blockedBy ?? 'sin ventaja suficiente'}`);
+    if (!d || d.stake <= 0) {
+      detalle.push(`${c.label}: no se apuesta — ${d?.blockedBy ?? 'ninguna salida con ventaja'}`);
+      continue;
+    }
+    const elegida = c.salidas.find((s) => s.label === d.label);
+    if (!elegida) {
+      // No puede pasar —la etiqueta sale de esta misma lista— pero si pasara, apostar
+      // sin saber a qué se apostó sería peor que no apostar.
+      detalle.push(`${c.label}: la política eligió «${d.label}», que no está en las salidas`);
       continue;
     }
     ins.run(
-      ahora, c.sport, c.match_key, c.event_id, c.label, c.selection,
-      c.pModel, c.pMarket, c.odds, Math.round(d.stake * 100) / 100, banco,
+      ahora, c.sport, c.match_key, c.event_id, c.label, elegida.label,
+      elegida.p, elegida.pMarket, elegida.odds, Math.round(d.stake * 100) / 100, banco,
     );
     // La exposición se acumula DENTRO del bucle. Sin esto, veinte candidatas se
     // dimensionarían todas como si fueran la primera y los topes no servirían de nada.
     abierto += d.stake;
     colocadas++;
     detalle.push(
-      `${c.label}: ${c.selection} a ${c.odds.toFixed(2)} · ${d.stake.toFixed(2)} ` +
+      `${c.label}: ${elegida.label} a ${elegida.odds.toFixed(2)} · ${d.stake.toFixed(2)} ` +
         `(${(d.edge * 100).toFixed(1)} pp de ventaja)`,
     );
   }
@@ -336,6 +394,10 @@ export function settle(): { liquidadas: number } {
        LEFT JOIN players p2 ON p2.tour = l.tour AND p2.id = l.p2_id
       WHERE l.match_key = ? AND l.resolved_at IS NOT NULL`,
   );
+  const futbol = db.prepare(
+    `SELECT home_name, away_name, home_goals, away_goals
+       FROM fb_prediction_log WHERE match_key = ? AND resolved_at IS NOT NULL`,
+  );
   const nfl = db.prepare(
     `SELECT home_name, away_name, home_points, away_points
        FROM naf_prediction_log WHERE match_key = ? AND home_points IS NOT NULL`,
@@ -358,6 +420,20 @@ export function settle(): { liquidadas: number } {
         .get(a.match_key) as { p1_id: number; p2_id: number } | undefined;
       if (!row) continue;
       ganador = r.winner_id === row.p1_id ? r.p1 : r.p2;
+    } else if (a.sport === 'football') {
+      const r = futbol.get(a.match_key) as
+        | { home_name: string; away_name: string; home_goals: number; away_goals: number }
+        | undefined;
+      if (!r) continue;
+      // Tres resultados, y el empate es uno de ellos — no una anulación. Tratarlo como
+      // void (lo correcto en la NFL, donde el moneyline se devuelve) sería regalarle al
+      // modelo el 25 % de los partidos de fútbol sin riesgo.
+      ganador =
+        r.home_goals > r.away_goals
+          ? r.home_name
+          : r.away_goals > r.home_goals
+            ? r.away_name
+            : 'Empate';
     } else if (a.sport === 'nfl') {
       const r = nfl.get(a.match_key) as
         | { home_name: string; away_name: string; home_points: number; away_points: number }

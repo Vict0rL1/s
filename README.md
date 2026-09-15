@@ -135,6 +135,30 @@ resuelto con precio son 15 partidos de la NFL — una muestra con la que cualqui
 ruido. Hacia delante es más lento y es lo único defendible: la apuesta se registra
 **antes** del partido, con el precio de ese momento, y se liquida con el resultado real.
 
+```bash
+npm run paper     # el banco desde la terminal: liquida, apuesta y resume
+```
+
+**Qué deportes apuestan, y por qué no todos.** La política de sizing falla cerrado: sin
+una calibración medida, no dimensiona. Eso deja tres situaciones distintas:
+
+| Deporte | Calibración medida | ¿Apuesta? |
+| --- | --- | --- |
+| **Fútbol** | ECE 0,72 pp sobre 71.319 predicciones | **sí**, con tamaño a la mitad |
+| **Tenis** | ECE 0,64 pp sobre 22.062 predicciones | **sí**, con tamaño a la mitad |
+| **NFL** | ECE 1,82 pp, y medido **peor que la línea de cierre** | **nunca** |
+| Baloncesto y béisbol | sin medir | no, hasta que se midan |
+
+El fútbol es donde este banco puede funcionar de verdad: tres salidas por partido, trece
+ligas y la calibración medida sobre más predicciones que ningún otro. Y ahí el empate
+compite en igualdad con los dos equipos en vez de ganar por tener siempre la cuota más
+alta — lo elige `bestSelection`, que aplica el mínimo de ventaja, y no un «la de más
+ventaja» a secas.
+
+El empate, además, **pierde**: es uno de los tres resultados, no una anulación. Tratarlo
+como void —lo correcto en la NFL, donde el moneyline se devuelve— le regalaría al modelo
+uno de cada cuatro partidos de fútbol sin riesgo.
+
 **Dos deportes no apuestan, y por buenas razones.** La política de sizing falla cerrado:
 sin una calibración medida, no dimensiona. La NFL está medida como **peor que la línea de
 cierre**, así que su multiplicador es cero y no apostará nunca — apostar contra un precio
@@ -1398,6 +1422,7 @@ probar ese caso concreto, no leyendo el código.
 | `npm run go` | **Todo en uno**: rama, pull, dependencias, base de datos y arranque. El único que hace falta saber |
 | `npm run auto` | Instala la actualización diaria de los datos (launchd en macOS) y deja de hacer falta acordarse |
 | `npm run demo` | Enciende o apaga los partidos inventados. `-- --off` deja solo lo real |
+| `npm run paper` | El banco de papel del modelo: liquida lo resuelto, apuesta lo que apruebe la política y resume |
 | `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
 | `npm run seed` | Tenis: carga el dataset de demostración |
 | `npm run fetch-data` | **Descarga la base ya construida** (9 MB) en vez de reconstruirla. `-- --force` reemplaza la que haya, conservando tus apuestas |
