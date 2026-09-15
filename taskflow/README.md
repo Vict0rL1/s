@@ -217,6 +217,13 @@ reference con sus custom properties.
 
 ## Decisiones que vale la pena conocer
 
+**Un color, un significado.** El sistema del reference usaba el mismo acento
+para la marca, para lo urgente, para lo destacado y para los errores — cinco
+trabajos, un solo rojo, y por eso todo competía. Ahora `--accent` es sólo la
+marca y lo interactivo, y `--danger` aparece únicamente cuando algo va tarde.
+En la misma línea, una fecha normal es texto plano: la caja se reserva para lo
+atrasado y lo que vence hoy, así el ojo encuentra eso primero.
+
 **Nada de esto lo decide el navegador.** Todas las fechas se calculan en la zona
 del perfil (`profiles.timezone`, por defecto `America/Vancouver`), nunca en la
 del servidor de Vercel, que corre en UTC. `lib/date.ts` hace la aritmética de
