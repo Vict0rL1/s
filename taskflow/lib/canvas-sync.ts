@@ -58,9 +58,13 @@ export async function syncCanvas(ctx: Ctx): Promise<SyncResult> {
     { areas: ctx.profile.areas, timeZone: ctx.tz, baseUrl },
   );
 
+  // El filtro por `user_id` es explícito a propósito. Con la sesión bastaría la
+  // RLS, pero el cron de la fase 4 corre con la service role, que la salta: sin
+  // esto leería y pisaría las filas de cualquier otro usuario.
   const { data: existing } = await ctx.supabase
     .from("tasks")
     .select("external_id, user_edited_at")
+    .eq("user_id", ctx.userId)
     .eq("source", "canvas")
     .returns<{ external_id: string; user_edited_at: string | null }[]>();
 

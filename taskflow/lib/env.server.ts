@@ -23,3 +23,24 @@ export function requireCanvasEnv(): { baseUrl: string; token: string } {
   }
   return { baseUrl: CANVAS_BASE_URL.replace(/\/+$/, ""), token: CANVAS_TOKEN };
 }
+
+/* ------------------------------------------------------------ service role */
+
+/** Salta la RLS. Sólo para el cron, nunca para una petición del usuario. */
+export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+export function requireServiceRoleKey(): string {
+  if (!SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      "Falta SUPABASE_SERVICE_ROLE_KEY. Está en Supabase -> Project Settings -> API, " +
+        "como service_role / secret key. Va en las variables del servidor; al repo no, y al navegador menos.",
+    );
+  }
+  return SUPABASE_SERVICE_ROLE_KEY;
+}
+
+/* -------------------------------------------------------------------- cron */
+
+export const CRON_SECRET = process.env.CRON_SECRET;
+
+export const cronConfigured = () => Boolean(CRON_SECRET);

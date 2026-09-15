@@ -148,7 +148,36 @@ El token vive sólo en el servidor: el sync es un route handler porque el token
 no puede tocar el navegador, y porque Canvas bloquea CORS de todos modos. Si se
 te filtra, revócalo en Canvas y genera otro — borrar el commit no basta.
 
-### 5. Correr
+### 5. Sync automático (fase 4)
+
+Para que Canvas entre solo cada día, sin tocar el botón. Necesita estar
+desplegada en Vercel.
+
+1. Genera un secreto: `openssl rand -base64 32`.
+2. En las variables de entorno de Vercel:
+
+   ```
+   CRON_SECRET=el-secreto-que-acabas-de-generar
+   SUPABASE_SERVICE_ROLE_KEY=...   # Supabase → Project Settings → API
+   ```
+
+3. `vercel.json` ya trae el horario. Vercel lo levanta solo al desplegar.
+
+`GET /api/sync` compara el header `Authorization` contra `CRON_SECRET` y
+responde 401 si no cuadra; sin eso, cualquiera en internet podría disparar tus
+syncs. Como corre sin sesión, usa la service role, que **salta la RLS**: por eso
+todo lo que hay dentro filtra por `user_id` a mano.
+
+La **service role key nunca debe llegar al navegador**. Vive en
+`lib/env.server.ts`, que lleva `server-only`: importarla desde un componente
+cliente es un error de build, no un descuido que se descubre en producción.
+
+**Sobre la hora.** El cron de Vercel se programa en UTC, así que `0 13 * * *`
+son las 6:00 en Vancouver en horario de verano y las 5:00 en invierno. Es un
+sync diario: esa hora de diferencia no importa. Si algún día molesta, se cambia
+el número en `vercel.json`.
+
+### 6. Correr
 
 ```bash
 npm install
@@ -158,7 +187,7 @@ npm run dev
 Si abres <http://localhost:3000> sin configurar nada, la app te manda al login y
 te muestra este mismo instructivo en vez de un error.
 
-### 6. Desplegar
+### 7. Desplegar
 
 Importa el repo en Vercel. Como el proyecto vive en una subcarpeta, en la
 configuración del proyecto pon **Root Directory: `taskflow`**. Carga las dos
@@ -190,6 +219,7 @@ app/
     hoy/ tareas/ semana/ notas/ rutinas/ ajustes/
   api/sync/canvas/   route handler del sync de Canvas (POST)
   api/export/        baja todos tus datos en JSON (GET)
+  api/sync/          el sync diario del cron, con CRON_SECRET (GET)
   auth/callback/     canje del código de OAuth por la sesión
   auth/signout/      cerrar sesión
   login/             entrar con Google, o el instructivo si falta configurar
@@ -203,7 +233,7 @@ lib/
   canvas.ts          Canvas: paginación y mapeo a tareas (puro, testeado)
   canvas-sync.ts     el sync en sí: trae de Canvas y escribe en la base
   data.ts            lectura desde Supabase (sólo servidor)
-  supabase/          clientes de navegador y de servidor
+  supabase/          clientes de navegador, de servidor y de service role
 proxy.ts             refresca la sesión y protege las rutas
 tools/demo/          Supabase de mentira para `npm run demo` (sólo desarrollo)
 supabase/schema.sql  esquema completo, idempotente
@@ -217,6 +247,12 @@ reference con sus custom properties.
 ---
 
 ## Decisiones que vale la pena conocer
+
+**Una API nunca se redirige al login.** El proxy manda al login las páginas sin
+sesión, pero deja pasar `/api/*`, donde cada handler comprueba por su cuenta y
+responde 401 en JSON. Antes no: `/api/sync` recibía un 307 hacia `/login`, y
+como el cron de Vercel no manda cookies, el sync diario no habría corrido nunca
+— sin un solo error a la vista. Salió al probar el endpoint, no al leerlo.
 
 **La semana vive en la URL.** `/semana?w=2` es dentro de dos semanas, igual que
 el filtro de área en Tareas. Se recarga, se comparte y se puede marcar. El

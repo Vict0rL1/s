@@ -17,7 +17,9 @@ export async function updateSession(request: NextRequest) {
   // Sin variables de entorno no hay a quién preguntarle: todo al login, que en
   // ese caso muestra el instructivo de configuración en vez de un stack trace.
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    if (request.nextUrl.pathname === "/login") return response;
+    if (request.nextUrl.pathname === "/login" || request.nextUrl.pathname.startsWith("/api/")) {
+      return response;
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
@@ -44,6 +46,13 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
+
+  // Una API nunca se redirige al login: un cliente que espera JSON recibiría el
+  // HTML de una página. Cada route handler hace su propia comprobación y
+  // responde 401 — y `/api/sync` ni siquiera usa sesión, se autentica con
+  // CRON_SECRET, así que redirigirlo dejaba el cron sin correr jamás.
+  if (path.startsWith("/api/")) return response;
+
   const isPublic = PUBLIC.some((p) => path === p || path.startsWith(p + "/"));
 
   if (!data.user && !isPublic) {
