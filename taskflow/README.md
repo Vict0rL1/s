@@ -25,15 +25,48 @@ Cloud Console recién en la fase 3.
 1. Crea un proyecto en [supabase.com](https://supabase.com).
 2. Abre el **SQL Editor**, pega todo `supabase/schema.sql` y córrelo. Es
    idempotente: si lo corres dos veces no rompe nada.
-3. En **Project Settings → API** copia la *Project URL* y la *anon public key*.
+3. En **Project Settings → API** copia la *Project URL* y la llave pública. Según
+   qué tan reciente sea el panel aparece como *anon public* o como *publishable
+   key* (`sb_publishable_…`); las dos sirven para `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+   La que **no** va aquí es la *service role* / *secret key*: esa salta la RLS y
+   nunca debe tocar el navegador.
 
 ### 2. Login con Google
 
-1. En Supabase, **Authentication → Providers → Google**, actívalo y pega el
-   Client ID y el Client Secret del Google Cloud Console.
-2. En **Authentication → URL Configuration**, agrega a *Redirect URLs*:
+Son dos consolas y hay **dos URLs de redirección distintas**. Confundirlas es el
+error clásico, así que lee esto antes de pegar nada.
+
+**En Google Cloud Console** ([console.cloud.google.com](https://console.cloud.google.com)):
+
+1. Proyecto nuevo.
+2. **APIs y servicios → Pantalla de consentimiento OAuth** → tipo **Externo**,
+   déjala en modo **Testing** y agrégate como *test user* con tu propio correo.
+   En Testing no necesitas la verificación de Google, que es el trámite que hace
+   que la gente abandone esto a medio camino.
+3. **Credenciales → Crear credenciales → ID de cliente de OAuth → Aplicación
+   web**.
+4. En *URIs de redireccionamiento autorizados* pon **la de Supabase**, no la de
+   tu app:
+
+   ```
+   https://TU-REF.supabase.co/auth/v1/callback
+   ```
+
+   `TU-REF` es el identificador del proyecto, el mismo que sale en
+   `NEXT_PUBLIC_SUPABASE_URL`. Quien habla con Google es Supabase, no TaskFlow.
+5. Copia el **Client ID** y el **Client Secret**.
+
+**En Supabase:**
+
+6. **Authentication → Providers → Google**: actívalo y pega esos dos valores.
+   Van aquí, no en `.env.local`.
+7. **Authentication → URL Configuration**: en *Site URL* pon
+   `http://localhost:3000` mientras desarrollas, y en *Redirect URLs* agrega
+   **las de tu app** (estas sí):
    - `http://localhost:3000/auth/callback`
    - `https://TU-APP.vercel.app/auth/callback`
+
+En resumen: Google apunta a Supabase, y Supabase apunta a TaskFlow.
 
 En la fase 1 el login sólo pide identidad. Los scopes de Calendar entran en la
 fase 3, en `components/GoogleButton.tsx` (hay un comentario marcando el lugar).
