@@ -1,5 +1,9 @@
 /**
- * Lectura de variables de entorno con un mensaje decente cuando faltan.
+ * Variables públicas (`NEXT_PUBLIC_*`), con un mensaje decente cuando faltan.
+ *
+ * Este módulo llega al bundle del navegador — lo importa `supabase/client.ts`.
+ * Cualquier secreto de servidor va en `lib/env.server.ts`, que está protegido
+ * con `server-only`.
  *
  * `NEXT_PUBLIC_*` tiene que leerse con el nombre completo y literal:
  * Next las sustituye en tiempo de build, `process.env[nombre]` no funciona.
