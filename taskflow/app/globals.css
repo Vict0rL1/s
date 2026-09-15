@@ -249,6 +249,7 @@ a{color:inherit;text-decoration:none}
 .authcard h1{font-size:23px;margin-bottom:6px}
 .authcard p{margin:0 0 18px;font-size:13.5px;color:var(--ink-2)}
 .authcard .btn{width:100%;justify-content:center;display:flex;align-items:center;gap:9px;padding:10px 14px}
+.authcard .row .btn{width:auto}
 .authnote{margin-top:16px;font-size:12px;color:var(--ink-3);line-height:1.55}
 .authnote code{font-family:var(--mono);font-size:11px;background:var(--surface-2);padding:1px 5px;border-radius:4px;word-break:break-all}
 .err{background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent);border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px}
@@ -277,3 +278,16 @@ a{color:inherit;text-decoration:none}
 .hrow.wide .streak{display:block;margin-top:5px}
 .panel + .panel{margin-top:16px}
 .wi .mono{opacity:.7}
+
+/* La regla `.brand{display:none}` del riel en móvil también tapaba la marca del
+   login, que no vive en el riel. Aquí se rescata. */
+@media (max-width:760px){
+  .authcard .brand{display:flex}
+}
+
+/* ---- separador «o» entre los dos logins ---- */
+.sep{display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--ink-3);font-size:12px}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* ---- aviso neutro, distinto del error ---- */
+.notice{background:var(--teal-soft);border:1px solid var(--teal-line);color:var(--teal);border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px}

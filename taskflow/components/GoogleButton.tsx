@@ -35,7 +35,7 @@ export function GoogleButton() {
   return (
     <>
       {error ? <div className="err">{error}</div> : null}
-      <button className="btn" onClick={signIn} disabled={loading}>
+      <button className="btn line" onClick={signIn} disabled={loading}>
         {loading ? "Abriendo Google…" : "Entrar con Google"}
       </button>
     </>

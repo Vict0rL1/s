@@ -17,8 +17,11 @@ los pasos están abajo.
 
 ## Ponerla a andar
 
-Necesitas una cuenta de **Supabase** y una de **Vercel**, ambas gratis. Google
-Cloud Console recién en la fase 3.
+Necesitas una cuenta de **Supabase**, gratis. Vercel sólo cuando quieras abrirla
+desde el teléfono, y Google Cloud Console recién en la fase 3.
+
+**El camino corto para verla funcionando hoy**: pasos 1, 2a, 3 y 5. Son unos ocho
+minutos y una sola consola.
 
 ### 1. Base de datos
 
@@ -31,7 +34,29 @@ Cloud Console recién en la fase 3.
    La que **no** va aquí es la *service role* / *secret key*: esa salta la RLS y
    nunca debe tocar el navegador.
 
-### 2. Login con Google
+### 2. Login
+
+Hay dos formas de entrar. La de correo no necesita nada más que Supabase; la de
+Google hace falta para la fase 3, porque es la que entrega el token de Calendar.
+
+#### 2a. Con correo y contraseña — lo rápido
+
+El proveedor de correo de Supabase ya viene activado, así que no hay nada que
+configurar. Sólo un ajuste para no depender del correo de confirmación:
+
+1. **Authentication → Providers → Email** → apaga **Confirm email**.
+2. Abre la app, escribe tu correo y una contraseña, y dale a **Crear cuenta**.
+   Entras de inmediato.
+3. **En cuanto tengas tu cuenta**, vuelve ahí y apaga **Allow new users to sign
+   up**. Si no, cualquiera que encuentre la URL puede registrarse. La RLS impide
+   que vean tus datos, pero no hay razón para dejar el registro abierto en una
+   app de un solo usuario.
+
+Si prefieres dejar **Confirm email** encendido, también funciona: te llega un
+correo con un enlace. Supabase limita esos envíos a unos pocos por hora en el
+plan gratis, así que para probar es más cómodo apagarlo.
+
+#### 2b. Con Google — para la fase 3
 
 Son dos consolas y hay **dos URLs de redirección distintas**. Confundirlas es el
 error clásico, así que lee esto antes de pegar nada.

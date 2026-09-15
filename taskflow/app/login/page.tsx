@@ -1,3 +1,4 @@
+import { EmailAuth } from "@/components/EmailAuth";
 import { GoogleButton } from "@/components/GoogleButton";
 import { isConfigured } from "@/lib/env";
 
@@ -23,6 +24,10 @@ export default async function LoginPage({ searchParams }: Props) {
           <>
             <h1>Entra con tu cuenta</h1>
             <p>Una sola cuenta, la tuya. Los datos quedan en tu proyecto de Supabase.</p>
+            <EmailAuth />
+            <div className="sep">
+              <span>o</span>
+            </div>
             <GoogleButton />
           </>
         ) : (
