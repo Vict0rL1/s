@@ -33,6 +33,7 @@ interface Resumen {
   roi: number | null;
   arriesgado: number;
   empezado: string | null;
+  ultima: { cuando: string; candidatas: number; colocadas: number; rechazos: Record<string, number> } | null;
   apuestas: Apuesta[];
   motivo: string | null;
 }
@@ -109,6 +110,24 @@ export default function PaperBankroll() {
       {r.apuestas.length === 0 && r.motivo && (
         <div className="border-t border-white/[0.07] px-4 py-3 text-[14px] leading-relaxed text-[#9aa1ac]">
           <strong className="text-[#c3c9d1]">Todavía no ha apostado nada.</strong> {r.motivo}
+        </div>
+      )}
+
+      {/* La última pasada, con los RECHAZOS. Sin esto, un banco quieto se lee igual
+          esté esperando partidos, esperando cuotas, o decidiendo no apostar — y la
+          tercera es el experimento funcionando, no una avería. */}
+      {r.ultima && (r.ultima.candidatas > 0 || Object.keys(r.ultima.rechazos).length > 0) && (
+        <div className="border-t border-white/[0.07] px-4 py-2.5 text-[13px] leading-relaxed text-[#7b828d]">
+          Última revisión {new Date(r.ultima.cuando).toLocaleString('es', {
+            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+          })}
+          : {r.ultima.candidatas} partido{r.ultima.candidatas === 1 ? '' : 's'} con cuotas reales,{' '}
+          {r.ultima.colocadas} apostado{r.ultima.colocadas === 1 ? '' : 's'}.
+          {Object.entries(r.ultima.rechazos).map(([motivo, n]) => (
+            <span key={motivo} className="block">
+              · {n} descartado{n === 1 ? '' : 's'} por {motivo}
+            </span>
+          ))}
         </div>
       )}
 

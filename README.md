@@ -129,6 +129,24 @@ no hay ninguna real lo dice en vez de dar números:
 > Con cuotas de demostración este banco no apuesta: el modelo encontraría valor en su
 > propio precio y el resultado no diría nada.
 
+**Un banco quieto tiene que poder explicarse.** Tres semanas sin apostar se ven idénticas
+en los tres casos que las producen, y cada uno pide algo distinto:
+
+| Lo que pasa | Lo que dice | Qué hacer |
+| --- | --- | --- |
+| No hay partidos con cuotas reales | «no hay ningún partido con cuotas reales por delante» | arreglar las cuotas |
+| Los hay y se descartan todos | «se evaluaron N partidos y ninguno pasó la política de riesgo» | **nada: es el modelo decidiendo no apostar** |
+| Los hay y apuesta | la tabla de apuestas | seguirlo |
+
+El tercer caso —el que más despista— es el experimento funcionando perfectamente. Sin
+dejar escrito el recuento de rechazos y su motivo, se lee como una avería. Por eso cada
+pasada guarda cuántos partidos miró, cuántos apostó y **por qué descartó el resto**:
+
+```
+Última revisión: 1 partido(s) con cuotas reales, 0 apostado(s).
+  · 1 descartado(s) por ventaja insuficiente
+```
+
 **Es hacia delante, no una simulación del pasado.** Se podría recorrer el histórico y
 calcular qué habría pasado, pero no hay cuotas históricas de tenis guardadas y el log
 resuelto con precio son 15 partidos de la NFL — una muestra con la que cualquier ROI es

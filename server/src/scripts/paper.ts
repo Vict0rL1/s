@@ -49,6 +49,18 @@ if (r.apuestas.length > 0) {
   }
 }
 
+// La última pasada, con los rechazos agrupados. Es lo que contesta a «¿por qué lleva
+// tres semanas sin apostar?», que sin esto no se puede contestar sin leer código.
+if (r.ultima && r.ultima.candidatas > 0) {
+  console.log(
+    `\n  ${C.dim}Última revisión: ${r.ultima.candidatas} partido(s) con cuotas reales, ` +
+      `${r.ultima.colocadas} apostado(s).${C.off}`,
+  );
+  for (const [motivo, n] of Object.entries(r.ultima.rechazos)) {
+    console.log(`  ${C.dim}  · ${n} descartado(s) por ${motivo}${C.off}`);
+  }
+}
+
 // Sin apuestas, el motivo es lo único que hay que leer. Un banco a 1.000 y una tabla
 // vacía, sin explicación, se lee como que el experimento está roto.
 if (r.apuestas.length === 0 && r.motivo) {

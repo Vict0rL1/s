@@ -39,6 +39,50 @@ import { decideEvent, DEFAULT_CONFIG } from '../staking/policy.ts';
 /** El banco inicial del experimento. Se guarda para que cambiarlo sea deliberado. */
 export const BANCO_INICIAL = 1000;
 const KEY_INICIO = 'paper:startedAt';
+const KEY_ULTIMA = 'paper:lastRun';
+
+/**
+ * Qué pasó la última vez que se miró, incluidos los RECHAZOS.
+ *
+ * ===========================================================================
+ * UN BANCO QUIETO TIENE QUE PODER EXPLICARSE
+ * ===========================================================================
+ * Sin esto, tres semanas sin apostar se ven exactamente igual en los tres casos que
+ * las producen, y cada uno pide algo distinto:
+ *
+ *   · no hay partidos por delante            → esperar
+ *   · los hay, pero sin cuotas reales         → arreglar las cuotas
+ *   · los hay con cuotas y se rechazan todos  → el modelo no ve ventaja, y eso es un
+ *                                               RESULTADO, no una avería
+ *
+ * El tercero es el que más despista: el experimento está corriendo perfectamente y
+ * decidiendo no apostar, que es justo lo que se le pide a una política de riesgo. Sin
+ * dejarlo escrito, se lee como que está roto.
+ *
+ * Se guarda en meta y no en una tabla porque solo interesa LA ÚLTIMA pasada: un
+ * histórico de rechazos sería un registro que crece sin parar y que nadie leería.
+ */
+export interface UltimaPasada {
+  cuando: string;
+  candidatas: number;
+  colocadas: number;
+  /** Cuántas cayó cada motivo de rechazo. */
+  rechazos: Record<string, number>;
+}
+
+function guardarPasada(p: UltimaPasada): void {
+  setMeta(KEY_ULTIMA, JSON.stringify(p));
+}
+
+export function ultimaPasada(): UltimaPasada | null {
+  try {
+    const raw = getMeta(KEY_ULTIMA);
+    return raw ? (JSON.parse(raw) as UltimaPasada) : null;
+  } catch {
+    // Un meta corrupto no puede tumbar la pantalla del banco.
+    return null;
+  }
+}
 
 export interface ApuestaPapel {
   id: number;
@@ -74,6 +118,8 @@ export interface Resumen {
   /** Total arriesgado en apuestas liquidadas, que es el denominador del ROI. */
   arriesgado: number;
   empezado: string | null;
+  /** Qué pasó la última vez que se miró, rechazos incluidos. */
+  ultima: UltimaPasada | null;
   apuestas: ApuestaPapel[];
   /** Por qué no hay apuestas, cuando no hay. */
   motivo: string | null;
@@ -125,6 +171,7 @@ export function resumen(motivo: string | null = null): Resumen {
     roi: arriesgado > 0 ? beneficio / arriesgado : null,
     arriesgado,
     empezado: getMeta(KEY_INICIO),
+    ultima: ultimaPasada(),
     apuestas: todas.slice(0, 50),
     motivo,
   };
@@ -377,6 +424,7 @@ export function place(): { colocadas: number; motivo: string | null; detalle: st
     return { colocadas: 0, motivo: `no pude leer las candidatas: ${(e as Error).message}`, detalle: [] };
   }
   if (candidatas.length === 0) {
+    guardarPasada({ cuando: new Date().toISOString(), candidatas: 0, colocadas: 0, rechazos: {} });
     return {
       colocadas: 0,
       // El motivo distingue las dos razones por las que puede no haber nada, que piden
@@ -405,6 +453,7 @@ export function place(): { colocadas: number; motivo: string | null; detalle: st
   let abierto = expuesto();
   let colocadas = 0;
   const detalle: string[] = [];
+  const rechazos: Record<string, number> = {};
 
   for (const c of candidatas) {
     // `decideEvent` elige la salida Y la dimensiona, con la regla de la política. Para
@@ -416,7 +465,9 @@ export function place(): { colocadas: number; motivo: string | null; detalle: st
       DEFAULT_CONFIG,
     );
     if (!d || d.stake <= 0) {
-      detalle.push(`${c.label}: no se apuesta — ${d?.blockedBy ?? 'ninguna salida con ventaja'}`);
+      const motivoRechazo = d?.blockedBy ?? 'ninguna salida con ventaja';
+      rechazos[motivoRechazo] = (rechazos[motivoRechazo] ?? 0) + 1;
+      detalle.push(`${c.label}: no se apuesta — ${motivoRechazo}`);
       continue;
     }
     const elegida = c.salidas.find((s) => s.label === d.label);
@@ -439,7 +490,24 @@ export function place(): { colocadas: number; motivo: string | null; detalle: st
         `(${(d.edge * 100).toFixed(1)} pp de ventaja)`,
     );
   }
-  return { colocadas, motivo: colocadas === 0 ? 'ninguna candidata pasó la política de sizing' : null, detalle };
+  guardarPasada({
+    cuando: new Date().toISOString(),
+    candidatas: candidatas.length,
+    colocadas,
+    rechazos,
+  });
+  return {
+    colocadas,
+    // Con candidatas y cero colocadas, el motivo ya no es «no hay partidos»: el
+    // experimento ha corrido y ha decidido no apostar. Se dice con el número, porque
+    // «ninguna de 14» y «ninguna de 1» son dos situaciones muy distintas.
+    motivo:
+      colocadas === 0
+        ? `se evaluaron ${candidatas.length} partido(s) con cuotas reales y ninguno pasó la ` +
+          'política de riesgo. No es una avería: es el modelo decidiendo no apostar.'
+        : null,
+    detalle,
+  };
 }
 
 // ---------------------------------------------------------------------------
