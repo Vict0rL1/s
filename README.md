@@ -107,6 +107,45 @@ Detalle en [«Quiero las cuotas reales»](#quiero-las-cuotas-reales-npm-run-odds
 
 Y si algo sigue sin cuadrar, **`npm run doctor`** diagnostica sin gastar ni una petición.
 
+### Preguntar a los datos, sin que nada se los invente
+
+En la pestaña de tenis hay un recuadro donde se escribe una pregunta y sale una
+respuesta. **No hay ningún modelo de lenguaje detrás, y esa es la característica.**
+
+Un chatbot que contesta «Alcaraz tiene 2180 de Elo» es un generador de frases
+plausibles, y un número plausible es justo lo que no sirve para comprobar nada: suena
+igual esté bien o mal, y distinguirlo obliga a ir a mirarlo a mano — que es el trabajo
+que se quería ahorrar. Para *comprobar datos*, un modelo de lenguaje es la herramienta
+equivocada.
+
+El reparto que sí funciona:
+
+1. La pregunta se clasifica en una de seis consultas. Es una tarea de clasificación con
+   seis salidas, y para eso bastan unas expresiones regulares: sin clave, sin coste, sin
+   red, y **determinista** — la misma pregunta da siempre la misma consulta.
+2. La consulta la ejecuta SQLite contra la base, y el número que sale es el mismo que
+   enseña la pestaña.
+3. **Cada respuesta dice de dónde viene**, para poder repetirla a mano.
+
+| Pregunta | Qué contesta |
+| --- | --- |
+| `Alcaraz` | Elo general y por superficie, récord, ranking oficial |
+| `cara a cara Alcaraz contra Sinner` | el historial real, partido a partido |
+| `quién gana Sinner contra Djokovic en tierra` | la predicción del modelo, con su fiabilidad |
+| `top 10 ATP` | la clasificación por Elo |
+| `estado de los datos` | qué hay guardado y por qué faltan cuotas |
+| `qué precisión tiene el modelo` | las cifras del backtest, citadas como tales |
+
+Ninguna herramienta acepta SQL de fuera: son funciones con argumentos tipados y las
+consultas escritas en el código. A un asistente al que se le puede dictar SQL se le puede
+dictar `DROP TABLE`.
+
+**Dónde encajaría un modelo, si se quisiera:** en `server/src/ask/router.ts` y solo ahí,
+sustituyendo el clasificador por una llamada con herramientas donde el modelo elige
+*cuál* y *con qué argumentos*, y nada más. El contrato de salida es el mismo, así que las
+respuestas seguirían saliendo de SQLite. Lo que aportaría es tolerancia a preguntas
+raras; lo que no debe aportar nunca es el contenido de la respuesta.
+
 ### «No quiero partidos inventados»: `npm run demo -- --off`
 
 ```bash

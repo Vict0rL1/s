@@ -14,6 +14,7 @@ import {
   DayFilter, DayHeading, pillClass, StaleHistoryWarning, PicksPanel, DashboardHeader,
   EmptySlate, SlateTable, VacioPorqueNoHayCuotas,
 } from './ui';
+import AskPanel from './AskPanel';
 import { staleLabel, staleness } from '../lib/staleness';
 import { CAVEATS, rankPicks, tennisPicks } from '../lib/picks';
 import { tennisSlate } from '../lib/slate';
@@ -154,6 +155,8 @@ export default function TennisDashboard() {
       <PicksPanel {...picks} caveat={CAVEATS.tennis} demoOdds={demoOdds} stake={stake} onStakeChange={setStake} />
 
       <SlateTable rows={slate} demoOdds={demoOdds} />
+
+      <AskPanel />
 
       {matches.length === 0 && !loading && (
         <VacioPorqueNoHayCuotas

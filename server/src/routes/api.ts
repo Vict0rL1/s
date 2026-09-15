@@ -27,6 +27,7 @@ import { computeH2H } from '../model/h2h.ts';
 import { impliedProbabilities, type MarketProbabilities } from '../model/market.ts';
 import { buildPrediction, type Prediction } from '../model/predict.ts';
 import { refreshOdds } from '../ingest/odds.ts';
+import { responder } from '../ask/router.ts';
 import { evaluate } from '../live/engine.ts';
 import { matchupServe } from '../live/serve.ts';
 import { describe as describeState, type LiveState } from '../live/state.ts';
@@ -370,6 +371,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     // que una persona acababa de pedir, y encima lo reportaba como «no hay partidos».
     const result = await refreshOdds(true);
     return { ok: true, ...result };
+  });
+
+  // --- el asistente: pregunta en texto, respuesta desde la base ---
+  //
+  // POST y no GET porque la pregunta es texto libre del usuario y en una URL acabaría
+  // en los logs de acceso de cualquier proxy por el que pase.
+  app.post<{ Body: { pregunta?: string } }>('/ask', async (req, reply) => {
+    const pregunta = String(req.body?.pregunta ?? '').slice(0, 300);
+    if (!pregunta.trim()) return reply.code(400).send({ error: 'Falta la pregunta.' });
+    return responder(pregunta);
   });
 
   // --- tours ---
