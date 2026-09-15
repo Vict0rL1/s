@@ -52,6 +52,7 @@ import type {
   LlmStatus,
   ProviderUsage,
   Quote,
+  HistorialDeCartera,
   RiesgoDeCartera,
   SeñalesDeOpciones,
   RiskResponse,
@@ -244,6 +245,8 @@ export const api = {
   portfolio: () => fetchJson<Portfolio>('/api/portfolio'),
   // `descargar` distingue abrir la pantalla (que puede costar una llamada por
   // posición, una vez por semana) de refrescarla (que no debería costar nada).
+  historialDeCartera: (descargar: boolean) =>
+    fetchJson<HistorialDeCartera>(`/api/portfolio/historial?descargar=${descargar}`),
   riesgoDeCartera: (descargar: boolean) =>
     fetchJson<RiesgoDeCartera>(`/api/portfolio/riesgo?descargar=${descargar}`),
   addPosition: (body: { symbol: string; quantity: number; cost_basis: number }) =>

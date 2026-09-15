@@ -192,6 +192,36 @@ def tipo_desde_observaciones(moneda: str, puntos: list[dict], hoy: date | None =
     raise SinTipo(f"La serie {SERIES[moneda]['serie']} no trae ninguna observación con valor.")
 
 
+def serie_por_usd(moneda: str, puntos: list[dict]) -> list[tuple[date, float]]:
+    """Toda la serie de FRED como (fecha, unidades por dólar).
+
+    La curva de valor necesita el tipo VIGENTE en cada fecha, no el de hoy: con
+    el actual aplicado a todo el histórico, una depreciación de la divisa
+    desaparece del gráfico y lo que movió el cambio parece que lo movió la
+    acción. Pasa por la misma comprobación de banda que el tipo puntual — una
+    serie del revés lo está en todas sus observaciones, no solo en la última.
+    """
+    salida: list[tuple[date, float]] = []
+    for punto in puntos:
+        valor = punto.get("value")
+        if valor is None:
+            continue
+        try:
+            crudo = float(valor)
+            fecha = date.fromisoformat(str(punto["ts"])[:10])
+        except (TypeError, ValueError, KeyError):
+            continue
+        if crudo <= 0:
+            continue
+        por_usd = a_por_usd(moneda, crudo)
+        salida.append((fecha, por_usd))
+
+    if salida:
+        # Basta comprobar una: si la dirección está mal, lo está entera.
+        comprobar_banda(moneda, salida[len(salida) // 2][1])
+    return sorted(salida)
+
+
 def convertir(
     importe: float, desde: str, hacia: str, tipos: dict[str, dict]
 ) -> float:

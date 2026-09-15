@@ -97,8 +97,12 @@ número:
       FRED está escrita a mano con su título al lado y un test la comprueba,
       pero nadie la ha contrastado contra un tipo real. Mira una vez que
       1 USD ≈ 1,3-1,4 CAD y no ≈ 0,7.
-- [ ] **Sin historial de precios de la cartera**: el P&L es puntual, no hay
-      curva de valor en el tiempo.
+- [x] ~~**Sin historial de precios de la cartera.**~~ Hecho:
+      `GET /api/portfolio/historial` reconstruye el valor día a día desde la
+      primera compra, con la línea de lo invertido al lado y las ventas
+      marcadas. El rendimiento y la peor caída salen de un índice encadenado,
+      inmune a compras y ventas — sobre el valor bruto, vender contaba como
+      caída.
 
 ## Mejoras pendientes
 

@@ -197,3 +197,86 @@ export function Histograma({
     </div>
   )
 }
+
+/** La curva de valor de la cartera contra lo invertido.
+ *
+ *  Dos líneas y no una: una curva de valor sola no dice si vas ganando. La
+ *  distancia entre ellas ES el P&L, y los escalones de la línea de coste son
+ *  las veces que compraste o vendiste.
+ *
+ *  Los cierres se marcan porque hacen BAJAR la línea de valor sin que eso sea
+ *  una pérdida: es dinero que salió del modelo. Sin la marca, cada venta se lee
+ *  como un desplome. */
+export function CurvaDeCartera({
+  puntos,
+  cierres = [],
+  height = 180,
+}: {
+  puntos: { fecha: string; valor: number; invertido: number; abiertas: number }[]
+  cierres?: string[]
+  height?: number
+}) {
+  if (!puntos || puntos.length < 2) return null
+
+  const W = 600
+  const todos = puntos.flatMap((p) => [p.valor, p.invertido]).filter((v) => v > 0)
+  const min = Math.min(...todos)
+  const max = Math.max(...todos)
+  const span = max - min || 1
+  const dx = W / (puntos.length - 1)
+  // 8px de margen: sin él el trazo se corta en el máximo y el mínimo, que son
+  // los dos puntos por los que se mira el gráfico.
+  const y = (v: number) => height - 8 - ((v - min) / span) * (height - 16)
+  const trazo = (campo: 'valor' | 'invertido') =>
+    puntos
+      .map((p, i) => `${i === 0 ? 'M' : 'L'}${(i * dx).toFixed(1)},${y(p[campo]).toFixed(1)}`)
+      .join(' ')
+
+  const ultimo = puntos[puntos.length - 1]
+  const gana = ultimo.valor >= ultimo.invertido
+  const indiceDe = (f: string) => puntos.findIndex((p) => p.fecha >= f)
+
+  return (
+    <svg
+      width="100%"
+      height={height}
+      viewBox={`0 0 ${W} ${height}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label="Valor de la cartera frente a lo invertido"
+    >
+      {/* Las ventas, marcadas: la caída de ese día no es una pérdida. */}
+      {cierres.map((f) => {
+        const i = indiceDe(f)
+        if (i < 0) return null
+        return (
+          <line
+            key={f}
+            x1={i * dx}
+            x2={i * dx}
+            y1="0"
+            y2={height}
+            strokeWidth="1"
+            strokeDasharray="2 3"
+            className="stroke-slate-400"
+          />
+        )
+      })}
+      {/* Lo invertido va detrás y más fino: es la referencia, no el dato. */}
+      <path
+        d={trazo('invertido')}
+        fill="none"
+        strokeWidth="1.2"
+        strokeDasharray="4 3"
+        className="stroke-slate-400"
+      />
+      <path
+        d={trazo('valor')}
+        fill="none"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        className={gana ? 'stroke-emerald-500' : 'stroke-red-500'}
+      />
+    </svg>
+  )
+}

@@ -757,6 +757,51 @@ alguien la va a buscar. Lo que no se hizo fue rellenar el hueco del 200 en la
 paleta: `border-amber-200` se usa en catorce sitios como borde visible de las
 cajas de aviso, y oscurecerlo habría roto los catorce para arreglar dos.
 
+## El recorrido de la cartera, no solo el P&L de hoy
+
+El portafolio decía cuánto vale HOY y cuánto llevas ganado HOY. Faltaba lo único
+que contesta «¿cómo ha ido esto de verdad?»: el camino. Un +17 % que subió en
+línea recta y otro que llegó ahí tras estar un −30 % son la misma cifra y no la
+misma experiencia, y la segunda es la que hace vender abajo.
+
+`GET /api/portfolio/historial` reconstruye el valor día a día desde la primera
+compra, con la línea de lo invertido al lado —los escalones son las compras— y
+las ventas marcadas.
+
+### Un bug que solo apareció al leer los números de salida
+
+La primera versión publicaba **«peor caída vivida: −11,8 %»**. Resulta que la
+venta de una posición había hundido la línea un 10,5 %: el resumen estaba
+presentando **tu propia decisión de vender** como un golpe del mercado, que es
+justo lo contrario de lo que sirve para saber si aguantarías otra vez.
+
+El arreglo es un **índice encadenado**: cada día se encadena el retorno
+calculado solo sobre las posiciones abiertas ese día **y el anterior**. Una que
+entra o sale no aporta retorno el día del movimiento. El índice no se entera de
+compras ni de ventas, así que su drawdown es lo que de verdad hizo el mercado.
+
+| | Antes | Ahora |
+|---|---|---|
+| Peor caída vivida | −11,8 % (la venta) | **−5,1 %** (mercado) |
+| Fechas | alrededor de la venta | un episodio real |
+
+Con eso aparece gratis un número que no existía: el **rendimiento sin contar
+aportes ni ventas**, que es el único comparable con un índice.
+
+### Tres decisiones más que deciden si la curva miente
+
+1. **Es el valor de las posiciones ABIERTAS, no el de tu cuenta.** La app no
+   lleva saldo en efectivo, así que un cierre hace bajar la línea — y eso es una
+   retirada, no una pérdida. Se dice en cada respuesta y se marca cada fecha.
+2. **El cambio es el de CADA DÍA, no el de hoy.** Convertir el histórico al tipo
+   actual convertiría un movimiento de divisa en uno de la acción. Hay un test
+   con el precio congelado y el CAD depreciándose: si se usara el tipo de hoy,
+   la depreciación desaparecería del gráfico.
+3. **El resumen se calcula sobre la serie completa, no sobre la adelgazada.** La
+   curva se recorta a 260 puntos para caber en el payload —forzando el mínimo y
+   el máximo dentro, como en la curva de crisis— pero los números de al lado no
+   dependen de cuántos puntos quepan en el dibujo.
+
 ## Divisas: sumar dólares con euros es la peor clase de error
 
 La cartera sumaba `market_value` de todas las posiciones sin mirar la moneda.

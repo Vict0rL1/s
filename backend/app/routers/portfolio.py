@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.analysis import fx, portfolio_risk
+from app.analysis import fx, historial as hist, portfolio_risk
 from app.analysis.decision import _stop_pct
 from app.analysis.risk_budget import presupuesto_de_riesgo
 from app.analysis.sizing import con_caida_esperada, peor_ventana
@@ -680,6 +680,72 @@ def _referencia_del_universo(session: Session) -> tuple[dict | None, int]:
             else (ordenados[medio - 1] + ordenados[medio]) / 2
         )
     return (referencia or None), empresas
+
+
+DIAS_FX_HISTORICO = 4000  # ~11 años: cubre cualquier cartera de esta app
+
+
+def _series_fx(service: MarketDataService, monedas: set[str]) -> tuple[dict, dict]:
+    """Series completas de tipos, para convertir CADA fecha con SU tipo.
+
+    Con el tipo de hoy aplicado a todo el histórico, una depreciación de la
+    divisa desaparece del gráfico y lo que movió el cambio parece que lo movió
+    la acción.
+    """
+    series, fallos = {}, {}
+    desde = fx.inicio_de_ventana(dias=DIAS_FX_HISTORICO)
+    for moneda in sorted(monedas):
+        if moneda == fx.BASE or moneda not in fx.SERIES:
+            continue
+        try:
+            payload = service.get("macro", series_id=fx.SERIES[moneda]["serie"], start=desde)
+            series[moneda] = fx.serie_por_usd(moneda, payload.get("points") or [])
+        except (DataNotFoundError, AllProvidersFailedError, fx.SinTipo) as exc:
+            fallos[moneda] = str(exc)[:200]
+    return series, fallos
+
+
+@router.get("/historial")
+def historial_de_cartera(
+    descargar: bool = True,
+    session: Session = Depends(get_session),
+    service: MarketDataService = Depends(get_service),
+):
+    """La curva de valor de la cartera, no solo el P&L de hoy.
+
+    Un +17 % que subió en línea recta y otro que llegó ahí tras estar un −30 %
+    son la misma cifra y no la misma experiencia. Incluye las posiciones
+    CERRADAS hasta su fecha de cierre: sin ellas la curva contaría una historia
+    en la que nunca vendiste nada.
+    """
+    filas = session.execute(
+        select(Position, Instrument).join(Instrument, Position.instrument_id == Instrument.id)
+    ).all()
+    if not filas:
+        return {"disponible": False, "nota": "No hay posiciones que recorrer."}
+
+    posiciones, symbols, monedas = [], [], set()
+    for position, instrument in filas:
+        _, divisa = _precio_y_divisa(service, instrument.symbol)
+        moneda = fx.normalizar(divisa) or fx.BASE
+        monedas.add(moneda)
+        symbols.append(instrument.symbol)
+        posiciones.append(
+            {
+                "symbol": instrument.symbol,
+                "quantity": position.quantity,
+                "cost_basis": position.cost_basis,
+                "currency": moneda,
+                "opened_at": position.opened_at.date(),
+                "closed_at": position.closed_at.date() if position.closed_at else None,
+            }
+        )
+
+    series, _ = _historico_largo(service, sorted(set(symbols)), descargar)
+    fx_series, fallos_fx = _series_fx(service, monedas)
+
+    resultado = hist.historial(posiciones, series, fx_series, base=fx.BASE)
+    return {**resultado, "fallos_de_cambio": fallos_fx}
 
 
 @router.get("/riesgo")

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CompanyLogo } from '../components/CompanyLogo'
-import { Sparkline } from '../components/Sparkline'
+import { CurvaDeCartera, Sparkline } from '../components/Sparkline'
 import { api } from '../api/client'
 import type {
   DivisasDeCartera,
+  HistorialDeCartera,
   Estres,
   Portfolio,
   PriceAlert,
@@ -198,6 +199,117 @@ function DivisasPanel({ d }: { d: DivisasDeCartera }) {
   )
 }
 
+
+/** El recorrido del valor de la cartera, no solo el P&L de hoy.
+ *
+ *  Se carga aparte y solo cuando se abre la pestaña: necesita el histórico
+ *  largo de cada posición, que puede costar una descarga. */
+function HistorialPanel() {
+  const [d, setD] = useState<HistorialDeCartera | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.historialDeCartera(false).then(setD, (e: Error) => setError(e.message))
+  }, [])
+
+  if (error) {
+    return (
+      <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        {error}
+      </section>
+    )
+  }
+  if (!d) return null
+  if (!d.disponible) {
+    return (
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-sm font-semibold text-slate-800">Recorrido de la cartera</h3>
+        <p className="mt-1 text-xs text-slate-500">{d.nota}</p>
+      </section>
+    )
+  }
+
+  const r = d.resumen
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-800">
+          Recorrido de la cartera
+        </h3>
+        <span className="text-[11px] text-slate-400">
+          {d.desde} → {d.hasta} · {d.sesiones} sesiones
+        </span>
+      </div>
+
+      {r?.disponible && (
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-8 gap-y-2">
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">Ahora</div>
+            <div className="text-xl font-semibold tabular-nums text-slate-800">
+              {fmtNumber(r.actual)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">Máximo</div>
+            <div className="text-xl tabular-nums text-slate-500">{fmtNumber(r.maximo)}</div>
+            {r.bajo_maximo_pct !== null && r.bajo_maximo_pct !== undefined && (
+              <div className="text-[10px] tabular-nums text-slate-400">
+                {fmtNumber(r.bajo_maximo_pct, 1)} % por debajo
+              </div>
+            )}
+          </div>
+          <div>
+            {/* El encadenado, no el bruto: comprar y vender mueven el valor sin
+                que eso sea rentabilidad. */}
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              Rendimiento
+            </div>
+            <div
+              className={`text-xl font-semibold tabular-nums ${
+                (r.rendimiento_pct ?? 0) >= 0 ? 'text-emerald-700' : 'text-red-700'
+              }`}
+            >
+              {(r.rendimiento_pct ?? 0) > 0 ? '+' : ''}
+              {fmtNumber(r.rendimiento_pct, 1)} %
+            </div>
+            <div className="text-[10px] text-slate-400">sin contar aportes ni ventas</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              Peor caída vivida
+            </div>
+            <div className="text-xl font-semibold tabular-nums text-red-700">
+              {fmtNumber(r.max_drawdown_pct, 1)} %
+            </div>
+            <div className="text-[10px] text-slate-400">
+              {r.drawdown_desde} → {r.drawdown_hasta}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3">
+        <CurvaDeCartera puntos={d.puntos ?? []} cierres={d.cierres ?? []} />
+      </div>
+      <div className="mt-1 flex flex-wrap gap-x-4 text-[10px] text-slate-400">
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-0.5 w-4 bg-emerald-500" /> valor
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-0.5 w-4 bg-slate-400" /> invertido
+        </span>
+        {(d.cierres?.length ?? 0) > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-3 w-px bg-slate-400" /> venta
+          </span>
+        )}
+      </div>
+
+      <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{d.aviso}</p>
+    </section>
+  )
+}
+
 function Pnl({ value, pct }: { value: number | null; pct: number | null }) {
   if (value === null) return <span className="text-slate-400">—</span>
   const up = value >= 0
@@ -329,6 +441,7 @@ function PortfolioTab() {
           )}
 
           {data.divisas && <DivisasPanel d={data.divisas} />}
+          <HistorialPanel />
           {data.risk_budget && <RiskBudgetPanel risk={data.risk_budget} />}
 
           {data.estres && <EstresPanel estres={data.estres} />}

@@ -1822,3 +1822,35 @@ export interface HistogramaDistribucion {
   perdedoras?: number
   suficiente?: boolean
 }
+
+export interface HistorialDeCartera {
+  disponible: boolean
+  nota?: string
+  base?: string
+  puntos?: {
+    fecha: string
+    valor: number
+    invertido: number
+    abiertas: number
+    indice?: number
+  }[]
+  desde?: string
+  hasta?: string
+  sesiones?: number
+  cierres?: string[]
+  excluidas?: { symbol: string; motivo: string }[]
+  fallos_de_cambio?: Record<string, string>
+  aviso?: string
+  resumen?: {
+    disponible: boolean
+    maximo?: number
+    actual?: number
+    invertido_actual?: number
+    max_drawdown_pct?: number
+    drawdown_desde?: string
+    drawdown_hasta?: string
+    bajo_maximo_pct?: number | null
+    indice_final?: number
+    rendimiento_pct?: number
+  }
+}

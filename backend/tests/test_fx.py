@@ -215,3 +215,37 @@ def test_un_tipo_viejo_se_avisa_en_la_nota():
     tipos = {"CAD": {"por_usd": 1.37, "fecha": "2026-01-05", "fresco": False, "serie": "DEXCAUS"}}
     r = fx.convertir_cartera([_pos("SHOP", 137.0, "CAD")], tipos)
     assert "más de" in r["nota"] and "días" in r["nota"]
+
+
+# --- La serie completa, para la curva de valor ----------------------------------
+
+
+def test_la_serie_entera_se_convierte_a_por_dolar():
+    """La curva necesita el tipo vigente en CADA fecha, no el de hoy."""
+    puntos = [
+        {"ts": "2026-09-09", "value": "1.35"},
+        {"ts": "2026-09-10", "value": "."},     # festivo
+        {"ts": "2026-09-11", "value": "1.37"},
+    ]
+    serie = fx.serie_por_usd("CAD", puntos)
+    assert serie == [(date(2026, 9, 9), 1.35), (date(2026, 9, 11), 1.37)]
+
+
+def test_la_serie_de_una_moneda_invertida_tambien_se_invierte():
+    puntos = [{"ts": "2026-09-09", "value": "1.08"}, {"ts": "2026-09-10", "value": "1.10"}]
+    serie = fx.serie_por_usd("EUR", puntos)
+    assert serie[0][1] == pytest.approx(1 / 1.08)
+    assert serie[1][1] == pytest.approx(1 / 1.10)
+
+
+def test_una_serie_entera_del_reves_se_detecta():
+    """Si la dirección está mal, lo está en todas las observaciones."""
+    puntos = [{"ts": f"2026-09-{d:02d}", "value": "0.73"} for d in (9, 10, 11)]
+    with pytest.raises(fx.SinTipo) as exc:
+        fx.serie_por_usd("CAD", puntos)
+    assert "del revés" in str(exc.value)
+
+
+def test_una_serie_vacia_devuelve_lista_vacia_sin_romper():
+    assert fx.serie_por_usd("CAD", []) == []
+    assert fx.serie_por_usd("CAD", [{"ts": "2026-09-09", "value": None}]) == []
