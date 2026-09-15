@@ -1557,6 +1557,56 @@ Con el peso corregido, la ablación vuelve a correrse contra el modelo que ahora
 el resultado dudoso deja de serlo: quitar el Elo por superficie pasa de +0,00192 (p=0,0559)
 a **+0,00371 (p=0,0020)**. La pieza siempre sirvió; lo que fallaba era la dosis.
 
+### Se buscó una mejora más y no la hay: diez parámetros barridos, cero candidatos
+
+Después de corregir el peso de superficie quedaba la pregunta obvia: ¿y los demás? El
+modelo tiene diez números que se pueden mover, y cinco de ellos —el encogimiento del cara
+a cara, la ventana de la forma, su decaimiento, su tope y los dos factores de
+calibración— **nunca se habían medido**. Estaban puestos a mano desde el primer día,
+exactamente la situación en la que estaba el peso de superficie antes de resultar que
+estaba mal.
+
+`npm run study:ablation -- --sweep` los barre todos, eligiendo en 2015–2022 y midiendo en
+2023 en adelante. **Ninguno da un candidato.** El mejor, el peso de superficie a 0,4,
+mejora 0,00027 en el periodo de prueba: por debajo del umbral de 0,0005 y muy por debajo
+de lo que este tamaño de muestra puede distinguir del ruido. El resto se quedan entre
+0,00001 y 0,00015, y tres de ellos salen peor.
+
+### Y la combinación de todas tampoco (`--conjunto`)
+
+Diez mejoras de 0,0002 podrían sumar una de 0,002, que sí se mide. Es una hipótesis
+distinta y merece su propia prueba, así que se hizo: descenso por coordenadas sobre los
+diez parámetros, **105 configuraciones evaluadas, todas usando solo partidos anteriores a
+2023**. El segundo periodo no participó en ninguna decisión.
+
+La búsqueda encontró lo que suele encontrarse cuando se buscan 105 cosas:
+
+```
+  elección: 0.60924 → 0.60829  (mejora 0.00095)
+  Cambia: surfaceWeight 0.5→0.4 · movWeight 4→8 · h2hMax 35→50 · restPenalty 60→80
+          formWindow 10→3 · formDecay 0.85→0.6 · formCap 40→20 · bo5Scale 0.86→0.94
+```
+
+Ocho parámetros cambiados y casi una milésima de mejora. En el periodo que no vio:
+
+| | log loss |
+| --- | --- |
+| publicado | 0,62198 |
+| conjunto | 0,62177 |
+| diferencia | **−0,00021** [−0,00126, +0,00075] · p = 0,70 |
+
+**El intervalo cruza el cero por los dos lados.** De los 0,00095 que ganaba al elegir
+sobreviven 0,00021, que no se distingue de cero. Eso no es mala suerte: es la definición
+de sobreajuste, medida. Con 105 configuraciones probadas, la mejor gana por una mezcla de
+efecto y de ruido que le vino de cara, y el ruido no viaja al periodo siguiente.
+
+Si el segundo periodo hubiera participado en la búsqueda, esto se habría publicado como
+una mejora del 0,1 % con ocho parámetros retocados. No se publica nada.
+
+**La conclusión útil es la que no se buscaba:** el modelo publicado ya está en su óptimo
+dentro de esta rejilla. La única mejora real que había —el peso de superficie— ya está
+aplicada, y por eso ninguna otra aparece.
+
 ### Por qué estos negativos son creíbles
 
 Un resultado negativo solo vale si lo que se apagó era de verdad lo que está en producción.

@@ -46,10 +46,12 @@ import {
   MOV_WEIGHT,
   movMultiplier,
   layoffAdjustment,
-  calibrationScaleFor,
+  CALIBRATION_SCALE,
+  CALIBRATION_SCALE_BO3,
+  CALIBRATION_SCALE_BO5,
   REST_MAX_PENALTY,
 } from '../model/elo.ts';
-import { computeForm, type FormResult } from '../model/form.ts';
+import { FORM_MAX_DELTA, type FormResult } from '../model/form.ts';
 import { recordExperiment, bootstrapP } from '../experiments/registry.ts';
 
 const args = Object.fromEntries(
@@ -81,6 +83,10 @@ const WARMUP = 20;
 const SURFACE_WEIGHT = 0.5;
 const H2H_MAX = 35;
 const H2H_SHRINK = 4;
+// Estas dos están privadas en model/form.ts, así que se replican con su valor y la
+// guarda de fidelidad se encarga de avisar si allí cambian.
+const FORM_WINDOW = 10;
+const FORM_DECAY = 0.85;
 
 interface Cfg {
   surfaceWeight: number;
@@ -90,6 +96,26 @@ interface Cfg {
   restPenalty: number;
   /** null = la calibración por formato publicada; un número = uno solo para todo. */
   forcedScale: number | null;
+  // ===========================================================================
+  // LOS QUE NUNCA SE HABÍAN MEDIDO
+  // ===========================================================================
+  // Los cinco de arriba han pasado por la ablación. Estos cinco están puestos a mano
+  // desde el primer día y nadie los ha tocado desde entonces — exactamente la situación
+  // en la que estaba el peso de superficie antes de medirlo, que resultó estar mal y dar
+  // una mejora real de 0,0019 al corregirlo. Un número elegido a ojo no es sospechoso
+  // por ser redondo; es sospechoso por no haber sido medido nunca.
+  /** Encogimiento del cara a cara: n/(n+k). Publicado k=4. */
+  h2hShrink: number;
+  /** Cuántos partidos entran en la forma reciente. Publicado 10. */
+  formWindow: number;
+  /** Peso que pierde cada partido al alejarse. Publicado 0,85. */
+  formDecay: number;
+  /** Tope en puntos Elo del ajuste por forma. Publicado 40. */
+  formCap: number;
+  /** Factor de calibración al mejor de 3. Publicado 0,68. */
+  bo3Scale: number;
+  /** Factor de calibración al mejor de 5. Publicado 0,86. */
+  bo5Scale: number;
 }
 
 const PUBLICADO: Cfg = {
@@ -99,7 +125,36 @@ const PUBLICADO: Cfg = {
   h2hMax: H2H_MAX,
   restPenalty: REST_MAX_PENALTY,
   forcedScale: null,
+  h2hShrink: H2H_SHRINK,
+  formWindow: FORM_WINDOW,
+  formDecay: FORM_DECAY,
+  formCap: FORM_MAX_DELTA,
+  bo3Scale: CALIBRATION_SCALE_BO3,
+  bo5Scale: CALIBRATION_SCALE_BO5,
 };
+
+/**
+ * La forma reciente, replicada aquí para poder barrer sus tres constantes.
+ *
+ * `computeForm` las tiene dentro y no las acepta como argumento, así que con ella no se
+ * pueden medir. Esta réplica tiene que dar EXACTAMENTE lo mismo con los valores
+ * publicados, y la guarda de fidelidad de más abajo es lo que lo comprueba: si se
+ * separan, el estudio aborta en vez de medir un modelo que no se sirve.
+ */
+function formaDelta(recent: FormResult[], window: number, decay: number, cap: number): number {
+  const w = recent.slice(0, window);
+  if (w.length === 0) return 0;
+  let weightedWins = 0;
+  let weightTotal = 0;
+  w.forEach((r, i) => {
+    const peso = Math.pow(decay, i);
+    if (r.won) weightedWins += peso;
+    weightTotal += peso;
+  });
+  const tasa = weightTotal > 0 ? weightedWins / weightTotal : 0.5;
+  const raw = (tasa - 0.5) * (cap * 2);
+  return Math.min(cap, Math.max(-cap, raw));
+}
 
 interface State {
   overall: number;
@@ -189,7 +244,8 @@ function replay(cfg: Cfg): { perMatch: number[]; bloque: string[]; fecha: string
     if (w.nOverall >= WARMUP && l.nOverall >= WARMUP) {
       const eff = (s: State) =>
         sk ? cfg.surfaceWeight * s[sk] + (1 - cfg.surfaceWeight) * s.overall : s.overall;
-      const form = (s: State) => computeForm(s.recent).delta * cfg.formWeight;
+      const form = (s: State) =>
+        formaDelta(s.recent, cfg.formWindow, cfg.formDecay, cfg.formCap) * cfg.formWeight;
 
       const k = key(m.winner_id, m.loser_id);
       const rec = h2h.get(k) ?? { a: 0, b: 0 };
@@ -199,14 +255,16 @@ function replay(cfg: Cfg): { perMatch: number[]; bloque: string[]; fecha: string
       const tot = wH + lH;
       let h2hDelta = 0;
       if (tot > 0 && cfg.h2hMax > 0) {
-        h2hDelta = (wH / tot - 0.5) * (cfg.h2hMax * 2) * (tot / (tot + H2H_SHRINK));
+        h2hDelta = (wH / tot - 0.5) * (cfg.h2hMax * 2) * (tot / (tot + cfg.h2hShrink));
       }
       const layoff = (s: State) =>
         layoffAdjustment(daysBetween(s.lastDate, m.tourney_date), cfg.restPenalty);
 
       const adjW = eff(w) + form(w) + h2hDelta + layoff(w);
       const adjL = eff(l) + form(l) - h2hDelta + layoff(l);
-      const scale = cfg.forcedScale ?? calibrationScaleFor(m.best_of);
+      const scale =
+        cfg.forcedScale ??
+        (m.best_of === 5 ? cfg.bo5Scale : m.best_of === 3 ? cfg.bo3Scale : CALIBRATION_SCALE);
       const p = calibratedExpectedScore(adjW, adjL, scale);
 
       perMatch.push(-Math.log(Math.max(p, 1e-15)));
@@ -463,10 +521,19 @@ if (args.sweep) {
   };
 
   const barridos: { nombre: string; valores: number[]; aplica: (v: number) => Partial<Cfg> }[] = [
-    { nombre: 'peso de superficie', valores: [0, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1], aplica: (v) => ({ surfaceWeight: v }) },
+    // Recentrado alrededor del 0,5 publicado, no del 0,7 antiguo: un barrido cuyo
+    // óptimo cae en el borde de la rejilla no ha terminado de buscar.
+    { nombre: 'peso de superficie', valores: [0.3, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7], aplica: (v) => ({ surfaceWeight: v }) },
     { nombre: 'peso del margen de victoria', valores: [0, 2, 3, 4, 5, 6, 8], aplica: (v) => ({ movWeight: v }) },
     { nombre: 'tope del cara a cara', valores: [0, 15, 25, 35, 50, 70], aplica: (v) => ({ h2hMax: v }) },
     { nombre: 'penalización por inactividad', valores: [0, 30, 45, 60, 80, 110], aplica: (v) => ({ restPenalty: v }) },
+    // Los cinco que nunca se habían medido.
+    { nombre: 'encogimiento del cara a cara (k)', valores: [1, 2, 4, 6, 10, 16], aplica: (v) => ({ h2hShrink: v }) },
+    { nombre: 'ventana de la forma', valores: [3, 5, 8, 10, 15, 20, 30], aplica: (v) => ({ formWindow: v }) },
+    { nombre: 'decaimiento de la forma', valores: [0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 1], aplica: (v) => ({ formDecay: v }) },
+    { nombre: 'tope de la forma', valores: [0, 10, 20, 40, 60, 90], aplica: (v) => ({ formCap: v }) },
+    { nombre: 'calibración al mejor de 3', valores: [0.58, 0.62, 0.65, 0.68, 0.71, 0.75, 0.8], aplica: (v) => ({ bo3Scale: v }) },
+    { nombre: 'calibración al mejor de 5', valores: [0.74, 0.8, 0.86, 0.9, 0.94, 1], aplica: (v) => ({ bo5Scale: v }) },
   ];
 
   for (const b of barridos) {
@@ -611,4 +678,139 @@ if (typeof args.candidato === 'string') {
     result: { delta: ci.mean, ciLo: ci.lo, ciHi: ci.hi, p: ci.p, n: idx.length },
     verdict: mejora ? 'shipped' : ci.lo > 0 ? 'rejected' : 'inconclusive',
   });
+}
+
+// ===========================================================================
+// MODO CONJUNTO: `npm run study:ablation -- --conjunto`
+// ===========================================================================
+// El barrido mueve un parámetro cada vez y ninguno solo llega al umbral. Eso no zanja
+// la pregunta: varias mejoras de 0,0002 pueden sumar una de 0,0008, y una de 0,0008 sí
+// se mide. Es una hipótesis distinta de las diez anteriores y merece su propia prueba.
+//
+// LO QUE HACE QUE ESTO NO SEA HACER TRAMPA
+// ===========================================================================
+// Buscar la mejor combinación entre cientos y luego medirla en los mismos partidos es
+// la forma más rápida que existe de publicar ruido: con bastantes combinaciones, alguna
+// gana por azar, y su ventaja medida ahí es optimista SIEMPRE.
+//
+// Así que la búsqueda entera —descenso por coordenadas, tantas pasadas como haga falta—
+// ocurre SOLO sobre los partidos anteriores a 2023. El segundo periodo no participa en
+// ninguna decisión: se mira UNA vez, al final, con la configuración ya cerrada. Si la
+// combinación elegida a ciegas también gana allí, la ventaja es del modelo.
+//
+// Y el veredicto lo da el intervalo de confianza, no el signo de la diferencia. Con el
+// intervalo cruzando el cero se publica «no se distingue», por bonita que sea la media.
+if (args.conjunto) {
+  const CORTE = '20230101';
+  const media = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / (xs.length || 1);
+  const soloEleccion = (r: { perMatch: number[]; fecha: string[] }) =>
+    media(r.perMatch.filter((_, i) => r.fecha[i] < CORTE));
+
+  // La misma rejilla del barrido. Un parámetro que no esté aquí no se toca, y eso es
+  // deliberado: `formWeight` y `movWeight` a cero son ABLACIONES, no ajustes.
+  const rejilla: { clave: keyof Cfg; nombre: string; valores: number[] }[] = [
+    { clave: 'surfaceWeight', nombre: 'peso de superficie', valores: [0.3, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7] },
+    { clave: 'movWeight', nombre: 'peso del margen', valores: [2, 3, 4, 5, 6, 8] },
+    { clave: 'h2hMax', nombre: 'tope cara a cara', valores: [15, 25, 35, 50, 70] },
+    { clave: 'h2hShrink', nombre: 'encogimiento cara a cara', valores: [1, 2, 4, 6, 10, 16] },
+    { clave: 'restPenalty', nombre: 'penalización inactividad', valores: [30, 45, 60, 80, 110] },
+    { clave: 'formWindow', nombre: 'ventana de forma', valores: [3, 5, 8, 10, 15, 20, 30] },
+    { clave: 'formDecay', nombre: 'decaimiento de forma', valores: [0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 1] },
+    { clave: 'formCap', nombre: 'tope de forma', valores: [10, 20, 40, 60, 90] },
+    { clave: 'bo3Scale', nombre: 'calibración bo3', valores: [0.58, 0.62, 0.65, 0.68, 0.71, 0.75] },
+    { clave: 'bo5Scale', nombre: 'calibración bo5', valores: [0.74, 0.8, 0.86, 0.9, 0.94, 1] },
+  ];
+
+  console.log(`\n\nBúsqueda conjunta · SOLO con partidos anteriores a ${CORTE}\n`);
+  let actual: Cfg = { ...PUBLICADO };
+  let mejor = soloEleccion(replay(actual));
+  const base = mejor;
+  console.log(`  punto de partida (el publicado): ${base.toFixed(5)}`);
+
+  const PASADAS = 3;
+  let evaluaciones = 1;
+  for (let pasada = 1; pasada <= PASADAS; pasada++) {
+    let cambio = false;
+    for (const p of rejilla) {
+      for (const v of p.valores) {
+        if ((actual[p.clave] as number) === v) continue;
+        const cand = { ...actual, [p.clave]: v } as Cfg;
+        const s = soloEleccion(replay(cand));
+        evaluaciones++;
+        if (s < mejor - 1e-9) {
+          mejor = s;
+          actual = cand;
+          cambio = true;
+          console.log(`    pasada ${pasada}: ${p.nombre} → ${v}   ${s.toFixed(5)}`);
+        }
+      }
+    }
+    // Sin cambios en una pasada entera, otra pasada daría exactamente lo mismo.
+    if (!cambio) {
+      console.log(`  pasada ${pasada}: sin cambios, la búsqueda ha convergido.`);
+      break;
+    }
+  }
+
+  console.log(`\n  ${evaluaciones} configuraciones evaluadas, todas en el periodo de elección.`);
+  console.log(`  elección: ${base.toFixed(5)} → ${mejor.toFixed(5)}  (mejora ${(base - mejor).toFixed(5)})`);
+  const cambios = (Object.keys(PUBLICADO) as (keyof Cfg)[])
+    .filter((k) => actual[k] !== PUBLICADO[k])
+    .map((k) => `${k}: ${String(PUBLICADO[k])} → ${String(actual[k])}`);
+  console.log(cambios.length ? `\n  Cambia: ${cambios.join(' · ')}` : '\n  No cambia nada.');
+
+  if (cambios.length === 0) {
+    console.log('\n  → El modelo publicado ya es el óptimo de esta rejilla. Nada que probar.\n');
+  } else {
+    // ===========================================================================
+    // Y AHORA, POR PRIMERA VEZ, EL SEGUNDO PERIODO
+    // ===========================================================================
+    const rBase = replay(PUBLICADO);
+    const rCand = replay(actual);
+    const idx: number[] = [];
+    for (let i = 0; i < rBase.fecha.length; i++) if (rBase.fecha[i] >= CORTE) idx.push(i);
+    const b2 = idx.map((i) => rBase.perMatch[i]);
+    const c2 = idx.map((i) => rCand.perMatch[i]);
+    const bl2 = idx.map((i) => rBase.bloque[i]);
+    const ci = pairedCI(b2, c2, bl2);
+
+    console.log(`\n  Medido SOLO en >=${CORTE}, que no ha participado en nada de lo anterior:\n`);
+    console.log(`    partidos:      ${idx.length}  (${new Set(bl2).size} ediciones de torneo)`);
+    console.log(`    publicado:     ${media(b2).toFixed(5)}`);
+    console.log(`    conjunto:      ${media(c2).toFixed(5)}`);
+    console.log(
+      `    diferencia:    ${ci.mean >= 0 ? '+' : ''}${ci.mean.toFixed(5)}  ` +
+        `[${ci.lo.toFixed(5)}, ${ci.hi.toFixed(5)}]   p=${ci.p.toFixed(4)}`,
+    );
+    const mejora = ci.hi < 0;
+    console.log(
+      mejora
+        ? '\n    → MEJORA CONCLUYENTE: el intervalo entero por debajo de cero. Publicable.'
+        : ci.lo > 0
+          ? '\n    → EMPEORA en el periodo que no vio. La búsqueda encontró ruido.'
+          : '\n    → NO CONCLUYENTE: el intervalo cruza el cero. La mejora de la elección no\n' +
+            '      se sostiene fuera, así que no se publica — cambiar diez parámetros por una\n' +
+            '      diferencia que no se distingue del ruido es moverlos por moverlos.',
+    );
+    if (BOOTS >= MIN_BOOTS_PARA_REGISTRAR) {
+      recordExperiment({
+        hypothesis:
+          'la mejor combinación conjunta de los 10 parámetros mejora el log loss sobre el publicado (tenis)',
+        dataset: { sport: 'tennis', split: 'validation', n: idx.length },
+        features: rejilla.map((r) => String(r.clave)),
+        hyperparams: { boots: BOOTS, desde: CORTE, evaluaciones, cambios: cambios.length },
+        metric: 'logloss',
+        baseline: 'modelo publicado',
+        notes:
+          `Descenso por coordenadas (${PASADAS} pasadas máximo, ${evaluaciones} configuraciones) ` +
+          `sobre partidos ANTERIORES a ${CORTE}; el periodo posterior no participó en ninguna ` +
+          `decisión y se miró una sola vez. Cambios elegidos: ${cambios.join(' · ')}. ` +
+          'Delta NEGATIVO = el conjunto mejora.',
+        result: { delta: ci.mean, ciLo: ci.lo, ciHi: ci.hi, p: ci.p, n: idx.length },
+        verdict: mejora ? 'shipped' : ci.lo > 0 ? 'rejected' : 'inconclusive',
+      });
+      console.log('\n    Registrado en experiments/registry.jsonl.');
+    }
+    console.log('');
+  }
 }
