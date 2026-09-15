@@ -15,7 +15,27 @@ los pasos están abajo.
 
 ---
 
-## Ponerla a andar
+## Verla funcionando ahora mismo, sin cuentas
+
+```bash
+npm install
+npm run demo
+```
+
+Abre <http://localhost:3000> y entra con **victor@ejemplo.com** / **contrasena**.
+
+Eso levanta un Supabase de mentira en tu máquina (Postgres de verdad compilado a
+WebAssembly, con el esquema real y la RLS activa) y lo siembra con tareas, notas,
+rutinas, bloques y clases de ejemplo. No hay que crear ninguna cuenta.
+
+Los datos viven en memoria: cuando cortas el proceso, se van. Es para ver y
+probar la app, no para usarla de verdad — para eso están los pasos de abajo.
+
+El código del demo está en `tools/demo/` y la app no importa nada de ahí.
+
+---
+
+## Ponerla a andar de verdad
 
 Necesitas una cuenta de **Supabase**, gratis. Vercel sólo cuando quieras abrirla
 desde el teléfono, y Google Cloud Console recién en la fase 3.
@@ -153,7 +173,8 @@ variables `NEXT_PUBLIC_*` en *Environment Variables* y agrega la URL de
 
 | Comando | Qué hace |
 |---|---|
-| `npm run dev` | servidor de desarrollo |
+| `npm run demo` | la app con datos de ejemplo, sin cuentas |
+| `npm run dev` | servidor de desarrollo (necesita `.env.local`) |
 | `npm run build` | build de producción (incluye el chequeo de tipos) |
 | `npm run test` | los tests del parser y del mapeo de Canvas |
 | `npm run typecheck` | sólo TypeScript |
@@ -183,6 +204,7 @@ lib/
   data.ts            lectura desde Supabase (sólo servidor)
   supabase/          clientes de navegador y de servidor
 proxy.ts             refresca la sesión y protege las rutas
+tools/demo/          Supabase de mentira para `npm run demo` (sólo desarrollo)
 supabase/schema.sql  esquema completo, idempotente
 tests/               tests del parser
 ```

@@ -272,7 +272,10 @@ a{color:inherit;text-decoration:none}
 .notesearch{background:var(--surface);border:1px solid var(--line-2);border-radius:7px;padding:6px 10px;max-width:200px}
 .habitname{flex:1 1 170px;min-width:0;background:var(--ground);border:1px solid var(--line-2);border-radius:7px;padding:7px 10px}
 .daychip{cursor:pointer;display:inline-flex;gap:5px;align-items:center;padding:4px 9px}
-.daychip input{margin:0;width:13px;height:13px}
+.daychip input{margin:0;width:13px;height:13px;accent-color:var(--accent)}
+/* Todo control nativo (checkbox, radio, barra de progreso) toma el acento del
+   tema en vez del azul del navegador. */
+input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
 .hrow.wide{align-items:flex-start;flex-wrap:wrap}
 .hrow.wide .dots{margin-top:6px}
 .hrow.wide .streak{display:block;margin-top:5px}

@@ -69,21 +69,6 @@ export default async function AjustesPage() {
             </div>
           </div>
 
-          <div className="panel">
-            <div className="ph">
-              <h2>Cómo sacar tu .ics</h2>
-            </div>
-            <div className="pb" style={{ fontSize: 13, color: "var(--ink-2)" }}>
-              <p style={{ margin: "0 0 8px" }}>
-                <b style={{ color: "var(--ink)" }}>Canvas</b> → Calendario → botón «Calendar Feed»
-                abajo a la derecha → copia el link, ábrelo en el navegador y guarda el archivo.
-              </p>
-              <p style={{ margin: 0 }}>
-                <b style={{ color: "var(--ink)" }}>Google Calendar</b> → Configuración → Importar y
-                exportar → Exportar. Baja un .zip; descomprímelo y sube el .ics de dentro.
-              </p>
-            </div>
-          </div>
         </div>
 
         <div className="stack">
@@ -111,6 +96,22 @@ export default async function AjustesPage() {
             </div>
             <div className="pb">
               <TimezoneForm timezone={ctx.profile.timezone} />
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="ph">
+              <h2>Cómo sacar tu .ics</h2>
+            </div>
+            <div className="pb" style={{ fontSize: 13, color: "var(--ink-2)" }}>
+              <p style={{ margin: "0 0 8px" }}>
+                <b style={{ color: "var(--ink)" }}>Canvas</b> → Calendario → botón «Calendar Feed»
+                abajo a la derecha → copia el link, ábrelo en el navegador y guarda el archivo.
+              </p>
+              <p style={{ margin: 0 }}>
+                <b style={{ color: "var(--ink)" }}>Google Calendar</b> → Configuración → Importar y
+                exportar → Exportar. Baja un .zip; descomprímelo y sube el .ics de dentro.
+              </p>
             </div>
           </div>
         </div>
