@@ -1739,6 +1739,57 @@ una mejora del 0,1 % con ocho parámetros retocados. No se publica nada.
 dentro de esta rejilla. La única mejora real que había —el peso de superficie— ya está
 aplicada, y por eso ninguna otra aparece.
 
+### Dos señales NUEVAS, que es donde quedaba margen. Tampoco
+
+Reajustar los diez parámetros no podía dar nada más: el barrido y la búsqueda conjunta
+dicen que están en su óptimo. Lo único que quedaba para mejorar de verdad era
+**información que el modelo no ve**, y hay dos que se derivan de lo ya guardado sin
+descargar una sola fila más:
+
+- **Cambio de superficie.** El tenis cambia de suelo tres veces al año y el ajuste tarda.
+  Quien sale de la gira de tierra y juega su primer partido en hierba no es el mismo que
+  quien lleva un mes en hierba — y el Elo por superficie *no* lo capta: ese sabe lo bueno
+  que es en hierba en general, no que acaba de llegar.
+- **Fatiga acumulada.** El modelo penaliza el exceso de *descanso* (vueltas de lesión) y
+  no tiene nada para lo contrario. En un Masters se juegan cinco partidos en siete días, y
+  el quinto no se juega con las piernas del primero.
+
+Las dos entran a cero —el modelo de hoy— para que el barrido mida literalmente cuánto
+aporta encenderlas.
+
+**La fatiga sale al revés y sin ambigüedad:**
+
+```
+  fatiga por partido en 7 días
+    valor      elección     prueba
+    0           0.60924    0.62198  ←mejor en los dos (publicado)
+    5           0.60944    0.62207
+    12          0.61005    0.62249
+    25          0.61225    0.62417
+```
+
+Cero es el óptimo y empeora **monótonamente**. La explicación más plausible es que la
+carga está confundida con la causa: quien juega cinco partidos en una semana es quien los
+va ganando, y eso el modelo ya lo sabe por el Elo y la forma. Penalizarlo es penalizar
+estar jugando bien.
+
+**El cambio de superficie sí apunta en la dirección correcta**, con un mínimo limpio en 30
+puntos Elo y mejorando en los dos periodos. Pero medido como toca, sobre los 7.050
+partidos que la búsqueda no vio:
+
+| | log loss |
+| --- | --- |
+| publicado (sin la señal) | 0,62198 |
+| con castigo de 30 | 0,62191 |
+| diferencia | −0,00007 [−0,00046, +0,00028] · p = 0,71 |
+
+El intervalo cruza el cero por los dos lados. **No se publica.** El efecto puede ser real
+—la forma de la curva lo sugiere— pero es de un orden que estos 7.050 partidos no pueden
+distinguir del ruido, y cambiar el modelo por eso es moverlo por moverlo.
+
+Las dos quedan medidas y en el registro. Si algún día hay más histórico, el candidato ya
+está escrito y se vuelve a probar con un comando.
+
 ### Por qué estos negativos son creíbles
 
 Un resultado negativo solo vale si lo que se apagó era de verdad lo que está en producción.

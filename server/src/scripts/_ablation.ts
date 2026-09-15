@@ -116,6 +116,34 @@ interface Cfg {
   bo3Scale: number;
   /** Factor de calibración al mejor de 5. Publicado 0,86. */
   bo5Scale: number;
+  // ===========================================================================
+  // DOS SEÑALES QUE EL MODELO HOY NO VE
+  // ===========================================================================
+  // Los diez parámetros de arriba están en su óptimo: el barrido y la búsqueda conjunta
+  // lo dicen, y volver a moverlos no puede dar nada. Lo único que queda para mejorar de
+  // verdad es INFORMACIÓN NUEVA, y estas dos se pueden derivar de lo que ya hay guardado
+  // sin descargar una sola fila más.
+  //
+  // Publicadas a CERO, que es como está el modelo hoy: así la réplica sigue dando
+  // 0,61331 y la guarda de fidelidad puede comprobarlo. Un candidato que ya viniera
+  // encendido en el punto de partida haría imposible medir cuánto aporta.
+  /**
+   * Castigo en puntos Elo por llegar de otra superficie.
+   *
+   * El tenis cambia de suelo tres veces al año y el ajuste tarda. Un jugador que sale de
+   * la gira de tierra y juega su primer partido en hierba no es el mismo que uno que
+   * lleva un mes en hierba, y el Elo por superficie NO lo capta: ese sabe lo bueno que
+   * es en hierba en general, no que acaba de llegar.
+   */
+  surfaceSwitch: number;
+  /**
+   * Castigo en puntos Elo por partido jugado en los últimos 7 días, a partir del segundo.
+   *
+   * El modelo ya penaliza el exceso de DESCANSO (`restPenalty`, para vueltas de lesión)
+   * y no tiene nada para lo contrario. En un Masters se juegan cinco partidos en siete
+   * días, y el quinto no se juega con las piernas del primero.
+   */
+  fatiguePerMatch: number;
 }
 
 const PUBLICADO: Cfg = {
@@ -131,6 +159,8 @@ const PUBLICADO: Cfg = {
   formCap: FORM_MAX_DELTA,
   bo3Scale: CALIBRATION_SCALE_BO3,
   bo5Scale: CALIBRATION_SCALE_BO5,
+  surfaceSwitch: 0,
+  fatiguePerMatch: 0,
 };
 
 /**
@@ -167,6 +197,10 @@ interface State {
   nGrass: number;
   recent: FormResult[];
   lastDate: string | null;
+  /** La superficie del partido anterior, para saber si acaba de cambiar. */
+  lastSurface: string | null;
+  /** Fechas de los últimos partidos, para contar la carga reciente. */
+  recentDates: string[];
 }
 const fresh = (): State => ({
   overall: INITIAL_ELO,
@@ -179,6 +213,8 @@ const fresh = (): State => ({
   nGrass: 0,
   recent: [],
   lastDate: null,
+  lastSurface: null,
+  recentDates: [],
 });
 
 function daysBetween(from: string | null, to: string): number {
@@ -260,8 +296,28 @@ function replay(cfg: Cfg): { perMatch: number[]; bloque: string[]; fecha: string
       const layoff = (s: State) =>
         layoffAdjustment(daysBetween(s.lastDate, m.tourney_date), cfg.restPenalty);
 
-      const adjW = eff(w) + form(w) + h2hDelta + layoff(w);
-      const adjL = eff(l) + form(l) - h2hDelta + layoff(l);
+      // ---- Las dos señales nuevas, ambas NEGATIVAS por construcción ----
+      // Restan o no hacen nada; nunca suman. Un «castigo» que con un valor negativo se
+      // convierte en premio mediría otra hipótesis distinta de la que se enunció, y el
+      // barrido la encontraría encantado si la rejilla se lo permitiera.
+      const cambioSuperficie = (s: State): number => {
+        if (cfg.surfaceSwitch <= 0 || !sk || !s.lastSurface) return 0;
+        // 21 días: más que eso y ya ha tenido tiempo de adaptarse, así que dejaría de
+        // ser «viene de otra superficie» para ser «lleva parado», que es `restPenalty`.
+        if (daysBetween(s.lastDate, m.tourney_date) > 21) return 0;
+        return s.lastSurface === sk ? 0 : -cfg.surfaceSwitch;
+      };
+      const fatiga = (s: State): number => {
+        if (cfg.fatiguePerMatch <= 0) return 0;
+        const recientes = s.recentDates.filter(
+          (d) => daysBetween(d, m.tourney_date) <= 7,
+        ).length;
+        // A partir del SEGUNDO: jugar un partido en una semana es lo normal y no cansa.
+        return -Math.max(0, recientes - 1) * cfg.fatiguePerMatch;
+      };
+
+      const adjW = eff(w) + form(w) + h2hDelta + layoff(w) + cambioSuperficie(w) + fatiga(w);
+      const adjL = eff(l) + form(l) - h2hDelta + layoff(l) + cambioSuperficie(l) + fatiga(l);
       const scale =
         cfg.forcedScale ??
         (m.best_of === 5 ? cfg.bo5Scale : m.best_of === 3 ? cfg.bo3Scale : CALIBRATION_SCALE);
@@ -284,6 +340,16 @@ function replay(cfg: Cfg): { perMatch: number[]; bloque: string[]; fecha: string
     l.overall -= kL * (1 - eW);
     w.nOverall++;
     l.nOverall++;
+    // La superficie y la carga se actualizan SIEMPRE, también en los partidos que no se
+    // puntúan por warmup: si solo se guardaran los puntuados, un jugador llegaría a su
+    // primer partido evaluado con el historial de carga vacío.
+    for (const s of [w, l]) {
+      s.lastSurface = sk;
+      s.recentDates.push(m.tourney_date);
+      // Diez caben de sobra para una ventana de siete días y evitan que esto crezca sin
+      // límite a lo largo de veinte años de partidos.
+      if (s.recentDates.length > 10) s.recentDates.shift();
+    }
     if (sk) {
       const nW = sk === 'hard' ? w.nHard : sk === 'clay' ? w.nClay : w.nGrass;
       const nL = sk === 'hard' ? l.nHard : sk === 'clay' ? l.nClay : l.nGrass;
@@ -534,6 +600,10 @@ if (args.sweep) {
     { nombre: 'tope de la forma', valores: [0, 10, 20, 40, 60, 90], aplica: (v) => ({ formCap: v }) },
     { nombre: 'calibración al mejor de 3', valores: [0.58, 0.62, 0.65, 0.68, 0.71, 0.75, 0.8], aplica: (v) => ({ bo3Scale: v }) },
     { nombre: 'calibración al mejor de 5', valores: [0.74, 0.8, 0.86, 0.9, 0.94, 1], aplica: (v) => ({ bo5Scale: v }) },
+    // Las dos señales nuevas. Empiezan en 0 —el modelo de hoy— así que el barrido mide
+    // literalmente cuánto aporta encenderlas.
+    { nombre: 'castigo por cambio de superficie', valores: [0, 5, 10, 20, 30, 45, 60], aplica: (v) => ({ surfaceSwitch: v }) },
+    { nombre: 'fatiga por partido en 7 días', valores: [0, 2, 5, 8, 12, 18, 25], aplica: (v) => ({ fatiguePerMatch: v }) },
   ];
 
   for (const b of barridos) {
