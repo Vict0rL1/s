@@ -77,17 +77,27 @@ export async function loadTasks(ctx: Ctx): Promise<Task[]> {
  */
 export async function loadEvents(ctx: Ctx, from: string, to: string): Promise<DayEvent[]> {
   const lo = addDays(from, -1), hi = addDays(to, 1);
-  const { data } = await ctx.supabase
-    .from("events")
-    .select("*")
-    .or(
-      `and(starts_at.gte.${lo}T00:00:00Z,starts_at.lte.${hi}T23:59:59Z),` +
-        `and(all_day_date.gte.${from},all_day_date.lte.${to})`,
-    )
-    .returns<EventRow[]>();
+
+  // Dos consultas simples en vez de un `or(and(...),and(...))`. Da lo mismo en
+  // resultado, pero cada una es evidente de leer y no depende de armar bien una
+  // cadena de filtros: es una capa menos donde equivocarse en silencio.
+  const [timed, allDay] = await Promise.all([
+    ctx.supabase
+      .from("events")
+      .select("*")
+      .gte("starts_at", `${lo}T00:00:00Z`)
+      .lte("starts_at", `${hi}T23:59:59Z`)
+      .returns<EventRow[]>(),
+    ctx.supabase
+      .from("events")
+      .select("*")
+      .gte("all_day_date", from)
+      .lte("all_day_date", to)
+      .returns<EventRow[]>(),
+  ]);
 
   const out: DayEvent[] = [];
-  for (const e of data ?? []) {
+  for (const e of [...(timed.data ?? []), ...(allDay.data ?? [])]) {
     if (e.all_day_date) {
       if (e.all_day_date < from || e.all_day_date > to) continue;
       out.push({
@@ -222,16 +232,15 @@ export async function loadCounts(ctx: Ctx): Promise<Counts> {
   const from = addDays(ctx.today, -3);
   const to = addDays(ctx.today, 7);
 
-  const [dueToday, openTasks, notes, events, habits, log] = await Promise.all([
+  const [dueToday, openTasks, notes, timedEvents, allDayEvents, habits, log] = await Promise.all([
     ctx.supabase.from("tasks").select("id", { count: "exact", head: true })
       .eq("done", false).lte("due_date", ctx.today),
     ctx.supabase.from("tasks").select("id", { count: "exact", head: true }).eq("done", false),
     ctx.supabase.from("notes").select("id", { count: "exact", head: true }),
     ctx.supabase.from("events").select("id", { count: "exact", head: true })
-      .or(
-        `and(starts_at.gte.${from}T00:00:00Z,starts_at.lte.${to}T23:59:59Z),` +
-          `and(all_day_date.gte.${from},all_day_date.lte.${to})`,
-      ),
+      .gte("starts_at", `${from}T00:00:00Z`).lte("starts_at", `${to}T23:59:59Z`),
+    ctx.supabase.from("events").select("id", { count: "exact", head: true })
+      .gte("all_day_date", from).lte("all_day_date", to),
     loadHabits(ctx),
     loadHabitLog(ctx, ctx.today, ctx.today),
   ]);
@@ -243,7 +252,7 @@ export async function loadCounts(ctx: Ctx): Promise<Counts> {
   return {
     hoy: dueToday.count ?? 0,
     tareas: openTasks.count ?? 0,
-    semana: events.count ?? 0,
+    semana: (timedEvents.count ?? 0) + (allDayEvents.count ?? 0),
     notas: notes.count ?? 0,
     rutinas: pending,
   };
