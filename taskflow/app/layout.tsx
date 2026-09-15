@@ -21,9 +21,9 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cumbre",
+  title: "TaskFlow",
   description: "Agenda, tareas, notas y rutinas — la app personal de Victor.",
-  appleWebApp: { capable: true, title: "Cumbre", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "TaskFlow", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
@@ -40,7 +40,7 @@ export const viewport: Viewport = {
  * Aplica el tema guardado ANTES del primer pintado. Si esto corriera después
  * de la hidratación se vería un parpadeo blanco al abrir en modo oscuro.
  */
-const THEME_SCRIPT = `try{var t=localStorage.getItem("cumbre.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}`;
+const THEME_SCRIPT = `try{var t=localStorage.getItem("taskflow.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

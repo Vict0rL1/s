@@ -1,4 +1,4 @@
-# Cumbre
+# TaskFlow
 
 App personal de productividad de Victor: agenda del día, tareas por área, notas
 rápidas y rutinas. Un solo usuario. Next.js + Supabase, desplegada en Vercel.
@@ -9,7 +9,9 @@ Supabase y desplegarla — los pasos están abajo.
 
 - `PLAN.md` — el plan completo: stack, las 4 fases, Canvas y Google Calendar
 - `CLAUDE.md` — las reglas del proyecto
-- `reference/cumbre.html` — la versión artifact de donde salieron la UI y los parsers
+- `reference/cumbre.html` — el artifact original (se llamaba Cumbre), de donde
+  salieron la UI y los parsers. Conserva su nombre a propósito: es la foto de
+  la versión publicada, y sus datos viven bajo la clave `cumbre.v1`.
 
 ---
 
@@ -60,7 +62,7 @@ te muestra este mismo instructivo en vez de un error.
 ### 5. Desplegar
 
 Importa el repo en Vercel. Como el proyecto vive en una subcarpeta, en la
-configuración del proyecto pon **Root Directory: `cumbre`**. Carga las dos
+configuración del proyecto pon **Root Directory: `taskflow`**. Carga las dos
 variables `NEXT_PUBLIC_*` en *Environment Variables* y agrega la URL de
 `/auth/callback` de tu dominio a las Redirect URLs de Supabase.
 

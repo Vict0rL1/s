@@ -2,7 +2,7 @@ import { NoteList, type NoteView } from "@/components/NoteList";
 import { getCtx, loadNotes } from "@/lib/data";
 import { MONTHS_SHORT, minsToHHMM, monthOf, dayOfMonth, zonedDayMinute } from "@/lib/date";
 
-export const metadata = { title: "Notas · Cumbre" };
+export const metadata = { title: "Notas · TaskFlow" };
 
 export default async function NotasPage() {
   const ctx = await getCtx();

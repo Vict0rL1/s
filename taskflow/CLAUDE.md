@@ -1,11 +1,13 @@
-# Cumbre
+# TaskFlow
 
 App personal de productividad de Victor. Un solo usuario. Next.js + Supabase,
 desplegada en Vercel.
 
 Lee `PLAN.md` antes de empezar cualquier fase. `reference/cumbre.html` es la
 versión que ya funciona: la UI, el parser de captura rápida y el importador
-de `.ics` salen de ahí — pórtalos, no los reescribas desde cero.
+de `.ics` salen de ahí — pórtalos, no los reescribas desde cero. Ese archivo
+conserva el nombre viejo de la app (Cumbre) porque es la foto del artifact
+publicado; no lo renombres.
 
 ## Reglas del proyecto
 

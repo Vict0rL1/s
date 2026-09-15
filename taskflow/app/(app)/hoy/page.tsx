@@ -8,7 +8,7 @@ import { DAYS, MONTHS, addDays, dayOfMonth, minutesInTz, monthOf, weekdayOf, yea
 import { HABIT_WINDOW, didHabit, habitsOn } from "@/lib/habits";
 import { FocusButton } from "@/components/FocusButton";
 
-export const metadata = { title: "Hoy · Cumbre" };
+export const metadata = { title: "Hoy · TaskFlow" };
 
 function greeting(minutes: number) {
   const h = Math.floor(minutes / 60);

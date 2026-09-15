@@ -3,7 +3,7 @@ import { ViewHead } from "@/components/TaskRow";
 import { AreasForm, HoursForm, ImportIcs, TimezoneForm } from "@/components/SettingsForms";
 import { getCtx, loadIcsSources } from "@/lib/data";
 
-export const metadata = { title: "Ajustes · Cumbre" };
+export const metadata = { title: "Ajustes · TaskFlow" };
 
 export default async function AjustesPage() {
   const ctx = await getCtx();

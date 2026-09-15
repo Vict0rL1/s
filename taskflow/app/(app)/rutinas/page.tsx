@@ -5,7 +5,7 @@ import { getCtx, loadHabitLog, loadHabits } from "@/lib/data";
 import { addDays } from "@/lib/date";
 import { HABIT_WINDOW } from "@/lib/habits";
 
-export const metadata = { title: "Rutinas · Cumbre" };
+export const metadata = { title: "Rutinas · TaskFlow" };
 
 export default async function RutinasPage() {
   const ctx = await getCtx();

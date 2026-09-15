@@ -1,7 +1,7 @@
 import { GoogleButton } from "@/components/GoogleButton";
 import { isConfigured } from "@/lib/env";
 
-export const metadata = { title: "Entrar · Cumbre" };
+export const metadata = { title: "Entrar · TaskFlow" };
 
 type Props = { searchParams: Promise<{ error?: string }> };
 
@@ -13,7 +13,7 @@ export default async function LoginPage({ searchParams }: Props) {
     <div className="authwrap">
       <div className="authcard">
         <div className="brand">
-          <b>Cumbre</b>
+          <b>TaskFlow</b>
           <span>agenda · tareas · rutinas</span>
         </div>
 

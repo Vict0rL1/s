@@ -1,4 +1,4 @@
-# Cumbre — notas para agentes
+# TaskFlow — notas para agentes
 
 Las reglas del proyecto están en **`CLAUDE.md`** y el plan de construcción en
 **`PLAN.md`**. Léelos primero; este archivo sólo guarda las notas de la

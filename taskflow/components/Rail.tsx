@@ -25,13 +25,13 @@ export function Rail({ counts, email }: { counts: Counts; email: string }) {
   function cycleTheme() {
     let cur = "system";
     try {
-      cur = localStorage.getItem("cumbre.theme") || "system";
+      cur = localStorage.getItem("taskflow.theme") || "system";
     } catch {
       /* modo incógnito con el almacenamiento bloqueado */
     }
     const next = cur === "system" ? "light" : cur === "light" ? "dark" : "system";
     try {
-      localStorage.setItem("cumbre.theme", next);
+      localStorage.setItem("taskflow.theme", next);
     } catch {
       /* ídem */
     }
@@ -44,7 +44,7 @@ export function Rail({ counts, email }: { counts: Counts; email: string }) {
     <>
       <nav className="rail" aria-label="Secciones">
         <div className="brand">
-          <b>Cumbre</b>
+          <b>TaskFlow</b>
           <span>
             <i className="syncdot" />
             sincronizado

@@ -3,7 +3,7 @@ import { ViewHead } from "@/components/TaskRow";
 import { getCtx, loadBlocks, loadEvents, loadTasks } from "@/lib/data";
 import { DAYS_SHORT, MONTHS_SHORT, addDays, dayOfMonth, minsToHHMM, monthOf, startOfWeek, weekdayOf } from "@/lib/date";
 
-export const metadata = { title: "Semana · Cumbre" };
+export const metadata = { title: "Semana · TaskFlow" };
 
 const MAX_EVENTS = 6;
 const MAX_BLOCKS = 4;

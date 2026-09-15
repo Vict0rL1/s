@@ -1,4 +1,4 @@
--- Cumbre — esquema de base de datos (Postgres / Supabase)
+-- TaskFlow — esquema de base de datos (Postgres / Supabase)
 -- Aplícalo desde el SQL Editor de Supabase, o con `supabase db push`.
 -- Es idempotente: puedes correrlo de nuevo sin romper nada.
 

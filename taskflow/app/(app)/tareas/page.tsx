@@ -5,7 +5,7 @@ import { getCtx, loadTasks } from "@/lib/data";
 import { daysBetween } from "@/lib/date";
 import type { Task } from "@/lib/types";
 
-export const metadata = { title: "Tareas · Cumbre" };
+export const metadata = { title: "Tareas · TaskFlow" };
 
 /** El filtro por área vive en la URL, no en la base: así se comparte y se recarga bien. */
 type Props = { searchParams: Promise<{ area?: string }> };

@@ -15,9 +15,13 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Todo menos los estáticos de Next y los archivos de imagen — ahí no hay
+     * Todo menos los estáticos de Next, las imágenes y el manifest — ahí no hay
      * sesión que refrescar y sólo costaría latencia.
+     *
+     * El manifest tiene que quedar fuera sí o sí: el navegador lo pide sin
+     * cookies, así que detrás del login recibiría el HTML del redirect y
+     * "Agregar a pantalla de inicio" no leería ni el nombre ni el ícono.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
