@@ -189,6 +189,24 @@ export async function loadBlocks(ctx: Ctx, from: string, to: string): Promise<Bl
   return data ?? [];
 }
 
+/* --------------------------------------------------------- estado del sync */
+
+export type SyncState = {
+  source: string;
+  last_synced_at: string | null;
+  last_error: string | null;
+  items_synced: number;
+};
+
+export async function loadSyncState(ctx: Ctx, source: string): Promise<SyncState | null> {
+  const { data } = await ctx.supabase
+    .from("sync_state")
+    .select("source, last_synced_at, last_error, items_synced")
+    .eq("source", source)
+    .maybeSingle<SyncState>();
+  return data ?? null;
+}
+
 /* -------------------------------------------------------------- contadores */
 
 export type Counts = {

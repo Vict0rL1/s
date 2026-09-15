@@ -1,13 +1,26 @@
 import { deleteIcsSource } from "@/app/actions";
 import { ViewHead } from "@/components/TaskRow";
 import { AreasForm, HoursForm, ImportIcs, TimezoneForm } from "@/components/SettingsForms";
-import { getCtx, loadIcsSources } from "@/lib/data";
+import { CanvasPanel } from "@/components/CanvasPanel";
+import { getCtx, loadIcsSources, loadSyncState } from "@/lib/data";
+import { canvasConfigured } from "@/lib/env.server";
+import { MONTHS_SHORT, dayOfMonth, minsToHHMM, monthOf, zonedDayMinute } from "@/lib/date";
 
 export const metadata = { title: "Ajustes · TaskFlow" };
 
 export default async function AjustesPage() {
   const ctx = await getCtx();
-  const sources = await loadIcsSources(ctx);
+  const [sources, canvasState] = await Promise.all([
+    loadIcsSources(ctx),
+    loadSyncState(ctx, "canvas"),
+  ]);
+
+  // La fecha se formatea aquí, en la zona del perfil, y viaja ya hecha.
+  let lastSynced: string | null = null;
+  if (canvasState?.last_synced_at) {
+    const { date, min } = zonedDayMinute(canvasState.last_synced_at, ctx.tz);
+    lastSynced = dayOfMonth(date) + " " + MONTHS_SHORT[monthOf(date)] + " · " + minsToHHMM(min);
+  }
 
   return (
     <>
@@ -15,6 +28,21 @@ export default async function AjustesPage() {
 
       <div className="grid2">
         <div className="stack">
+          <div className="panel">
+            <div className="ph">
+              <h2>Canvas</h2>
+              <span className="sub">fase 2</span>
+            </div>
+            <div className="pb">
+              <CanvasPanel
+                configured={canvasConfigured()}
+                lastSynced={lastSynced}
+                lastError={canvasState?.last_error ?? null}
+                itemsSynced={canvasState?.items_synced ?? 0}
+              />
+            </div>
+          </div>
+
           <div className="panel">
             <div className="ph">
               <h2>Importar calendario</h2>

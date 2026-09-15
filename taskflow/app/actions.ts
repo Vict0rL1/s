@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getCtx } from "@/lib/data";
 import { parseInput } from "@/lib/parse";
 import { cleanSourceName, parseICS } from "@/lib/ics";
+import { recordSync, syncCanvas } from "@/lib/canvas-sync";
+import { canvasConfigured } from "@/lib/env.server";
 import { minsToTime, todayInTz } from "@/lib/date";
 
 export type ActionResult = { ok: boolean; message: string };
@@ -266,6 +268,31 @@ export async function saveTimezone(_prev: ActionResult | null, fd: FormData): Pr
 
   refresh();
   return ok("Zona horaria actualizada");
+}
+
+/* ------------------------------------------------------------------ Canvas */
+
+/**
+ * El botón "Sincronizar ahora" de Ajustes. Llama a la misma función que
+ * `POST /api/sync/canvas`; la ruta queda para el cron de la fase 4.
+ */
+export async function syncCanvasNow(): Promise<ActionResult> {
+  if (!canvasConfigured()) {
+    return fail("Falta CANVAS_TOKEN en .env.local — mira las instrucciones de abajo");
+  }
+
+  const ctx = await getCtx();
+  try {
+    const result = await syncCanvas(ctx);
+    await recordSync(ctx, { items: result.items });
+    refresh();
+    return ok(result.message);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Falló el sync de Canvas";
+    await recordSync(ctx, { items: 0, error: message });
+    refresh();
+    return fail(message);
+  }
 }
 
 /* ------------------------------------------------------------ importar .ics */
