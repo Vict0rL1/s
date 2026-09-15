@@ -100,6 +100,37 @@ export async function deleteTask(fd: FormData) {
   refresh();
 }
 
+/**
+ * Reescribe una tarea desde su propio título.
+ *
+ * Acepta la misma gramática que la captura rápida, así que «Leer cap 4 mañana»
+ * corrige el texto y mueve la fecha de una sola pasada. Los campos que el
+ * parser no encuentra se dejan como están: escribir sólo el título nuevo no
+ * borra el área ni el estimado que ya tenías.
+ */
+export async function renameTask(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const id = str(fd, "id");
+  const raw = str(fd, "text");
+  if (!raw) return fail("El título no puede quedar vacío");
+
+  const ctx = await getCtx();
+  const p = parseInput(raw, { areas: ctx.profile.areas, today: ctx.today });
+  if (!p.title) return fail("Falta el texto de la tarea");
+
+  const patch: Record<string, unknown> = { title: p.title.slice(0, 200), ...EDITED() };
+  if (p.area) patch.area = p.area;
+  if (p.due) patch.due_date = p.due;
+  if (p.start !== null) patch.due_time = minsToTime(p.start);
+  if (p.dur) patch.est_minutes = p.dur;
+  if (p.prio) patch.priority = p.prio;
+
+  const { error } = await ctx.supabase.from("tasks").update(patch).eq("id", id);
+  if (error) return fail("No se pudo guardar el cambio");
+
+  refresh();
+  return ok("");
+}
+
 /** Fija o quita una tarea del enfoque de hoy. Máximo 3. */
 export async function toggleFocus(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
   const id = str(fd, "id");

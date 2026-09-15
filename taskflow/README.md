@@ -217,6 +217,18 @@ reference con sus custom properties.
 
 ## Decisiones que vale la pena conocer
 
+**Editar una tarea es volver a escribirla.** Tocas el título y se vuelve un
+campo; lo que escribes pasa por el mismo parser de la captura rápida, así que
+«Llamar al dentista mañana !alta» arregla el texto, mueve la fecha y sube la
+prioridad de una sola pasada. Lo que el parser no encuentra se deja como está,
+así que corregir una palabra no te borra el área ni el estimado. No hay un
+formulario de edición aparte porque no hace falta.
+
+**En el teléfono, primero lo accionable.** La agenda mide unos 660px que casi
+siempre están vacíos, y en una pantalla de 390px enterraba lo que hay que
+hacer. Por debajo de 760px el orden se invierte: enfoque, tareas y rutinas
+arriba; la agenda, después.
+
 **Un color, un significado.** El sistema del reference usaba el mismo acento
 para la marca, para lo urgente, para lo destacado y para los errores — cinco
 trabajos, un solo rojo, y por eso todo competía. Ahora `--accent` es sólo la

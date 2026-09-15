@@ -3,6 +3,7 @@ import { daysBetween, fmtDur, fmtDate, minsToHHMM, timeToMins } from "@/lib/date
 import type { Task } from "@/lib/types";
 import { ActionButton } from "./ActionButton";
 import { FocusButton } from "./FocusButton";
+import { TaskTitle } from "./TaskTitle";
 
 export function TaskPills({ task, today }: { task: Task; today: string }) {
   const min = timeToMins(task.due_time);
@@ -44,7 +45,7 @@ export function TaskRow({ task, today }: { task: Task; today: string }) {
       </ActionButton>
 
       <div className="tmain">
-        <span className="ttitle">{task.title}</span>
+        <TaskTitle id={task.id} title={task.title} />
         <TaskPills task={task} today={today} />
       </div>
 

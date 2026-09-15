@@ -48,7 +48,7 @@ export default async function HoyPage() {
     <>
       <ViewHead eyebrow={eyebrow} title={greeting(minutesInTz(ctx.tz))} />
 
-      <div className="grid2">
+      <div className="grid2 hoy">
         <div className="stack">
           <div className="panel">
             <div className="ph">
