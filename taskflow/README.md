@@ -177,7 +177,48 @@ son las 6:00 en Vancouver en horario de verano y las 5:00 en invierno. Es un
 sync diario: esa hora de diferencia no importa. Si algún día molesta, se cambia
 el número en `vercel.json`.
 
-### 6. Correr
+### 6. Avisos en el teléfono (fase 4)
+
+Un solo aviso al día, en la mañana, con lo que vence y lo que hay en la agenda.
+Es push del navegador: no hace falta instalar nada de una tienda ni usar
+Firebase. **Sólo funciona sobre HTTPS**, así que hay que desplegarla primero
+(en `localhost` también, pero no desde el teléfono).
+
+1. Genera el par de llaves, una sola vez:
+
+   ```bash
+   npx web-push generate-vapid-keys
+   ```
+
+2. En las variables de entorno de Vercel:
+
+   ```
+   NEXT_PUBLIC_VAPID_PUBLIC_KEY=la-publica
+   VAPID_PRIVATE_KEY=la-privada
+   VAPID_SUBJECT=mailto:tu@correo.com
+   ```
+
+   La pública también llega al navegador — así funciona, no es un descuido. La
+   privada nunca sale del servidor.
+
+3. Vuelve a desplegar, abre la app **en el teléfono** y entra a **Ajustes →
+   Avisos → Activar**. El navegador te pide permiso una vez.
+
+4. En iPhone hay un paso extra: Safari sólo permite avisos si antes agregaste
+   la app a la pantalla de inicio (Compartir → *Agregar a pantalla de inicio*).
+   Ábrela desde ahí, no desde Safari.
+
+El aviso sale del mismo cron del paso anterior, así que **sólo hay uno al día**:
+el plan gratis de Vercel no permite más. Alcanza para el resumen de la mañana,
+no para "avísame 15 minutos antes de la clase".
+
+Si un día no hay nada atrasado, nada que venza y nada en la agenda, **no suena
+nada**. Una app que avisa por avisar se silencia y se deja de usar.
+
+Para dejar de recibirlos, el mismo botón en Ajustes. Y si borras el navegador o
+revocas el permiso, la suscripción muerta se limpia sola en el siguiente envío.
+
+### 7. Correr
 
 ```bash
 npm install
@@ -187,7 +228,7 @@ npm run dev
 Si abres <http://localhost:3000> sin configurar nada, la app te manda al login y
 te muestra este mismo instructivo en vez de un error.
 
-### 7. Desplegar
+### 8. Desplegar
 
 Importa el repo en Vercel. Como el proyecto vive en una subcarpeta, en la
 configuración del proyecto pon **Root Directory: `taskflow`**. Carga las dos
@@ -232,8 +273,10 @@ lib/
   ics.ts             importador .ics de respaldo
   canvas.ts          Canvas: paginación y mapeo a tareas (puro, testeado)
   canvas-sync.ts     el sync en sí: trae de Canvas y escribe en la base
+  push.ts            arma el aviso del día y lo manda (sólo servidor)
   data.ts            lectura desde Supabase (sólo servidor)
   supabase/          clientes de navegador, de servidor y de service role
+public/sw.js         service worker: recibe el aviso y abre /hoy al tocarlo
 proxy.ts             refresca la sesión y protege las rutas
 tools/demo/          Supabase de mentira para `npm run demo` (sólo desarrollo)
 supabase/schema.sql  esquema completo, idempotente
@@ -345,7 +388,7 @@ Lo que `PLAN.md` pedía confirmar antes de escribir código:
 
 - **Fase 3 — Google Calendar.** Scopes de Calendar en el login y lectura de
   eventos con `singleEvents=true`.
-- **Fase 4 — Que trabaje sola.** Vercel Cron, Web Push y el botón de "Planear mi
-  día" contra la API de Claude.
+- **Fase 4 — Que trabaje sola.** El cron diario y los avisos push ya están; falta
+  el botón de "Planear mi día" contra la API de Claude.
 
 El detalle de cada una está en `PLAN.md`.
