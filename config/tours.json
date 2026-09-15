@@ -1,0 +1,42 @@
+{
+  "$comment": "Circuits (tours) covered by the app. Add a tour by appending an entry — nothing in the model/API logic hardcodes these ids.",
+  "history": {
+    "$comment": "How much history to ingest by default and where the raw CSVs live. `startYear` is the earliest season pulled by `npm run update-data` (override with --from). Serve/break stats exist in Sackmann data from ~1991 onward. `mirrors` lists alternative GitHub repos to git-clone if the primary one is unreachable from your network.",
+    "startYear": 2015,
+    "rawBaseUrlsComment": "Tried in order. jsDelivr is a CDN that mirrors GitHub file-by-file and is usually reachable on networks that filter raw.githubusercontent.com — it still serves the ORIGINAL repo, so the data is current.",
+    "rawBaseUrls": [
+      "https://raw.githubusercontent.com/{repo}/master/{file}",
+      "https://cdn.jsdelivr.net/gh/{repo}@master/{file}",
+      "https://rawcdn.githack.com/{repo}/master/{file}"
+    ],
+    "mirrorsComment": "Alternative GitHub repos to try if the primary one is unreachable. Deliberately EMPTY: JeffSackmann/tennis_atp and tennis_wta are 404 (deleted, not blocked — another repo on the same account still serves), and the mirror that used to be listed here, stakah/tennis_atp, is 404 as well. A mirror entry that does not resolve is worse than none: it turns one clear failure into two, and the retry advice it produces sends you to a page that no longer exists. Add one back only after checking it actually serves a recent season.",
+    "mirrors": {}
+  },
+  "tours": [
+    {
+      "id": "atp",
+      "name": "ATP",
+      "label": "ATP · Men's singles",
+      "sackmann": {
+        "$comment": "JeffSackmann/tennis_atp stopped being publicly reachable (404), so ATP history now comes from Tennismylife/TML-Database: same column layout, one CSV per season, updated through the current year, and it carries each player's official rank/points on every match row.",
+        "format": "tml",
+        "repo": "Tennismylife/TML-Database",
+        "matchesFile": "{year}.csv",
+        "playersFile": "",
+        "rankingsFiles": []
+      }
+    },
+    {
+      "id": "wta",
+      "name": "WTA",
+      "label": "WTA · Women's singles",
+      "sackmann": {
+        "$comment": "There is no WTA source left on GitHub. JeffSackmann/tennis_wta is 404 and TML covers ATP only, so this block will fail and update-data falls through to tennis-data.co.uk, which serves both tours (plus closing odds) and reaches the current season. The repo is kept here rather than deleted so that the attempt — and its 404 — is visible in the log instead of the WTA silently having no source at all; and so it starts working again by itself if the repo ever returns.",
+        "repo": "JeffSackmann/tennis_wta",
+        "matchesFile": "wta_matches_{year}.csv",
+        "playersFile": "wta_players.csv",
+        "rankingsFiles": ["wta_rankings_current.csv", "wta_rankings_20s.csv"]
+      }
+    }
+  ]
+}
