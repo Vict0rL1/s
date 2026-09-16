@@ -59,7 +59,24 @@ const lineas = [
   "X-WR-CALNAME:Semestre SFU — otoño 2026",
 ];
 
-function evento({ uid, start, end, day, summary, location, description }) {
+/**
+ * Recordatorio dentro del propio evento.
+ *
+ * Esto es lo que hace que Google Calendar (o el calendario del iPhone) avise
+ * sin que haya que configurar nada a mano evento por evento — y sin depender
+ * del cron de Vercel, que en el plan gratis sólo corre una vez al día.
+ *
+ * `trigger` es un intervalo ISO-8601 relativo al inicio. Negativo = antes.
+ */
+const alarma = (trigger, texto) => [
+  "BEGIN:VALARM",
+  "ACTION:DISPLAY",
+  `TRIGGER:${trigger}`,
+  `DESCRIPTION:${esc(texto)}`,
+  "END:VALARM",
+];
+
+function evento({ uid, start, end, day, summary, location, description, alarms = [] }) {
   const v = ["BEGIN:VEVENT", `UID:${uid}`, `DTSTAMP:${STAMP}`];
   if (day) {
     // Un evento de día completo termina al día siguiente: DTEND es exclusivo.
@@ -73,6 +90,7 @@ function evento({ uid, start, end, day, summary, location, description }) {
   v.push(`SUMMARY:${esc(summary)}`);
   if (location) v.push(`LOCATION:${esc(location)}`);
   if (description) v.push(`DESCRIPTION:${esc(description)}`);
+  for (const a of alarms) v.push(...a);
   v.push("END:VEVENT");
   lineas.push(...v);
 }
@@ -96,6 +114,7 @@ for (const course of COURSES) {
           summary: titulo,
           location: m.location,
           description: quien,
+          alarms: m.kind === "oficina" ? [] : [alarma("-PT15M", `${titulo} en 15 minutos`)],
         });
         conHora++;
       } else {
@@ -119,6 +138,10 @@ for (const course of COURSES) {
       day: d.date,
       summary: `${course.code}: ${d.title}`,
       description: [d.note, quien].filter(Boolean).join("\n"),
+      alarms: [
+        alarma("-PT6H", `Mañana: ${course.code} — ${d.title}`),
+        alarma("PT9H", `Hoy: ${course.code} — ${d.title}`),
+      ],
     });
     diaCompleto++;
   }
