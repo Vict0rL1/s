@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ViewHead } from "@/components/TaskRow";
+import { TermShape } from "@/components/TermShape";
 import { getCtx, loadBlocks, loadEvents, loadTasks } from "@/lib/data";
 import { DAYS_SHORT, MONTHS_SHORT, addDays, dayOfMonth, minsToHHMM, monthOf, startOfWeek, weekdayOf, yearOf } from "@/lib/date";
 
@@ -116,6 +117,8 @@ export default async function SemanaPage({ searchParams }: Props) {
           );
         })}
       </div>
+
+      <TermShape tasks={tasks} today={d} viewing={offset} />
     </>
   );
 }

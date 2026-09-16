@@ -201,6 +201,31 @@ main{min-width:0;padding:22px 26px 90px;max-width:1180px}
 .wi.t.done{opacity:.45;text-decoration:line-through}
 .wmore{font-family:var(--mono);font-size:10px;color:var(--ink-3);padding-left:5px}
 
+/* La tira de las próximas semanas, debajo de la cuadrícula. Sin cajas ni
+   sombras: sólo barras y fechas, para que compita lo menos posible con la
+   semana de arriba, que es lo que se está mirando. */
+.shape{margin-top:26px}
+.shapehead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.shapehead .eyebrow{margin-bottom:0}
+.shapehead .sub{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.shaperow{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;list-style:none;margin:0;padding:0}
+.shaperow li{display:flex}
+/* Todo se ancla abajo: si no, una celda sin número mide tres píxeles menos y,
+   al centrarse, desalinea su fecha respecto a las vecinas. */
+.shapecell{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px;padding:6px 4px;border-radius:7px;text-align:center}
+.shapecell:hover{background:var(--surface-2)}
+/* Alto fijo, no mínimo: la celda vacía tiene que ocupar exactamente lo mismo. */
+.shapecount{font-family:var(--mono);font-size:11px;line-height:15px;height:15px;color:var(--ink-2)}
+.shapetrack{display:flex;align-items:flex-end;justify-content:center;height:40px;width:100%}
+.shapebar{width:100%;max-width:22px;background:var(--accent);border-radius:3px}
+.shapeweek{font-family:var(--mono);font-size:10px;line-height:15px;height:15px;color:var(--ink-3);white-space:nowrap}
+.shapecell.hot .shapebar{background:var(--danger)}
+.shapecell.hot .shapecount{color:var(--danger);font-weight:600}
+.shapecell.blank .shapebar{background:var(--line-2)}
+/* La semana que se está mirando se marca con una línea bajo la fecha, no con
+   un bloque de color: el bloque pesaba más que los datos. */
+.shapecell[aria-current="page"] .shapeweek{color:var(--ink);box-shadow:inset 0 -1px 0 var(--ink-3)}
+
 /* ---- misc ---- */
 .empty{padding:22px 14px;text-align:center;color:var(--ink-3);font-size:13.5px}
 .empty b{display:block;color:var(--ink-2);font-weight:600;font-size:14px;margin-bottom:3px;font-family:var(--disp)}
@@ -227,6 +252,7 @@ main{min-width:0;padding:22px 26px 90px;max-width:1180px}
 @media (max-width:900px){
   .grid2{grid-template-columns:minmax(0,1fr)}
   .weekgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .shaperow{grid-template-columns:repeat(10,58px);overflow-x:auto;padding-bottom:4px}
 }
 @media (max-width:760px){
   /* En el teléfono la agenda mide unos 660px casi siempre vacíos, y enterraba

@@ -24,16 +24,23 @@ export default async function TareasPage({ searchParams }: Props) {
     .sort((a, b) => String(b.done_at ?? "").localeCompare(String(a.done_at ?? "")))
     .slice(0, 12);
 
-  const sort = (a: Task, b: Task) =>
-    a.priority - b.priority || String(a.due_date ?? "9").localeCompare(String(b.due_date ?? "9"));
+  // Dentro de un grupo que ya está definido por fecha, manda la fecha y la
+  // prioridad desempata. El artifact de referencia ordenaba al revés, y con
+  // fechas repartidas por todo un semestre eso deja un "2 nov" debajo de un
+  // "7 dic", que se lee como un error aunque no lo sea.
+  const byDate = (a: Task, b: Task) =>
+    String(a.due_date ?? "9").localeCompare(String(b.due_date ?? "9")) || a.priority - b.priority;
 
-  const late = open.filter((t) => t.due_date && t.due_date < d).sort(sort);
-  const hoy = open.filter((t) => t.due_date === d).sort(sort);
+  // Sin fecha no hay nada que ordenar salvo la prioridad.
+  const byPriority = (a: Task, b: Task) => a.priority - b.priority;
+
+  const late = open.filter((t) => t.due_date && t.due_date < d).sort(byDate);
+  const hoy = open.filter((t) => t.due_date === d).sort(byPriority);
   const week = open
     .filter((t) => t.due_date && t.due_date > d && daysBetween(d, t.due_date) <= 7)
-    .sort(sort);
-  const later = open.filter((t) => t.due_date && daysBetween(d, t.due_date) > 7).sort(sort);
-  const none = open.filter((t) => !t.due_date).sort(sort);
+    .sort(byDate);
+  const later = open.filter((t) => t.due_date && daysBetween(d, t.due_date) > 7).sort(byDate);
+  const none = open.filter((t) => !t.due_date).sort(byPriority);
 
   const chips = (
     <div className="chips">
