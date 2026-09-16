@@ -46,13 +46,37 @@ const seed = spawn(process.execPath, [new URL("./seed.mjs", import.meta.url).pat
 });
 await new Promise((r) => seed.on("exit", r));
 
+// El demo compila y sirve en modo producción, no `next dev`, por dos razones:
+//
+// 1. `NEXT_PUBLIC_*` se incrusta en el bundle al compilar. Pasárselas al build
+//    es lo correcto; dárselas sólo a `next dev` funcionaba de casualidad.
+// 2. En dev, si el websocket de recarga en caliente no conecta —una red rara,
+//    un proxy, un contenedor— React no hidrata y la página queda de adorno:
+//    escribes el correo, pulsas Entrar y no pasa nada, sin ningún error. El
+//    demo es para MIRAR la app, no para desarrollarla; la recarga en caliente
+//    no le aporta nada y sí le agrega esa forma de romperse en silencio.
+//
+// Para desarrollar de verdad está `npm run dev`.
+const entorno = {
+  NEXT_PUBLIC_SUPABASE_URL: URL_BASE,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: "llave-de-mentira-para-el-demo",
+};
+
+console.log("\ncompilando la app (esto tarda unos segundos, sólo la primera vez)...\n");
+const build = spawn("npm", ["run", "build"], {
+  stdio: ["inherit", "ignore", "inherit"],
+  env: { ...process.env, ...entorno },
+});
+const codigoBuild = await new Promise((r) => build.on("exit", r));
+if (codigoBuild) {
+  console.error("\nfalló la compilación — arriba está el error");
+  cerrar(codigoBuild);
+}
+
 console.log("\n──────────────────────────────────────────────");
 console.log("  TaskFlow en modo demo → http://localhost:3000");
 console.log("  entra con:  victor@ejemplo.com / contrasena");
 console.log("  los datos viven en memoria: al cerrar, se van");
 console.log("──────────────────────────────────────────────\n");
 
-lanzar("npm", ["run", "dev"], {
-  NEXT_PUBLIC_SUPABASE_URL: URL_BASE,
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: "llave-de-mentira-para-el-demo",
-}, "next dev");
+lanzar("npm", ["run", "start"], entorno, "next start");

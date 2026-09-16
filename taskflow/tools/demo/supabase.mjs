@@ -288,5 +288,17 @@ const server = createServer(async (req, res) => {
   }
 });
 
+// Un puerto ocupado es el tropiezo más probable al arrancar el demo, y el
+// volcado de Node que sale por defecto no le dice a nadie qué hacer.
+server.on("error", (e) => {
+  if (e.code === "EADDRINUSE") {
+    console.error(`\nEl puerto ${PORT} ya está ocupado.`);
+    console.error("Seguramente hay otro demo corriendo. Ciérralo (Ctrl+C en su");
+    console.error(`ventana) o usa otro puerto:  DEMO_PORT=7412 npm run demo\n`);
+    process.exit(1);
+  }
+  throw e;
+});
+
 server.listen(PORT, "127.0.0.1", () => console.log(`fake supabase escuchando en http://127.0.0.1:${PORT}`));
 export { db, server };
