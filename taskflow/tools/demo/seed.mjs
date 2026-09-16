@@ -1,4 +1,16 @@
-// SÓLO PARA DESARROLLO. Datos de ejemplo para el modo demo.
+// SÓLO PARA DESARROLLO. Siembra el modo demo con el semestre real de Victor,
+// leído de `tools/semester.mjs`. Los datos viven en memoria y se van al cerrar.
+import {
+  COURSES,
+  EXAM_WINDOW,
+  TZ,
+  addDays,
+  meetingDates,
+  meetingTitle,
+  missingTimes,
+  wallTimeToInstant,
+} from "../semester.mjs";
+
 const BASE = process.env.DEMO_URL || "http://127.0.0.1:7411";
 const login = await (await fetch(`${BASE}/auth/v1/token?grant_type=password`, {
   method: "POST", headers: { "content-type": "application/json" },
@@ -16,35 +28,68 @@ const post = async (table, rows) => {
   return body;
 };
 
-const HOY = "2026-09-15";        // martes
-const d = (n) => { const x = new Date(Date.UTC(2026, 8, 15) + n * 86400000); return x.toISOString().slice(0, 10); };
+// El día de hoy en Vancouver, no en la zona del servidor. Antes estaba fijo en
+// una fecha de septiembre, así que el demo envejecía: "Hoy" mostraba un día que
+// ya había pasado.
+const HOY = new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
 
 // PostgREST pone NULL donde falte una clave en un insert múltiple, así que
 // todas las filas tienen que traer el mismo juego de columnas.
 const task = (o) => ({
-  user_id: me, title: "", area: null, due_date: null, due_time: null,
+  user_id: me, title: "", area: null, body: null, due_date: null, due_time: null,
   est_minutes: null, priority: 3, done: false, done_at: null, focus_day: null,
   user_edited_at: null, ...o,
 });
 
-await post("tasks", [
-  task({ title: "Entregar reporte de laboratorio", area: "SFU", due_date: d(-2), priority: 1, user_edited_at: new Date().toISOString() }),
-  task({ title: "Problem set 4", area: "SFU", due_date: HOY, due_time: "23:59:00", est_minutes: 90, priority: 1, focus_day: HOY }),
-  task({ title: "Revisar cartera del mes", area: "FINSA", due_date: HOY, est_minutes: 45, priority: 2, focus_day: HOY }),
-  task({ title: "Leer cap 4 de econometría", area: "SFU", due_date: d(3), est_minutes: 60, priority: 2 }),
-  task({ title: "Reservar cancha", area: "Badminton", due_date: d(5), priority: 3 }),
-  task({ title: "Rediseñar el portafolio", area: "Proyectos", due_date: d(20), est_minutes: 240, priority: 3 }),
+/* ------------------------------------------------------------------ tareas */
+
+const tareas = [];
+
+for (const course of COURSES) {
+  for (const d of course.deadlines) {
+    tareas.push(task({
+      title: `${course.code}: ${d.title}`,
+      area: "SFU",
+      body: d.note ?? null,
+      due_date: d.date,
+      priority: d.priority ?? 2,
+    }));
+  }
+  // Lo que el programa menciona pero no fecha. Entra sin `due_date` para que no
+  // finja un vencimiento que nadie ha publicado.
+  for (const pendiente of course.pending ?? []) {
+    tareas.push(task({ title: `${course.code}: ${pendiente}`, area: "SFU", priority: 2 }));
+  }
+}
+
+tareas.push(
+  task({
+    title: "Mirar las fechas de los finales cuando salgan",
+    area: "SFU",
+    body: `Ventana ${EXAM_WINDOW.start} a ${EXAM_WINDOW.end}. Las publica el Registrar.`,
+    due_date: EXAM_WINDOW.start,
+    priority: 2,
+  }),
+  task({ title: "Confirmar hora y sala del tutorial de ECON 342 en goSFU", area: "SFU", priority: 1 }),
+  task({ title: "Confirmar la hora de la clase y del tutorial de ECON 370", area: "SFU", priority: 1 }),
+  task({ title: "Instalar R y RStudio para ECON 260", area: "SFU", est_minutes: 30, priority: 2 }),
+  task({ title: "Revisar cartera del mes", area: "FINSA", est_minutes: 45, priority: 2 }),
+  task({ title: "Reservar cancha", area: "Badminton", priority: 3 }),
   task({ title: "Llamar al dentista", area: "Personal", priority: 3 }),
-  task({ title: "Comprar cuadernos", area: "Personal", priority: 3 }),
-  task({ title: "Quiz 1 de estadística", area: "SFU", due_date: d(-4), done: true, done_at: new Date().toISOString(), priority: 2 }),
-  task({ title: "Actualizar hoja de vida", area: "Proyectos", done: true, done_at: new Date().toISOString(), priority: 3 }),
-]);
+);
+
+await post("tasks", tareas);
+
+/* ------------------------------------------------------------------- notas */
 
 await post("notes", [
-  { user_id: me, body: "Idea: agrupar las tareas por energía, no sólo por área. Las de concentración alta en la mañana.", pinned: true },
-  { user_id: me, body: "Preguntarle al profe por la rúbrica del proyecto final.", pinned: false },
-  { user_id: me, body: "Playlist para estudiar: lo instrumental funciona, lo cantado no.", pinned: false },
+  { user_id: me, body: "ECON 370: el tema de la propuesta (9 nov) tiene que ser el mismo del proyecto final (7 dic). Si lo cambio, hay que mandarle un correo a Kissel al menos una semana antes.", pinned: true },
+  { user_id: me, body: "ECON 260: de los 4 problem sets sólo cuentan los 3 mejores, y no se aceptan tarde. La tarea estadística sí se acepta tarde, pero con 20% por día.", pinned: true },
+  { user_id: me, body: "ECON 342 no permite IA en trabajo entregado sin permiso escrito. ECON 370 sí la permite para investigar, declarándola. Son políticas distintas — no mezclarlas.", pinned: false },
+  { user_id: me, body: "ECON 370 exige calculadora NO programable (sin IA, sin teléfono). ECON 260 sólo dice \"se permite calculadora\". El midterm de ECON 260 es a libro cerrado y sin apuntes.", pinned: false },
 ]);
+
+/* ----------------------------------------------------------------- rutinas */
 
 const habits = await post("habits", [
   { user_id: me, name: "Leer / estudiar 1 h", days: [1, 2, 3, 4, 5], sort_order: 0 },
@@ -53,33 +98,86 @@ const habits = await post("habits", [
   { user_id: me, name: "Cerrar el día en TaskFlow", days: [0, 1, 2, 3, 4, 5, 6], sort_order: 3 },
 ]);
 
-// Marcas de los últimos días, para que se vean rachas y puntitos
 const log = [];
 for (let i = 0; i < 12; i++) {
-  const day = d(-i);
-  const wd = new Date(Date.UTC(2026, 8, 15) - i * 86400000).getUTCDay();
+  const day = addDays(HOY, -i);
+  const wd = new Date(`${day}T00:00:00Z`).getUTCDay();
   for (const h of habits) {
     if (!h.days.includes(wd)) continue;
-    if (i === 0 && h.name === "Entrenar") continue;        // hoy aún pendiente
+    if (i === 0 && h.name === "Entrenar") continue;         // hoy aún pendiente
     if (i === 4 && h.name === "Revisar mercados") continue; // un hueco, para ver la racha cortada
     log.push({ habit_id: h.id, user_id: me, day });
   }
 }
 await post("habit_log", log);
 
+/* ---------------------------------------------------------------- eventos */
+
+const eventos = [];
+
+for (const course of COURSES) {
+  const slug = course.code.toLowerCase().replace(/\s+/g, "");
+  for (const m of course.meetings) {
+    const titulo = meetingTitle(course, m);
+    for (const day of meetingDates(course, m)) {
+      const base = {
+        user_id: me,
+        title: titulo,
+        location: m.location,
+        course_ref: course.code,
+        source: "ics",
+        external_id: `ics:Semestre:${slug}:${m.kind}:${m.weekday}:${day}`,
+      };
+      if (m.start && m.end) {
+        eventos.push({
+          ...base,
+          starts_at: wallTimeToInstant(day, m.start),
+          ends_at: wallTimeToInstant(day, m.end),
+          all_day_date: null,
+        });
+      } else {
+        // Sin hora en el programa: va como día completo, no con una inventada.
+        eventos.push({
+          ...base,
+          title: `${titulo} (falta la hora)`,
+          starts_at: null,
+          ends_at: null,
+          all_day_date: day,
+        });
+      }
+    }
+  }
+
+  for (const d of course.deadlines) {
+    eventos.push({
+      user_id: me,
+      title: `${course.code}: ${d.title}`,
+      location: null,
+      course_ref: course.code,
+      source: "canvas",
+      external_id: `canvas:deadline:${slug}:${d.date}`,
+      starts_at: null,
+      ends_at: null,
+      all_day_date: d.date,
+    });
+  }
+}
+
+await post("events", eventos);
+
+/* ----------------------------------------------------------------- bloques */
+
+// Un par de bloques de hoy, para que la agenda no se vea sólo con clases.
 await post("blocks", [
-  { user_id: me, day: HOY, start_min: 9 * 60, end_min: 10 * 60 + 30, title: "Problem set 4", kind: "tarea" },
-  { user_id: me, day: HOY, start_min: 10 * 60 + 30, end_min: 10 * 60 + 45, title: "Descanso", kind: "descanso" },
-  { user_id: me, day: HOY, start_min: 14 * 60, end_min: 15 * 60, title: "Revisar cartera", kind: "tarea" },
+  { user_id: me, day: HOY, start_min: 14 * 60, end_min: 15 * 60 + 30, title: "Leer para ECON 342", kind: "tarea" },
+  { user_id: me, day: HOY, start_min: 15 * 60 + 30, end_min: 15 * 60 + 45, title: "Descanso", kind: "descanso" },
 ]);
 
-// Eventos: clases con hora y un deadline de día completo
-const iso = (day, h, m) => new Date(`${day}T${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:00-07:00`).toISOString();
-await post("events", [
-  { user_id: me, title: "ECON 103 D100", starts_at: iso(HOY, 11, 30), ends_at: iso(HOY, 12, 20), all_day_date: null, course_ref: "ECON 103 D100", source: "ics", external_id: "ics:Canvas SFU:econ:1" },
-  { user_id: me, title: "CMPT 225 D200", starts_at: iso(HOY, 16, 0), ends_at: iso(HOY, 17, 20), all_day_date: null, course_ref: "CMPT 225 D200", source: "ics", external_id: "ics:Canvas SFU:cmpt:1" },
-  { user_id: me, title: "ECON 103 D100", starts_at: iso(d(2), 11, 30), ends_at: iso(d(2), 12, 20), all_day_date: null, course_ref: "ECON 103 D100", source: "ics", external_id: "ics:Canvas SFU:econ:2" },
-  { user_id: me, title: "Entrega: proyecto de CMPT", starts_at: null, ends_at: null, all_day_date: d(3), course_ref: "CMPT 225 D200", source: "canvas", external_id: "canvas:assignment:9001" },
-]);
+const faltan = missingTimes();
+if (faltan.length) {
+  const dias = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+  console.log("\nSin hora en el programa (salen como día completo):");
+  for (const f of faltan) console.log(`  · ${f.course} ${f.kind}, los ${dias[f.weekday]}`);
+}
 
 console.log("\nlisto — entra con victor@ejemplo.com / contrasena");
