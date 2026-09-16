@@ -8,7 +8,9 @@
  */
 
 :root{
-  /* Neutros cálidos, no verdosos: el fondo deja de teñir todo lo que va encima. */
+  /* Neutros cálidos, no verdosos, en AMBOS temas: el fondo deja de teñir todo lo
+     que va encima. En oscuro estaban en verde (#111312: G por encima de R y B),
+     así que el riel y el fondo se veían verdosos sin que nadie lo hubiera pedido. */
   --ground:#FAFAF9; --surface:#FFFFFF; --surface-2:#F3F3F1; --surface-3:#E9E9E5;
   --ink:#1A1A19; --ink-2:#63635F; --ink-3:#97978F;
   --line:#EAEAE6; --line-2:#DBDBD5;
@@ -35,9 +37,9 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme: dark;
-    --ground:#111312; --surface:#181A19; --surface-2:#202322; --surface-3:#292D2B;
+    --ground:#121211; --surface:#1A1A19; --surface-2:#222221; --surface-3:#2B2B29;
     --ink:#E9E9E5; --ink-2:#9A9A94; --ink-3:#6E6E69;
-    --line:#252826; --line-2:#343835;
+    --line:#272725; --line-2:#363631;
     --accent:#8FBFB2; --accent-on:#12201C; --accent-soft:#1B2A26; --accent-line:#2B403A;
     --danger:#E8897E; --danger-soft:#2B1A18; --danger-line:#422824;
     --teal:#8FB0CC; --teal-soft:#1A2029; --teal-line:#2A3542;
@@ -48,9 +50,9 @@
 }
 :root[data-theme="dark"]{
   color-scheme: dark;
-    --ground:#111312; --surface:#181A19; --surface-2:#202322; --surface-3:#292D2B;
+    --ground:#121211; --surface:#1A1A19; --surface-2:#222221; --surface-3:#2B2B29;
   --ink:#E9E9E5; --ink-2:#9A9A94; --ink-3:#6E6E69;
-  --line:#252826; --line-2:#343835;
+  --line:#272725; --line-2:#363631;
   --accent:#8FBFB2; --accent-on:#12201C; --accent-soft:#1B2A26; --accent-line:#2B403A;
   --danger:#E8897E; --danger-soft:#2B1A18; --danger-line:#422824;
   --teal:#8FB0CC; --teal-soft:#1A2029; --teal-line:#2A3542;
