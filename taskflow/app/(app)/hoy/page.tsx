@@ -1,6 +1,8 @@
 import { Timeline } from "@/components/Timeline";
 import { HabitRow } from "@/components/HabitRow";
 import { EmptyBox, TaskGroup, TaskPills, ViewHead } from "@/components/TaskRow";
+import { DayPlanner } from "@/components/DayPlanner";
+import { plannerConfigured } from "@/lib/env.server";
 import { ActionButton } from "@/components/ActionButton";
 import { toggleTask } from "@/app/actions";
 import { getCtx, loadBlocks, loadEvents, loadHabitLog, loadHabits, loadTasks } from "@/lib/data";
@@ -77,6 +79,14 @@ export default async function HoyPage() {
                 tz={ctx.tz}
               />
             </div>
+
+            {/* Sin ANTHROPIC_API_KEY no se pinta nada: un botón que siempre
+                falla es peor que no tenerlo. El resto de la app no se entera. */}
+            {plannerConfigured() ? (
+              <div className="pb" style={{ paddingTop: 0 }}>
+                <DayPlanner />
+              </div>
+            ) : null}
           </div>
         </div>
 

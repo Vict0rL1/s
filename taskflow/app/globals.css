@@ -226,6 +226,28 @@ main{min-width:0;padding:22px 26px 90px;max-width:1180px}
    un bloque de color: el bloque pesaba más que los datos. */
 .shapecell[aria-current="page"] .shapeweek{color:var(--ink);box-shadow:inset 0 -1px 0 var(--ink-3)}
 
+/* Planificador. La propuesta es una lista, no una caja con cromo: se mira, se
+   acepta o se descarta, y desaparece. */
+.planner{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.planbox{width:100%;border:1px solid var(--line);border-radius:var(--r);padding:12px 13px;background:var(--surface)}
+.planhead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.planhead .eyebrow{margin-bottom:0}
+.planhead .sub{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.planlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.planrow{display:flex;align-items:baseline;gap:9px;font-size:13.5px;padding:4px 6px;border-radius:6px;border-left:2.5px solid var(--accent)}
+.planrow.rest{border-left-color:var(--line-2);color:var(--ink-3)}
+.planrow .mono{font-size:11px;color:var(--ink-3);flex:0 0 auto}
+.plantitle{flex:1;min-width:0;word-break:break-word}
+.planmin{opacity:.75}
+.plannote{font-size:12.5px;color:var(--ink-2);margin:9px 0 0;line-height:1.45}
+.planfoot{display:flex;align-items:center;gap:8px;margin-top:12px}
+.plancost{margin-left:auto;font-size:11px;color:var(--ink-3)}
+.plannererr{font-size:12.5px;color:var(--danger);margin:0}
+@media (max-width:520px){
+  .planrow{flex-wrap:wrap;gap:4px 9px}
+  .plantitle{flex:1 0 100%;order:3}
+}
+
 /* ---- misc ---- */
 .empty{padding:22px 14px;text-align:center;color:var(--ink-3);font-size:13.5px}
 .empty b{display:block;color:var(--ink-2);font-weight:600;font-size:14px;margin-bottom:3px;font-family:var(--disp)}

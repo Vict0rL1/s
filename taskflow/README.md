@@ -218,7 +218,39 @@ nada**. Una app que avisa por avisar se silencia y se deja de usar.
 Para dejar de recibirlos, el mismo botón en Ajustes. Y si borras el navegador o
 revocas el permiso, la suscripción muerta se limpia sola en el siguiente envío.
 
-### 7. Correr
+### 7. Planear el día con Claude (fase 4, opcional y de pago)
+
+Un botón al pie de la agenda que reparte tus tareas pendientes en los ratos que
+de verdad tienes libres hoy.
+
+1. Saca una key en [console.anthropic.com](https://console.anthropic.com) →
+   **API keys**, y ponla en `.env.local` y en Vercel:
+
+   ```
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+
+2. Sin esa variable **el botón no aparece** y el resto de la app funciona igual.
+
+**Esto cuesta dinero.** Es lo único de TaskFlow que no es gratis: la API de
+Anthropic se cobra por uso. Cada plan ronda el centavo de dólar, y la app te
+enseña el costo exacto de cada llamada debajo de la propuesta, para que no te
+enteres en la factura. Si quieres gastar menos, `PLANNER_MODEL=claude-sonnet-5`
+o `claude-haiku-4-5`.
+
+**Propone, no dispone.** La propuesta se ve en pantalla con sus horas; se
+agenda sólo si le das a *Agendar*, y entonces se **suma** a lo que ya tenías.
+Nunca borra un bloque que pusiste a mano. La versión del artifact sí lo hacía
+—reemplazaba el día entero— y ese es justo el tipo de cosa que hace que una app
+se deje de usar.
+
+**Los huecos los calcula el servidor, no el modelo.** `lib/planner.ts` resta tus
+clases, eventos y bloques del horario visible del perfil y entrega sólo los
+ratos libres. Al modelo no se le pide que respete tus compromisos: se le da un
+tablero donde pisarlos es imposible. Lo que devuelve se vuelve a validar contra
+esos huecos antes de enseñártelo.
+
+### 8. Correr
 
 ```bash
 npm install
@@ -228,7 +260,7 @@ npm run dev
 Si abres <http://localhost:3000> sin configurar nada, la app te manda al login y
 te muestra este mismo instructivo en vez de un error.
 
-### 8. Desplegar
+### 9. Desplegar
 
 Importa el repo en Vercel. Como el proyecto vive en una subcarpeta, en la
 configuración del proyecto pon **Root Directory: `taskflow`**. Carga las dos
@@ -261,6 +293,7 @@ app/
   api/sync/canvas/   route handler del sync de Canvas (POST)
   api/export/        baja todos tus datos en JSON (GET)
   api/sync/          el sync diario del cron, con CRON_SECRET (GET)
+  api/plan/          propone un plan para hoy; no escribe nada (POST)
   auth/callback/     canje del código de OAuth por la sesión
   auth/signout/      cerrar sesión
   login/             entrar con Google, o el instructivo si falta configurar
@@ -274,6 +307,7 @@ lib/
   canvas.ts          Canvas: paginación y mapeo a tareas (puro, testeado)
   canvas-sync.ts     el sync en sí: trae de Canvas y escribe en la base
   push.ts            arma el aviso del día y lo manda (sólo servidor)
+  planner.ts         huecos libres del día + el plan con Claude (sólo servidor)
   data.ts            lectura desde Supabase (sólo servidor)
   supabase/          clientes de navegador, de servidor y de service role
 public/sw.js         service worker: recibe el aviso y abre /hoy al tocarlo

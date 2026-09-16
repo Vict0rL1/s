@@ -253,6 +253,72 @@ export async function deleteBlock(fd: FormData) {
   refresh();
 }
 
+/**
+ * Guarda un plan que el usuario ya vio y aceptó.
+ *
+ * **Añade, no reemplaza.** El artifact de referencia hacía `byDate[d] = made`,
+ * o sea que planear el día borraba los bloques puestos a mano. Eso es la misma
+ * clase de error que `CLAUDE.md` prohíbe en el sync: pisar en silencio algo que
+ * el usuario escribió. Aquí los bloques nuevos conviven con los que ya estaban,
+ * y el planificador ya los había tratado como tiempo ocupado.
+ */
+export async function applyPlan(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const ctx = await getCtx();
+
+  let propuesta: unknown;
+  try {
+    propuesta = JSON.parse(str(fd, "plan") || "[]");
+  } catch {
+    return fail("El plan llegó corrupto");
+  }
+  if (!Array.isArray(propuesta) || !propuesta.length) return fail("No hay plan que guardar");
+
+  const limpios = propuesta
+    .slice(0, 8)
+    .map((b) => b as { start?: unknown; end?: unknown; title?: unknown; kind?: unknown; taskId?: unknown })
+    .filter(
+      (b) =>
+        typeof b.start === "number" && typeof b.end === "number" &&
+        b.start >= 0 && b.end <= 1440 && b.end > b.start,
+    );
+
+  if (!limpios.length) return fail("El plan no tenía bloques válidos");
+
+  // `blocks.task_id` es una clave foránea. Si el plan referencia una tarea que
+  // ya no existe —la borraste mientras mirabas la propuesta, o el modelo se
+  // inventó un id— el insert entero falla y pierdes el plan completo por una
+  // sola fila. Se comprueba antes y el id desconocido se queda en null: el
+  // bloque sigue sirviendo aunque pierda el enlace a su tarea.
+  const pedidos = [...new Set(
+    limpios.map((b) => b.taskId).filter((x): x is string => typeof x === "string" && x.length > 0),
+  )];
+  let validos = new Set<string>();
+  if (pedidos.length) {
+    const { data } = await ctx.supabase
+      .from("tasks")
+      .select("id")
+      .in("id", pedidos)
+      .returns<{ id: string }[]>();
+    validos = new Set((data ?? []).map((t) => t.id));
+  }
+
+  const rows = limpios.map((b) => ({
+    user_id: ctx.userId,
+    day: ctx.today,
+    start_min: b.start as number,
+    end_min: b.end as number,
+    title: String(b.title ?? "Bloque").slice(0, 120),
+    kind: b.kind === "descanso" ? "descanso" : "tarea",
+    task_id: typeof b.taskId === "string" && validos.has(b.taskId) ? b.taskId : null,
+  }));
+
+  const { error } = await ctx.supabase.from("blocks").insert(rows);
+  if (error) return fail("No se pudieron guardar los bloques");
+
+  refresh();
+  return ok(`${rows.length} bloque${rows.length > 1 ? "s" : ""} agendado${rows.length > 1 ? "s" : ""}`);
+}
+
 /* ------------------------------------------------------------------ ajustes */
 
 export async function saveAreas(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {

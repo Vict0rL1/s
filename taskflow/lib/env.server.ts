@@ -55,3 +55,24 @@ export const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:nadie@example.
 
 export const pushSendConfigured = () =>
   Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+
+/* ------------------------------------------------- planificador con Claude */
+
+/** La key de la API de Anthropic. Sólo en el servidor: si llega al navegador,
+    cualquiera que abra las herramientas de desarrollo puede gastar tu saldo. */
+export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+
+/** Se puede cambiar por uno más barato sin tocar código. */
+export const PLANNER_MODEL = process.env.PLANNER_MODEL || "claude-opus-5";
+
+export const plannerConfigured = () => Boolean(ANTHROPIC_API_KEY);
+
+export function requireAnthropicKey(): string {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error(
+      "Falta ANTHROPIC_API_KEY. Se saca de console.anthropic.com -> API keys y va en " +
+        ".env.local y en Vercel. Al repo no va nunca.",
+    );
+  }
+  return ANTHROPIC_API_KEY;
+}
