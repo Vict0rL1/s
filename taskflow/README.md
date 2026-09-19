@@ -250,6 +250,22 @@ ratos libres. Al modelo no se le pide que respete tus compromisos: se le da un
 tablero donde pisarlos es imposible. Lo que devuelve se vuelve a validar contra
 esos huecos antes de enseñártelo.
 
+#### Partir una tarea en pasos
+
+El botón `⋮⋮` de una fila de Tareas reparte una entrega grande en 3-6 pasos con
+fecha propia. Aparece sólo en tareas pendientes que vencen dentro de **3 días o
+más**: con menos margen, los pasos se amontonan y el resultado es la misma pared
+con más filas.
+
+Reparte **hacia atrás**: el último paso cae al menos un día antes del
+vencimiento, y carga más trabajo al principio que al final. Terminar el día de
+la entrega es no tener margen para nada.
+
+Los pasos entran como tareas normales **junto a la original**, que no se toca ni
+se borra. No hay jerarquía en el esquema y no se inventa una: una columna
+`parent_id` obligaría a anidar en todas las vistas, y para cuatro pasos con
+fecha eso es más estructura que provecho.
+
 ### 8. Correr
 
 ```bash
@@ -294,6 +310,7 @@ app/
   api/export/        baja todos tus datos en JSON (GET)
   api/sync/          el sync diario del cron, con CRON_SECRET (GET)
   api/plan/          propone un plan para hoy; no escribe nada (POST)
+  api/breakdown/     propone los pasos de una tarea; no escribe nada (POST)
   auth/callback/     canje del código de OAuth por la sesión
   auth/signout/      cerrar sesión
   login/             entrar con Google, o el instructivo si falta configurar
@@ -308,6 +325,7 @@ lib/
   canvas-sync.ts     el sync en sí: trae de Canvas y escribe en la base
   push.ts            arma el aviso del día y lo manda (sólo servidor)
   planner.ts         huecos libres del día + el plan con Claude (sólo servidor)
+  breakdown.ts       parte una tarea grande en pasos con fecha (sólo servidor)
   data.ts            lectura desde Supabase (sólo servidor)
   supabase/          clientes de navegador, de servidor y de service role
 public/sw.js         service worker: recibe el aviso y abre /hoy al tocarlo

@@ -145,9 +145,9 @@ function buildPrompt(input: {
 
 /**
  * Precios de la API por millón de tokens, para poder decirle al usuario lo que
- * costó en vez de que se entere en la factura.
+ * costó en vez de que se entere en la factura. Lo comparte `lib/breakdown.ts`.
  */
-const PRICE_PER_MTOK: Record<string, { in: number; out: number }> = {
+export const PRICE_PER_MTOK: Record<string, { in: number; out: number }> = {
   "claude-opus-5": { in: 5, out: 25 },
   "claude-sonnet-5": { in: 2, out: 10 },
   "claude-haiku-4-5": { in: 1, out: 5 },

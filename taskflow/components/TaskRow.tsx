@@ -1,8 +1,10 @@
 import { deleteTask, toggleTask } from "@/app/actions";
 import { daysBetween, fmtDur, fmtDate, minsToHHMM, timeToMins } from "@/lib/date";
+import { plannerConfigured } from "@/lib/env.server";
 import type { Task } from "@/lib/types";
 import { ActionButton } from "./ActionButton";
 import { FocusButton } from "./FocusButton";
+import { TaskSplit } from "./TaskSplit";
 import { TaskTitle } from "./TaskTitle";
 
 export function TaskPills({ task, today }: { task: Task; today: string }) {
@@ -28,11 +30,24 @@ export function TaskPills({ task, today }: { task: Task; today: string }) {
   return <div className="tmeta">{bits}</div>;
 }
 
+/**
+ * Cuántos días de margen hacen falta para que partir la tarea signifique algo.
+ * Con menos, los pasos se amontonan en uno o dos días y el resultado es la
+ * misma pared con más filas.
+ */
+const MIN_DIAS_PARA_PARTIR = 3;
+
 export function TaskRow({ task, today }: { task: Task; today: string }) {
   const focused = task.focus_day === today;
 
-  return (
-    <div className={"task" + (task.done ? " done" : "")}>
+  const partible =
+    plannerConfigured() &&
+    !task.done &&
+    !!task.due_date &&
+    daysBetween(today, task.due_date) >= MIN_DIAS_PARA_PARTIR;
+
+  const contenido = (
+    <>
       <div className={"prio p" + (task.priority ?? 0)} />
 
       <ActionButton
@@ -54,8 +69,21 @@ export function TaskRow({ task, today }: { task: Task; today: string }) {
       <ActionButton action={deleteTask} id={task.id} className="xbtn" label="Eliminar">
         ×
       </ActionButton>
-    </div>
+    </>
   );
+
+  // `TaskSplit` aporta el botón y el panel de la propuesta, y tiene que envolver
+  // la fila porque el panel va debajo, no dentro. Sin él, la fila es la de
+  // siempre y no se manda nada de más al navegador.
+  if (partible) {
+    return (
+      <TaskSplit task={task} today={today}>
+        {contenido}
+      </TaskSplit>
+    );
+  }
+
+  return <div className={"task" + (task.done ? " done" : "")}>{contenido}</div>;
 }
 
 export function TaskGroup({

@@ -319,6 +319,54 @@ export async function applyPlan(_prev: ActionResult | null, fd: FormData): Promi
   return ok(`${rows.length} bloque${rows.length > 1 ? "s" : ""} agendado${rows.length > 1 ? "s" : ""}`);
 }
 
+/**
+ * Guarda los pasos en que se partió una tarea grande.
+ *
+ * Los pasos entran como tareas normales, junto a la original — que no se toca
+ * ni se borra. No hay jerarquía en el esquema y no se la inventa aquí: una
+ * columna `parent_id` obligaría a anidar en todas las vistas, y para tres o
+ * cuatro pasos con fecha propia eso es más estructura que provecho. Si algún
+ * día estorba, se añade entonces.
+ */
+export async function applyBreakdown(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const ctx = await getCtx();
+
+  let pasos: unknown;
+  try {
+    pasos = JSON.parse(str(fd, "steps") || "[]");
+  } catch {
+    return fail("Los pasos llegaron corruptos");
+  }
+  if (!Array.isArray(pasos) || !pasos.length) return fail("No hay pasos que guardar");
+
+  const area = str(fd, "area") || null;
+
+  const rows = pasos
+    .slice(0, 7)
+    .map((p) => p as { title?: unknown; date?: unknown; minutes?: unknown })
+    .filter((p) => typeof p.title === "string" && p.title.trim() && typeof p.date === "string")
+    .map((p) => ({
+      user_id: ctx.userId,
+      title: String(p.title).slice(0, 120),
+      area,
+      due_date: p.date as string,
+      est_minutes: typeof p.minutes === "number" ? Math.min(1440, Math.max(1, Math.round(p.minutes))) : null,
+      priority: 2,
+      // Son tareas escritas por el usuario al aceptarlas, no filas de una
+      // fuente externa: se marcan como editadas a mano para que el sync de
+      // Canvas nunca las considere suyas.
+      user_edited_at: new Date().toISOString(),
+    }));
+
+  if (!rows.length) return fail("Ningún paso era válido");
+
+  const { error } = await ctx.supabase.from("tasks").insert(rows);
+  if (error) return fail("No se pudieron guardar los pasos");
+
+  refresh();
+  return ok(`${rows.length} paso${rows.length > 1 ? "s" : ""} agregado${rows.length > 1 ? "s" : ""}`);
+}
+
 /* ------------------------------------------------------------------ ajustes */
 
 export async function saveAreas(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {

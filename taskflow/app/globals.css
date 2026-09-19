@@ -243,6 +243,10 @@ main{min-width:0;padding:22px 26px 90px;max-width:1180px}
 .planfoot{display:flex;align-items:center;gap:8px;margin-top:12px}
 .plancost{margin-left:auto;font-size:11px;color:var(--ink-3)}
 .plannererr{font-size:12.5px;color:var(--danger);margin:0}
+/* Partir una tarea: el botón vive en la fila, el panel debajo de ella. */
+.xbtn.split{font-size:11px;letter-spacing:-1px}
+.splitbox{margin:2px 0 10px;background:var(--surface-2)}
+.splitmsg{padding:2px 6px 8px}
 @media (max-width:520px){
   .planrow{flex-wrap:wrap;gap:4px 9px}
   .plantitle{flex:1 0 100%;order:3}
