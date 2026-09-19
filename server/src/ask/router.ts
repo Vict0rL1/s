@@ -118,6 +118,18 @@ export function enrutar(pregunta: string): Intencion {
 
 export function responder(pregunta: string): Respuesta & { intencion: Intencion } {
   const intencion = enrutar(pregunta);
+  return { ...ejecutar(intencion), intencion };
+}
+
+/**
+ * Ejecuta una intención, venga de donde venga.
+ *
+ * Separado de `responder` para que el enrutador con modelo y el agente de varios pasos
+ * usen EXACTAMENTE este código en vez de tener cada uno su switch. Con tres copias, una
+ * herramienta nueva se añade a dos de ellas y la tercera contesta «no te he entendido»
+ * a una pregunta que las otras dos saben responder.
+ */
+export function ejecutar(intencion: Intencion): Respuesta {
   const [a, b, c] = intencion.argumentos;
   let r: Respuesta;
   switch (intencion.herramienta) {
@@ -157,5 +169,5 @@ export function responder(pregunta: string): Respuesta & { intencion: Intencion 
         fuente: 'ninguna: no he llegado a consultar nada',
       };
   }
-  return { ...r, intencion };
+  return r;
 }

@@ -130,6 +130,15 @@ export const env = {
    * dice por qué. Una pantalla vacía con su motivo es una respuesta honesta.
    */
   demoFixtures: !/^(off|0|false|no)$/i.test(process.env.DEMO_FIXTURES?.trim() ?? ''),
+  /**
+   * Clave para el enrutador con modelo de lenguaje del asistente. OPCIONAL.
+   *
+   * Sin ella todo funciona: el asistente enruta con expresiones regulares, que es
+   * determinista, gratis y sin red. El modelo solo añade tolerancia a preguntas mal
+   * escritas o con un orden raro — nunca un dato, nunca una respuesta mejor a una
+   * pregunta que ya se entendía.
+   */
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || '',
 };
 
 export function tourById(id: string) {

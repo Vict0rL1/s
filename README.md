@@ -232,11 +232,62 @@ Ninguna herramienta acepta SQL de fuera: son funciones con argumentos tipados y 
 consultas escritas en el código. A un asistente al que se le puede dictar SQL se le puede
 dictar `DROP TABLE`.
 
-**Dónde encajaría un modelo, si se quisiera:** en `server/src/ask/router.ts` y solo ahí,
-sustituyendo el clasificador por una llamada con herramientas donde el modelo elige
-*cuál* y *con qué argumentos*, y nada más. El contrato de salida es el mismo, así que las
-respuestas seguirían saliendo de SQLite. Lo que aportaría es tolerancia a preguntas
-raras; lo que no debe aportar nunca es el contenido de la respuesta.
+### El agente de varios pasos (sin clave, sin coste)
+
+Un agente, en el sentido útil, es algo que **decide una secuencia**: mira la pregunta,
+elige una consulta, y con lo que sale decide si hace falta otra. Eso es lo que hace
+`compara a Alcaraz y Sinner`:
+
+```
+vía: agente | pasos: jugador → jugador → caraACara → prediccion
+plan: comparación: ficha de cada uno, cara a cara y predicción — cuatro consultas
+```
+
+Encadenar aporta algo real: «¿quién es mejor?» no tiene *una* respuesta en la base, tiene
+cuatro, y el enrutador de un paso tenía que elegir una y tirar las otras tres. Con las
+cuatro juntas sale lo interesante:
+
+| | |
+| --- | --- |
+| Ranking oficial | Alcaraz 1º · Sinner 2º |
+| Elo general | Sinner 2347 · Alcaraz 2286 |
+| Cara a cara | **Alcaraz 10–6** |
+| El modelo, en dura | **Sinner 60,6 %** |
+
+Los cuatro números discrepan y cada uno tiene su motivo — en pista dura el Elo de Sinner
+es 2335 contra 2192. Un asistente que promediara eso en silencio y soltara un número
+sería menos útil, no más.
+
+Y sigue sin redactar nada: el resumen se **compone** de los textos que ya devolvieron las
+herramientas. Si aquí se escribiera «X está claramente por delante», esa frase sería una
+opinión sin medir colada entre datos medidos.
+
+### El enrutador con modelo de lenguaje (opcional, `ANTHROPIC_API_KEY`)
+
+Con una clave en el `.env`, un modelo elige **qué herramienta** y **con qué argumentos**.
+Nada más: el texto lo sigue componiendo `tools.ts` desde SQLite. Así el modelo no puede
+equivocarse en una cifra — si se equivoca, contesta a otra pregunta, y eso se nota.
+
+Lo que aporta se ve mejor con una pregunta mal escrita:
+
+| | herramienta y argumentos |
+| --- | --- |
+| con modelo | `prediccion` · `["Alcaraz", "Sinner", "tierra"]` |
+| sin modelo | `prediccion` · `["oye y si juegan alcarazz", "siner en polvo de ladrillo quien gana", ""]` |
+
+Lo que **no** aporta: ningún dato, y ninguna respuesta mejor a una pregunta que el
+enrutador ya entendía. `top 10 ATP` da lo mismo con clave que sin ella. Por eso está
+apagado por defecto: cuesta dinero por pregunta y casi todo el valor de esta pantalla no
+depende de él.
+
+**Falla hacia el lado seguro, comprobado caso por caso.** Sin clave, con HTTP 401, con la
+red caída, con una respuesta que no se entiende, o con un nombre de herramienta que no
+existe → se usa el enrutador determinista y la pantalla dice cuál de los dos contestó.
+Nunca sale un error por culpa del modelo, porque la app funciona perfectamente sin él.
+
+Y lo que devuelve el modelo se **valida**: el nombre contra la lista y cada argumento por
+tipo. No es desconfianza decorativa — eso es texto de un servicio externo que va directo
+a elegir qué consulta se ejecuta.
 
 ### «No quiero partidos inventados»: `npm run demo -- --off`
 

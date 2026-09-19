@@ -27,7 +27,9 @@ import { computeH2H } from '../model/h2h.ts';
 import { impliedProbabilities, type MarketProbabilities } from '../model/market.ts';
 import { buildPrediction, type Prediction } from '../model/predict.ts';
 import { refreshOdds } from '../ingest/odds.ts';
-import { responder } from '../ask/router.ts';
+import { ejecutar } from '../ask/router.ts';
+import { responderAgente } from '../ask/agent.ts';
+import { enrutarConModelo } from '../ask/llm.ts';
 import { place, settle, resumen } from '../paper/bankroll.ts';
 import { evaluate } from '../live/engine.ts';
 import { matchupServe } from '../live/serve.ts';
@@ -391,7 +393,18 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: { pregunta?: string } }>('/ask', async (req, reply) => {
     const pregunta = String(req.body?.pregunta ?? '').slice(0, 300);
     if (!pregunta.trim()) return reply.code(400).send({ error: 'Falta la pregunta.' });
-    return responder(pregunta);
+
+    // Las comparaciones van al agente de varios pasos, que encadena cuatro consultas y
+    // no necesita ningún modelo. El resto pasa por el enrutador con modelo si hay clave,
+    // y si no —o si falla— por el determinista de siempre.
+    const ag = responderAgente(pregunta);
+    if (ag.pasos.length > 1) {
+      return { ...ag, via: 'agente', intencion: { herramienta: 'comparacion', argumentos: [] } };
+    }
+
+    const { intencion, via, nota } = await enrutarConModelo(pregunta);
+    const r = ejecutar(intencion);
+    return { ...r, intencion, via, nota, pasos: [{ herramienta: intencion.herramienta, argumentos: intencion.argumentos, respuesta: r }] };
   });
 
   // --- tours ---
