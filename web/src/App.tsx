@@ -6,6 +6,7 @@ import BaseballDashboard from './components/baseball/BaseballDashboard';
 import NflDashboard from './components/nfl/NflDashboard';
 import BetsDashboard from './components/bets/BetsDashboard';
 import { SPORT_THEMES, type SportId } from './lib/theme';
+import TodayPanel from './components/TodayPanel';
 
 /**
  * Sports are separate tabs, not a merged feed.
@@ -192,6 +193,10 @@ export default function App() {
 
         <main className={`mx-auto ${SHELL_WIDTH} px-4 pb-16 pt-6`}>
           {/* Mounted one at a time on purpose: the inactive sports do no fetching. */}
+          {/* Encima de la pestaña y fuera de ella: «qué hay hoy» cruza los cinco
+              deportes y la navegación por deporte no puede contestarla. */}
+          <TodayPanel />
+
           {sport === 'bets' && <BetsDashboard />}
           {sport === 'football' && <FootballDashboard />}
           {sport === 'basketball' && <BasketballDashboard />}

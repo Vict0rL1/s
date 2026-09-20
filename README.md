@@ -289,6 +289,40 @@ Y lo que devuelve el modelo se **valida**: el nombre contra la lista y cada argu
 tipo. No es desconfianza decorativa — eso es texto de un servicio externo que va directo
 a elegir qué consulta se ejecuta.
 
+### «Hoy», en los cinco deportes a la vez
+
+La app se organiza **por deporte** y eso es correcto: los modelos son distintos, los
+mercados son distintos, y mezclarlos en una lista haría ilegibles los cinco. Pero hay una
+pregunta que no respeta esa división y es la primera que se hace cualquiera al abrir la
+app: **¿qué hay hoy?** Contestarla costaba cinco clics y acordarse de lo que decía cada
+pestaña.
+
+Ahora sale arriba del todo, encima del contenido y fuera de las pestañas:
+
+```
+Hoy · 13 partidos en los cinco deportes · 13 por jugar
+
+  17:00  🏈  Carolina Panthers @ Atlanta Falcons      Atlanta Falcons 64%
+  17:00  🏈  New Orleans Saints @ Baltimore Ravens    Baltimore Ravens 70%
+  17:00  🏈  Minnesota Vikings @ Chicago Bears        Chicago Bears 55%
+```
+
+Se pliega, y plegado **se recuerda entre visitas**: quien ya sabe lo que hay hoy no
+quiere volver a verlo cada vez que cambia de deporte, y una cabecera que no se puede
+quitar acaba siendo un peaje.
+
+Tres decisiones que hacen que el número signifique algo:
+
+- **Las probabilidades salen del log de predicciones, no se recalculan.** El log guarda la
+  que *se mostró*, con su fecha. Recalculando aquí, esta vista podría decir un número y la
+  pestaña del deporte otro para el mismo partido, y no habría forma de saber cuál se usó.
+  Un partido que aún no ha pasado por el log sale como **«sin predicción»** en vez de con
+  una inventada, y el pie dice cuántos van así.
+- **La ventana es la misma que usa cada pestaña** (`freshSince`). Con un corte propio,
+  esta vista podría enseñar un partido que la pestaña ya escondió, o al revés.
+- **Un partido ya empezado no se esconde** —sigue siendo lo de hoy— pero se atenúa. Verlo
+  al mismo nivel que uno por jugar invita a apostarlo.
+
 ### ¿Están las cuotas al día? Y bajar el gasto: `npm run ahorro`
 
 ```bash

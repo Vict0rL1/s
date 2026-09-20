@@ -31,6 +31,7 @@ import { ejecutar } from '../ask/router.ts';
 import { responderAgente } from '../ask/agent.ts';
 import { enrutarConModelo } from '../ask/llm.ts';
 import { place, settle, resumen } from '../paper/bankroll.ts';
+import { partidosDeHoy } from '../today.ts';
 import { evaluate } from '../live/engine.ts';
 import { matchupServe } from '../live/serve.ts';
 import { describe as describeState, type LiveState } from '../live/state.ts';
@@ -375,6 +376,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const result = await refreshOdds(true);
     return { ok: true, ...result };
   });
+
+  // --- qué se juega hoy, en los cinco deportes ---
+  app.get('/today', async () => partidosDeHoy());
 
   // --- el banco de papel del modelo ---
   app.get('/paper', async () => {
