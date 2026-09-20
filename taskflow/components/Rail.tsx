@@ -23,13 +23,16 @@ export function Rail({ counts, email }: { counts: Counts; email: string }) {
   const [busy, setBusy] = useState(false);
 
   function cycleTheme() {
-    let cur = "system";
+    // El predeterminado es oscuro, así que el ciclo empieza ahí: oscuro → claro
+    // → el del sistema. Tiene que coincidir con el script de `app/layout.tsx`,
+    // que es quien decide qué se ve antes de que cargue nada de esto.
+    let cur = "dark";
     try {
-      cur = localStorage.getItem("taskflow.theme") || "system";
+      cur = localStorage.getItem("taskflow.theme") || "dark";
     } catch {
       /* modo incógnito con el almacenamiento bloqueado */
     }
-    const next = cur === "system" ? "light" : cur === "light" ? "dark" : "system";
+    const next = cur === "dark" ? "light" : cur === "light" ? "system" : "dark";
     try {
       localStorage.setItem("taskflow.theme", next);
     } catch {

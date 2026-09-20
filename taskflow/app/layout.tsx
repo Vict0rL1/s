@@ -40,7 +40,9 @@ export const viewport: Viewport = {
  * Aplica el tema guardado ANTES del primer pintado. Si esto corriera después
  * de la hidratación se vería un parpadeo blanco al abrir en modo oscuro.
  */
-const THEME_SCRIPT = `try{var t=localStorage.getItem("taskflow.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}`;
+// Sin nada guardado, oscuro. Es la preferencia de Victor y esta app tiene un
+// solo usuario; quien quiera otra cosa la cambia desde el riel y se recuerda.
+const THEME_SCRIPT = `try{var t=localStorage.getItem("taskflow.theme")||"dark";if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){document.documentElement.setAttribute("data-theme","dark")}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
