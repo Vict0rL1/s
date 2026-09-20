@@ -1,0 +1,90 @@
+# El reloj de TaskFlow.
+#
+# Existe por una limitación concreta: Victor pidió dos avisos al día — el
+# resumen de la mañana y el de la noche anterior — y el plan gratis de Vercel
+# permite UN cron al día. Además, dos horas fijas en UTC se irían de sitio en
+# noviembre, cuando Vancouver pasa de UTC-7 a UTC-8.
+#
+# La solución es separar el reloj de la decisión: esto llama a /api/sync cada
+# hora y es la app la que mira la hora local del perfil y decide si toca. Que
+# no se repita lo garantiza la tabla `digest_log`, no el horario de aquí.
+#
+# Hacen falta dos secretos del repo (Settings -> Secrets and variables ->
+# Actions -> New repository secret). NO van en ningún archivo:
+#   APP_URL      https://tu-app.vercel.app   (sin barra al final)
+#   CRON_SECRET  el mismo valor que pusiste en las variables de Vercel
+#
+# Aviso: GitHub desactiva los workflows programados de un repo público después
+# de 60 días sin commits. Si un día dejan de llegar los avisos, entra a la
+# pestaña Actions y dale a "Enable workflow".
+
+name: taskflow clock
+
+on:
+  schedule:
+    # A y siete, no en punto: a las horas en punto GitHub tiene cola y retrasa.
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: "Forzar un aviso ahora (se salta la ventana y el registro)"
+        type: choice
+        options: ["no", morning, night]
+        default: "no"
+      canvas:
+        description: "Forzar el sync de Canvas aunque acabe de correr"
+        type: boolean
+        default: false
+
+# Sin permisos sobre el repo: esto sólo hace una petición hacia afuera.
+permissions: {}
+
+concurrency:
+  group: taskflow-clock
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Llamar al reloj
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DIGEST: ${{ inputs.digest }}
+          CANVAS: ${{ inputs.canvas }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${APP_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "Faltan los secretos APP_URL y/o CRON_SECRET del repositorio." >&2
+            echo "Settings -> Secrets and variables -> Actions." >&2
+            exit 1
+          fi
+
+          url="${APP_URL%/}/api/sync"
+          sep="?"
+          if [ "${DIGEST:-no}" != "no" ] && [ -n "${DIGEST:-}" ]; then
+            url="${url}${sep}digest=${DIGEST}"; sep="&"
+          fi
+          if [ "${CANVAS:-false}" = "true" ]; then
+            url="${url}${sep}canvas=1"
+          fi
+
+          # El cuerpo NO se imprime: este repositorio es público y sus
+          # registros también, y la respuesta lleva el id del usuario y los
+          # mensajes de error de Canvas. El detalle está en los logs de
+          # Vercel, que sí son privados.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            --max-time 60 --retry 2 --retry-delay 15 --retry-connrefused \
+            "$url")
+
+          echo "HTTP $code"
+          case "$code" in
+            200) echo "El reloj respondió. Qué hizo (o si no tocaba nada), en los logs de Vercel." ;;
+            401) echo "CRON_SECRET no coincide con el de Vercel." >&2; exit 1 ;;
+            503) echo "A la app le falta CRON_SECRET en sus variables de entorno." >&2; exit 1 ;;
+            *)   echo "Respuesta inesperada." >&2; exit 1 ;;
+          esac
