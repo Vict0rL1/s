@@ -172,6 +172,27 @@ create table if not exists public.sync_state (
   primary key (user_id, source)
 );
 
+-- ------------------------------------------------------ avisos ya enviados
+
+-- Un aviso por día y por tipo, y ya.
+--
+-- El reloj corre cada hora y pregunta "¿toca avisar?". Sin esta tabla, la
+-- respuesta sería "sí" todas las horas de la ventana y el mismo resumen
+-- saldría cinco veces seguidas. Lo que lo impide es la clave primaria: el
+-- segundo intento del día choca contra ella y no manda nada. Deliberadamente
+-- no es una bandera ni un contador en `profiles` — eso se desincroniza en
+-- cuanto dos corridas se pisan; una fila existe o no existe.
+--
+-- `day` es el día LOCAL en que se mandó, no el que describe: el aviso de la
+-- noche del lunes habla del martes, pero se guarda como (lunes, 'night').
+create table if not exists public.digest_log (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  day     date not null,
+  kind    text not null check (kind in ('morning', 'night')),
+  sent_at timestamptz not null default now(),
+  primary key (user_id, day, kind)
+);
+
 -- ------------------------------------------------------------- triggers
 
 create or replace function public.touch_updated_at()
@@ -215,6 +236,7 @@ alter table public.habit_log  enable row level security;
 alter table public.blocks     enable row level security;
 alter table public.sync_state enable row level security;
 alter table public.push_subscriptions enable row level security;
+alter table public.digest_log enable row level security;
 
 drop policy if exists own_profile on public.profiles;
 create policy own_profile on public.profiles
@@ -250,4 +272,8 @@ create policy own_sync_state on public.sync_state
 
 drop policy if exists own_push_subscriptions on public.push_subscriptions;
 create policy own_push_subscriptions on public.push_subscriptions
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists own_digest_log on public.digest_log;
+create policy own_digest_log on public.digest_log
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
