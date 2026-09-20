@@ -75,6 +75,122 @@ const FUENTES: Fuente[] = [
   { deporte: 'Tenis', log: 'prediction_log', up: 'upcoming_matches', clave: 'match_key', casa: 'p1_name', fuera: 'p2_name', prob: 'prob1', precio: 'p1_odds', resuelto: 'resolved_at' },
 ];
 
+// ===========================================================================
+// Y EL CIERRE DEL CÍRCULO: ¿ACERTÓ?
+// ===========================================================================
+// «Hoy» dice lo que el modelo cree. Sin la otra mitad —qué pasó— eso es una promesa sin
+// cumplir, y una app de predicciones que solo enseña predicciones es indistinguible de
+// una que las inventa.
+//
+// El panel de historial ya daba el AGREGADO (acierta el 65 %), que es el número honesto
+// y el que hay que mirar para juzgar. Pero partido a partido es lo que se puede
+// comprobar: quien recuerda el partido de ayer puede verificar esta fila con su propia
+// memoria, y eso es lo que convierte un porcentaje en algo en lo que fiarse.
+//
+// Funciona sin cuotas, que es lo que lo hace útil incluso con el proveedor caído: para
+// saber si el modelo acertó no hace falta ningún precio, solo el resultado.
+export interface ResultadoReciente {
+  deporte: PartidoDeHoy['deporte'];
+  cuando: string;
+  partido: string;
+  favorito: string;
+  probabilidad: number;
+  ganador: string;
+  acerto: boolean;
+}
+
+interface FuenteResuelta extends Fuente {
+  /** Columnas del marcador final, o null en el tenis, que guarda el id del ganador. */
+  marcador: [string, string] | null;
+}
+
+/** Cuántos días atrás se mira. Una semana: más y la lista deja de leerse de un vistazo. */
+const DIAS_ATRAS = 7;
+
+export function resultadosRecientes(now = new Date()): ResultadoReciente[] {
+  const db = getDb();
+  const desde = new Date(now.getTime() - DIAS_ATRAS * 86_400_000).toISOString();
+  const out: ResultadoReciente[] = [];
+
+  const resueltas: FuenteResuelta[] = [
+    { ...FUENTES[0], marcador: ['home_goals', 'away_goals'] },
+    { ...FUENTES[1], marcador: ['home_pts', 'away_pts'] },
+    { ...FUENTES[2], marcador: ['home_runs', 'away_runs'] },
+    { ...FUENTES[3], marcador: ['home_points', 'away_points'] },
+    { ...FUENTES[4], marcador: null },
+  ];
+
+  for (const f of resueltas) {
+    try {
+      const rows = f.marcador
+        ? (db
+            .prepare(
+              `SELECT commence_time AS cuando, ${f.casa} AS casa, ${f.fuera} AS fuera,
+                      ${f.prob} AS p ${f.empate ? `, ${f.empate} AS pEmpate` : ''},
+                      ${f.marcador[0]} AS gc, ${f.marcador[1]} AS gf
+                 FROM ${f.log}
+                WHERE ${f.marcador[0]} IS NOT NULL AND commence_time >= ?
+                ORDER BY commence_time DESC LIMIT 40`,
+            )
+            .all(desde) as unknown as {
+            cuando: string; casa: string; fuera: string; p: number;
+            pEmpate?: number; gc: number; gf: number;
+          }[])
+        : (db
+            .prepare(
+              `SELECT l.commence_time AS cuando, l.p1_name AS casa, l.p2_name AS fuera,
+                      l.prob1 AS p, l.winner_id, l.p1_id
+                 FROM prediction_log l
+                WHERE l.winner_id IS NOT NULL AND l.commence_time >= ?
+                ORDER BY l.commence_time DESC LIMIT 40`,
+            )
+            .all(desde) as unknown as {
+            cuando: string; casa: string; fuera: string; p: number;
+            winner_id: number; p1_id: number;
+          }[]);
+
+      for (const r of rows as (typeof rows)[number][]) {
+        if (!r.casa || !r.fuera || typeof r.p !== 'number') continue;
+        const pEmpate = typeof (r as { pEmpate?: number }).pEmpate === 'number' ? (r as { pEmpate: number }).pEmpate : 0;
+        const lados: [string, number][] = [
+          [r.casa, r.p],
+          [r.fuera, 1 - r.p - pEmpate],
+        ];
+        if (f.empate) lados.push(['Empate', pEmpate]);
+        const [favorito, probabilidad] = lados.reduce((a, b) => (b[1] > a[1] ? b : a));
+
+        let ganador: string;
+        if (f.marcador) {
+          const g = r as { gc: number; gf: number };
+          // El empate solo existe donde el modelo lo predice. En baloncesto o béisbol un
+          // marcador igualado sería dato corrupto, y llamarlo «Empate» inventaría un
+          // resultado que ese deporte no tiene.
+          ganador = g.gc > g.gf ? r.casa : g.gf > g.gc ? r.fuera : f.empate ? 'Empate' : '';
+        } else {
+          const w = r as { winner_id: number; p1_id: number };
+          ganador = w.winner_id === w.p1_id ? r.casa : r.fuera;
+        }
+        if (!ganador) continue;
+        out.push({
+          deporte: f.deporte,
+          cuando: r.cuando,
+          partido: f.deporte === 'NFL' ? `${r.fuera} @ ${r.casa}` : `${r.casa} vs ${r.fuera}`,
+          favorito,
+          probabilidad,
+          ganador,
+          acerto: ganador === favorito,
+        });
+      }
+    } catch {
+      // Un deporte sin tabla todavía no puede aportar resultados, y no es motivo para
+      // dejar sin vista a los otros cuatro.
+    }
+  }
+
+  out.sort((a, b) => b.cuando.localeCompare(a.cuando));
+  return out.slice(0, 40);
+}
+
 /** Medianoche de MAÑANA en local, que es donde acaba «hoy». */
 function finDeHoy(now = new Date()): string {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0).toISOString();

@@ -31,7 +31,7 @@ import { ejecutar } from '../ask/router.ts';
 import { responderAgente } from '../ask/agent.ts';
 import { enrutarConModelo } from '../ask/llm.ts';
 import { place, settle, resumen } from '../paper/bankroll.ts';
-import { partidosDeHoy } from '../today.ts';
+import { partidosDeHoy, resultadosRecientes } from '../today.ts';
 import { evaluate } from '../live/engine.ts';
 import { matchupServe } from '../live/serve.ts';
 import { describe as describeState, type LiveState } from '../live/state.ts';
@@ -379,6 +379,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // --- qué se juega hoy, en los cinco deportes ---
   app.get('/today', async () => partidosDeHoy());
+
+  // --- y el cierre del círculo: qué dijo el modelo y qué pasó ---
+  app.get('/recent-results', async () => {
+    const r = resultadosRecientes();
+    const aciertos = r.filter((x) => x.acerto).length;
+    return {
+      resultados: r,
+      total: r.length,
+      aciertos,
+      // Sin partidos no hay porcentaje: enseñar «0 %» se leería como «no acierta
+      // ninguno» cuando lo que pasa es que aún no hay ninguno resuelto.
+      tasa: r.length > 0 ? aciertos / r.length : null,
+    };
+  });
 
   // --- el banco de papel del modelo ---
   app.get('/paper', async () => {

@@ -311,6 +311,32 @@ Se pliega, y plegado **se recuerda entre visitas**: quien ya sabe lo que hay hoy
 quiere volver a verlo cada vez que cambia de deporte, y una cabecera que no se puede
 quitar acaba siendo un peaje.
 
+### Y el cierre del círculo: «¿Acertó?»
+
+El mismo panel tiene un segundo interruptor. «Hoy» dice lo que el modelo cree; sin la otra
+mitad eso es una promesa sin cumplir, y una app de predicciones que solo enseña
+predicciones es indistinguible de una que las inventa.
+
+```
+Cómo le fue al modelo · 9 de 13 en los últimos 7 días · 69 %
+
+  14 sept  🏈  Dallas Cowboys @ New York Giants     dijo New York Giants 53%   ganó New York Giants ✓
+  13 sept  🏈  Arizona Cardinals @ LA Chargers      dijo LA Chargers 75%       ganó Arizona Cardinals ✗
+  13 sept  🏈  Miami Dolphins @ Las Vegas Raiders   dijo Miami Dolphins 51%    ganó Las Vegas Raiders ✗
+```
+
+El panel de historial de cada pestaña ya daba el **agregado** (acierta el 65 %), que es el
+número honesto y el que hay que mirar para juzgar. Esto es otra cosa: **partido a partido,
+comprobable con tu propia memoria**. Quien vio el partido de ayer puede verificar esa fila
+sin fiarse de nadie, y eso es lo que convierte un porcentaje en algo en lo que apoyarse.
+El pie lo dice explícitamente, para que trece partidos no se confundan con la medida real.
+
+**Funciona sin cuotas**, que es lo que lo hace útil incluso con el proveedor caído: para
+saber si el modelo acertó no hace falta ningún precio, solo el resultado.
+
+Se enseña **quién ganó** junto al ✓/✗. Solo la marca, sin el resultado, lo volvería
+incomprobable — que es exactamente lo contrario de para lo que existe la vista.
+
 Tres decisiones que hacen que el número signifique algo:
 
 - **Las probabilidades salen del log de predicciones, no se recalculan.** El log guarda la
