@@ -165,7 +165,7 @@ export default function BaseballDashboard() {
         />
       )}
 
-      <SlateTable rows={slate} demoOdds={demoOdds} />
+      <SlateTable rows={slate} demoOdds={demoOdds} refrescadas={meta?.oddsRefreshedAt} />
 
       {games.length === 0 && !loading && (
         <VacioPorqueNoHayCuotas

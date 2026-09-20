@@ -66,7 +66,8 @@
     "auto": "node scripts/auto.mjs",
     "demo": "node scripts/demo.mjs",
     "paper": "npm run paper --workspace server --",
-    "tokens": "npm run tokens --workspace server --"
+    "tokens": "npm run tokens --workspace server --",
+    "ahorro": "node scripts/ahorro.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

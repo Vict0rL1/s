@@ -154,7 +154,7 @@ export default function TennisDashboard() {
           render, so the two can never disagree about a number. */}
       <PicksPanel {...picks} caveat={CAVEATS.tennis} demoOdds={demoOdds} stake={stake} onStakeChange={setStake} />
 
-      <SlateTable rows={slate} demoOdds={demoOdds} />
+      <SlateTable rows={slate} demoOdds={demoOdds} refrescadas={meta?.oddsRefreshedAt} />
 
       <AskPanel />
 

@@ -1630,15 +1630,47 @@ export function NflNoLineNote({
  * Va DEBAJO del panel de discrepancias y ENCIMA de las tarjetas: resume lo que las
  * tarjetas detallan, y quien quiera el desglose de un partido lo abre ahí.
  */
+/**
+ * Hace cuánto se pidieron los precios, en palabras, o null si nunca.
+ *
+ * ===========================================================================
+ * UNA LISTA CONGELADA TIENE QUE VERSE CONGELADA
+ * ===========================================================================
+ * Cuando el refresco automático se para —plan agotado, freno de ritmo, la app cerrada—
+ * la tabla sigue ahí con las mismas cuotas y el mismo aspecto de estar al día. No hay
+ * nada en la pantalla que distinga un precio de hace diez minutos de uno de hace dos
+ * días, y esa es justo la diferencia que decide si una cuota sirve para algo.
+ *
+ * El umbral son SEIS HORAS y no una: con el plan gratuito un ciclo cabe cada pocos días,
+ * así que marcar en ámbar a la hora teñiría de aviso el funcionamiento normal, y un
+ * aviso permanente se deja de leer.
+ */
+function edadPrecios(iso: string | null | undefined): { texto: string; viejo: boolean } | null {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const min = Math.round(ms / 60_000);
+  const texto =
+    min < 60
+      ? `hace ${min} min`
+      : min < 1440
+        ? `hace ${Math.round(min / 60)} h`
+        : `hace ${Math.round(min / 1440)} día${Math.round(min / 1440) === 1 ? '' : 's'}`;
+  return { texto, viejo: ms > 6 * 3600_000 };
+}
+
 export function SlateTable({
   rows,
   demoOdds = false,
   maxRows = 12,
+  refrescadas,
 }: {
   rows: SlateRow[];
   /** Los precios existen pero se los ha inventado la app: la columna no dice nada. */
   demoOdds?: boolean;
   maxRows?: number;
+  /** Cuándo se pidieron por última vez las cuotas de este deporte. */
+  refrescadas?: string | null;
 }) {
   const [open, setOpen] = useState(true);
   const [todas, setTodas] = useState(false);
@@ -1650,6 +1682,7 @@ export function SlateTable({
   // Un mercado inventado por la app NO es un mercado. Se trata igual que no tener
   // ninguno en vez de enseñar un número que solo puede confundir.
   const hayMercado = !demoOdds && orden.some((r) => r.marketProb != null);
+  const edad = edadPrecios(refrescadas);
 
   return (
     <section className="mb-6 overflow-hidden rounded-xl border border-white/[0.09] bg-white/[0.02]">
@@ -1664,6 +1697,16 @@ export function SlateTable({
             {rows.length === 1 ? '1 partido' : `${rows.length} partidos`} · a quién ve favorito el
             modelo
             {hayMercado ? ' y qué dice el mercado' : ''}
+            {/* La edad de los precios, solo cuando hay precios de verdad que fechar. */}
+            {hayMercado && edad && (
+              <>
+                {' · '}
+                <span style={edad.viejo ? { color: '#d9a441' } : undefined}>
+                  precios {edad.texto}
+                  {edad.viejo ? ' — puede que ya no valgan' : ''}
+                </span>
+              </>
+            )}
           </span>
         </span>
         <span aria-hidden className="shrink-0 text-[#7b828d]">{open ? '▲' : '▼'}</span>

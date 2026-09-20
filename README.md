@@ -289,6 +289,54 @@ Y lo que devuelve el modelo se **valida**: el nombre contra la lista y cada argu
 tipo. No es desconfianza decorativa — eso es texto de un servicio externo que va directo
 a elegir qué consulta se ejecuta.
 
+### ¿Están las cuotas al día? Y bajar el gasto: `npm run ahorro`
+
+```bash
+npm run ahorro                    # qué cuesta la cadencia actual, y qué costaría cada otra
+npm run ahorro -- --minutos=720   # una cada 12 horas
+npm run ahorro -- --auto          # que la calcule la app
+```
+
+La variable `AUTO_REFRESH_MINUTES` ya existía y estaba documentada, pero ponerla exigía
+saber tres cosas que no estaban a la vista: qué cadencia tienes, cuánto cuesta un ciclo en
+tu plan, y por tanto qué número escribir. Sin eso, elegir es adivinar — y adivinar por lo
+bajo deja los precios viejos, adivinar por lo alto quema el plan. Así que el comando
+**primero dice lo que cuesta lo que ya tienes**, con datos medidos: lo que gastó el último
+ciclo de verdad y el tamaño del plan que la API declaró en sus cabeceras.
+
+```
+  plan de The Odds API   25.000 peticiones al mes
+  coste de un ciclo      8 peticiones (medido en el último)
+
+    cada 1 h         5760 peticiones/mes  cabe en el plan
+    cada 6 h          960 peticiones/mes  cabe en el plan
+    cada 12 h         480 peticiones/mes  cabe en el plan
+```
+
+`--auto` **quita** la línea en vez de ponerla a cero: un 0 *desactiva* el refresco, que es
+otra cosa muy distinta de «que lo calcule la app». Confundirlos dejaría las cuotas
+congeladas creyendo haber activado el modo automático.
+
+Y bajar la cadencia **no afecta** a los refrescos que pides tú: `npm run odds` y el botón
+siguen funcionando igual y nunca se frenan.
+
+### Una lista congelada tiene que verse congelada
+
+Cuando el refresco se para —plan agotado, freno de ritmo, la app cerrada— la tabla sigue
+ahí con las mismas cuotas y **el mismo aspecto de estar al día**. Nada en la pantalla
+distinguía un precio de hace diez minutos de uno de hace dos días, y esa es justo la
+diferencia que decide si una cuota sirve para algo.
+
+Ahora la tabla de partidos lo dice: `precios hace 20 min`, y pasadas **seis horas** en
+ámbar con un `— puede que ya no valgan`. Seis y no una: con el plan gratuito un ciclo cabe
+cada pocos días, así que avisar a la hora teñiría de alarma el funcionamiento normal, y un
+aviso permanente se deja de leer.
+
+**Las probabilidades son otra cosa y sí están siempre al día:** se calculan en cada
+petición a partir de los ratings actuales, no se guardan. Lo que puede envejecer es el
+histórico del que salen esos ratings, y para eso ya está el aviso de datos viejos de la
+cabecera.
+
 ### ¿Cuántos tokens gasta esto? `npm run tokens`
 
 Solo aplica si has activado el enrutador con modelo; sin `ANTHROPIC_API_KEY` la app no
@@ -1534,6 +1582,7 @@ probar ese caso concreto, no leyendo el código.
 | `npm run demo` | Enciende o apaga los partidos inventados. `-- --off` deja solo lo real |
 | `npm run paper` | El banco de papel del modelo: liquida lo resuelto, apuesta lo que apruebe la política y resume |
 | `npm run tokens` | Tokens que ha gastado el enrutador con modelo del asistente, y su coste si pones los precios |
+| `npm run ahorro` | Qué cuesta el refresco automático de cuotas y bajar la cadencia sin adivinar |
 | `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
 | `npm run seed` | Tenis: carga el dataset de demostración |
 | `npm run fetch-data` | **Descarga la base ya construida** (9 MB) en vez de reconstruirla. `-- --force` reemplaza la que haya, conservando tus apuestas |

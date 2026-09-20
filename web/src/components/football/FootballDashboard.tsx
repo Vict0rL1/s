@@ -280,7 +280,7 @@ export default function FootballDashboard() {
         />
       )}
 
-      <SlateTable rows={slate} demoOdds={demoOdds} />
+      <SlateTable rows={slate} demoOdds={demoOdds} refrescadas={meta?.oddsRefreshedAt} />
 
       {fixtures.length === 0 && !loading && (
         <VacioPorqueNoHayCuotas

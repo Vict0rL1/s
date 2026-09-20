@@ -179,7 +179,7 @@ export default function NflDashboard() {
           inventa cuotas, así que `PicksPanel` se retira entera cuando no hay línea y la
           pestaña se quedaba sin ninguna vista de conjunto. `demoOdds` aquí es siempre
           falso —nunca hay precios inventados— pero se pasa igual por coherencia. */}
-      <SlateTable rows={slate} demoOdds={demoOdds} />
+      <SlateTable rows={slate} demoOdds={demoOdds} refrescadas={meta?.oddsRefreshedAt} />
 
       {games.length === 0 && !loading && (
         <VacioPorqueNoHayCuotas
