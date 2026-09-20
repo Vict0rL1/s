@@ -34,6 +34,7 @@
 
 import { env } from '../config.ts';
 import { enrutar, type Intencion } from './router.ts';
+import { apuntarUso } from './llmUsage.ts';
 
 const API = 'https://api.anthropic.com/v1/messages';
 /** Barato y rápido: esto es clasificación entre seis salidas, no redacción. */
@@ -193,7 +194,11 @@ export async function enrutarConModelo(
         nota: `el modelo respondió ${res.status}`,
       };
     }
-    const j = (await res.json()) as { content?: unknown };
+    const j = (await res.json()) as { content?: unknown; usage?: unknown };
+    // Se apunta ANTES de mirar si la respuesta sirve: esos tokens se han pagado igual,
+    // y contar solo las llamadas útiles daría un total por debajo del real — la peor
+    // dirección para equivocarse en una factura.
+    apuntarUso(j.usage);
     const i = aIntencion(j.content);
     if (!i) {
       return {

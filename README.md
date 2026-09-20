@@ -289,6 +289,36 @@ Y lo que devuelve el modelo se **valida**: el nombre contra la lista y cada argu
 tipo. No es desconfianza decorativa — eso es texto de un servicio externo que va directo
 a elegir qué consulta se ejecuta.
 
+### ¿Cuántos tokens gasta esto? `npm run tokens`
+
+Solo aplica si has activado el enrutador con modelo; sin `ANTHROPIC_API_KEY` la app no
+gasta ni un token y el comando lo dice.
+
+```bash
+npm run tokens              # llamadas, tokens de entrada y de salida, media por pregunta
+npm run tokens -- --reiniciar   # contador a cero, por ejemplo al empezar un mes
+```
+
+Es la misma lección que con The Odds API, escrita en `oddsQuota.ts`: *«el plan gratuito
+se agotó porque nada lo mencionaba hasta que ya no quedaba»*. El enrutador falla igual —
+se paga por pregunta, nadie ve cuánto, y la factura llega sin poder repartirla entre lo
+que la produjo. Y el dato viene **gratis en cada respuesta** de la API, igual que la cuota
+de The Odds API viene en sus cabeceras. Se estaba tirando.
+
+**Se cuentan también las llamadas que se descartan.** Si el modelo contesta algo que no
+sirve y la app cae al enrutador determinista, esos tokens se han pagado igual. Contar solo
+las útiles daría un total por debajo del real, que es la peor dirección para equivocarse
+en una factura.
+
+**Tokens sí, dinero solo si lo pones tú.** Los tokens son una medida: los cuenta el
+proveedor. El precio no lo es — depende del modelo, del plan y de la fecha. Una cifra a
+ojo aquí daría un coste con aspecto de medido que puede estar al doble, así que el coste
+solo aparece si escribes `LLM_PRECIO_ENTRADA` y `LLM_PRECIO_SALIDA` en el `.env`, y
+entonces la salida dice que sale de ahí.
+
+Y cuenta **solo lo que gasta esta aplicación**. Lo que gastes hablando con un modelo por
+tu cuenta no aparece y no puede aparecer.
+
 ### «No quiero partidos inventados»: `npm run demo -- --off`
 
 ```bash
@@ -1503,6 +1533,7 @@ probar ese caso concreto, no leyendo el código.
 | `npm run auto` | Instala la actualización diaria de los datos (launchd en macOS) y deja de hacer falta acordarse |
 | `npm run demo` | Enciende o apaga los partidos inventados. `-- --off` deja solo lo real |
 | `npm run paper` | El banco de papel del modelo: liquida lo resuelto, apuesta lo que apruebe la política y resume |
+| `npm run tokens` | Tokens que ha gastado el enrutador con modelo del asistente, y su coste si pones los precios |
 | `npm run dev` | Levanta backend + frontend a la vez (ambos deportes) |
 | `npm run seed` | Tenis: carga el dataset de demostración |
 | `npm run fetch-data` | **Descarga la base ya construida** (9 MB) en vez de reconstruirla. `-- --force` reemplaza la que haya, conservando tus apuestas |

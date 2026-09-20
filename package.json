@@ -65,7 +65,8 @@
     "study:ablation": "npm run study:ablation --workspace server --",
     "auto": "node scripts/auto.mjs",
     "demo": "node scripts/demo.mjs",
-    "paper": "npm run paper --workspace server --"
+    "paper": "npm run paper --workspace server --",
+    "tokens": "npm run tokens --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
