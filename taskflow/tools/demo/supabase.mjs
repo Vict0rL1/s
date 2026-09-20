@@ -7,7 +7,8 @@
  *
  * La RLS es real: cada request corre como el rol `authenticated` con
  * `request.jwt.claims` puesto, así que un insert al que le falte `user_id` lo
- * rechaza Postgres igual que lo haría Supabase.
+ * rechaza Postgres igual que lo haría Supabase. Quien llega con el token de
+ * servicio (`DEMO_SERVICE_KEY`) corre sin RLS, como la service role.
  *
  * Lo que NO reproduce: el resto de PostgREST (relaciones anidadas, RPC, filtros
  * que la app no usa), Realtime, Storage, y la confirmación de correo. Sirve
@@ -22,6 +23,12 @@ const SCHEMA = new URL("../../supabase/schema.sql", import.meta.url);
 const PORT = Number(process.env.PORT || 7411);
 const USER_EMAIL = "victor@ejemplo.com";
 const USER_PASSWORD = "contrasena";
+
+// El equivalente de la service role key. `start.mjs` genera uno al azar en cada
+// arranque y se lo pasa a los dos lados; aquí no hay ninguno escrito. Quien
+// llega con él salta la RLS, igual que en Supabase de verdad: es lo que hace
+// que `/api/sync` (el reloj, que corre sin sesión) se pueda probar en el demo.
+const SERVICE_KEY = process.env.DEMO_SERVICE_KEY || null;
 
 // PostgREST entrega date/time/timestamptz como texto, no como objetos. PGlite
 // los convierte a Date por defecto, y eso rompería comparaciones como
@@ -137,9 +144,24 @@ async function asUser(sub, fn) {
   });
 }
 
+/**
+ * Corre la consulta sin RLS, como hace la service role.
+ *
+ * No es una excepción del harness: en Postgres el dueño de la tabla se salta
+ * las políticas salvo que lleve `force row level security`, y el rol de
+ * servicio de Supabase es justo eso. Por lo mismo, el código que use este
+ * camino tiene que filtrar por `user_id` a mano.
+ */
+async function asService(fn) {
+  return db.transaction(fn);
+}
+
+function tokenFrom(req) {
+  return (req.headers.authorization || "").replace(/^Bearer /i, "");
+}
+
 function subFrom(req) {
-  const auth = req.headers.authorization || "";
-  const token = auth.replace(/^Bearer /i, "");
+  const token = tokenFrom(req);
   try {
     return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).sub;
   } catch {
@@ -195,15 +217,17 @@ const server = createServer(async (req, res) => {
       const table = path.slice("/rest/v1/".length);
       if (!IDENT.test(table)) return json(res, 404, { message: "no such table" });
 
-      const sub = subFrom(req);
-      if (!sub) return json(res, 401, { message: "JWT required" });
+      const servicio = Boolean(SERVICE_KEY) && tokenFrom(req) === SERVICE_KEY;
+      const sub = servicio ? null : subFrom(req);
+      if (!servicio && !sub) return json(res, 401, { message: "JWT required" });
 
       const prefer = String(req.headers.prefer || "");
       const wantsCount = /count=exact/.test(prefer);
       const wantsRows = /return=representation/.test(prefer) || req.method === "GET" || req.method === "HEAD";
       const single = String(req.headers.accept || "").includes("pgrst.object");
 
-      const out = await asUser(sub, async (tx) => {
+      const correr = servicio ? asService : (fn) => asUser(sub, fn);
+      const out = await correr(async (tx) => {
         const args = [];
         const where = buildWhere(url.searchParams, args);
 
@@ -235,11 +259,21 @@ const server = createServer(async (req, res) => {
             return `$${values.length}`;
           }).join(",") + ")");
           let sql = `insert into public."${table}" (${keys.map((k) => `"${k}"`).join(",")}) values ${tuples.join(",")}`;
+          const conflicto = () =>
+            (url.searchParams.get("on_conflict") || "").split(",").filter((c) => IDENT.test(c));
           if (/resolution=merge-duplicates/.test(prefer)) {
-            const conflict = (url.searchParams.get("on_conflict") || "").split(",").filter((c) => IDENT.test(c));
+            const conflict = conflicto();
             const updatable = keys.filter((k) => !conflict.includes(k));
             sql += ` on conflict (${conflict.map((c) => `"${c}"`).join(",")}) do update set ` +
               (updatable.length ? updatable.map((k) => `"${k}" = excluded."${k}"`).join(", ") : `"${conflict[0]}" = excluded."${conflict[0]}"`);
+          } else if (/resolution=ignore-duplicates/.test(prefer)) {
+            // `upsert(..., { ignoreDuplicates: true })`. Con `return=representation`
+            // devuelve SÓLO lo que se insertó de verdad, que es de lo que vive
+            // la reserva de `digest_log`: lista vacía = otra corrida llegó antes.
+            const conflict = conflicto();
+            sql += conflict.length
+              ? ` on conflict (${conflict.map((c) => `"${c}"`).join(",")}) do nothing`
+              : " on conflict do nothing";
           }
           if (wantsRows) sql += " returning *";
           const r = await tx.query(sql, values);

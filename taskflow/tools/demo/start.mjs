@@ -2,14 +2,25 @@
  * `npm run demo` — levanta TaskFlow contra un Supabase de mentira local, con
  * datos de ejemplo. No hace falta ninguna cuenta.
  *
- * Arranca el servidor falso, siembra, y lanza `next dev` apuntándole.
+ * Arranca el servidor falso, siembra, compila y sirve la app apuntándole.
  */
 import { spawn } from "node:child_process";
 import { setTimeout as wait } from "node:timers/promises";
+import { randomBytes } from "node:crypto";
+import webpush from "web-push";
 
 const PORT = process.env.DEMO_PORT || "7411";
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 const hijos = [];
+
+// Secretos de usar y tirar, distintos en cada arranque. Van por variable de
+// entorno a los dos procesos; en el repo no hay ninguno escrito, que es la
+// regla. Existen para poder probar el reloj (`/api/sync`) sin desplegar: esa
+// ruta corre sin sesión, así que necesita el token de servicio, y se protege
+// con `CRON_SECRET`.
+const CRON_SECRET = randomBytes(18).toString("hex");
+const SERVICE_KEY = randomBytes(24).toString("hex");
+const VAPID = webpush.generateVAPIDKeys();
 
 function lanzar(cmd, args, env, nombre) {
   const p = spawn(cmd, args, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -28,7 +39,12 @@ function cerrar(code) {
 process.on("SIGINT", () => cerrar(0));
 process.on("SIGTERM", () => cerrar(0));
 
-lanzar(process.execPath, [new URL("./supabase.mjs", import.meta.url).pathname], { PORT }, "supabase de mentira");
+lanzar(
+  process.execPath,
+  [new URL("./supabase.mjs", import.meta.url).pathname],
+  { PORT, DEMO_SERVICE_KEY: SERVICE_KEY },
+  "supabase de mentira",
+);
 
 // Esperar a que responda antes de sembrar.
 for (let i = 0; i < 60; i++) {
@@ -60,6 +76,11 @@ await new Promise((r) => seed.on("exit", r));
 const entorno = {
   NEXT_PUBLIC_SUPABASE_URL: URL_BASE,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "llave-de-mentira-para-el-demo",
+  SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY,
+  CRON_SECRET,
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: VAPID.publicKey,
+  VAPID_PRIVATE_KEY: VAPID.privateKey,
+  VAPID_SUBJECT: "mailto:demo@example.com",
 };
 
 console.log("\ncompilando la app (esto tarda unos segundos, sólo la primera vez)...\n");
@@ -77,6 +98,11 @@ console.log("\n─────────────────────�
 console.log("  TaskFlow en modo demo → http://localhost:3000");
 console.log("  entra con:  victor@ejemplo.com / contrasena");
 console.log("  los datos viven en memoria: al cerrar, se van");
-console.log("──────────────────────────────────────────────\n");
+console.log("──────────────────────────────────────────────");
+console.log("\n  el reloj también corre aquí. Para ver un aviso sin esperar");
+console.log("  a las siete de la mañana (no manda nada: en el demo no hay");
+console.log("  ningún navegador suscrito, pero sí dice qué habría mandado):\n");
+console.log(`    curl -H "Authorization: Bearer ${CRON_SECRET}" \\`);
+console.log("      'http://localhost:3000/api/sync?digest=night'\n");
 
 lanzar("npm", ["run", "start"], entorno, "next start");
