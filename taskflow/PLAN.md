@@ -137,6 +137,8 @@ Ver `supabase/schema.sql`. Resumen:
 - `habits` + `habit_log` — rutinas y marcas por día
 - `blocks` — bloques de tiempo del día
 - `sync_state` — última sincronización por fuente
+- `digest_log` — qué aviso se mandó cada día, para que el reloj horario no
+  repita el mismo resumen una vez por hora
 
 `schema.sql` está probado contra Postgres 16: corre dos veces seguidas sin
 error, el trigger crea el perfil al registrarse, el upsert de sync deja una

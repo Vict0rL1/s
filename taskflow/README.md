@@ -172,17 +172,39 @@ La **service role key nunca debe llegar al navegador**. Vive en
 `lib/env.server.ts`, que lleva `server-only`: importarla desde un componente
 cliente es un error de build, no un descuido que se descubre en producción.
 
-**Sobre la hora.** El cron de Vercel se programa en UTC, así que `0 13 * * *`
-son las 6:00 en Vancouver en horario de verano y las 5:00 en invierno. Es un
-sync diario: esa hora de diferencia no importa. Si algún día molesta, se cambia
-el número en `vercel.json`.
+**Esa ruta es el reloj entero de la app.** Se la puede llamar cada hora sin
+miedo, porque cada llamada pregunta "¿qué toca ahora?" y casi siempre la
+respuesta es "nada":
+
+- Canvas se sincroniza si la última vez fue hace más de tres horas. Con el cron
+  de Vercel solo, eso es una vez al día; con el reloj de GitHub del paso 6, unas
+  ocho veces, que es lo que hace que un deadline publicado a mediodía aparezca
+  esa misma tarde.
+- El aviso se manda si la hora **local** cae en su ventana y no se mandó ya hoy.
+
+Para probarla a mano hay dos atajos, que igual piden el secreto:
+`?canvas=1` fuerza el sync aunque acabe de correr, y `?digest=morning` o
+`?digest=night` mandan ese aviso al instante, saltándose la ventana y el
+registro (si no, sólo se podría probar una vez al día).
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  "https://tu-app.vercel.app/api/sync?digest=night"
+```
+
+**Sobre la hora.** El cron de Vercel se programa en UTC, así que `0 15 * * *`
+son las 8:00 en Vancouver en horario de verano y las 7:00 en invierno. Las dos
+caen dentro de la ventana de la mañana, que es lo único que importa: el número
+exacto no, porque quien decide es la app mirando tu hora local, no el cron.
 
 ### 6. Avisos en el teléfono (fase 4)
 
-Un solo aviso al día, en la mañana, con lo que vence y lo que hay en la agenda.
-Es push del navegador: no hace falta instalar nada de una tienda ni usar
-Firebase. **Sólo funciona sobre HTTPS**, así que hay que desplegarla primero
-(en `localhost` también, pero no desde el teléfono).
+Dos avisos al día: el **resumen de la mañana** (lo que vence hoy, lo atrasado y
+lo que hay en la agenda) y el de **la noche anterior**, que habla de mañana —
+que es cuando todavía puedes hacer algo al respecto. Es push del navegador: no
+hace falta instalar nada de una tienda ni usar Firebase. **Sólo funciona sobre
+HTTPS**, así que hay que desplegarla primero (en `localhost` también, pero no
+desde el teléfono).
 
 1. Genera el par de llaves, una sola vez:
 
@@ -208,12 +230,49 @@ Firebase. **Sólo funciona sobre HTTPS**, así que hay que desplegarla primero
    la app a la pantalla de inicio (Compartir → *Agregar a pantalla de inicio*).
    Ábrela desde ahí, no desde Safari.
 
-El aviso sale del mismo cron del paso anterior, así que **sólo hay uno al día**:
-el plan gratis de Vercel no permite más. Alcanza para el resumen de la mañana,
-no para "avísame 15 minutos antes de la clase".
+#### El reloj: por qué hace falta GitHub Actions
+
+Son dos avisos al día y **el plan gratis de Vercel permite un cron**. Dos horas
+fijas en UTC tampoco servirían: en noviembre Vancouver pasa de UTC-7 a UTC-8 y
+los dos avisos se correrían una hora.
+
+Así que el reloj se separa de la decisión. `.github/workflows/taskflow-clock.yml`
+llama a `/api/sync` **cada hora** y la app mira tu hora local y decide. El cron
+de Vercel se queda como red de seguridad para la mañana. Como este repositorio
+es público, las Actions programadas no cuestan nada.
+
+Para encenderlo, dos secretos del repositorio (**Settings → Secrets and
+variables → Actions → New repository secret**). No van en ningún archivo:
+
+```
+APP_URL      https://tu-app.vercel.app     (sin barra al final)
+CRON_SECRET  el mismo valor que pusiste en Vercel
+```
+
+Desde la pestaña **Actions → taskflow clock → Run workflow** se dispara a mano,
+y ahí mismo se puede pedir `night` para ver el aviso de la noche sin esperar a
+las nueve.
+
+Dos cosas que conviene saber de antemano:
+
+- GitHub **desactiva los workflows programados de un repo público tras 60 días
+  sin commits**. Si un día dejan de llegar los avisos, es casi seguro eso:
+  Actions → Enable workflow.
+- El horario de GitHub es "aproximadamente cada hora", no al minuto. Por eso las
+  ventanas de la app son anchas (la mañana va de tu `day_start` a las 12) y por
+  eso quien impide el duplicado no es la hora sino la tabla `digest_log`: una
+  fila por día y por tipo, y la clave primaria rechaza la segunda.
+
+#### Cuándo NO suena
 
 Si un día no hay nada atrasado, nada que venza y nada en la agenda, **no suena
 nada**. Una app que avisa por avisar se silencia y se deja de usar.
+
+El de la noche es más estricto todavía: si mañana no hay nada, no se manda,
+aunque hoy hayas dejado cosas sin hacer. Eso ya sale en el aviso de la mañana, y
+el mismo texto dos veces al día es justo como se consigue que alguien apague las
+notificaciones. Lo pendiente de hoy aparece, pero sólo como cola de un aviso que
+ya tenía motivo propio.
 
 Para dejar de recibirlos, el mismo botón en Ajustes. Y si borras el navegador o
 revocas el permiso, la suscripción muerta se limpia sola en el siguiente envío.
@@ -308,7 +367,7 @@ app/
     hoy/ tareas/ semana/ notas/ rutinas/ ajustes/
   api/sync/canvas/   route handler del sync de Canvas (POST)
   api/export/        baja todos tus datos en JSON (GET)
-  api/sync/          el sync diario del cron, con CRON_SECRET (GET)
+  api/sync/          el reloj: sync de Canvas y avisos, con CRON_SECRET (GET)
   api/plan/          propone un plan para hoy; no escribe nada (POST)
   api/breakdown/     propone los pasos de una tarea; no escribe nada (POST)
   auth/callback/     canje del código de OAuth por la sesión
@@ -323,7 +382,7 @@ lib/
   ics.ts             importador .ics de respaldo
   canvas.ts          Canvas: paginación y mapeo a tareas (puro, testeado)
   canvas-sync.ts     el sync en sí: trae de Canvas y escribe en la base
-  push.ts            arma el aviso del día y lo manda (sólo servidor)
+  push.ts            arma los dos avisos del día y los manda (sólo servidor)
   planner.ts         huecos libres del día + el plan con Claude (sólo servidor)
   breakdown.ts       parte una tarea grande en pasos con fecha (sólo servidor)
   data.ts            lectura desde Supabase (sólo servidor)
@@ -440,7 +499,9 @@ Lo que `PLAN.md` pedía confirmar antes de escribir código:
 
 - **Fase 3 — Google Calendar.** Scopes de Calendar en el login y lectura de
   eventos con `singleEvents=true`.
-- **Fase 4 — Que trabaje sola.** El cron diario y los avisos push ya están; falta
-  el botón de "Planear mi día" contra la API de Claude.
+- **Fase 4 — Que trabaje sola.** El reloj, los dos avisos push y las dos
+  funciones con Claude ("Planear mi día" y partir una tarea en pasos) ya están.
+  Falta el mismo resumen por Telegram, para que llegue aunque el navegador tenga
+  los avisos apagados.
 
 El detalle de cada una está en `PLAN.md`.
