@@ -26,6 +26,7 @@ import {
 } from '../basketball/trackRecord.ts';
 import type { UpcomingGameRow } from '../basketball/types.ts';
 import { findGameResult, hasStarted } from '../results.ts';
+import { readCalibration } from '../staking/calibration.ts';
 
 /** Attach a prediction to an upcoming game (null when a team is unknown). */
 function predictRow(row: UpcomingGameRow): GamePrediction | null {
@@ -120,6 +121,9 @@ export async function registerBasketballRoutes(app: FastifyInstance): Promise<vo
       oddsFallbackDetail: getMeta('bb_odds_fallback_detail') || null,
       // Si está apagado, una pestaña vacía NO es un fallo: es lo que se pidió.
       demoFixtures: env.demoFixtures,
+    // El acierto REAL por banda de confianza, del backtest de este deporte. Es lo que
+    // permite que un filtro «solo los claros» diga cuánto acierta en vez de insinuarlo.
+    bands: readCalibration()['basketball']?.bands ?? null,
       oddsRefreshedAt: getMeta('bb_odds_refreshed_at'),
       hasOddsKey: !!env.oddsApiKey,
       autoRefreshMinutes: env.autoRefreshMinutes,

@@ -24,6 +24,7 @@ import { getNflTrackRecord, logNflPrediction, resolveNflPredictions } from '../n
 import { ELO_PER_POINT } from '../nfl/model.ts';
 import type { NafUpcomingRow } from '../nfl/types.ts';
 import { findGameResult, hasStarted } from '../results.ts';
+import { readCalibration } from '../staking/calibration.ts';
 
 function predictRow(row: NafUpcomingRow): NafPrediction | null {
   if (!row.home_id || !row.away_id) return null;
@@ -105,6 +106,9 @@ export async function registerNflRoutes(app: FastifyInstance): Promise<void> {
       oddsFallbackDetail: getMeta('naf_odds_fallback_detail') || null,
       // Si está apagado, una pestaña vacía NO es un fallo: es lo que se pidió.
       demoFixtures: env.demoFixtures,
+    // El acierto REAL por banda de confianza, del backtest de este deporte. Es lo que
+    // permite que un filtro «solo los claros» diga cuánto acierta en vez de insinuarlo.
+    bands: readCalibration()['nfl']?.bands ?? null,
       hasOddsKey: !!env.oddsApiKey,
       autoRefreshMinutes: env.autoRefreshMinutes,
       counts: { teams: countTeams(), games: countGames() },

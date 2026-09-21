@@ -161,7 +161,7 @@ export default function BasketballDashboard() {
         />
       )}
 
-      <SlateTable rows={slate} demoOdds={demoOdds} refrescadas={meta?.oddsRefreshedAt} />
+      <SlateTable rows={slate} demoOdds={demoOdds} refrescadas={meta?.oddsRefreshedAt} bands={meta?.bands} />
 
       {games.length === 0 && !loading && (
         <VacioPorqueNoHayCuotas

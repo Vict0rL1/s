@@ -245,8 +245,22 @@ function main() {
   {
     let ece = 0;
     for (const b of buckets.values()) ece += (b.n / scored) * Math.abs(b.won / b.n - b.pred / b.n);
+    // Acierto acumulado desde cada umbral: sobre los partidos donde dijo al menos X,
+    // cuántos acertó. Es lo que un filtro de confianza necesita para no prometer de más.
+    const orden = [...buckets.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    const bands: { desde: number; n: number; acierto: number }[] = [];
+    for (let i = 0; i < orden.length; i++) {
+      const sub = orden.slice(i);
+      const nn = sub.reduce((s, [, b]) => s + b.n, 0);
+      if (nn === 0) continue;
+      bands.push({
+        desde: Number(orden[i][0].slice(0, 2)) / 100,
+        n: nn,
+        acierto: sub.reduce((s, [, b]) => s + b.won, 0) / nn,
+      });
+    }
     const cal = readCalibration();
-    cal.basketball = { ece, n: scored, beatsMarket: null, vsMarketLogLoss: null, measuredAt: new Date().toISOString() };
+    cal.basketball = { ece, n: scored, beatsMarket: null, vsMarketLogLoss: null, measuredAt: new Date().toISOString(), bands };
     writeCalibration(cal);
     console.log(
       `\nCalibración registrada para el sizing: ECE ${(ece * 100).toFixed(2)} pp sobre ${scored} ` +

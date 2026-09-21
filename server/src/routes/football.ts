@@ -24,6 +24,7 @@ import { getSquad, hasSquadData, squadAvailability } from '../football/players.t
 import { getFootballTrackRecord, logFootballPrediction } from '../football/trackRecord.ts';
 import type { FbUpcomingRow } from '../football/types.ts';
 import { findGameResult, hasStarted } from '../results.ts';
+import { readCalibration } from '../staking/calibration.ts';
 
 /** Comma-separated player ids from a query string, e.g. ?outHome=302,417 */
 function idList(v: string | undefined): string[] {
@@ -108,6 +109,9 @@ export async function registerFootballRoutes(app: FastifyInstance): Promise<void
     oddsFallbackDetail: getMeta('fb_odds_fallback_detail') || null,
     // Si está apagado, una pestaña vacía NO es un fallo: es lo que se pidió.
     demoFixtures: env.demoFixtures,
+    // El acierto REAL por banda de confianza, del backtest de este deporte. Es lo que
+    // permite que un filtro «solo los claros» diga cuánto acierta en vez de insinuarlo.
+    bands: readCalibration()['football']?.bands ?? null,
     oddsRefreshedAt: getMeta('fb_odds_refreshed_at'),
     hasOddsKey: !!env.oddsApiKey,
     squads: {

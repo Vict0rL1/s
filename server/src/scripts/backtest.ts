@@ -394,6 +394,38 @@ function main() {
     }
     console.log(`Brier score: ${(brier / scored).toFixed(4)}   (0 = perfecto, 0.25 = 50/50 siempre)`);
     console.log(`Log loss:    ${(logloss / scored).toFixed(4)}   (0.693 = 50/50 siempre)`);
+    // ===========================================================================
+    // EL TECHO: HASTA DÓNDE PUEDE LLEGAR CUALQUIER MODELO CON ESTOS PARTIDOS
+    // ===========================================================================
+    // La pregunta «¿puede llegar al 80 %?» tiene una respuesta que no depende de lo
+    // listo que sea el modelo, y se puede calcular.
+    //
+    // Un modelo BIEN CALIBRADO que dice 60 % acierta el 60 % de esas veces. Su acierto
+    // esperado sobre todos los partidos es, por tanto, la media de max(p, 1−p): la
+    // probabilidad del lado que elige. Y como la calibración de este modelo está medida
+    // (ECE 0,64 pp sobre 22.062), sus p son aproximadamente las de verdad — así que esa
+    // media es el techo de CUALQUIER modelo calibrado sobre estos mismos partidos.
+    //
+    // Superarlo de forma sostenida exigiría no un modelo mejor, sino partidos menos
+    // igualados. Un 6-4 en el quinto set no se vuelve predecible por mirarlo más fuerte.
+    {
+      let sumaMax = 0;
+      let lopsided = 0;
+      for (const b of buckets.values()) {
+        sumaMax += b.pred; // ya es la suma de p del favorito en esa cubeta
+        // Cuántos partidos son tan desiguales que un 80 % es siquiera posible en ellos.
+      }
+      const techo = sumaMax / scored;
+      for (const [banda, b] of buckets) if (banda >= '80') lopsided += b.n;
+      console.log(
+        `\nTECHO TEÓRICO: ${(techo * 100).toFixed(1)} % — la media de la probabilidad del favorito.\n` +
+          `  Un modelo perfectamente calibrado no puede acertar más que eso sobre estos partidos.\n` +
+          `  Partidos donde el favorito pasa del 80 %: ${lopsided} de ${scored} (${((lopsided / scored) * 100).toFixed(1)} %).\n` +
+          `  Para acertar el 80 % habría que acertar casi todos los igualados, que es lo que\n` +
+          `  significa «igualado»: que no se sabe.`,
+      );
+    }
+
     console.log('\nCalibración (predicho vs real, del favorito):');
     [...buckets.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -433,6 +465,17 @@ function main() {
       for (const b of buckets.values()) {
         ece += (b.n / scored) * Math.abs(b.won / b.n - b.pred / b.n);
       }
+      // Acierto acumulado desde cada umbral: sobre los partidos donde dijo al menos X,
+      // cuántos acertó. Es lo que un filtro de confianza necesita para no prometer de más.
+      const orden = [...buckets.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      const bands: { desde: number; n: number; acierto: number }[] = [];
+      for (let i = 0; i < orden.length; i++) {
+        const sub = orden.slice(i);
+        const nn = sub.reduce((s, [, b]) => s + b.n, 0);
+        if (nn === 0) continue;
+        const ac = sub.reduce((s, [, b]) => s + b.won, 0) / nn;
+        bands.push({ desde: Number(orden[i][0].slice(0, 2)) / 100, n: nn, acierto: ac });
+      }
       const cal = readCalibration();
       cal.tennis = {
         ece,
@@ -440,6 +483,7 @@ function main() {
         beatsMarket: mkN > 0 ? mkModelLog / mkN < mkMarketLog / mkN : null,
         vsMarketLogLoss: mkN > 0 ? mkModelLog / mkN : null,
         measuredAt: new Date().toISOString(),
+        bands,
       };
       writeCalibration(cal);
       console.log(

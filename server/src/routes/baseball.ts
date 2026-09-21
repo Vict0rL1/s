@@ -26,6 +26,7 @@ import {
 import { getBaseballTrackRecord, logBaseballPrediction } from '../baseball/trackRecord.ts';
 import type { BsbUpcomingRow } from '../baseball/types.ts';
 import { findGameResult, hasStarted } from '../results.ts';
+import { readCalibration } from '../staking/calibration.ts';
 
 function predictRow(
   row: BsbUpcomingRow,
@@ -103,6 +104,9 @@ export async function registerBaseballRoutes(app: FastifyInstance): Promise<void
     oddsFallbackDetail: getMeta('bsb_odds_fallback_detail') || null,
     // Si está apagado, una pestaña vacía NO es un fallo: es lo que se pidió.
     demoFixtures: env.demoFixtures,
+    // El acierto REAL por banda de confianza, del backtest de este deporte. Es lo que
+    // permite que un filtro «solo los claros» diga cuánto acierta en vez de insinuarlo.
+    bands: readCalibration()['baseball']?.bands ?? null,
     oddsRefreshedAt: getMeta('bsb_odds_refreshed_at'),
     probables: Number(getMeta('bsb_probables') ?? 0),
     hasOddsKey: !!env.oddsApiKey,

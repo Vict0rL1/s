@@ -50,6 +50,22 @@ export interface SportCalibration {
   beatsMarket: boolean | null;
   /** Diferencia de log loss contra el mercado, cuando se puede medir. */
   vsMarketLogLoss: number | null;
+  /**
+   * Acierto REAL medido por banda de confianza, acumulado desde cada umbral.
+   *
+   * ===========================================================================
+   * PARA QUE UN FILTRO DE CONFIANZA NO PROMETA LO QUE NO PUEDE
+   * ===========================================================================
+   * «Enséñame solo los partidos claros» es una petición razonable, y la respuesta útil
+   * no es la lista: es QUÉ ACIERTO TIENE esa lista. Sin ese número, filtrar por encima
+   * del 80 % parece garantizar un 80 % de aciertos, y no es lo mismo — el modelo podría
+   * estar mal calibrado justo ahí.
+   *
+   * Aquí va medido: sobre los partidos donde dijo al menos X, cuántos acertó de verdad.
+   * Y sale del mismo backtest que ya calculaba las cubetas, por lo mismo que el ECE:
+   * duplicar el cálculo crearía dos verdades del mismo deporte.
+   */
+  bands?: { desde: number; n: number; acierto: number }[];
   measuredAt: string;
 }
 

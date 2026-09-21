@@ -1880,6 +1880,50 @@ Con el peso corregido, la ablación vuelve a correrse contra el modelo que ahora
 el resultado dudoso deja de serlo: quitar el Elo por superficie pasa de +0,00192 (p=0,0559)
 a **+0,00371 (p=0,0020)**. La pieza siempre sirvió; lo que fallaba era la dosis.
 
+### ¿Puede el modelo llegar al 80 %? No, y se puede calcular
+
+La pregunta tiene una respuesta que no depende de lo listo que sea el modelo.
+
+Un modelo **bien calibrado** que dice 60 % acierta el 60 % de esas veces. Su acierto
+esperado sobre todos los partidos es, por tanto, la media de `max(p, 1−p)` — la
+probabilidad del lado que elige. Y como la calibración de este modelo está medida
+(ECE 0,64 pp sobre 22.062 partidos), sus probabilidades son aproximadamente las de
+verdad. Así que esa media es **el techo de cualquier modelo calibrado sobre estos
+partidos**:
+
+```
+TECHO TEÓRICO: 65.9 % — la media de la probabilidad del favorito.
+  Partidos donde el favorito pasa del 80 %: 2813 de 22062 (12.8 %).
+```
+
+El modelo está en **65,3 %**. A seis décimas de su máximo teórico. Superarlo de forma
+sostenida no exigiría un modelo mejor, exigiría **partidos menos igualados**: un 7-6 en el
+quinto set no se vuelve predecible por mirarlo más fuerte.
+
+`npm run backtest` lo imprime, para que no haya que creérselo.
+
+### Lo que sí llega al 80 %: el filtro de confianza
+
+El modelo acierta el 65 % de **todo**, y el 87 % de aquello en lo que dice 80 % o más. No
+es otro modelo: es el mismo sobre menos partidos, y lo que se paga es **cobertura**.
+
+| umbral | partidos | % del total | acierto real medido |
+| --- | --- | --- | --- |
+| todos | 22.062 | 100 % | 65,3 % |
+| 60 %+ | 13.934 | 63,2 % | 72,0 % |
+| 70 %+ | 7.243 | 32,8 % | 79,2 % |
+| **80 %+** | **2.813** | **12,8 %** | **86,6 %** |
+| 90 %+ | 647 | 2,9 % | 94,4 % |
+
+La tabla de partidos tiene ahora ese filtro, y **el umbral siempre va con el acierto
+medido y el número de partidos sobre el que se midió**. Un filtro que solo enseña la lista
+insinúa que filtrar por 80 garantiza acertar el 80 — y eso solo es cierto si el modelo
+está calibrado justo ahí, cosa que aquí está medida y por eso se puede afirmar.
+
+Los números salen del mismo backtest que ya calculaba las cubetas, por el mismo motivo
+que el ECE: duplicar el cálculo crearía dos verdades del mismo deporte. Tenis y baloncesto
+los tienen medidos; donde no los hay, el filtro lo dice en vez de callárselo.
+
 ### Se buscó una mejora más y no la hay: diez parámetros barridos, cero candidatos
 
 Después de corregir el peso de superficie quedaba la pregunta obvia: ¿y los demás? El

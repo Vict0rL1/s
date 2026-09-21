@@ -38,6 +38,7 @@ import { describe as describeState, type LiveState } from '../live/state.ts';
 import { predictFromPoints } from '../points/predict.ts';
 import { modelForServing } from '../points/repo.ts';
 import type { Surface as PointsSurface } from '../points/fit.ts';
+import { readCalibration } from '../staking/calibration.ts';
 import { getTrackRecord, logPrediction } from '../trackRecord.ts';
 import type { TourId, UpcomingRow } from '../types.ts';
 
@@ -150,6 +151,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     oddsFallbackDetail: getMeta('odds_fallback_detail') || null,
     // Si está apagado, una pestaña vacía NO es un fallo: es lo que se pidió.
     demoFixtures: env.demoFixtures,
+    // El acierto REAL por banda de confianza, del backtest de este deporte. Es lo que
+    // permite que un filtro «solo los claros» diga cuánto acierta en vez de insinuarlo.
+    bands: readCalibration()['tennis']?.bands ?? null,
     oddsRefreshedAt: getMeta('odds_refreshed_at'),
     autoRefreshMinutes: env.autoRefreshMinutes,
     hasOddsKey: !!env.oddsApiKey,

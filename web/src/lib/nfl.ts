@@ -168,6 +168,8 @@ export interface NflMeta {
   oddsFallbackDetail: string | null;
   /** `DEMO_FIXTURES=off`: la app no inventa partidos, así que una pestaña vacía es lo esperado. */
   demoFixtures: boolean;
+  /** Acierto real por banda de confianza, del backtest de este deporte. */
+  bands: { desde: number; n: number; acierto: number }[] | null;
   hasOddsKey: boolean;
   autoRefreshMinutes: number;
   counts: { teams: number; games: number };

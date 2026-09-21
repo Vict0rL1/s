@@ -1664,6 +1664,7 @@ export function SlateTable({
   demoOdds = false,
   maxRows = 12,
   refrescadas,
+  bands,
 }: {
   rows: SlateRow[];
   /** Los precios existen pero se los ha inventado la app: la columna no dice nada. */
@@ -1671,12 +1672,30 @@ export function SlateTable({
   maxRows?: number;
   /** Cuándo se pidieron por última vez las cuotas de este deporte. */
   refrescadas?: string | null;
+  /** Acierto medido por umbral de confianza, para que el filtro no prometa de más. */
+  bands?: { desde: number; n: number; acierto: number }[] | null;
 }) {
   const [open, setOpen] = useState(true);
   const [todas, setTodas] = useState(false);
+  // ===========================================================================
+  // EL FILTRO DE CONFIANZA
+  // ===========================================================================
+  // «Enséñame solo los partidos claros» es una petición razonable y tiene una respuesta
+  // buena: el modelo acierta el 65 % de TODO, y el 87 % de aquello en lo que dice 80 % o
+  // más. No es un modelo mejor, es el mismo modelo sobre menos partidos — y lo que se
+  // paga es cobertura: ese 87 % vive en el 13 % de los partidos.
+  //
+  // Por eso el umbral SIEMPRE va acompañado del acierto medido y del número de partidos
+  // sobre el que se midió. Un filtro que solo enseña la lista insinúa que filtrar por 80
+  // garantiza acertar el 80, y eso solo es cierto si el modelo está calibrado ahí —
+  // cosa que aquí está medida, y por eso se puede decir.
+  const [umbral, setUmbral] = useState(0.5);
   if (rows.length === 0) return null;
 
-  const orden = [...rows].sort((a, b) => a.when.localeCompare(b.when));
+  const banda = bands?.slice().reverse().find((b) => umbral >= b.desde) ?? null;
+  const orden = [...rows]
+    .filter((r) => r.pickProb >= umbral)
+    .sort((a, b) => a.when.localeCompare(b.when));
   const vistas = todas ? orden : orden.slice(0, maxRows);
   const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
   // Un mercado inventado por la app NO es un mercado. Se trata igual que no tener
@@ -1770,6 +1789,37 @@ export function SlateTable({
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* El control del umbral, con lo que cuesta y lo que da, los dos medidos. */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.05] px-4 py-2.5">
+            <span className="text-[13px] text-[#7b828d]">Solo los que el modelo ve claros:</span>
+            {[0.5, 0.6, 0.7, 0.8].map((u) => (
+              <button
+                key={u}
+                onClick={() => setUmbral(u)}
+                className={`rounded-full px-2.5 py-1 text-[13px] transition ${
+                  umbral === u ? 'bg-white/[0.08] text-[#e8eaed]' : 'text-[#9aa1ac] hover:bg-white/[0.04]'
+                }`}
+              >
+                {u === 0.5 ? 'todos' : `${u * 100}%+`}
+              </button>
+            ))}
+            {umbral > 0.5 && (
+              <span className="text-[13px] text-[#7b828d]">
+                {/* Con la lista vacía no hay «estos» de los que acertar un porcentaje.
+                    Decir «acierta el 87 % de estos» sobre cero partidos es una frase
+                    sin referente, y de las que se leen como si prometieran algo. */}
+                {orden.length === 0
+                  ? `ninguno de los ${rows.length} de hoy llega a ese umbral`
+                  : `${orden.length} de ${rows.length}`}
+                {banda
+                  ? orden.length === 0
+                    ? ` · cuando los hay, el modelo acierta el ${(banda.acierto * 100).toFixed(0)} %, medido sobre ${banda.n.toLocaleString('es')} partidos`
+                    : ` · el modelo acierta el ${(banda.acierto * 100).toFixed(0)} % de estos, medido sobre ${banda.n.toLocaleString('es')} partidos`
+                  : ' · sin acierto medido por banda en este deporte'}
+              </span>
+            )}
           </div>
 
           {orden.length > maxRows && (
