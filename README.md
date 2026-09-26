@@ -318,7 +318,7 @@ mitad eso es una promesa sin cumplir, y una app de predicciones que solo enseña
 predicciones es indistinguible de una que las inventa.
 
 ```
-Cómo le fue al modelo · 9 de 13 en los últimos 7 días · 69 %
+Cómo le fue al modelo · 9 de 13 en los últimos 7 días · 69 % · esperaba 63 %
 
   14 sept  🏈  Dallas Cowboys @ New York Giants     dijo New York Giants 53%   ganó New York Giants ✓
   13 sept  🏈  Arizona Cardinals @ LA Chargers      dijo LA Chargers 75%       ganó Arizona Cardinals ✗
@@ -331,6 +331,12 @@ comprobable con tu propia memoria**. Quien vio el partido de ayer puede verifica
 sin fiarse de nadie, y eso es lo que convierte un porcentaje en algo en lo que apoyarse.
 El pie lo dice explícitamente, para que trece partidos no se confundan con la medida real.
 
+Y dice **qué cabía esperar**. «53 %» a secas no dice si el modelo va mal: con las
+probabilidades que dio, el número de aciertos esperado es su suma, y su dispersión la suma
+de p·(1−p). En una semana de NFL eso da algo como «esperaba 10 de 15; entre 6 y 13 es lo
+normal por azar, así que 8 está dentro». Es la diferencia entre «el modelo va mal» y «ha
+sido una semana corta», y con quince partidos casi siempre es lo segundo.
+
 **Funciona sin cuotas**, que es lo que lo hace útil incluso con el proveedor caído: para
 saber si el modelo acertó no hace falta ningún precio, solo el resultado.
 
@@ -340,7 +346,14 @@ incomprobable — que es exactamente lo contrario de para lo que existe la vista
 Tres decisiones que hacen que el número signifique algo:
 
 - **Las probabilidades salen del log de predicciones, no se recalculan.** El log guarda la
-  que *se mostró*, con su fecha. Recalculando aquí, esta vista podría decir un número y la
+  que *se mostró*, con su fecha. (Esto **no era cierto** en NFL y fútbol hasta ahora: el log
+  guardaba la cruda del modelo, antes del post-proceso, y el panel puntuaba esa. En la NFL la
+  que se enseña es casi el precio de mercado, así que el panel juzgaba una predicción que
+  nadie había visto, y además la peor: desde 2020 el favorito crudo acierta el 65,3 % y el
+  enseñado el 66,6 %, sobre 1.718 partidos; discrepan en uno de cada siete. Ahora el log
+  guarda las dos —`prob_*` la cruda, que el historial necesita para medir el modelo contra
+  el mercado, y `shown_*` la enseñada—, y las filas antiguas se rellenan solas: exactas en
+  fútbol, a unas décimas en la NFL.) Recalculando aquí, esta vista podría decir un número y la
   pestaña del deporte otro para el mismo partido, y no habría forma de saber cuál se usó.
   Un partido que aún no ha pasado por el log sale como **«sin predicción»** en vez de con
   una inventada, y el pie dice cuántos van así.

@@ -940,6 +940,20 @@ function migrateSchema(d: DatabaseSync): void {
       yellow_cards: 'INTEGER NOT NULL DEFAULT 0',
       red_cards: 'INTEGER NOT NULL DEFAULT 0',
     },
+    // LA PROBABILIDAD QUE SE ENSEÑÓ, al lado de la cruda. `prob_*` guarda lo que dijo
+    // el modelo antes del post-proceso, y así debe seguir: el historial de la NFL existe
+    // para medir el modelo contra el mercado, y para eso hace falta el modelo solo. Pero
+    // «¿Acertó?» y «Hoy» leían esa misma columna, y en pantalla se enseña la FINAL —en la
+    // NFL, un 90 % precio de mercado—. Resultado: el panel puntuaba una predicción que
+    // nadie vio, y la peor de las dos.
+    naf_prediction_log: {
+      shown_home: 'REAL',
+    },
+    fb_prediction_log: {
+      shown_home: 'REAL',
+      shown_draw: 'REAL',
+      shown_away: 'REAL',
+    },
   };
 
   for (const [table, cols] of Object.entries(wanted)) {

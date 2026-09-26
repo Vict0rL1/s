@@ -26,6 +26,8 @@
 // Consecuencia honesta: un partido que todavía no ha pasado por el log sale sin
 // probabilidad, y se dice, en vez de inventarle una.
 
+import { backfillShownFootball } from './football/trackRecord.ts';
+import { backfillShownNfl } from './nfl/trackRecord.ts';
 import { getDb } from './db.ts';
 import { freshSince } from './freshness.ts';
 
@@ -65,13 +67,30 @@ interface Fuente {
   precio: string;
   /** El fútbol tiene empate y hay que mirarlo para elegir favorito. */
   empate?: string;
+  /**
+   * Columnas con la probabilidad que SE ENSEÑÓ, donde difiere de la cruda (NFL y
+   * fútbol tienen post-proceso). Se leen con COALESCE: una fila sin rellenar cae a la
+   * cruda en vez de desaparecer.
+   */
+  mostrado?: string;
+  mostradoEmpate?: string;
+}
+
+/** La probabilidad a puntuar: la enseñada si existe, la cruda si no. */
+function probSql(f: Fuente, alias = ''): string {
+  return f.mostrado ? `COALESCE(${alias}${f.mostrado}, ${alias}${f.prob})` : `${alias}${f.prob}`;
+}
+function empateSql(f: Fuente, alias = ''): string {
+  return f.mostradoEmpate
+    ? `COALESCE(${alias}${f.mostradoEmpate}, ${alias}${f.empate})`
+    : `${alias}${f.empate}`;
 }
 
 const FUENTES: Fuente[] = [
-  { deporte: 'Fútbol', log: 'fb_prediction_log', up: 'fb_upcoming', clave: 'match_key', casa: 'home_name', fuera: 'away_name', prob: 'prob_home', precio: 'odds_home', resuelto: 'resolved_at', empate: 'prob_draw' },
+  { deporte: 'Fútbol', log: 'fb_prediction_log', up: 'fb_upcoming', clave: 'match_key', casa: 'home_name', fuera: 'away_name', prob: 'prob_home', precio: 'odds_home', resuelto: 'resolved_at', empate: 'prob_draw', mostrado: 'shown_home', mostradoEmpate: 'shown_draw' },
   { deporte: 'Baloncesto', log: 'bb_prediction_log', up: 'bb_upcoming', clave: 'game_key', casa: 'home_name', fuera: 'away_name', prob: 'prob_home', precio: 'home_odds', resuelto: 'home_pts' },
   { deporte: 'Béisbol', log: 'bsb_prediction_log', up: 'bsb_upcoming', clave: 'match_key', casa: 'home_name', fuera: 'away_name', prob: 'prob_home', precio: 'odds_home', resuelto: 'resolved_at' },
-  { deporte: 'NFL', log: 'naf_prediction_log', up: 'naf_upcoming', clave: 'match_key', casa: 'home_name', fuera: 'away_name', prob: 'prob_home', precio: 'odds_home', resuelto: 'home_points' },
+  { deporte: 'NFL', log: 'naf_prediction_log', up: 'naf_upcoming', clave: 'match_key', casa: 'home_name', fuera: 'away_name', prob: 'prob_home', precio: 'odds_home', resuelto: 'home_points', mostrado: 'shown_home' },
   { deporte: 'Tenis', log: 'prediction_log', up: 'upcoming_matches', clave: 'match_key', casa: 'p1_name', fuera: 'p2_name', prob: 'prob1', precio: 'p1_odds', resuelto: 'resolved_at' },
 ];
 
@@ -107,7 +126,18 @@ interface FuenteResuelta extends Fuente {
 /** Cuántos días atrás se mira. Una semana: más y la lista deja de leerse de un vistazo. */
 const DIAS_ATRAS = 7;
 
+/** Las filas registradas antes de `shown_*`, rellenadas. Vacío en cuanto se ha hecho. */
+function rellenarMostrado(): void {
+  try {
+    backfillShownFootball();
+    backfillShownNfl();
+  } catch {
+    // Sin tablas todavía: nada que rellenar.
+  }
+}
+
 export function resultadosRecientes(now = new Date()): ResultadoReciente[] {
+  rellenarMostrado();
   const db = getDb();
   const desde = new Date(now.getTime() - DIAS_ATRAS * 86_400_000).toISOString();
   const out: ResultadoReciente[] = [];
@@ -126,7 +156,7 @@ export function resultadosRecientes(now = new Date()): ResultadoReciente[] {
         ? (db
             .prepare(
               `SELECT commence_time AS cuando, ${f.casa} AS casa, ${f.fuera} AS fuera,
-                      ${f.prob} AS p ${f.empate ? `, ${f.empate} AS pEmpate` : ''},
+                      ${probSql(f)} AS p ${f.empate ? `, ${empateSql(f)} AS pEmpate` : ''},
                       ${f.marcador[0]} AS gc, ${f.marcador[1]} AS gf
                  FROM ${f.log}
                 WHERE ${f.marcador[0]} IS NOT NULL AND commence_time >= ?
@@ -197,6 +227,7 @@ function finDeHoy(now = new Date()): string {
 }
 
 export function partidosDeHoy(now = new Date()): { partidos: PartidoDeHoy[]; nota: string | null } {
+  rellenarMostrado();
   const db = getDb();
   // La misma ventana que usa cada pestaña: desde la medianoche local hasta la de
   // mañana. Reusar `freshSince` y no inventar un corte propio evita que esta vista
@@ -211,8 +242,8 @@ export function partidosDeHoy(now = new Date()): { partidos: PartidoDeHoy[]; not
       const rows = db
         .prepare(
           `SELECT u.commence_time AS cuando, u.source AS fuente, u.${f.precio} AS precio,
-                  l.${f.casa} AS casa, l.${f.fuera} AS fuera, l.${f.prob} AS p
-                  ${f.empate ? `, l.${f.empate} AS pEmpate` : ''}
+                  l.${f.casa} AS casa, l.${f.fuera} AS fuera, ${probSql(f, 'l.')} AS p
+                  ${f.empate ? `, ${empateSql(f, 'l.')} AS pEmpate` : ''}
              FROM ${f.up} u
              LEFT JOIN ${f.log} l ON l.upcoming_id = u.id
             WHERE u.commence_time >= ? AND u.commence_time < ?

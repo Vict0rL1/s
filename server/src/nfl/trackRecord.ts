@@ -13,6 +13,7 @@
 // is the only version of the value question worth reporting.
 
 import { getDb } from '../db.ts';
+import { postprocess } from '../postprocess/apply.ts';
 import type { NafPrediction } from './predict.ts';
 import type { NafUpcomingRow } from './types.ts';
 
@@ -71,8 +72,8 @@ export function logNflPrediction(row: NafUpcomingRow, prediction: NafPrediction)
     .prepare(
       `INSERT INTO naf_prediction_log
          (match_key, league, upcoming_id, commence_time, home_id, away_id, home_name, away_name,
-          prob_home, market_prob_home, expected_margin, expected_total, reliability, predicted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          prob_home, shown_home, market_prob_home, expected_margin, expected_total, reliability, predicted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (match_key) DO NOTHING`,
     )
     .run(
@@ -85,6 +86,8 @@ export function logNflPrediction(row: NafUpcomingRow, prediction: NafPrediction)
       row.home_name,
       row.away_name,
       prediction.model.home,
+      // Lo que se enseñó: la final, que en la NFL es casi el precio. Ver `shown_home`.
+      prediction.final.home,
       prediction.market.market?.home ?? null,
       prediction.spread.expectedMargin,
       prediction.total.expected,
@@ -93,8 +96,33 @@ export function logNflPrediction(row: NafUpcomingRow, prediction: NafPrediction)
     );
 }
 
+/**
+ * Rellena `shown_home` en las filas registradas antes de que existiera la columna.
+ *
+ * Reconstruido con el mismo post-proceso que usa `predict.ts`: la cruda y el mercado
+ * que se guardaron entran en `postprocess('nfl', …)`. Casi exacto — la cruda guardada
+ * es la victoria local CON empate dentro y la mezcla usa la de dos vías, así que puede
+ * haber unas décimas de diferencia (en la NFL el empate ronda el 0,3 %). Muchísimo más
+ * cerca de lo que se vio que la cruda, que es lo que se puntuaba hasta ahora.
+ */
+export function backfillShownNfl(): number {
+  const db = getDb();
+  const rows = db
+    .prepare('SELECT match_key, prob_home, market_prob_home FROM naf_prediction_log WHERE shown_home IS NULL')
+    .all() as unknown as { match_key: string; prob_home: number; market_prob_home: number | null }[];
+  if (rows.length === 0) return 0;
+  const upd = db.prepare('UPDATE naf_prediction_log SET shown_home = ? WHERE match_key = ?');
+  for (const r of rows) {
+    const m = r.market_prob_home;
+    const f = postprocess('nfl', [r.prob_home, 1 - r.prob_home], m != null ? [m, 1 - m] : null).final;
+    upd.run(f[0], r.match_key);
+  }
+  return rows.length;
+}
+
 /** Match logged predictions to results that have since arrived. */
 export function resolveNflPredictions(): { resolved: number } {
+  backfillShownNfl();
   const db = getDb();
   const pending = db
     .prepare(

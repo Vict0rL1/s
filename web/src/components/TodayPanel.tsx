@@ -48,7 +48,16 @@ const CLAVE_VISTA = 'predictor.today.view';
 
 export default function TodayPanel() {
   const [datos, setDatos] = useState<{ partidos: Partido[]; nota: string | null } | null>(null);
-  const [res, setRes] = useState<{ resultados: Resultado[]; aciertos: number; total: number; tasa: number | null } | null>(null);
+  const [res, setRes] = useState<{
+    resultados: Resultado[];
+    aciertos: number;
+    total: number;
+    tasa: number | null;
+    /** Aciertos que el propio modelo esperaba, y el rango normal por azar (95 %). */
+    esperado?: number | null;
+    tasaEsperada?: number | null;
+    rangoNormal?: [number, number] | null;
+  } | null>(null);
   const [vista, setVista] = useState<'hoy' | 'resultados'>(() => {
     try {
       return localStorage.getItem(CLAVE_VISTA) === 'resultados' ? 'resultados' : 'hoy';
@@ -137,6 +146,8 @@ export default function TodayPanel() {
               <>
                 {res?.aciertos} de {res?.total} en los últimos 7 días
                 {res?.tasa != null && ` · ${(res.tasa * 100).toFixed(0)} %`}
+                {/* Sin esto, un 53 % no dice nada: puede ser justo lo que tocaba. */}
+                {res?.tasaEsperada != null && ` · esperaba ${(res.tasaEsperada * 100).toFixed(0)} %`}
               </>
             )}
           </span>
@@ -228,6 +239,19 @@ export default function TodayPanel() {
           )}
           {activa === 'resultados' && (
             <p className="border-t border-white/[0.05] px-4 py-2 text-[12px] text-[#7b828d]">
+              {res?.rangoNormal && res.esperado != null && (
+                <>
+                  Con las probabilidades que dio, el modelo esperaba acertar unos{' '}
+                  {res.esperado.toFixed(1).replace('.', ',')} de {res.total}. Por puro azar, entre{' '}
+                  {res.rangoNormal[0]} y {res.rangoNormal[1]} aciertos es lo normal con tan pocos
+                  partidos, así que {res.aciertos}{' '}
+                  {res.aciertos >= res.rangoNormal[0] && res.aciertos <= res.rangoNormal[1]
+                    ? 'está dentro de lo esperado.'
+                    : res.aciertos < res.rangoNormal[0]
+                      ? 'está por debajo de lo normal: merece mirarse.'
+                      : 'está por encima: buena racha, no un modelo mejor.'}{' '}
+                </>
+              )}
               Partido a partido, para que lo puedas comprobar con tu propia memoria. El
               porcentaje que sirve para juzgar al modelo es el del historial de cada
               pestaña, medido sobre miles de partidos y no sobre estos {res?.total}.

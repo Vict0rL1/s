@@ -388,6 +388,17 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/recent-results', async () => {
     const r = resultadosRecientes();
     const aciertos = r.filter((x) => x.acerto).length;
+    // ===========================================================================
+    // CUÁNTO CABÍA ESPERAR
+    // ===========================================================================
+    // «8 de 15, 53 %» no dice si eso es bueno o malo. Lo dice compararlo con lo que el
+    // propio modelo prometió: si daba a cada favorito su probabilidad, el número de
+    // aciertos esperado es la SUMA de esas probabilidades, y su dispersión la suma de
+    // p·(1−p). Con quince partidos esa dispersión es enorme —de seis a doce aciertos
+    // es lo normal para un modelo perfectamente calibrado—, y enseñarlo es lo que
+    // separa «el modelo va mal» de «ha sido una semana corta».
+    const esperado = r.reduce((a, x) => a + x.probabilidad, 0);
+    const sd = Math.sqrt(r.reduce((a, x) => a + x.probabilidad * (1 - x.probabilidad), 0));
     return {
       resultados: r,
       total: r.length,
@@ -395,6 +406,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       // Sin partidos no hay porcentaje: enseñar «0 %» se leería como «no acierta
       // ninguno» cuando lo que pasa es que aún no hay ninguno resuelto.
       tasa: r.length > 0 ? aciertos / r.length : null,
+      esperado: r.length > 0 ? esperado : null,
+      tasaEsperada: r.length > 0 ? esperado / r.length : null,
+      // El rango del 95 %, en aciertos enteros y dentro de [0, total].
+      rangoNormal:
+        r.length > 0
+          ? [Math.max(0, Math.ceil(esperado - 1.96 * sd)), Math.min(r.length, Math.floor(esperado + 1.96 * sd))]
+          : null,
     };
   });
 

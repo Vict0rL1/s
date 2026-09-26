@@ -6,6 +6,7 @@
 // while being useless about the outcome that happens a quarter of the time.
 
 import { getDb } from '../db.ts';
+import { postprocess } from '../postprocess/apply.ts';
 import { rankedProbabilityScore, impliedFrom1X2 } from './model.ts';
 import type { FbPrediction } from './predict.ts';
 import type { FbUpcomingRow } from './types.ts';
@@ -67,15 +68,18 @@ export function logFootballPrediction(row: FbUpcomingRow, p: FbPrediction): void
         `INSERT INTO fb_prediction_log (
            match_key, league, upcoming_id, commence_time, home_id, away_id,
            home_name, away_name, prob_home, prob_draw, prob_away,
+           shown_home, shown_draw, shown_away,
            market_prob_home, market_prob_draw, market_prob_away,
            expected_home_goals, expected_away_goals, reliability, predicted_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(match_key) DO NOTHING`,
       )
       .run(
         key, row.league, row.id, row.commence_time ?? null, row.home_id, row.away_id,
         p.teams.home.name, p.teams.away.name,
         p.model.home, p.model.draw, p.model.away,
+        // Lo que se enseñó, que no es lo mismo: ver `shown_*` en db.ts.
+        p.final.home, p.final.draw, p.final.away,
         implied?.home ?? null, implied?.draw ?? null, implied?.away ?? null,
         p.goals.expectedHome, p.goals.expectedAway,
         p.reliability.level, new Date().toISOString(),
@@ -85,7 +89,29 @@ export function logFootballPrediction(row: FbUpcomingRow, p: FbPrediction): void
   }
 }
 
+/**
+ * Rellena `shown_*` en las filas registradas antes de que existiera la columna.
+ *
+ * Exacto, no aproximado: en fútbol la final es el calibrador aplicado a la cruda (la
+ * mezcla con el mercado está apagada por falta de cuotas históricas), y el calibrador
+ * es una función determinista de lo que ya está guardado.
+ */
+export function backfillShownFootball(): number {
+  const db = getDb();
+  const rows = db
+    .prepare('SELECT match_key, prob_home, prob_draw, prob_away FROM fb_prediction_log WHERE shown_home IS NULL')
+    .all() as unknown as { match_key: string; prob_home: number; prob_draw: number; prob_away: number }[];
+  if (rows.length === 0) return 0;
+  const upd = db.prepare('UPDATE fb_prediction_log SET shown_home = ?, shown_draw = ?, shown_away = ? WHERE match_key = ?');
+  for (const r of rows) {
+    const f = postprocess('football', [r.prob_home, r.prob_draw, r.prob_away], null).final;
+    upd.run(f[0], f[1], f[2], r.match_key);
+  }
+  return rows.length;
+}
+
 export function resolveFootballPredictions(): { resolved: number } {
+  backfillShownFootball();
   const db = getDb();
   const pending = db
     .prepare(
