@@ -468,13 +468,14 @@ function main() {
       // Acierto acumulado desde cada umbral: sobre los partidos donde dijo al menos X,
       // cuántos acertó. Es lo que un filtro de confianza necesita para no prometer de más.
       const orden = [...buckets.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-      const bands: { desde: number; n: number; acierto: number }[] = [];
+      const bands: { desde: number; n: number; acierto: number; media: number }[] = [];
       for (let i = 0; i < orden.length; i++) {
         const sub = orden.slice(i);
         const nn = sub.reduce((s, [, b]) => s + b.n, 0);
         if (nn === 0) continue;
         const ac = sub.reduce((s, [, b]) => s + b.won, 0) / nn;
-        bands.push({ desde: Number(orden[i][0].slice(0, 2)) / 100, n: nn, acierto: ac });
+        const media = sub.reduce((s, [, b]) => s + b.pred, 0) / nn;
+        bands.push({ desde: Number(orden[i][0].slice(0, 2)) / 100, n: nn, acierto: ac, media });
       }
       const cal = readCalibration();
       cal.tennis = {

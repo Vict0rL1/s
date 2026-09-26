@@ -1689,10 +1689,19 @@ export function SlateTable({
   // sobre el que se midió. Un filtro que solo enseña la lista insinúa que filtrar por 80
   // garantiza acertar el 80, y eso solo es cierto si el modelo está calibrado ahí —
   // cosa que aquí está medida, y por eso se puede decir.
-  const [umbral, setUmbral] = useState(0.5);
+  // «Todos» es CERO, no 0,5. La primera versión arrancaba en 0,5 creyendo que el
+  // favorito siempre pasa de la mitad, y eso solo es cierto con dos resultados. En el
+  // fútbol hay empate: el favorito suele rondar el 40 %, así que la vista por defecto
+  // escondía cinco de cada seis partidos con «todos» marcado. Medido en pantalla:
+  // cabecera «6 partidos», tabla con 1 fila.
+  const [umbral, setUmbral] = useState(0);
   if (rows.length === 0) return null;
 
-  const banda = bands?.slice().reverse().find((b) => umbral >= b.desde) ?? null;
+  // La banda EXACTA del umbral, no «la más alta por debajo». Béisbol no tiene banda del
+  // 80 %: su modelo casi nunca llega ahí y no hay partidos para medirlo. Con la búsqueda
+  // anterior, «80 %+» en béisbol habría enseñado el acierto del 70 %+ como si fuera el
+  // suyo — un número medido sobre otros partidos, puesto bajo un filtro que no lo es.
+  const banda = bands?.find((b) => Math.abs(b.desde - umbral) < 1e-9) ?? null;
   const orden = [...rows]
     .filter((r) => r.pickProb >= umbral)
     .sort((a, b) => a.when.localeCompare(b.when));
@@ -1794,7 +1803,7 @@ export function SlateTable({
           {/* El control del umbral, con lo que cuesta y lo que da, los dos medidos. */}
           <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.05] px-4 py-2.5">
             <span className="text-[13px] text-[#7b828d]">Solo los que el modelo ve claros:</span>
-            {[0.5, 0.6, 0.7, 0.8].map((u) => (
+            {[0, 0.6, 0.7, 0.8].map((u) => (
               <button
                 key={u}
                 onClick={() => setUmbral(u)}
@@ -1802,10 +1811,10 @@ export function SlateTable({
                   umbral === u ? 'bg-white/[0.08] text-[#e8eaed]' : 'text-[#9aa1ac] hover:bg-white/[0.04]'
                 }`}
               >
-                {u === 0.5 ? 'todos' : `${u * 100}%+`}
+                {u === 0 ? 'todos' : `${u * 100}%+`}
               </button>
             ))}
-            {umbral > 0.5 && (
+            {umbral > 0 && (
               <span className="text-[13px] text-[#7b828d]">
                 {/* Con la lista vacía no hay «estos» de los que acertar un porcentaje.
                     Decir «acierta el 87 % de estos» sobre cero partidos es una frase
@@ -1817,7 +1826,9 @@ export function SlateTable({
                   ? orden.length === 0
                     ? ` · cuando los hay, el modelo acierta el ${(banda.acierto * 100).toFixed(0)} %, medido sobre ${banda.n.toLocaleString('es')} partidos`
                     : ` · el modelo acierta el ${(banda.acierto * 100).toFixed(0)} % de estos, medido sobre ${banda.n.toLocaleString('es')} partidos`
-                  : ' · sin acierto medido por banda en este deporte'}
+                  : bands?.length
+                    ? ' · el modelo casi nunca llega tan alto en este deporte: no hay partidos suficientes para medir su acierto ahí'
+                    : ' · sin acierto medido por banda en este deporte'}
               </span>
             )}
           </div>

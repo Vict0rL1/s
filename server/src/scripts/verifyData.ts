@@ -109,6 +109,7 @@ import { halfMarkets, HALF_NU } from '../football/halves.ts';
 import { getHalfParams } from '../football/halvesRepo.ts';
 import { getTeamCounts } from '../football/teamCounts.ts';
 import { bancoActual, BANCO_INICIAL } from '../paper/bankroll.ts';
+import { readCalibration } from '../staking/calibration.ts';
 import {
   minutesDistribution,
   propDistribution,
@@ -1161,6 +1162,74 @@ function auditExperimentRegistry(): void {
  * NO hace redundante la comprobación: una restricción protege de una escritura nueva y
  * esto protege también de las filas que ya estén guardadas de una versión anterior.
  */
+/**
+ * La calibración que lee la política de sizing: los cinco deportes, siempre.
+ *
+ * Existe porque ya se perdieron tres en silencio. `study:calibration` sobrescribía el
+ * fichero con solo fútbol y NFL, y el único síntoma fue que el banco de papel dejó de
+ * apostar en tenis, baloncesto y béisbol diciendo «calibración insuficiente» — verdad, y
+ * sin señalar a la causa. `writeCalibration` mezcla ahora en vez de sustituir, y esto
+ * comprueba que la mezcla siga siendo la regla y no una suerte.
+ *
+ * El fichero está en git, así que esta comprobación NO depende de haber corrido ningún
+ * backtest en la máquina: en una copia recién clonada tiene que pasar igual.
+ */
+function auditCalibrationFile(): void {
+  console.log('\n▸ Calibración para el sizing (experiments/calibration.json)');
+  const cal = readCalibration();
+  const esperados = ['baseball', 'basketball', 'football', 'nfl', 'tennis'];
+  const faltan = esperados.filter((d) => !cal[d]);
+  check(
+    'calibración: los cinco deportes tienen entrada',
+    faltan.length === 0,
+    `faltan ${faltan.join(', ')} — el banco de papel no apostará en ellos`,
+  );
+  for (const d of esperados) {
+    const c = cal[d];
+    if (!c) continue;
+    band(`calibración ${d}: ECE en un rango creíble`, c.ece, 0, 0.1);
+    check(`calibración ${d}: medida sobre una muestra`, c.n > 1000, `solo ${c.n} predicciones`);
+    // Las bandas, cuando están, tienen que ser MONÓTONAS: pedir más confianza no puede
+    // dar menos acierto. Si lo diera, el filtro «solo los claros» estaría recomendando
+    // lo contrario de lo que promete.
+    if (c.bands && c.bands.length > 1) {
+      const mono = c.bands.every((b, i) => i === 0 || b.acierto >= c.bands![i - 1].acierto - 0.005);
+      check(`calibración ${d}: más confianza nunca da menos acierto`, mono, JSON.stringify(c.bands.map((b) => b.acierto.toFixed(3))));
+    }
+    // El filtro de la tabla ofrece 60 y 70 en todos los deportes; sin su banda, la
+    // pantalla no puede decir qué acierto tiene lo que filtra.
+    const cubiertos = [0.6, 0.7].filter((u) => c.bands?.some((b) => Math.abs(b.desde - u) < 1e-9));
+    check(
+      `calibración ${d}: bandas del 60 % y del 70 % medidas`,
+      cubiertos.length === 2,
+      `solo ${cubiertos.map((u) => u * 100 + ' %').join(', ') || 'ninguna'} — corre el backtest o study:calibration`,
+    );
+    // Cada banda, contra lo que el modelo PROMETIÓ en ella: su probabilidad media. La
+    // tolerancia es tres errores estándar de la muestra más un punto de holgura, así que
+    // una banda de 500 partidos puede separarse ~6 pp y una de 20.000, ~2.
+    //
+    // Compararla con el umbral no sirve, y está medido: con el signo de la línea de la
+    // NFL invertido a propósito, «50 %+» acertaba el 56 % —más que 50, «correcto»— cuando
+    // el modelo prometía un 66. De cuatro bandas rotas, el umbral solo cazó una; esta
+    // las caza todas. Y en su primera pasada destapó un fallo que nadie buscaba: el
+    // fútbol se estaba midiendo sobre el Elo de respaldo en vez del Dixon-Coles que se
+    // enseña (ver `_calibration.ts`).
+    for (const b of c.bands ?? []) {
+      if (b.media == null) {
+        check(`calibración ${d}: la banda del ${(b.desde * 100).toFixed(0)} % trae su media`, false, 'vuelve a correr su backtest');
+        continue;
+      }
+      const tol = 3 * Math.sqrt((b.acierto * (1 - b.acierto)) / b.n) + 0.01;
+      check(
+        `calibración ${d}: el ${(b.desde * 100).toFixed(0)} %+ acierta lo que promete`,
+        Math.abs(b.acierto - b.media) <= tol,
+        `promete ${(b.media * 100).toFixed(1)} %, acierta ${(b.acierto * 100).toFixed(1)} % sobre ${b.n} (tolerancia ±${(tol * 100).toFixed(1)} pp)`,
+      );
+    }
+  }
+  console.log(`  ${Object.keys(cal).length} deportes · ${esperados.filter((d) => cal[d]?.bands).length} con bandas de confianza`);
+}
+
 function auditPaperBankroll(): void {
   console.log('\n▸ El banco de papel del modelo');
   const db = getDb();
@@ -3588,6 +3657,7 @@ function main(): void {
   auditExperimentRegistry();
   auditStaking();
   auditPaperBankroll();
+  auditCalibrationFile();
   auditDixonColes();
   auditPostprocess();
   auditThinMarkets();

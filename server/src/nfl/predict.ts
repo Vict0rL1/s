@@ -350,7 +350,7 @@ function deVig(oddsHome: number | null, oddsAway: number | null): NafMarket | nu
  * here rather than 1.0, because "no margin measured" and "a margin of zero" are
  * different claims.
  */
-function marketFromSpread(spreadLine: number | null | undefined, expectedTotal: number): NafMarket | null {
+export function marketFromSpread(spreadLine: number | null | undefined, expectedTotal: number): NafMarket | null {
   if (spreadLine == null || !Number.isFinite(spreadLine)) return null;
   const d = buildDistribution(-spreadLine, expectedTotal);
   const o = outcomeProbabilities(d);

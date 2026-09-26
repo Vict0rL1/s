@@ -47,7 +47,7 @@ import {
 } from './model.ts';
 import { factorsFrom, type ParkAccumulator } from './parkFactors.ts';
 import { firstSeasonRunAverage, loadGames, replayGames } from './ratings.ts';
-import { readCalibration, writeCalibration } from '../staking/calibration.ts';
+import { readCalibration, writeCalibration, bandasDeAcierto } from '../staking/calibration.ts';
 
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
@@ -117,6 +117,12 @@ export function runBacktest(opts: {
   park?: boolean;
   /** Collect calibration bands as well. */
   bands?: Map<string, { n: number; pred: number; obs: number }>;
+  /**
+   * El favorito de cada partido y si ganó: lo que necesita el filtro de confianza.
+   * Las cubetas de `bands` agrupan por victoria LOCAL, que no es lo mismo — un 30 %
+   * local es un 70 % visitante, y el filtro corta por el segundo.
+   */
+  favs?: { p: number; hit: boolean }[];
 }): BacktestTotals {
   const warmup = opts.warmup ?? 60;
   const dispersion = opts.dispersion ?? RUN_DISPERSION;
@@ -223,6 +229,11 @@ export function runBacktest(opts: {
           b.obs += homeWon;
           opts.bands.set(key, b);
         }
+        if (opts.favs) {
+          opts.favs.push(
+            win.home >= 0.5 ? { p: win.home, hit: homeWon === 1 } : { p: 1 - win.home, hit: homeWon === 0 },
+          );
+        }
       },
     });
   }
@@ -272,7 +283,8 @@ function main() {
   );
 
   const bands = new Map<string, { n: number; pred: number; obs: number }>();
-  const r = runBacktest({ ...cfg, bands });
+  const favs: { p: number; hit: boolean }[] = [];
+  const r = runBacktest({ ...cfg, bands, favs });
 
   if (r.n === 0) {
     console.log('\nSin partidos evaluables. Corre `npm run update-data:bsb` primero.');
@@ -333,7 +345,14 @@ function main() {
         ece += (b.n / usados) * Math.abs(b.obs / b.n - b.pred / b.n);
       }
       const cal = readCalibration();
-      cal.baseball = { ece, n: usados, beatsMarket: null, vsMarketLogLoss: null, measuredAt: new Date().toISOString() };
+      cal.baseball = {
+        ece,
+        n: usados,
+        beatsMarket: null,
+        vsMarketLogLoss: null,
+        measuredAt: new Date().toISOString(),
+        bands: bandasDeAcierto(favs),
+      };
       writeCalibration(cal);
       console.log(
         `\nCalibración registrada para el sizing: ECE ${(ece * 100).toFixed(2)} pp sobre ${usados} ` +

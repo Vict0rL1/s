@@ -1912,7 +1912,7 @@ es otro modelo: es el mismo sobre menos partidos, y lo que se paga es **cobertur
 | todos | 22.062 | 100 % | 65,3 % |
 | 60 %+ | 13.934 | 63,2 % | 72,0 % |
 | 70 %+ | 7.243 | 32,8 % | 79,2 % |
-| **80 %+** | **2.813** | **12,8 %** | **86,6 %** |
+| **80 %+** | **2.813** | **12,8 %** | **86,7 %** |
 | 90 %+ | 647 | 2,9 % | 94,4 % |
 
 La tabla de partidos tiene ahora ese filtro, y **el umbral siempre va con el acierto
@@ -1921,8 +1921,59 @@ insinúa que filtrar por 80 garantiza acertar el 80 — y eso solo es cierto si 
 está calibrado justo ahí, cosa que aquí está medida y por eso se puede afirmar.
 
 Los números salen del mismo backtest que ya calculaba las cubetas, por el mismo motivo
-que el ECE: duplicar el cálculo crearía dos verdades del mismo deporte. Tenis y baloncesto
-los tienen medidos; donde no los hay, el filtro lo dice en vez de callárselo.
+que el ECE: duplicar el cálculo crearía dos verdades del mismo deporte.
+
+**Los cinco deportes tienen ya su acierto medido por umbral** (acierto del favorito,
+walk-forward, sin tocar el holdout):
+
+| umbral | Tenis | Baloncesto | Fútbol | NFL | Béisbol |
+| --- | --- | --- | --- | --- | --- |
+| 60 %+ | 72,0 % · 13.934 | 73,2 % · 61.874 | 70,3 % · 3.742 | 71,6 % · 4.428 | 64,4 % · 4.595 |
+| 70 %+ | 79,2 % · 7.243 | 78,8 % · 37.941 | 77,1 % · 1.323 | 79,3 % · 2.146 | 70,9 % · 492 |
+| 80 %+ | 86,7 % · 2.813 | 84,9 % · 17.526 | 85,7 % · 315 | 85,2 % · 610 | — |
+
+El «—» del béisbol no es un hueco: su modelo casi nunca pasa del 80 % (menos de 200
+partidos en todo el archivo), y la tabla lo dice así en vez de enseñar el acierto del 70 %
+bajo el filtro del 80, que es lo que hacía la primera versión.
+
+En fútbol el empate cuenta como **fallo** del favorito, y el favorito es el mayor de local
+y visitante —nunca el empate—, igual que en la tabla. Y cada banda se mide sobre la
+probabilidad que **se enseña**, no sobre la cruda: en la NFL la final es casi el precio
+(peso del modelo 0,10), y medir el crudo habría filtrado por un número y prometido el
+acierto de otro.
+
+#### Lo que destapó: el fútbol se calibraba sobre el modelo equivocado
+
+`verify:data` comprueba ahora cada banda contra lo que el modelo **prometió** en ella (su
+probabilidad media), con una tolerancia de tres errores estándar. En su primera pasada
+falló el fútbol: el favorito del 50 %+ prometía un 61,0 % y acertaba un 58,5 %, sobre
+10.446 partidos — cinco errores estándar, no mala suerte.
+
+No era el modelo. Era `study:calibration`, que medía el **Elo de respaldo** en vez del
+Dixon-Coles jerárquico que usa la app en 6 de cada 7 partidos:
+
+| | victoria local: dice / pasa | favoritos 50 %+: prometen / aciertan |
+| --- | --- | --- |
+| Elo (lo que se medía) | 46,2 / 43,1 | 61,0 / 58,5 |
+| Dixon-Coles (lo que se enseña) | 43,4 / 43,1 | 60,2 / 60,9 |
+
+El Elo sobreestima la ventaja de campo en tres puntos; el Dixon-Coles la ajusta por liga y
+con decaimiento temporal y la clava. El ECE que lee el sizing también venía del Elo
+(0,720 pp); medido sobre el camino real es **0,683 pp**. El banco de papel no cambia —en
+fútbol ya estaba topado a la mitad por no tener cuotas históricas—, pero ahora el número
+describe al modelo que apuesta.
+
+Comprobado que la comprobación sirve: con el signo de la línea de la NFL invertido a
+propósito, compararla con el umbral cazaba 1 de las 4 bandas rotas; compararla con lo
+prometido caza las 4.
+
+#### Y un fallo de escritura que borraba tres deportes
+
+`experiments/calibration.json` lo escriben cuatro procesos, y `study:calibration`
+construía el suyo desde cero: correrlo **borraba** tenis, baloncesto y béisbol (medido:
+cinco deportes antes, dos después). Sin calibración el sizing falla cerrado, así que el
+banco de papel dejaba de apostar en tres deportes sin avisar de la causa. Ahora
+`writeCalibration` mezcla por deporte, y `verify:data` exige los cinco.
 
 ### Se buscó una mejora más y no la hay: diez parámetros barridos, cero candidatos
 
