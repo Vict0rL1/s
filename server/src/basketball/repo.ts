@@ -5,7 +5,8 @@
 // side, where that OR let SQLite choose a full scan of the league and turned a
 // 5 ms prediction into 600 ms.
 
-import { getDb, getMeta } from '../db.ts';
+import { getDb, getMeta, setMeta } from '../db.ts';
+import { loadGames, replayGames } from './ratings.ts';
 import { freshFilter } from '../freshness.ts';
 import { HOME_ADVANTAGE, INITIAL_ELO, MARGIN_SIGMA } from './elo.ts';
 import type {
@@ -282,7 +283,22 @@ export function getMarginSigma(league: LeagueId): number {
 export function getHomeAdvantage(league: LeagueId): number {
   const raw = getMeta(`bb_home_adv_${league}`);
   const n = Number(raw);
-  return raw && Number.isFinite(n) ? n : HOME_ADVANTAGE;
+  if (raw && Number.isFinite(n)) return n;
+  // Una base descargada antes de que existiera la clave no la tiene, y esperar a que
+  // alguien corra `update-data:bb` para dejar de inflar al local siete puntos sería
+  // pedirle al usuario que se acuerde de algo que no sabe que existe. Se calcula aquí
+  // una vez —una reproducción, un segundo— y se guarda.
+  if (raw == null) {
+    const games = loadGames(league);
+    if (games.length > 0) {
+      let aprendida = HOME_ADVANTAGE;
+      replayGames(games, { onEnd: ({ homeAdvantage }) => (aprendida = homeAdvantage) });
+      const r = Math.round(aprendida * 10) / 10;
+      setMeta(`bb_home_adv_${league}`, String(r));
+      return r;
+    }
+  }
+  return HOME_ADVANTAGE;
 }
 
 /** Full team dossier for the UI. */
