@@ -17,6 +17,7 @@ import {
   CALIBRATION_SCALE,
   ELO_PER_POINT,
   HOME_ADVANTAGE,
+  HOME_ADV_RATE,
   INITIAL_ELO,
   K_FACTOR,
   SEASON_CARRYOVER,
@@ -53,7 +54,12 @@ export interface TeamState {
 }
 
 export interface ReplayOptions {
+  /** Ventaja de campo INICIAL; con `homeAdvRate` > 0 se aprende desde ahí. */
   homeAdvantage?: number;
+  /** Cuánto se mueve la ventaja de campo por partido (ver HOME_ADV_RATE). */
+  homeAdvRate?: number;
+  /** Al terminar, con la ventaja de campo aprendida: la que debe usar el vivo. */
+  onEnd?: (info: { homeAdvantage: number }) => void;
   movWeight?: number;
   restWeight?: number;
   carryover?: number;
@@ -80,6 +86,8 @@ export interface ReplayOptions {
     probHome: number;
     /** Expected home margin in points. */
     predictedMargin: number;
+    /** La ventaja de campo con la que se predijo ESTE partido. */
+    homeAdvantage: number;
   }) => void;
 }
 
@@ -115,7 +123,8 @@ export function replayGames(
   games: ReplayGame[],
   opts: ReplayOptions = {},
 ): Map<string, TeamState> {
-  const homeAdv = opts.homeAdvantage ?? HOME_ADVANTAGE;
+  let homeAdv = opts.homeAdvantage ?? HOME_ADVANTAGE;
+  const homeAdvRate = opts.homeAdvRate ?? HOME_ADV_RATE;
   const movWeight = opts.movWeight ?? 1;
   const restWeight = opts.restWeight ?? 1;
   const carry = opts.carryover ?? SEASON_CARRYOVER;
@@ -171,6 +180,7 @@ export function replayGames(
           homeAdvantage: homeAdv,
           eloPerPoint,
         }),
+        homeAdvantage: homeAdv,
       });
     }
 
@@ -186,6 +196,10 @@ export function replayGames(
     const shift = k * movMultiplier(margin, eloDiffWinner, movWeight) * ((homeWon ? 1 : 0) - expHome);
     home.elo += shift;
     away.elo -= shift;
+    // La ventaja de campo aprende del mismo error que los ratings, pero de TODOS los
+    // partidos a la vez: si los locales ganan menos de lo esperado liga entera, no es
+    // cosa de un equipo, es que la cancha vale menos. Un partido neutral no dice nada.
+    if (!neutral) homeAdv += homeAdvRate * ((homeWon ? 1 : 0) - expHome);
 
     home.games++;
     away.games++;
@@ -212,6 +226,7 @@ export function replayGames(
     }
   }
 
+  opts.onEnd?.({ homeAdvantage: homeAdv });
   return states;
 }
 
@@ -250,7 +265,11 @@ export function recomputeBasketballRatings(): Record<string, number> {
     if (games.length === 0) continue;
     // Scoring averages from the last 3 seasons present in the data.
     const latest = games[games.length - 1].season;
-    const states = replayGames(games, { scoringFromSeason: latest - 2 });
+    let homeAdv: number | null = null;
+    const states = replayGames(games, {
+      scoringFromSeason: latest - 2,
+      onEnd: ({ homeAdvantage }) => (homeAdv = homeAdvantage),
+    });
 
     db.exec('BEGIN');
     try {
@@ -275,6 +294,9 @@ export function recomputeBasketballRatings(): Record<string, number> {
     // full replay of 86k games.
     const sigma = measureMarginSigma(league as LeagueId);
     setMeta(`bb_margin_sigma_${league}`, sigma == null ? '' : String(sigma));
+    // La ventaja de campo aprendida al final del archivo: la que tiene que usar el
+    // próximo partido. Sin esto, el vivo usaría la de 1947 (ver HOME_ADV_RATE).
+    setMeta(`bb_home_adv_${league}`, homeAdv == null ? '' : String(Math.round(homeAdv * 10) / 10));
     out[league] = states.size;
   }
   return out;

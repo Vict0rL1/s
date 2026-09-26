@@ -27,7 +27,6 @@ import {
   marginBands,
   overProbability,
   restAdjustment,
-  HOME_ADVANTAGE,
   LONG_LAYOFF_DAYS,
   TOTAL_SIGMA,
   type MarginBand,
@@ -44,6 +43,7 @@ import {
   getLastGameDate,
   getLeagueAverageScore,
   getLeagueLatestDate,
+  getHomeAdvantage,
   getMarginSigma,
   getMeetings,
   getRating,
@@ -397,16 +397,18 @@ export function buildGamePrediction(
 
   const homeAdj = home.elo + home.restAdjustment;
   const awayAdj = away.elo + away.restAdjustment;
+  // La ventaja de campo APRENDIDA, no la constante: ver HOME_ADV_RATE.
+  const homeAdvantage = getHomeAdvantage(league);
 
   // Round once and derive the complement, so the two sides always sum to exactly
   // 100.0% at the precision shown.
   const probHome = round5(
-    calibratedHomeWinProbability(homeAdj, awayAdj, { neutral, homeAdvantage: HOME_ADVANTAGE }),
+    calibratedHomeWinProbability(homeAdj, awayAdj, { neutral, homeAdvantage }),
   );
   const probAway = round5(1 - probHome);
 
   const margin = round1(
-    expectedMargin(homeAdj, awayAdj, { neutral, homeAdvantage: HOME_ADVANTAGE }),
+    expectedMargin(homeAdj, awayAdj, { neutral, homeAdvantage }),
   );
   const leagueAvg = getLeagueAverageScore(league);
   const points = expectedPoints(
@@ -456,7 +458,7 @@ export function buildGamePrediction(
   const marketComparison = compareToMarket(probHome, marketProbs);
 
   const ratingGap = round1(home.elo - away.elo);
-  const homeCourt = neutral ? 0 : HOME_ADVANTAGE;
+  const homeCourt = neutral ? 0 : homeAdvantage;
   const restGap = round1(home.restAdjustment - away.restAdjustment);
   const factors: ReasoningFactor[] = [
     { key: 'rating', label: 'Elo (nivel del equipo)', pointsForHome: ratingGap },
@@ -507,8 +509,11 @@ export function buildGamePrediction(
   bullets.push(
     neutral
       ? `Cancha neutral: no se aplica ventaja de campo.`
-      : `${home.name} juega en casa, lo que vale ${HOME_ADVANTAGE} puntos de Elo ` +
-        `(en la NBA el local gana ~60% de los partidos).`,
+      : `${home.name} juega en casa, lo que vale ${Math.round(homeAdvantage)} puntos de Elo ` +
+        // Del número y no de una frase fija: la frase antigua decía «~60 %», que era
+        // la NBA de hace veinte años y justo el error que la ventaja aprendida corrige.
+        `(entre dos equipos iguales, el local ganaría el ${Math.round(100 / (1 + Math.pow(10, -homeAdvantage / 400)))} %; ` +
+        'se aprende de los resultados y ha bajado mucho en la última década).',
   );
 
   bullets.push(

@@ -7,7 +7,7 @@
 
 import { getDb, getMeta } from '../db.ts';
 import { freshFilter } from '../freshness.ts';
-import { INITIAL_ELO, MARGIN_SIGMA } from './elo.ts';
+import { HOME_ADVANTAGE, INITIAL_ELO, MARGIN_SIGMA } from './elo.ts';
 import type {
   GameRow,
   LeagueId,
@@ -269,6 +269,20 @@ export function getMarginSigma(league: LeagueId): number {
   const raw = getMeta(`bb_margin_sigma_${league}`);
   const n = Number(raw);
   return raw && Number.isFinite(n) && n > 0 ? n : MARGIN_SIGMA;
+}
+
+/**
+ * La ventaja de campo que usa el vivo: la aprendida al final de la reproducción.
+ *
+ * La escribe `recomputeBasketballRatings`. Sin ella —ratings sin recalcular desde que
+ * existe la clave— cae a la constante, que es el punto de partida y NO lo que vale hoy:
+ * con la NBA actual eso infla al local unos siete puntos. Por eso `verify:data` avisa
+ * si falta.
+ */
+export function getHomeAdvantage(league: LeagueId): number {
+  const raw = getMeta(`bb_home_adv_${league}`);
+  const n = Number(raw);
+  return raw && Number.isFinite(n) ? n : HOME_ADVANTAGE;
 }
 
 /** Full team dossier for the UI. */

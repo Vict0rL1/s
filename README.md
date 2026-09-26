@@ -163,8 +163,8 @@ una calibración medida, no dimensiona. Eso deja tres situaciones distintas:
 | Deporte | Calibración medida | ¿Apuesta? |
 | --- | --- | --- |
 | **Tenis** | ECE 0,64 pp · 22.062 predicciones | **sí**, tamaño a la mitad |
-| **Fútbol** | ECE 0,72 pp · 71.319 predicciones | **sí**, tamaño a la mitad |
-| **Baloncesto** | ECE 0,77 pp · 85.562 predicciones | **sí**, tamaño a la mitad |
+| **Fútbol** | ECE 0,86 pp · 71.319 predicciones | **sí**, tamaño a la mitad |
+| **Baloncesto** | ECE 0,30 pp · 85.562 predicciones | **sí**, tamaño a la mitad |
 | **Béisbol** | ECE 1,12 pp · 14.337 predicciones | **sí**, tamaño a la mitad |
 | **NFL** | ECE 1,82 pp, y medido **peor que la línea de cierre** | **nunca** |
 
@@ -621,6 +621,17 @@ Detalles y todas las mediciones en **[docs/NFL.md](docs/NFL.md)**.
   local»: 61.6%), Brier 0.2012 y error de margen de 9.2 puntos con sesgo cero. Y comparado contra
   **la predicción que publicó FiveThirtyEight** en esos mismos partidos: empate técnico
   (0.2012 vs 0.2014 de Brier).
+- **La ventaja de campo se aprende, no se fija.** Era una constante de 100 Elo ajustada sobre
+  todo el archivo —sobre todo partidos anteriores a 2011— y la cancha de la NBA vale hoy mucho
+  menos: desde 2021 el modelo decía victoria local un **62,4 %** y pasaba un **55,3 %**, siete
+  puntos inflados en **cada** predicción. Ahora se mueve partido a partido con el mismo error que
+  los ratings (`npm run study:home-bb`): ~120 Elo en los 80, 78 en 2015, **~43 hoy**. La tasa se
+  eligió con temporadas hasta 2020 y se confirmó en 2021+: **log loss −0,0123** (IC95 [−0,0158,
+  −0,0085], p = 0,0005) y sesgo local de **−7,0 a 0,0 pp**. Sobre los 86.000 partidos del
+  archivo: Brier 0,2044 → **0,2034**, ECE 0,77 → **0,30 pp**, y contra FiveThirtyEight en sus
+  58.281 partidos pasa de perder (0,2041 vs 0,2039) a **ganar** (0,2036 vs 0,2039). `verify:data`
+  mide ahora el sesgo local de las temporadas recientes en baloncesto, béisbol y NFL: con la
+  constante vieja, la NBA falla por nueve errores estándar.
 - **Fiabilidad y track record propios**, igual que en tenis — incluida la precisión del margen, que
   es lo que importa si miras el handicap.
 - **Ligas sin fuente de resultados** (EuroLeague, NBL) muestran partidos y probabilidades del
@@ -1938,9 +1949,9 @@ walk-forward, sin tocar el holdout):
 
 | umbral | Tenis | Baloncesto | Fútbol | NFL | Béisbol |
 | --- | --- | --- | --- | --- | --- |
-| 60 %+ | 72,0 % · 13.934 | 73,2 % · 61.874 | 71,0 % · 3.582 | 71,6 % · 4.428 | 64,4 % · 4.595 |
-| 70 %+ | 79,2 % · 7.243 | 78,8 % · 37.941 | 77,2 % · 1.288 | 79,3 % · 2.146 | 70,9 % · 492 |
-| 80 %+ | 86,7 % · 2.813 | 84,9 % · 17.526 | 85,8 % · 309 | 85,2 % · 610 | — |
+| 60 %+ | 72,0 % · 13.934 | 73,6 % · 61.112 | 71,0 % · 3.582 | 71,6 % · 4.428 | 64,4 % · 4.595 |
+| 70 %+ | 79,2 % · 7.243 | 79,4 % · 36.965 | 77,2 % · 1.288 | 79,3 % · 2.146 | 70,9 % · 492 |
+| 80 %+ | 86,7 % · 2.813 | 85,5 % · 16.705 | 85,8 % · 309 | 85,2 % · 610 | — |
 
 El «—» del béisbol no es un hueco: su modelo casi nunca pasa del 80 % (menos de 200
 partidos en todo el archivo), y la tabla lo dice así en vez de enseñar el acierto del 70 %

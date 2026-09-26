@@ -42,6 +42,30 @@ export const MEAN_ELO = 1500;
  */
 export const HOME_ADVANTAGE = 100;
 
+/**
+ * La ventaja de campo se APRENDE: tantos Elo se mueve por cada punto de sorpresa.
+ *
+ * HOME_ADVANTAGE ya no es la ventaja que se usa: es el punto de partida del primer
+ * partido del archivo. La que se usa sale de la reproducción, y la que usa el vivo es
+ * la última aprendida, guardada por liga al recalcular (ver `getHomeAdvantage`).
+ *
+ * Por qué: la constante de 100 estaba ajustada sobre todo el archivo, que son sobre
+ * todo partidos anteriores a 2011, y la cancha de la NBA vale mucho menos que antes.
+ * Victoria local desde 2021: el modelo decía 62,4 %, pasaba 55,3 % — siete puntos,
+ * doce errores estándar, en CADA predicción. `npm run study:home-bb`:
+ *
+ *   tasa elegida con temporadas ≤ 2020     1 (rejilla 0–8; 0 = la constante)
+ *   log loss 2021+ contra la constante     −0,0123, IC95 [−0,0158, −0,0085], p 0,0005
+ *   sesgo local 2021+                      −7,01 pp → −0,02 pp
+ *   ventaja aprendida                      ~120 en los 80 · 78 en 2015 · ~43 hoy
+ *
+ * Con tasa 1 un solo partido la mueve como mucho un Elo; hace falta una temporada
+ * entera de sorpresas en el mismo sentido para moverla treinta. Es lo bastante lenta
+ * para no perseguir el ruido y lo bastante rápida para que 2020 no tardara un lustro
+ * en notarse.
+ */
+export const HOME_ADV_RATE = 1;
+
 /** Base K-factor, before the margin multiplier. */
 export const K_FACTOR = 20;
 

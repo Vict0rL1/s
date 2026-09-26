@@ -857,6 +857,12 @@ function auditProvenance(): void {
       `${nbaGames.toLocaleString('es')} partidos en la base pero sin bb_margin_sigma_nba: ` +
         'el hándicap saldría con la σ de reserva',
     );
+    check(
+      'baloncesto: ventaja de campo aprendida presente para la NBA',
+      !!getMeta('bb_home_adv_nba'),
+      `${nbaGames.toLocaleString('es')} partidos en la base pero sin bb_home_adv_nba: ` +
+        'las predicciones usarían la constante de partida, que infla al local ~7 puntos',
+    );
   }
   console.log(`  ${n} deportes con datos comprobados`);
 }

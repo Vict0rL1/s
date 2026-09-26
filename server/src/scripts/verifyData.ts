@@ -66,6 +66,12 @@ import { getDcParams } from '../football/bayes/repo.ts';
 import { FINAL_HOLDOUT_FROM } from '../experiments/holdout.ts';
 import { normalCdf, MARGIN_SIGMA as NFL_MARGIN_SIGMA } from '../nfl/model.ts';
 import { recomputeBaseballRatings } from '../baseball/ratings.ts';
+import { loadGames as loadBbGames, replayGames as replayBbGames } from '../basketball/ratings.ts';
+import { getHomeAdvantage } from '../basketball/repo.ts';
+import { runBacktest as runBaseballBacktest } from '../baseball/backtest.ts';
+import { listGamesWithMarket as listNflGames } from '../nfl/repo.ts';
+import { replayGames as replayNflGames } from '../nfl/ratings.ts';
+import { buildDistribution as nflDistribution, outcomeProbabilities as nflOutcomes } from '../nfl/model.ts';
 import { applyPlatt, fitPlatt } from '../postprocess/platt.ts';
 import { applyIsotonic, fitIsotonic } from '../postprocess/isotonic.ts';
 import { blend, disagreement } from '../postprocess/blend.ts';
@@ -1228,6 +1234,111 @@ function auditCalibrationFile(): void {
     }
   }
   console.log(`  ${Object.keys(cal).length} deportes · ${esperados.filter((d) => cal[d]?.bands).length} con bandas de confianza`);
+}
+
+/**
+ * ¿Sigue valiendo la ventaja de campo lo que el modelo cree?
+ *
+ * La NBA estuvo años inflando al local siete puntos en CADA predicción: la constante
+ * se ajustó sobre un archivo que es sobre todo anterior a 2011, y la cancha vale hoy
+ * mucho menos. Ninguna comprobación miraba eso — el ECE global salía bien porque las
+ * décadas viejas, bien predichas, tapaban a las recientes. Esto mira SOLO las
+ * temporadas recientes, que son las que se parecen al partido de mañana.
+ *
+ * Tolerancia: tres errores estándar. Con la constante vieja la NBA fallaba por doce.
+ */
+function auditHomeBias(): void {
+  console.log('\n▸ La ventaja de campo, en las temporadas recientes');
+  // Con sumas y no con listas: el béisbol solo expone sus cubetas, y la media no
+  // necesita más que eso.
+  const medir = (nombre: string, n: number, sumaP: number, sumaY: number): void => {
+    if (n < 500) {
+      console.log(`  ${nombre}: ${n} partidos recientes — muy pocos para medir, saltado`);
+      return;
+    }
+    const dice = sumaP / n;
+    const pasa = sumaY / n;
+    const se = Math.sqrt((pasa * (1 - pasa)) / n);
+    console.log(
+      `  ${nombre}: local dice ${(dice * 100).toFixed(1)} %, pasa ${(pasa * 100).toFixed(1)} % sobre ${n.toLocaleString('es')}`,
+    );
+    check(
+      `${nombre}: la ventaja de campo no está desfasada`,
+      Math.abs(pasa - dice) <= 3 * se,
+      `sesgo ${((pasa - dice) * 100).toFixed(2)} pp = ${((pasa - dice) / se).toFixed(1)} errores estándar`,
+    );
+  };
+
+  // Baloncesto: las tres últimas temporadas, con la ventaja APRENDIDA de la reproducción.
+  {
+    const games = loadBbGames('nba', 0);
+    if (games.length > 0) {
+      const desde = games[games.length - 1].season - 2;
+      const ps: number[] = [];
+      const ys: number[] = [];
+      let aprendida = 0;
+      replayBbGames(games, {
+        onGame: ({ game, home, away, probHome }) => {
+          if (game.season < desde || home.games < 20 || away.games < 20) return;
+          if (game.home_pts === game.away_pts) return;
+          ps.push(probHome);
+          ys.push(game.home_pts > game.away_pts ? 1 : 0);
+        },
+        onEnd: ({ homeAdvantage }) => (aprendida = homeAdvantage),
+      });
+      medir('baloncesto NBA', ps.length, ps.reduce((a, b) => a + b, 0), ys.reduce((a, b) => a + b, 0));
+      // Y que el vivo use la misma que la reproducción: si la meta falta o se quedó
+      // vieja, la tarjeta volvería a la constante de 1947.
+      check(
+        'baloncesto NBA: el vivo usa la ventaja aprendida',
+        Math.abs(getHomeAdvantage('nba') - aprendida) < 1,
+        `vivo ${getHomeAdvantage('nba')} · reproducción ${aprendida.toFixed(1)} — corre update-data:bb`,
+      );
+    }
+  }
+  // Béisbol: desde hace tres temporadas.
+  {
+    const bands = new Map<string, { n: number; pred: number; obs: number }>();
+    const ultima = (
+      getDb().prepare('SELECT MAX(season) AS s FROM bsb_games').get() as { s: number | null } | undefined
+    )?.s;
+    if (ultima) {
+      runBaseballBacktest({ fromSeason: ultima - 3, bands });
+      let n = 0;
+      let p = 0;
+      let y = 0;
+      for (const b of bands.values()) {
+        n += b.n;
+        p += b.pred;
+        y += b.obs;
+      }
+      medir('béisbol', n, p, y);
+    }
+  }
+  // NFL: las cinco últimas temporadas (la NFL juega pocos partidos por año).
+  {
+    const games = listNflGames('nfl') as unknown as { season: number }[];
+    if (games.length > 0) {
+      const desde = Math.max(...games.map((g) => g.season)) - 4;
+      const ps: number[] = [];
+      const ys: number[] = [];
+      replayNflGames(games as never, {
+        onGame: ({ game, expectedMargin, expectedTotal }: {
+          game: { season: number; home_points: number; away_points: number };
+          expectedMargin: number;
+          expectedTotal: number;
+        }) => {
+          if (game.season < desde) return;
+          const m = game.home_points - game.away_points;
+          if (m === 0) return;
+          const o = nflOutcomes(nflDistribution(expectedMargin, expectedTotal));
+          ps.push(o.home / (o.home + o.away));
+          ys.push(m > 0 ? 1 : 0);
+        },
+      } as never);
+      medir('NFL', ps.length, ps.reduce((a, b) => a + b, 0), ys.reduce((a, b) => a + b, 0));
+    }
+  }
 }
 
 function auditPaperBankroll(): void {
@@ -3658,6 +3769,7 @@ function main(): void {
   auditStaking();
   auditPaperBankroll();
   auditCalibrationFile();
+  auditHomeBias();
   auditDixonColes();
   auditPostprocess();
   auditThinMarkets();
