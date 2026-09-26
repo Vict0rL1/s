@@ -1,0 +1,56 @@
+# Cómo corre la app en Fly.io.
+#
+# Cambia `app` por el nombre que elijas: es único en todo Fly y decide tu URL
+# (https://<app>.fly.dev). `fly launch` lo rellena solo la primera vez.
+
+app = "sports-predictor"
+primary_region = "mad"          # Madrid. Cámbialo al aeropuerto que te pille cerca.
+
+[build]
+  dockerfile = "Dockerfile"
+
+# ---------------------------------------------------------------------------
+# EL DISCO
+# ---------------------------------------------------------------------------
+# Aquí vive tennis.db. Es lo único que sobrevive a un despliegue: la imagen se
+# reemplaza entera, el volumen no. Sin esto, cada `fly deploy` borraría el registro
+# de apuestas y todo lo actualizado.
+#
+# 3 GB para una base de 37 MB no es exceso: `update-all` descarga ~100 MB de
+# ficheros temporales a data/raw mientras trabaja, y quedarse sin espacio a mitad
+# de una actualización deja la base a medio escribir.
+[[mounts]]
+  source = "datos"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true            # Sin esto, la contraseña viajaría en claro por HTTP.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # La máquina se duerme sin visitas y despierta con la primera petición (unos
+  # segundos). Es lo que mantiene el coste cerca de cero para una app que usa una
+  # persona: no se paga por estar parada.
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 20
+    hard_limit = 25
+
+# Fly pide esta ruta para saber si la máquina vive. Va sin contraseña a propósito
+# (ver server/src/auth.ts): si respondiera 401, Fly la daría por muerta y la
+# reiniciaría en bucle.
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "20s"
+  method = "GET"
+  path = "/healthz"
+
+[[vm]]
+  # 1 GB. El ajuste del modelo de puntos recorre 58.000 observaciones en memoria y
+  # con 256 MB el proceso muere sin explicación clara (OOM killer).
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
