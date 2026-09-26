@@ -35,10 +35,25 @@ export const INITIAL_ELO = 1500;
 export const MEAN_ELO = 1500;
 
 /**
- * Home advantage in Elo points. Football's home edge is large and slow-moving;
- * fitted on real league matches (see the backtest).
+ * Home advantage in Elo points.
+ *
+ * Era 65, y sobraban 30. El Elo decía victoria local un 46 % de las veces y pasaba un
+ * 43 %, en las seis temporadas del archivo y en 11 de 14 ligas: la ventaja de campo
+ * del fútbol ha bajado (y bajó de golpe con los estadios vacíos de 2020), y una
+ * constante elegida con datos más viejos no se entera. `npm run study:home-elo`:
+ *
+ *   elegido con temporadas < 2025         35 (rejilla 25–65)
+ *   sesgo local en 2025, fuera de muestra −2,62 pp (3,6 EE) → +0,88 pp (1,2 EE)
+ *   log loss 1X2 en 2025                  −0,0016, IC95 [−0,0039, +0,0009]
+ *
+ * El log loss solo no habría bastado (p = 0,21). Lo que decide es el sesgo, medido en
+ * una temporada que no se usó para elegir, y que con 65 era real y con 35 es ruido.
+ *
+ * En vivo esto solo mueve los partidos que el Dixon-Coles no conoce —los de un recién
+ * ascendido, casi todos en las primeras jornadas—, porque el Dixon-Coles estima su
+ * propia ventaja por liga y ya la clavaba (43,4 / 43,1).
  */
-export const HOME_ADVANTAGE = 65;
+export const HOME_ADVANTAGE = 35;
 
 /** Base K-factor. Football teams play ~38 league matches a season, so a single
  * result should move a rating less than in tennis but more than in the NBA. */
@@ -91,7 +106,8 @@ export const GOAL_SENSITIVITY = 0.32;
  * Share of a league's total goals scored by the home side.
  *
  * NOTE this and HOME_ADVANTAGE both encode the home edge, so they are
- * substitutes: raising one wants the other lowered. Fitted jointly (the optimum
+ * substitutes: raising one wants the other lowered. (HOME_ADVANTAGE bajó después a
+ * 35 con este reparto fijo — ver arriba.) Fitted jointly (the optimum
  * is a flat ridge); 65 Elo + 0.52 was chosen over equally-scoring pairs because
  * it keeps the home edge as an explicit Elo quantity the breakdown can show,
  * with the goal split carrying only the residual.

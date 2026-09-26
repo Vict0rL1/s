@@ -509,7 +509,7 @@ equivalente, con ese aviso.
   partidos. La salida es la **distribución completa de marcadores**, y de ahí se derivan el 1X2, el
   over/under, el «ambos marcan» y los hándicaps — no hay un modelo por mercado.
 - **Modelo verificado sobre 20.824 partidos reales** de 14 ligas, sin puntuar el holdout:
-  **RPS 0.2077** frente a 0.2230 de la referencia, y una calibración del empate que pasó de errar
+  **RPS 0.2076** frente a 0.2230 de la referencia, y una calibración del empate que pasó de errar
   5–8 pp a **±1,4 pp**. Contra el Elo anterior gana en el marcador exacto (p = 0,0005) y en el
   hándicap, pero **no de forma medible en el 1X2** (p = 0,054): la mejora está en la forma de la
   distribución de goles, no en acertar quién gana. Está escrito así en la ficha de la app.
@@ -518,6 +518,16 @@ equivalente, con ese aviso.
   resultado negativo se pueda reproducir en vez de tener que creérselo. Que el ataque/defensa sí
   funcione dentro del Dixon-Coles y no como corrección del Elo no es una contradicción: allí son los
   parámetros que se ajustan, aquí eran un parche multiplicativo sobre un número que ya los resumía.
+- **El Elo de respaldo tenía la ventaja de campo de otra época.** El Elo —que solo decide los
+  partidos de un recién ascendido, porque el Dixon-Coles aún no lo conoce— usaba +65 puntos por
+  jugar en casa y decía victoria local un 46 % de las veces cuando pasaba un 43 %, en las seis
+  temporadas y en 11 de 14 ligas. Elegido de nuevo solo con temporadas anteriores a 2025
+  (`npm run study:home-elo`): **+35**. En 2025, que no se usó para elegir, el sesgo pasa de
+  **−2,6 pp (3,6 errores estándar)** a **+0,9 pp (1,2, ruido)**. El log loss mejora
+  (−0,0016) pero sin significación propia (p = 0,21), y así consta en el registro: lo que decide
+  es el sesgo medido fuera de muestra, no el log loss. El backtest publicado pasa de 1,0147 a
+  **1,0143** de log loss. Afecta a pocos partidos al año, pero caen casi todos en las primeras
+  jornadas, que es cuando más se miran.
 - **Información de todos los equipos**: clasificación por Elo con goles a favor y en contra, y ficha
   por equipo (balance global / casa / fuera, puntos, últimos partidos).
 - **Ligas sin fuente de resultados** (Champions) muestran partidos y probabilidades del mercado,
@@ -1928,9 +1938,9 @@ walk-forward, sin tocar el holdout):
 
 | umbral | Tenis | Baloncesto | Fútbol | NFL | Béisbol |
 | --- | --- | --- | --- | --- | --- |
-| 60 %+ | 72,0 % · 13.934 | 73,2 % · 61.874 | 70,3 % · 3.742 | 71,6 % · 4.428 | 64,4 % · 4.595 |
-| 70 %+ | 79,2 % · 7.243 | 78,8 % · 37.941 | 77,1 % · 1.323 | 79,3 % · 2.146 | 70,9 % · 492 |
-| 80 %+ | 86,7 % · 2.813 | 84,9 % · 17.526 | 85,7 % · 315 | 85,2 % · 610 | — |
+| 60 %+ | 72,0 % · 13.934 | 73,2 % · 61.874 | 71,0 % · 3.582 | 71,6 % · 4.428 | 64,4 % · 4.595 |
+| 70 %+ | 79,2 % · 7.243 | 78,8 % · 37.941 | 77,2 % · 1.288 | 79,3 % · 2.146 | 70,9 % · 492 |
+| 80 %+ | 86,7 % · 2.813 | 84,9 % · 17.526 | 85,8 % · 309 | 85,2 % · 610 | — |
 
 El «—» del béisbol no es un hueco: su modelo casi nunca pasa del 80 % (menos de 200
 partidos en todo el archivo), y la tabla lo dice así en vez de enseñar el acierto del 70 %
@@ -1959,7 +1969,9 @@ Dixon-Coles jerárquico que usa la app en 6 de cada 7 partidos:
 
 El Elo sobreestima la ventaja de campo en tres puntos; el Dixon-Coles la ajusta por liga y
 con decaimiento temporal y la clava. El ECE que lee el sizing también venía del Elo
-(0,720 pp); medido sobre el camino real es **0,683 pp**. El banco de papel no cambia —en
+(0,720 pp); medido sobre el camino real es **0,683 pp** (0,856 tras bajar la ventaja de campo
+del Elo a 35 — ver la sección del fútbol: con cubetas de 5 puntos sobre los 3.461 partidos del
+Elo el ECE es ruidoso, y por cubetas de 10 puntos y por log loss el cambio mejora). El banco de papel no cambia —en
 fútbol ya estaba topado a la mitad por no tener cuotas históricas—, pero ahora el número
 describe al modelo que apuesta.
 
