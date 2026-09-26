@@ -31,6 +31,8 @@ import {
   REST_MAX_PENALTY,
 } from '../model/elo.ts';
 import { computeForm, type FormResult } from '../model/form.ts';
+import { H2H_MAX_DELTA, SHRINK_K } from '../model/h2h.ts';
+import { SURFACE_WEIGHT } from '../model/predict.ts';
 import { computeReliability } from '../model/reliability.ts';
 import { VALUE_THRESHOLD } from '../model/market.ts';
 import { readCalibration, writeCalibration } from '../staking/calibration.ts';
@@ -62,10 +64,12 @@ interface State {
   lastDate: string | null; // date of their previous match, for staleness
 }
 
-const SURFACE_WEIGHT = 0.5; // must match model/predict.ts
+// Importados y no copiados. Antes estaban escritos aquí a mano, con un «must match
+// model/predict.ts» al lado: una promesa que nada comprobaba. El backtest solo vale si
+// mide la aritmética del vivo, y la forma de garantizarlo es que no haya dos números.
 const FORM_WEIGHT = 1;
-const H2H_MAX = 35;
-const H2H_SHRINK = 4;
+const H2H_MAX = H2H_MAX_DELTA;
+const H2H_SHRINK = SHRINK_K;
 
 function fresh(): State {
   return {
@@ -186,6 +190,10 @@ function main() {
     let modelRightOnDisagreement = 0;
     // Calibration buckets by predicted probability of the *predicted winner*.
     const buckets = new Map<string, { n: number; pred: number; won: number }>();
+    // La misma calibración, POR AÑO. El agregado de 22.000 partidos puede tapar una
+    // deriva reciente: en la NBA, las décadas viejas bien predichas escondieron durante
+    // años que el modelo inflaba al local siete puntos en las temporadas actuales.
+    const porAnio = new Map<string, { n: number; pred: number; won: number; ll: number }>();
     // Does the reliability tier shown in the UI mean anything? Score each tier
     // separately: if the label is informative, "low" must be measurably worse.
     const tiers = new Map<string, { n: number; correct: number; brier: number; margin: number }>();
@@ -259,6 +267,15 @@ function main() {
         // Calibration on the favourite's probability.
         const pFav = Math.max(pWinnerWins, 1 - pWinnerWins);
         const favWon = pWinnerWins >= 0.5 ? 1 : 0;
+        {
+          const y = String(m.tourney_date).slice(0, 4);
+          const a = porAnio.get(y) ?? { n: 0, pred: 0, won: 0, ll: 0 };
+          a.n++;
+          a.pred += pFav;
+          a.won += favWon;
+          a.ll += -Math.log(Math.max(pWinnerWins, 1e-15));
+          porAnio.set(y, a);
+        }
         const lo = Math.min(0.95, Math.floor(pFav * 10) / 10);
         const bk = `${(lo * 100).toFixed(0)}–${((lo + 0.1) * 100).toFixed(0)}%`;
         const b = buckets.get(bk) ?? { n: 0, pred: 0, won: 0 };
@@ -423,6 +440,17 @@ function main() {
           `  Partidos donde el favorito pasa del 80 %: ${lopsided} de ${scored} (${((lopsided / scored) * 100).toFixed(1)} %).\n` +
           `  Para acertar el 80 % habría que acertar casi todos los igualados, que es lo que\n` +
           `  significa «igualado»: que no se sabe.`,
+      );
+    }
+
+    console.log('\nPor año (favorito: promete / acierta · log loss):');
+    for (const [y, a] of [...porAnio.entries()].sort()) {
+      const d = (a.won - a.pred) / a.n;
+      const se = Math.sqrt(((a.won / a.n) * (1 - a.won / a.n)) / a.n);
+      console.log(
+        `  ${y}  n=${String(a.n).padStart(5)}  promete ${((a.pred / a.n) * 100).toFixed(1)}%  ` +
+          `acierta ${((a.won / a.n) * 100).toFixed(1)}%  (${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)} pp, ` +
+          `${(d / se).toFixed(1)} EE)  log loss ${(a.ll / a.n).toFixed(4)}`,
       );
     }
 

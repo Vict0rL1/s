@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 export const H2H_MAX_DELTA = 35;
-const SHRINK_K = 4; // meetings needed before H2H carries ~half its weight
+export const SHRINK_K = 4; // meetings needed before H2H carries ~half its weight
 
 export interface H2HMeeting {
   date: string; // YYYYMMDD

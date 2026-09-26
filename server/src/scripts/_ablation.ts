@@ -51,7 +51,9 @@ import {
   CALIBRATION_SCALE_BO5,
   REST_MAX_PENALTY,
 } from '../model/elo.ts';
-import { FORM_MAX_DELTA, type FormResult } from '../model/form.ts';
+import { DECAY, FORM_MAX_DELTA, FORM_WINDOW, type FormResult } from '../model/form.ts';
+import { H2H_MAX_DELTA, SHRINK_K } from '../model/h2h.ts';
+import { SURFACE_WEIGHT } from '../model/elo.ts';
 import { recordExperiment, bootstrapP } from '../experiments/registry.ts';
 
 const args = Object.fromEntries(
@@ -78,15 +80,12 @@ const BOOTS = Number(args.boots) || 1000;
 const MIN_BOOTS_PARA_REGISTRAR = 500;
 const WARMUP = 20;
 
-// Los valores publicados. Deben coincidir con model/predict.ts y con backtest.ts, y si
-// alguno cambia allí, este estudio deja de medir el modelo que se sirve.
-const SURFACE_WEIGHT = 0.5;
-const H2H_MAX = 35;
-const H2H_SHRINK = 4;
-// Estas dos están privadas en model/form.ts, así que se replican con su valor y la
-// guarda de fidelidad se encarga de avisar si allí cambian.
-const FORM_WINDOW = 10;
-const FORM_DECAY = 0.85;
+// Los valores publicados, IMPORTADOS del modelo que se sirve: con copias a mano, un
+// cambio allí dejaba a este estudio midiendo otro modelo. La guarda de fidelidad sigue
+// ahí por lo que no son constantes (el orden de los partidos, el calentamiento…).
+const H2H_MAX = H2H_MAX_DELTA;
+const H2H_SHRINK = SHRINK_K;
+const FORM_DECAY = DECAY;
 
 interface Cfg {
   surfaceWeight: number;

@@ -28,7 +28,7 @@
 // is less accurate" is measured rather than asserted.
 // ===========================================================================
 
-import { CALIBRATION_SCALE } from './elo.ts';
+import { CALIBRATION_SCALE, SURFACE_WEIGHT } from './elo.ts';
 
 /**
  * Rating noise in Elo points for a player with a single match. Everything scales
@@ -40,8 +40,6 @@ const ELO_SIGMA_C = 250;
 const STALE_SIGMA_PER_YEAR = 40;
 const STALE_SIGMA_CAP = 120;
 
-/** Must match SURFACE_WEIGHT in predict.ts: half the rating comes from the surface. */
-const SURFACE_WEIGHT = 0.5;
 
 /** Below this many effective matches a rating is barely more than a guess. */
 const MIN_MATCHES_FOR_ANY_CONFIDENCE = 10;

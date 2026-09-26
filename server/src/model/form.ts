@@ -10,8 +10,8 @@
 
 /** Max Elo points form can add or subtract. Keeps it a nudge, not a takeover. */
 export const FORM_MAX_DELTA = 40;
-const FORM_WINDOW = 10; // matches considered
-const DECAY = 0.85; // weight multiplier per step further back in time
+export const FORM_WINDOW = 10; // matches considered
+export const DECAY = 0.85; // weight multiplier per step further back in time
 
 export interface FormResult {
   won: boolean;

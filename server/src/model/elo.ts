@@ -356,3 +356,17 @@ export function computeRatings(matches: MatchRow[], tour: TourId): ComputedRatin
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
+
+/**
+ * Peso del Elo de superficie frente al general. Medido, no elegido a ojo: ver el barrido
+ * en docs/MODEL.md.
+ *
+ * UN SOLO SITIO. Este número estuvo copiado a mano en cinco: al bajarlo de 0,7 a 0,5 se
+ * quedaron dos atrás —el generador de cuotas de demostración y su consulta de
+ * ordenación—, y la demo describía un modelo que ya no se servía. Se exportó desde
+ * predict.ts, y aun así quedaban dos copias con un «must match» al lado: el backtest (que
+ * es lo que mide el modelo publicado) y el semáforo de fiabilidad. Vive aquí porque
+ * `reliability.ts` no puede importar de `predict.ts` sin un ciclo, y elo.ts lo importan
+ * todos.
+ */
+export const SURFACE_WEIGHT = 0.5;
