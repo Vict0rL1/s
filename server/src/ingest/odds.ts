@@ -1,0 +1,424 @@
+// ===========================================================================
+// ODDS INGESTION  (bookmaker head-to-head odds for upcoming matches)
+// ===========================================================================
+// Provider abstraction with two backends:
+//   • theOddsApi  — live odds from The Odds API (needs ODDS_API_KEY)
+//   • fixtures    — locally generated odds from current Elo, so the dashboard
+//                   still works with no key / offline / out of season
+//
+// Get a FREE key at https://the-odds-api.com (500 requests/month on the free
+// plan). Configure it as ODDS_API_KEY in .env — never hardcode it.
+// ===========================================================================
+
+import { getDb, setMeta } from '../db.ts';
+import { demoKickoffs } from '../demoSchedule.ts';
+import { pruneUpcoming } from '../freshness.ts';
+import { env, tournamentsConfig } from '../config.ts';
+import { decideReason, recordKeyOutcomes, type OddsReason } from '../oddsReason.ts';
+import { listSports, OddsBudgetSkip } from '../oddsQuota.ts';
+import { aggregateH2H, outcomeError, outcomeOk, requestOdds, type KeyOutcome } from '../oddsApi.ts';
+import { expectedScore } from '../model/elo.ts';
+import { SURFACE_WEIGHT } from '../model/predict.ts';
+import type { Surface, TourId } from '../types.ts';
+
+
+interface AggregatedEvent {
+  id: string;
+  commence_time: string;
+  home: string;
+  away: string;
+  price: Record<string, number>; // player name -> consensus (median) decimal odds
+  books: number;
+}
+
+// ---------------------------------------------------------------------------
+// The Odds API backend
+// ---------------------------------------------------------------------------
+
+interface TennisSport {
+  key: string; // e.g. "tennis_atp_wimbledon"
+  title: string; // e.g. "ATP Wimbledon"
+}
+
+/**
+ * Discover the tennis tournaments that are ACTIVE right now. The /sports listing
+ * is free (does not count against the odds quota), so we use it to find whatever
+ * is currently in season instead of hardcoding sport keys — that's how "today's"
+ * real matches show up automatically.
+ */
+async function fetchActiveTennisSports(): Promise<TennisSport[]> {
+  // Shared and cached: five sports were each making this call every cycle. It
+  // is free, but it also carries the quota headers, so going through one place
+  // means the app always knows where it stands.
+  const all = (await listSports()) as any[];
+  return all
+    .filter((s) => s.group === 'Tennis' && s.active && !s.has_outrights)
+    .map((s) => ({ key: s.key as string, title: s.title as string }));
+}
+
+async function fetchLive(sportKey: string, manual: boolean): Promise<{ events: AggregatedEvent[]; outcome: KeyOutcome }> {
+  // Una sola forma de pedir, para los cinco deportes: ver oddsApi.ts. Lanza si el freno
+  // de presupuesto no deja preguntar, o si la respuesta no es una lista de eventos —
+  // nunca devuelve vacío para disimular un error.
+  const r = await requestOdds(sportKey, { manual });
+  const events = r.events.map((ev) => {
+    const agg = aggregateH2H(ev);
+    return {
+      id: ev.id,
+      commence_time: ev.commence_time,
+      home: ev.home_team,
+      away: ev.away_team,
+      price: agg.price,
+      books: agg.books,
+    };
+  });
+  return { events, outcome: outcomeOk(sportKey, r) };
+}
+
+// ---------------------------------------------------------------------------
+// Player-name resolution (odds API names → Sackmann player ids)
+// ---------------------------------------------------------------------------
+function normalizeName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // strip accents (combining diacritics)
+    .toLowerCase()
+    .replace(/[.'-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildNameIndex(tour: TourId): Map<string, number> {
+  const rows = getDb()
+    .prepare('SELECT id, name FROM players WHERE tour = ?')
+    .all(tour) as unknown as { id: number; name: string }[];
+  const idx = new Map<string, number>();
+  for (const r of rows) idx.set(normalizeName(r.name), r.id);
+  return idx;
+}
+
+function resolve(idx: Map<string, number>, name: string): number | null {
+  return idx.get(normalizeName(name)) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Fixtures backend (Elo-derived odds when there is no live market)
+// ---------------------------------------------------------------------------
+interface RatedPlayer {
+  id: number;
+  name: string;
+  overall: number;
+  hard: number;
+  clay: number;
+  grass: number;
+}
+
+function topRated(tour: TourId, surface: Surface, limit: number): RatedPlayer[] {
+  const col = surface.toLowerCase(); // hard|clay|grass
+  return getDb()
+    .prepare(
+      `SELECT p.id, p.name, r.overall, r.hard, r.clay, r.grass
+       FROM player_ratings r JOIN players p ON p.tour = r.tour AND p.id = r.player_id
+       WHERE r.tour = ? AND r.matches_played > 0
+       ORDER BY (${SURFACE_WEIGHT} * r.${col} + ${1 - SURFACE_WEIGHT} * r.overall) DESC
+       LIMIT ?`,
+    )
+    .all(tour, limit) as unknown as RatedPlayer[];
+}
+
+function generateFixtures(): number {
+  const db = getDb();
+  // Se vacía SIEMPRE, incluso con la demostración apagada: si no, los partidos
+  // inventados de una pasada anterior sobreviven y la app sigue enseñándolos después
+  // de haberlos desactivado, que es justo lo que se quería evitar.
+  clearUpcoming();
+  // DEMO_FIXTURES=off: no se inventa nada. La tabla se queda vacía a propósito y la
+  // pestaña lo explica con la causa real. Ver `env.demoFixtures` en config.ts.
+  if (!env.demoFixtures) return 0;
+
+  const insert = db.prepare(
+    `INSERT INTO upcoming_matches (
+       id, tour, tournament_id, tournament_name, surface, commence_time,
+       p1_name, p2_name, p1_id, p2_id, p1_odds, p2_odds, books, source, updated_at
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(id) DO UPDATE SET
+       commence_time = excluded.commence_time, p1_odds = excluded.p1_odds,
+       p2_odds = excluded.p2_odds, books = excluded.books,
+       source = excluded.source, updated_at = excluded.updated_at`,
+  );
+  // Plausible kick-off times on the clock, always still ahead. This generator was
+  // missed when the other four were fixed — it is a SECOND demo-fixture builder for
+  // tennis, separate from the one in ingest/seed.ts, and it kept producing
+  // `Date.now() + n hours` (times with stray seconds, ageing into the past). The
+  // audit's "hora de inicio en punto de minuto" check is what found it.
+  const kickoffs = demoKickoffs('tennis', 64);
+  let slot = 0;
+  let count = 0;
+  db.exec('BEGIN');
+  for (const t of tournamentsConfig.tournaments) {
+    for (const tour of t.tours) {
+      const surface = t.surface;
+      const players = topRated(tour, surface, 8);
+      if (players.length < 4) continue;
+      // Pair 1v3, 2v4, 5v7, 6v8 for competitive matchups.
+      const pairs: [RatedPlayer, RatedPlayer][] = [];
+      for (let i = 0; i + 2 < players.length && pairs.length < 3; i += 1) {
+        if (i % 2 === 0) pairs.push([players[i], players[i + 2]]);
+      }
+      pairs.forEach((pair, pi) => {
+        const [a, b] = pair;
+        // La misma mezcla que `predict.ts`, importada y no copiada: las cuotas de
+        // demostración tienen que salir del modelo que la app SIRVE. Si divergen, la
+        // pestaña compara la predicción contra una cuota de otro modelo distinto.
+        const S = SURFACE_WEIGHT;
+        const effA = S * a[surface.toLowerCase() as 'hard'] + (1 - S) * a.overall;
+        const effB = S * b[surface.toLowerCase() as 'hard'] + (1 - S) * b.overall;
+        const pa = expectedScore(effA, effB);
+        const margin = 1.05; // bookmaker overround (~5%): implied probs sum to >1
+        // tiny deterministic bias so market != model exactly
+        const bias = ((a.id + b.id) % 7) / 100 - 0.03;
+        const mp = Math.min(0.9, Math.max(0.1, pa + bias));
+        // The kick-off INSTANT belongs in the id — see the note in football's
+        // generateFixtures. Without it a regenerated slate reuses the same id and
+        // the ON CONFLICT UPDATE drags this morning's match forward to tonight.
+        const kickoff = kickoffs[slot++];
+        insert.run(
+          `fx-${tour}-${t.id}-${kickoff}-${pi}`,
+          tour,
+          t.id,
+          t.name,
+          surface,
+          kickoff,
+          a.name,
+          b.name,
+          a.id,
+          b.id,
+          round2(1 / (mp * margin)),
+          round2(1 / ((1 - mp) * margin)),
+          0,
+          'fixture',
+          new Date().toISOString(),
+        );
+        count++;
+      });
+    }
+  }
+  db.exec('COMMIT');
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+/**
+ * Clear the slate a refresh is about to rewrite — but not the matches from earlier
+ * today.
+ *
+ * This used to be an unconditional `DELETE FROM upcoming_matches`, which is what
+ * made a match played this morning disappear: a feed of UPCOMING matches never
+ * returns one that has already started, so the row was deleted and never came back.
+ * See pruneUpcoming in freshness.ts for the three-way rule.
+ */
+export function clearUpcoming(): void {
+  pruneUpcoming(getDb(), 'upcoming_matches');
+}
+
+/** Which config tournament (if any) a live sport key belongs to. */
+function matchConfigTournament(sportKey: string) {
+  return tournamentsConfig.tournaments.find((t) =>
+    Object.values(t.oddsSportKeys).includes(sportKey),
+  );
+}
+
+/** Derive the tour from a sport key: tennis_atp_* / tennis_wta_*. */
+function tourFromKey(sportKey: string): TourId | null {
+  if (sportKey.includes('_wta')) return 'wta';
+  if (sportKey.includes('_atp')) return 'atp';
+  return null;
+}
+
+/** Best-effort surface for a live event, via config keyword hints (else ''). */
+function guessSurface(sportKey: string, title: string): string {
+  const hints = tournamentsConfig.surfaceHints ?? {};
+  const hay = `${sportKey} ${title}`.toLowerCase();
+  for (const [keyword, surface] of Object.entries(hints)) {
+    if (hay.includes(keyword.toLowerCase())) return surface;
+  }
+  return ''; // unknown → model uses overall Elo
+}
+
+/**
+ * Por qué se están enseñando cuotas de demostración.
+ *
+ * ===========================================================================
+ * TRES CAUSAS QUE SE VEÍAN IGUAL
+ * ===========================================================================
+ * Hasta ahora solo se guardaba QUE se cayó a demo (`odds_source = 'fixture'`), y las tres
+ * causas son distintas y piden cosas distintas:
+ *
+ *   sin_clave     → falta ODDS_API_KEY. Se arregla poniéndola.
+ *   fuente_falla  → la clave está, pero el proveedor no contestó: cuota agotada, clave
+ *                   inválida o sin internet. Poner la clave otra vez no arregla nada.
+ *   sin_eventos   → todo bien, pero no hay tenis en juego. Entre torneos el proveedor no
+ *                   publica nada y no hay nada que arreglar: hay que esperar.
+ *
+ * Sin distinguirlas, el aviso de la pantalla decía siempre «pon tu clave», que es un
+ * consejo equivocado en dos de los tres casos — y el más frustrante, porque manda a
+ * revisar algo que ya está bien.
+ */
+/**
+ * El tenis tenía su propia lista de causas, más corta que la compartida, y por eso no
+ * podía nombrar «presupuesto»: el tipo no lo admitía. Ahora usa la de `oddsReason.ts`,
+ * que es la que leen la pantalla, `npm run odds` y `npm run doctor`.
+ */
+export type FallbackReason = OddsReason;
+
+export async function ingestOdds(manual = false): Promise<{
+  source: 'live' | 'fixture';
+  count: number;
+  reason: FallbackReason;
+  detail?: string;
+}> {
+  if (!env.oddsApiKey) {
+    const count = generateFixtures();
+    return { source: 'fixture', count, reason: 'sin_clave' };
+  }
+
+  const db = getDb();
+  const insert = db.prepare(
+    `INSERT OR REPLACE INTO upcoming_matches (
+       id, tour, tournament_id, tournament_name, surface, commence_time,
+       p1_name, p2_name, p1_id, p2_id, p1_odds, p2_odds, books, source, updated_at
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  );
+
+  // Discover the tournaments that are live right now (free endpoint).
+  let sports: TennisSport[];
+  try {
+    sports = await fetchActiveTennisSports();
+  } catch (e) {
+    process.stderr.write(`  could not list tennis sports: ${(e as Error).message}\n`);
+    const count = generateFixtures();
+    setMeta('odds_fallback_detail', (e as Error).message.slice(0, 200));
+    return { source: 'fixture', count, reason: 'fuente_falla' };
+  }
+
+  const nameIndex: Partial<Record<TourId, Map<string, number>>> = {};
+  clearUpcoming();
+  let total = 0;
+  /** Partidos con al menos un precio: los que de verdad son «cuotas reales». */
+  let conPrecio = 0;
+  /** Qué contestó cada torneo. Ver `KeyOutcome` en oddsApi.ts. */
+  const outcomes: KeyOutcome[] = [];
+
+  for (const sport of sports) {
+    const tour = tourFromKey(sport.key);
+    if (!tour) continue; // skip mixed / unknown circuits
+    const idx = (nameIndex[tour] ??= buildNameIndex(tour));
+
+    let events: AggregatedEvent[] = [];
+    try {
+      const r = await fetchLive(sport.key, manual);
+      events = r.events;
+      outcomes.push(r.outcome);
+    } catch (e) {
+      // Cada fallo queda anotado CON su causa. Antes solo iba a la consola del servidor,
+      // y al final la ingesta llamaba `sin_ligas` a «todos los torneos dieron 401».
+      outcomes.push(outcomeError(sport.key, e, e instanceof OddsBudgetSkip));
+      process.stderr.write(`  ${sport.key}: ${(e as Error).message}\n`);
+      continue;
+    }
+
+    // Map to a configured tournament when possible; otherwise surface the real
+    // event under its own name so nothing is hidden.
+    const conf = matchConfigTournament(sport.key);
+    const tournamentId = conf?.id ?? sport.key;
+    const tournamentName = conf?.name ?? sport.title;
+    // The Odds API doesn't report the surface. Use the config surface, else a
+    // keyword hint, else leave it unknown so the model predicts on overall Elo
+    // (never wrongly assume a surface).
+    const surface = conf?.surface ?? guessSurface(sport.key, sport.title);
+
+    db.exec('BEGIN');
+    for (const ev of events) {
+      const names = Object.keys(ev.price);
+      const p1 = ev.home ?? names[0];
+      const p2 = ev.away ?? names[1];
+      if (!p1 || !p2) continue;
+      insert.run(
+        ev.id,
+        tour,
+        tournamentId,
+        tournamentName,
+        surface,
+        ev.commence_time,
+        p1,
+        p2,
+        resolve(idx, p1),
+        resolve(idx, p2),
+        ev.price[p1] ?? null,
+        ev.price[p2] ?? null,
+        ev.books,
+        'live',
+        new Date().toISOString(),
+      );
+      total++;
+      if (ev.price[p1] != null && ev.price[p2] != null) conPrecio++;
+    }
+    db.exec('COMMIT');
+    if (events.length) process.stdout.write(`  ${sport.key}: ${events.length} events\n`);
+  }
+  recordKeyOutcomes('', outcomes);
+
+  // Nothing live at all → keep a working demo with Elo-derived fixtures.
+  //
+  // «Con precio», no «con evento»: un partido que el proveedor lista sin ninguna casa en
+  // tus regiones no es una cuota real, y contarlo como tal dejaba la pestaña en «live»
+  // con todas las cuotas vacías.
+  if (conPrecio === 0) {
+    const count = generateFixtures();
+    const d = decideReason(outcomes, conPrecio);
+    if (d.reason === 'sin_ligas') {
+      // Si el proveedor no listó ni un torneo que sepamos traducir, la causa NO es «no
+      // hay partidos con precio»: no había a quién preguntar.
+      return {
+        source: 'fixture',
+        count,
+        reason: 'sin_ligas',
+        detail:
+          `el proveedor lista ${sports.length} clave(s) de tenis y ninguna es de un ` +
+          `circuito que sepamos traducir${sports.length ? ': ' + sports.map((s) => s.key).slice(0, 8).join(', ') : ''}`,
+      };
+    }
+    return { source: 'fixture', count, reason: d.reason, detail: `${d.detail} · regiones=${env.oddsRegions}` };
+  }
+  return { source: 'live', count: total, reason: null };
+}
+
+/** Refresh odds and record when it happened. Used by the timer and /api/refresh. */
+export async function refreshOdds(
+  manual = false,
+): Promise<{ source: 'live' | 'fixture'; count: number }> {
+  const result = await ingestOdds(manual);
+  setMeta('odds_source', result.source);
+  setMeta('odds_fallback_reason', result.reason ?? '');
+  setMeta('odds_refreshed_at', new Date().toISOString());
+  // El detalle solo tiene sentido mientras la causa sea esa. Si la siguiente pasada va
+  // bien o cae por otro motivo, dejarlo puesto haría que la pantalla enseñara el mensaje
+  // de un fallo que ya no ocurre.
+  //
+  // `presupuesto` también trae detalle —el número exacto de peticiones y el ritmo que se
+  // ha pasado—, y sin él el aviso diría «me frené» sin decir por cuánto.
+  if (result.reason === 'fuente_falla') {
+    // el detalle de red ya lo dejó puesto la propia ingesta
+  } else if (result.detail) {
+    setMeta('odds_fallback_detail', result.detail.slice(0, 240));
+  } else {
+    setMeta('odds_fallback_detail', '');
+  }
+  return { source: result.source, count: result.count };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}

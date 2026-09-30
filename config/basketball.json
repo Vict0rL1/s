@@ -1,0 +1,72 @@
+{
+  "$comment": "Basketball leagues. Add one by appending an entry — nothing in the model or API hardcodes these ids. `oddsSportKeys` are The Odds API sport keys (upcoming games + bookmaker odds). `espn` is the slug pair used by ESPN's public API for RESULTS and team info; a league without one still shows upcoming games and market probabilities, just no Elo model — the UI says so instead of pretending.",
+  "history": {
+    "$comment": "How many past seasons to ingest by default. Basketball rosters turn over fast, so deep history matters much less than in tennis: 8 seasons is plenty for stable Elo and keeps the ingest quick.",
+    "seasons": 8,
+    "espnBase": "https://site.api.espn.com/apis/site/v2/sports",
+    "$comment_538": "Real NBA game-by-game results 1946–2015 (FiveThirtyEight). Used to FIT and VALIDATE the model on a large real sample, and as a guaranteed-reachable fallback when ESPN is blocked. It stops in 2015, so it is never the source for current ratings on its own.",
+    "fivethirtyeightUrl": "https://raw.githubusercontent.com/fivethirtyeight/data/master/nba-elo/nbaallelo.csv"
+  },
+  "leagues": [
+    {
+      "id": "nba",
+      "name": "NBA",
+      "label": "NBA · Estados Unidos",
+      "country": "US",
+      "oddsSportKeys": ["basketball_nba"],
+      "espn": { "sport": "basketball", "league": "nba" },
+      "quarters": 4,
+      "minutes": 48
+    },
+    {
+      "id": "wnba",
+      "name": "WNBA",
+      "label": "WNBA · Estados Unidos (femenino)",
+      "country": "US",
+      "oddsSportKeys": ["basketball_wnba"],
+      "espn": { "sport": "basketball", "league": "wnba" },
+      "quarters": 4,
+      "minutes": 40
+    },
+    {
+      "id": "ncaab",
+      "name": "NCAA (M)",
+      "label": "NCAA masculino · universitario EEUU",
+      "country": "US",
+      "oddsSportKeys": ["basketball_ncaab", "basketball_ncaab_championship_winner"],
+      "espn": { "sport": "basketball", "league": "mens-college-basketball" },
+      "quarters": 2,
+      "minutes": 40
+    },
+    {
+      "id": "ncaaw",
+      "name": "NCAA (F)",
+      "label": "NCAA femenino · universitario EEUU",
+      "country": "US",
+      "oddsSportKeys": ["basketball_ncaaw"],
+      "espn": { "sport": "basketball", "league": "womens-college-basketball" },
+      "quarters": 4,
+      "minutes": 40
+    },
+    {
+      "id": "euroleague",
+      "name": "EuroLeague",
+      "label": "EuroLeague · Europa",
+      "country": "EU",
+      "oddsSportKeys": ["basketball_euroleague"],
+      "espn": null,
+      "quarters": 4,
+      "minutes": 40
+    },
+    {
+      "id": "nbl",
+      "name": "NBL",
+      "label": "NBL · Australia",
+      "country": "AU",
+      "oddsSportKeys": ["basketball_nbl"],
+      "espn": null,
+      "quarters": 4,
+      "minutes": 40
+    }
+  ]
+}
