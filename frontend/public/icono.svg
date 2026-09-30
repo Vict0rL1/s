@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Análisis Bursátil">
+  <title>Análisis Bursátil</title>
+  <!-- Fondo pizarra, el mismo tono que la barra lateral de la app. -->
+  <rect width="32" height="32" rx="7" fill="#0f172a"/>
+  <!-- Una serie de precios con su caída y su recuperación: la app va de eso,
+       de mirar el recorrido entero y no solo el último punto. -->
+  <polyline points="5,22 10,17 14,19 19,11 23,14 27,7"
+            fill="none" stroke="#38bdf8" stroke-width="2.4"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- El punto de ahora, que es el único que se suele mirar. -->
+  <circle cx="27" cy="7" r="2.6" fill="#38bdf8"/>
+</svg>
