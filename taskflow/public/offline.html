@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sin conexión · TaskFlow</title>
+<!--
+  La página que muestra el service worker cuando no hay red. Autocontenida:
+  sin CSS ni JS de afuera, porque sin conexión no se puede pedir nada.
+
+  Lo que se anota aquí queda en el dispositivo (localStorage, misma cola que
+  usa la barra de captura) y la app lo sube sola al volver la conexión.
+-->
+<style>
+:root{--ground:#FAFAF9;--surface:#FFFFFF;--surface-2:#F3F3F1;--ink:#1A1A19;--ink-2:#63635F;--ink-3:#97978F;--line:#EAEAE6;--accent:#2C4A43;--accent-on:#FFFFFF;color-scheme:light}
+@media (prefers-color-scheme: dark){:root{--ground:#121211;--surface:#1A1A19;--surface-2:#222221;--ink:#E9E9E5;--ink-2:#9A9A94;--ink-3:#6E6E69;--line:#272725;--accent:#8FBFB2;--accent-on:#12201C;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px 16px}
+main{max-width:520px;margin:0 auto}
+h1{font-size:24px;margin:0 0 6px}
+p{color:var(--ink-2);margin:0 0 16px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px}
+.seg{display:flex;gap:2px;background:var(--surface-2);border-radius:7px;padding:2px;margin-bottom:8px;width:max-content}
+.seg button{border:0;background:none;color:var(--ink-2);padding:5px 11px;border-radius:5px;font:inherit;font-size:13px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:600}
+textarea{width:100%;min-height:70px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:inherit;padding:8px}
+.row{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap}
+.btn{background:var(--accent);color:var(--accent-on);border:0;border-radius:7px;padding:7px 14px;font:inherit;font-weight:600;cursor:pointer}
+.btn.line{background:none;color:var(--ink-2);border:1px solid var(--line)}
+ul{list-style:none;padding:0;margin:14px 0 0}
+li{padding:6px 0;border-top:1px solid var(--line);font-size:14px}
+li small{color:var(--ink-3);margin-left:6px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.status{font-size:13px;color:var(--ink-3);min-height:1.5em}
+</style>
+</head>
+<body>
+<main>
+  <h1>Sin conexión</h1>
+  <p>Tus tareas y tu agenda viven en el servidor, así que sin red no se pueden mostrar al día. Lo que anotes aquí se guarda en este dispositivo y se sube solo cuando vuelva la conexión.</p>
+
+  <div class="box">
+    <div class="seg" role="group" aria-label="Tipo">
+      <button type="button" data-mode="tarea" aria-pressed="true">Tarea</button>
+      <button type="button" data-mode="nota" aria-pressed="false">Nota</button>
+    </div>
+    <label for="t" style="position:absolute;left:-9999px">Qué quieres anotar</label>
+    <textarea id="t" placeholder="Leer cap 4 #SFU vie 45m"></textarea>
+    <div class="row">
+      <button class="btn" type="button" id="guardar">Guardar para después</button>
+      <button class="btn line" type="button" id="reintentar">Reintentar conexión</button>
+    </div>
+    <p class="status" id="status" role="status"></p>
+    <ul id="lista" aria-label="Pendientes de subir"></ul>
+  </div>
+</main>
+<script>
+(function () {
+  var KEY = "taskflow.offlineQueue";
+  var modo = "tarea";
+  function leer() { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) { return []; } }
+  function escribir(q) { try { localStorage.setItem(KEY, JSON.stringify(q)); return true; } catch (e) { return false; } }
+  function uid() {
+    if (self.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx".replace(/x/g, function () { return (Math.random() * 16 | 0).toString(16); });
+  }
+  function pintar() {
+    var q = leer(), ul = document.getElementById("lista");
+    ul.innerHTML = "";
+    q.forEach(function (it) {
+      var li = document.createElement("li");
+      li.textContent = it.text;
+      var s = document.createElement("small");
+      s.textContent = it.mode === "nota" ? "nota" : "tarea";
+      li.appendChild(s);
+      ul.appendChild(li);
+    });
+  }
+  document.querySelectorAll(".seg button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      modo = b.getAttribute("data-mode");
+      document.querySelectorAll(".seg button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+    });
+  });
+  document.getElementById("guardar").addEventListener("click", function () {
+    var t = document.getElementById("t"), text = t.value.trim();
+    if (!text) return;
+    var q = leer();
+    q.push({ cid: uid(), text: text.slice(0, 500), mode: modo, at: new Date().toISOString() });
+    document.getElementById("status").textContent = escribir(q)
+      ? "Guardado en este dispositivo. Se sube al volver la conexión."
+      : "Este navegador no deja guardar nada sin conexión.";
+    t.value = "";
+    pintar();
+  });
+  document.getElementById("reintentar").addEventListener("click", function () { location.reload(); });
+  window.addEventListener("online", function () { location.reload(); });
+  pintar();
+})();
+</script>
+</body>
+</html>
