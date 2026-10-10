@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useI18n } from '../../i18n';
 import { DeporteIcono } from '../icons';
+import { useDialogo } from '../ui/useDialogo';
 
 interface Resultado { tipo: 'equipo' | 'jugador' | 'partido' | 'liga' | 'pagina'; sport: string; league: string | null; id: string; etiqueta: string; detalle: string | null; ruta: string }
 
@@ -58,6 +59,9 @@ export default function Buscador() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
+  // Foco atrapado, devuelto al botón y fondo quieto (G11): era aria-modal sin nada de eso.
+  const dialogo = useRef<HTMLDivElement>(null);
+  useDialogo(abierto, () => setAbierto(false), dialogo);
   const ir = (r: Resultado) => {
     setAbierto(false);
     navigate(r.ruta);
@@ -71,7 +75,7 @@ export default function Buscador() {
       </button>
       {abierto && (
         <div className="fixed inset-0 z-[70] bg-black/50 p-4 pt-[10vh]" onClick={() => setAbierto(false)}>
-          <div role="dialog" aria-modal="true" aria-label={t('buscar.titulo')} className="mx-auto w-full max-w-lg rounded-xl border border-(--line) bg-(--surface-card) shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div ref={dialogo} role="dialog" aria-modal="true" aria-label={t('buscar.titulo')} className="mx-auto w-full max-w-lg rounded-xl border border-(--line) bg-(--surface-card) shadow-xl" onClick={(e) => e.stopPropagation()}>
             <input
               ref={input}
               value={q}

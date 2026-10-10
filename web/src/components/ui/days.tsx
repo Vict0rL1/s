@@ -80,7 +80,7 @@ export function DayFilter({
         className={pillClass(selected === null)}
       >
         {t('dias.todos')}
-        <span className="ml-1.5 opacity-60">{total}</span>
+        <span className="ml-1.5 text-(--ink-soft)">{total}</span>
       </button>
       {days.map((d) => (
         <button
@@ -91,7 +91,7 @@ export function DayFilter({
           className={pillClass(selected === d.key)}
         >
           {d.label}
-          <span className="ml-1.5 opacity-60">{d.count}</span>
+          <span className="ml-1.5 text-(--ink-soft)">{d.count}</span>
         </button>
       ))}
     </div>

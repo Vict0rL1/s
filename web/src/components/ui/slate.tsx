@@ -204,7 +204,7 @@ export function SlateTable({
                   umbral === u ? 'bg-(--raised-2) text-(--ink-strong)' : 'text-(--ink-soft) hover:bg-(--raised)'
                 }`}
               >
-                {u === 0 ? t('tabla.todos') : `${u * 100}%+`}
+                {u === 0 ? t('tabla.todos') : `${pctF(u, 0)}+`}
               </button>
             ))}
             {umbral > 0 && (

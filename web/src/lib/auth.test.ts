@@ -36,3 +36,34 @@ test('D6: salir vacía la caché de la API aunque el logout falle', async () => 
     delete g.caches;
   }
 });
+
+test('G4: cerrar desde la lista la sesión ACTUAL también vacía la caché de la API', async () => {
+  const { revocar } = await import('./auth.ts');
+  const original = g.fetch;
+  const borradas: string[] = [];
+  g.caches = { delete: async (n) => (borradas.push(n), true) };
+  g.fetch = (async () => new Response(JSON.stringify({ ok: true, eraLaActual: true }), { headers: { 'content-type': 'application/json' } })) as typeof fetch;
+  try {
+    const r = await revocar(7);
+    assert.equal(r.eraLaActual, true);
+    assert.deepEqual(borradas, [CACHE_API]);
+  } finally {
+    g.fetch = original;
+    delete g.caches;
+  }
+});
+
+test('G4: cerrar OTRA sesión no toca la caché', async () => {
+  const { revocar } = await import('./auth.ts');
+  const original = g.fetch;
+  const borradas: string[] = [];
+  g.caches = { delete: async (n) => (borradas.push(n), true) };
+  g.fetch = (async () => new Response(JSON.stringify({ ok: true, eraLaActual: false }), { headers: { 'content-type': 'application/json' } })) as typeof fetch;
+  try {
+    await revocar(8);
+    assert.deepEqual(borradas, []);
+  } finally {
+    g.fetch = original;
+    delete g.caches;
+  }
+});

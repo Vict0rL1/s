@@ -25,3 +25,21 @@ test('D8: solo la última petición escribe (cambiar dos veces de liga no deja l
   await Promise.all([cargar('laliga', 30), cargar('epl', 5)]);
   assert.deepEqual(escritas, ['epl'], 'la Liga contestó tarde y no pisa a la Premier');
 });
+
+test('G2: el torneo del enlace se conserva mientras no ha llegado la lista de torneos', async () => {
+  const { torneoValido } = await import('./carga.ts');
+  const lista = [{ id: 'australian_open' }, { id: 'wimbledon' }];
+  assert.equal(torneoValido('wimbledon', [], false), 'wimbledon', 'sin lista todavía: no se toca');
+  assert.equal(torneoValido('wimbledon', lista, true), 'wimbledon');
+  assert.equal(torneoValido('no_existe', lista, true), 'australian_open', 'cargada y sin él: el primero');
+  assert.equal(torneoValido(null, lista, true), 'australian_open');
+  assert.equal(torneoValido('wimbledon', [], true), null, 'cargada y vacía: ninguno');
+});
+
+test('G3: solo se pintan las filas de la liga elegida (las de la anterior, mientras carga, no)', async () => {
+  const { filasDeLaLiga } = await import('./carga.ts');
+  const filas = [{ fixture: { league: 'laliga', id: 1 } }, { fixture: { league: 'laliga', id: 2 } }];
+  assert.deepEqual(filasDeLaLiga(filas, (f) => f.fixture.league, 'epl'), []);
+  assert.deepEqual(filasDeLaLiga(filas, (f) => f.fixture.league, 'laliga'), filas);
+  assert.deepEqual(filasDeLaLiga(filas, (f) => f.fixture.league, null), []);
+});

@@ -18,11 +18,12 @@
   --ink-muted: #8b929d;
   /* ≥ 4,5:1 sobre página, tarjeta y relleno (E2 de la revisión del 8 de octubre: era #5c636c, 3:1). */
   --ink-faint: #7f8691;
-  /* Estados como TEXTO: con su fondo teñido al 14 % y sobre la tarjeta pasan de 4,5:1. */
+  /* Estados como TEXTO: con su fondo teñido al 12–14 % pasan de 4,5:1 sobre tarjeta, página,
+     carril y relleno (G6: con el tinte sobre un fondo elevado no llegaban; lib/tokens.test.ts). */
   --status-good: #22b07f;
-  --status-warning: #c98500;
-  --status-critical: #e66767;
-  --status-neutral: #8391a5;
+  --status-warning: #cc8c0f;
+  --status-critical: #e97676;
+  --status-neutral: #8e9bad;
   /* Beneficio y pérdida como TEXTO (las marcas siguen con los hex de theme.ts). */
   --profit-text: #22b07f;
   --loss-text: #e2703f;
@@ -48,10 +49,10 @@
   --ink-soft: #4b525c;
   --ink-muted: #565c68;
   --ink-faint: #636975;
-  --status-good: #0b6e4c;
-  --status-warning: #8a5b00;
-  --status-critical: #b83b3b;
-  --status-neutral: #5b6676;
+  --status-good: #0a6747;
+  --status-warning: #7c5200;
+  --status-critical: #a23434;
+  --status-neutral: #525c6a;
   --profit-text: #0b6e4c;
   --loss-text: #a8401a;
   --seleccion: #8a5b00;
@@ -76,10 +77,10 @@
     --ink-soft: #4b525c;
     --ink-muted: #565c68;
     --ink-faint: #636975;
-    --status-good: #0b6e4c;
-    --status-warning: #8a5b00;
-    --status-critical: #b83b3b;
-    --status-neutral: #5b6676;
+    --status-good: #0a6747;
+    --status-warning: #7c5200;
+    --status-critical: #a23434;
+    --status-neutral: #525c6a;
     --profit-text: #0b6e4c;
     --loss-text: #a8401a;
     --seleccion: #8a5b00;

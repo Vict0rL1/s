@@ -61,6 +61,7 @@ import type {
 // SURFACE_WEIGHT vive en elo.ts (ver allí por qué), y se reexporta desde aquí porque
 // es donde lo buscan los que ya lo importaban.
 import { SURFACE_WEIGHT } from './elo.ts';
+import { num, pct } from '../numeros.ts';
 export { SURFACE_WEIGHT };
 
 export const DISCLAIMER =
@@ -240,7 +241,7 @@ const SURFACE_ES: Record<string, string> = { hard: 'dura', clay: 'arcilla', gras
 
 /** Format a 0..1 probability as a percentage string with one decimal. */
 function pct1(p: number): string {
-  return (p * 100).toFixed(1);
+  return pct(p);
 }
 
 /**
@@ -286,11 +287,11 @@ function buildSummary(args: {
   const topPct = pct1(top.probability);
   const headline =
     confidence === 'toss_up'
-      ? `Partido muy parejo: ligerísima ventaja para ${fav} (${favProb}%–${dogProb}%). ` +
+      ? `Partido muy parejo: ligerísima ventaja para ${fav} (${favProb}–${dogProb}). ` +
         `Cualquiera de los dos puede ganar.`
-      : `Lo más probable: gana ${fav} (${favProb}%). ` +
+      : `Lo más probable: gana ${fav} (${favProb}). ` +
         `El marcador más probable es ${top.label} para ` +
-        `${top.side === 1 ? p1 : p2} (${topPct}%).`;
+        `${top.side === 1 ? p1 : p2} (${topPct}).`;
 
   const bullets: string[] = [];
 
@@ -338,7 +339,7 @@ function buildSummary(args: {
     bullets.push(`Forma: ${[favStreak, dogStreak].filter(Boolean).join('; ')}.`);
   } else {
     bullets.push(
-      `Forma reciente parecida (${Math.round(favForm.winRate * 100)}% vs ${Math.round(dogForm.winRate * 100)}% de victorias).`,
+      `Forma reciente parecida (${pct(favForm.winRate, 0)} vs ${pct(dogForm.winRate, 0)} de victorias).`,
     );
   }
 
@@ -376,7 +377,7 @@ function buildSummary(args: {
     if (Math.abs(diff) >= 3) {
       const better = diff > 0 ? fav : dog;
       bullets.push(
-        `${better} tiene el saque más fuerte (${Math.max(favServe.acePct, dogServe.acePct)}% de aces vs ${Math.min(favServe.acePct, dogServe.acePct)}%).`,
+        `${better} tiene el saque más fuerte (${num(Math.max(favServe.acePct, dogServe.acePct))}\u00a0% de aces vs ${num(Math.min(favServe.acePct, dogServe.acePct))}\u00a0%).`,
       );
     }
   }
@@ -384,8 +385,8 @@ function buildSummary(args: {
   // --- Scoreline shape: how the match is likely to unfold ---
   bullets.push(
     `Probabilidad de que se vaya al set decisivo: ` +
-      `${pct1(args.scorelines.decidingSetProbability)}%; ` +
-      `de que el favorito gane sin ceder sets: ${pct1(args.scorelines.straightSetsProbability)}%.`,
+      `${pct1(args.scorelines.decidingSetProbability)}; ` +
+      `de que el favorito gane sin ceder sets: ${pct1(args.scorelines.straightSetsProbability)}.`,
   );
 
   // --- Tournament history ---
@@ -429,14 +430,14 @@ function buildSummary(args: {
     const gapPp = (modelFav - marketFav) * 100; // percentage points
     const marketFavProb = pct1(marketFav);
     if (Math.abs(gapPp) < VALUE_THRESHOLD * 100) {
-      bullets.push(`Las casas de apuestas coinciden (${marketFavProb}% para ${fav}).`);
+      bullets.push(`Las casas de apuestas coinciden (${marketFavProb} para ${fav}).`);
     } else if (gapPp > 0) {
       bullets.push(
-        `El modelo es más optimista con ${fav} (${favProb}%) que el mercado (${marketFavProb}%): posible value en ${fav}.`,
+        `El modelo es más optimista con ${fav} (${favProb}) que el mercado (${marketFavProb}): posible value en ${fav}.`,
       );
     } else {
       bullets.push(
-        `El mercado ve a ${fav} más favorito (${marketFavProb}%) que el modelo (${favProb}%): el valor estaría en ${dog}.`,
+        `El mercado ve a ${fav} más favorito (${marketFavProb}) que el modelo (${favProb}): el valor estaría en ${dog}.`,
       );
     }
   } else {
@@ -448,7 +449,7 @@ function buildSummary(args: {
   // the confidence of the wording matches the confidence of the data.
   const rel = args.reliability;
   if (rel.level !== 'high') {
-    const band = `${pct1(Math.max(prob1, 1 - prob1))}% ± ${rel.marginPp} pp`;
+    const band = `${pct1(Math.max(prob1, 1 - prob1))} ± ${num(rel.marginPp, 1)} pp`;
     bullets.push(
       `⚠️ ${cap(rel.label)}: tómalo como un rango (${band}) más que como una cifra exacta.` +
         (rel.reasons.length ? ` ${rel.reasons[0]}` : ''),

@@ -82,7 +82,7 @@ export default function Login({ totp, onEntrar }: { totp: boolean; onEntrar: () 
           </>
         )}
         {error && (
-          <p className="mt-3 text-[13px] text-[#e66767]" role="alert">
+          <p className="mt-3 text-[13px] text-(--status-critical)" role="alert">
             {error}
             {espera > 0 && t('login.espera', { s: espera })}
           </p>
@@ -90,7 +90,7 @@ export default function Login({ totp, onEntrar }: { totp: boolean; onEntrar: () 
         <button
           type="submit"
           disabled={enviando || espera > 0}
-          className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#3987e5] px-3 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#4a93ea] disabled:opacity-50"
+          className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#3987e5] px-3 py-2.5 text-[14px] font-semibold text-[#0b1220] transition hover:bg-[#4a93ea] disabled:opacity-50"
         >
           <LockIcon size={16} />
           {enviando ? t('login.entrando') : t('login.entrar')}

@@ -216,7 +216,7 @@ export default function NflDashboard() {
             >
                 <LeagueFlag country={l.country} className="mr-1.5" />
               {l.name}
-              {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
+              {l.upcomingCount > 0 && <span className="ml-1.5 text-(--ink-soft)">{l.upcomingCount}</span>}
               {!l.hasModel && (
                 <span className="ml-1.5 text-amber-400" title={tr('eq.sinModeloElo')}>
                   ◦

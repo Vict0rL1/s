@@ -4,6 +4,31 @@ Por fases de la hoja de ruta (ver `docs/plans/`). Cada fase termina con doctor, 
 `verify:data`, typecheck, lint y build en verde; las cifras de antes y después van aquí cuando
 cambian.
 
+## Revisión del 8 de octubre · lote G, lo que encontró la prueba en el navegador (2026-10-10)
+
+Doce defectos que el agente `ui-tester` encontró en la app construida con la base real, tres en
+cosas que los lotes D y E daban por arregladas (D2, D5, D8). Cada uno con su prueba, que falla
+antes del arreglo (`docs/plans/fixes-G.md`). Ningún parámetro de modelo cambia y no hay
+migraciones. Tests: 642 → 671 (512 del servidor + 64 de la web + 95 de punta a punta).
+
+- **G1 · Horizontes pendientes, de verdad.** Un T-6h, T-1h o final que aún no ha llegado dice
+  «pendiente»; antes se rellenaba con la última instantánea (D2 solo probaba filas vacías).
+- **G2 · `?torneo=` sobrevive a la recarga** en el tenis. **G3 · Cambiar de liga** en el fútbol
+  ya no enseña los partidos de la anterior mientras carga.
+- **G4 · Salir desde la lista de sesiones** también vacía la caché de la API.
+- **G5 · Un solo formato de número.** `t()` escribe los números en el idioma, el catálogo español
+  lleva «41,6 %» y el texto del servidor («Lectura completa», titulares, motivos de confianza)
+  sale de `server/src/numeros.ts`: coma, «−» y espacio duro.
+- **G6 · Contraste con datos reales.** Campana, filas empezadas de «Hoy» (sin `opacity`),
+  contadores, insignias de confianza, escudos de club, botón y error de la pantalla de entrada,
+  errores de Ajustes. Los estados de cada tema, retocados para pasar de 4,5:1 sobre su tinte.
+  `contrastes()` en los e2e mide lo que axe deja como incompleto.
+- **G7 · «Salir» se alcanza** con muchas sesiones (la barra lateral se desplaza). **G8 · «Hoy» a
+  390 px** cabe entero.
+- **G9 · Sin 404 de simulación** en Equipo y Liga de la NHL. **G10 · Sin 401** en la pantalla de
+  entrada. **G11 · El buscador** atrapa y devuelve el foco. **G12 · `/api/auth/me`** no dice el
+  usuario a quien no ha entrado.
+
 ## Mantenimiento: agentes del proyecto y CI de secretos (2026-10-09)
 
 - **Agentes del proyecto.** `CLAUDE.md` con las reglas comunes, `.claude/settings.json` con reglas

@@ -147,7 +147,7 @@ export function StarterPicker({
             {t('bsd.opcion', {
               nombre: p.name,
               n: p.starts,
-              r: p.rating != null ? `${p.rating < 1 ? '−' : '+'}${Math.abs(Math.round((p.rating - 1) * 100))}%` : t('bsd.sd'),
+              r: p.rating != null ? `${p.rating < 1 ? '−' : '+'}${numF(Math.abs(Math.round((p.rating - 1) * 100)), 0)}\u00a0%` : t('bsd.sd'),
             })}
           </option>
         ))}

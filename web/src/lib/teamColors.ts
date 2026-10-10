@@ -36,6 +36,7 @@
 // City in Leicester's gold. The North American leagues do get nickname keys,
 // because the basketball database really does store teams as "Celtics".
 
+import { contraste, luminancia } from './contraste';
 import { TEAM_COLORS } from './teamColorsDatos';
 
 /** Strip accents, punctuation and the club-type words that vary by source. */
@@ -105,15 +106,6 @@ export function monogram(name: string, code?: string | null): string {
     .toUpperCase();
 }
 
-/** Relative luminance, for deciding what can be read on top of a colour. */
-function luminance(hex: string): number {
-  const h = hex.replace('#', '');
-  const v = (i: number) => {
-    const c = parseInt(h.slice(i, i + 2), 16) / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * v(0) + 0.7152 * v(2) + 0.0722 * v(4);
-}
 
 function mix(hex: string, toward: string, amount: number): string {
   const a = hex.replace('#', '');
@@ -140,10 +132,15 @@ function mix(hex: string, toward: string, amount: number): string {
  */
 export function crestPaint(c: Crest): { fill: string; ring: string; ink: string } {
   let fill = c.primary;
-  const l = luminance(fill);
+  const l = luminancia(fill);
   if (l < 0.035) fill = mix(fill, '#8b93a1', 0.42);
   else if (l > 0.82) fill = mix(fill, '#4b5159', 0.18);
-  const ink = luminance(fill) > 0.35 ? '#0b0d11' : '#f2f4f7';
+  // The ink is whichever of the two reads better, and if neither reaches 4.5:1 (a mid-tone red
+  // or orange sits right between them) the fill is shaded just enough, away from the ink (G6:
+  // the old luminance threshold put white on the Giants' orange at 2.86:1).
+  const ink = contraste('#0b0d11', fill) >= contraste('#f2f4f7', fill) ? '#0b0d11' : '#f2f4f7';
+  const away = ink === '#f2f4f7' ? '#000000' : '#ffffff';
+  for (let step = 1; contraste(ink, fill) < 4.5 && step <= 20; step++) fill = mix(fill, away, 0.04);
   // A hairline of the second colour: enough to tell two clubs apart when their
   // primaries are both, say, navy, without turning the crest into a logo.
   const ring = c.secondary === c.primary ? 'rgba(255,255,255,0.14)' : c.secondary;

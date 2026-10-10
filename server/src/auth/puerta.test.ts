@@ -205,3 +205,20 @@ test('D7: /assets/* y /flags/* que no existen son 404, no el index (la carga dif
   assert.equal((await app.inject({ method: 'GET', url: '/futbol/epl', headers: { accept: 'text/html' } })).statusCode, 200);
   await app.close();
 });
+
+// ---------------------------------------------------------------------------
+// G12 (lote G): /api/auth/me no le dice el usuario a quien no ha entrado
+// ---------------------------------------------------------------------------
+test('G12: /api/auth/me sin sesión no lleva el usuario; con sesión, sí', async () => {
+  const app = await appConAuth();
+  const fuera = (await app.inject({ method: 'GET', url: '/api/auth/me' })).json() as Record<string, unknown>;
+  assert.equal(fuera.dentro, false);
+  assert.equal('usuario' in fuera, false, `fuera: ${JSON.stringify(fuera)}`);
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { password: PASSWORD } });
+  assert.equal(login.statusCode, 200, login.body);
+  const cookie = String(login.headers['set-cookie']).split(';')[0];
+  const dentro = (await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } })).json() as Record<string, unknown>;
+  assert.equal(dentro.dentro, true);
+  assert.equal(typeof dentro.usuario, 'string');
+  await app.close();
+});

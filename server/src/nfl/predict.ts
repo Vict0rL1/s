@@ -42,6 +42,7 @@ import {
 import { carryOver, SCORING_CARRYOVER, SEASON_CARRYOVER } from './model.ts';
 import { postprocess } from '../postprocess/apply.ts';
 import type { LeagueId, NafRecord } from './types.ts';
+import { conSigno, num, pct as pctEs } from '../numeros.ts';
 
 export const DISCLAIMER =
   'Estimación estadística basada en Elo por equipo, una ventaja de campo que la liga actualiza sola, ' +
@@ -295,11 +296,11 @@ export interface NafPrediction {
   disclaimer: string;
 }
 
-const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
+const pct = (p: number) => pctEs(p);
 
 /** "Seattle Seahawks" → "Seahawks". The nickname is how the team is spoken of. */
 const shortName = (name: string): string => name.split(' ').slice(-1)[0] ?? name;
-const signed = (x: number) => `${x > 0 ? '+' : ''}${x.toFixed(1)}`;
+const signed = (x: number) => conSigno(x, 1);
 
 /** Decimal odds → implied probability, with the bookmaker's margin removed. */
 function deVig(oddsHome: number | null, oddsAway: number | null): NafMarket | null {
@@ -676,7 +677,7 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
     seasonsAhead > 0
       ? ` Los Elo vienen regresados hacia la media porque de por medio hay ${
           seasonsAhead > 1 ? `${seasonsAhead} pretemporadas` : 'una pretemporada'
-        }: en la NFL solo sobrevive el ${Math.round(SEASON_CARRYOVER * 100)}% de la diferencia entre dos equipos.`
+        }: en la NFL solo sobrevive el ${pctEs(SEASON_CARRYOVER, 0)} de la diferencia entre dos equipos.`
       : '';
   const reasoningText =
     (input.neutral
@@ -720,15 +721,15 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
   const h2h = getHeadToHead(league, homeId, awayId);
 
   const bullets: string[] = [
-    `Margen esperado: ${signed(expectedMargin)} para ${home.name} (${points.home.toFixed(1)}-${points.away.toFixed(1)}).`,
+    `Margen esperado: ${signed(expectedMargin)} para ${home.name} (${num(points.home, 1)}-${num(points.away, 1)}).`,
     `El marcador más probable es ${scorelines[0]?.label ?? '—'} (${pct(scorelines[0]?.probability ?? 0)}).`,
     `El margen cae justo en 3 o en 7 puntos el ${pct(
       keyNumbers[0].probability + keyNumbers[1].probability,
     )} de las veces: son los dos números alrededor de los que se mueve todo el mercado de hándicap.`,
-    `Total: ${expectedTotal.toFixed(1)} puntos esperados · over ${totalLine} al ${pct(ou.over)}. ` +
-      `Sale de los ritmos de anotación de los dos equipos (${homePf.toFixed(1)} y ${awayPf.toFixed(1)} ` +
-      `a favor, ${homePa.toFixed(1)} y ${awayPa.toFixed(1)} en contra), que mueven el total pero no el margen.`,
-    `Ventaja de campo actual de la liga: ${(edge / ELO_PER_POINT).toFixed(1)} puntos${
+    `Total: ${num(expectedTotal, 1)} puntos esperados · over ${num(totalLine)} al ${pct(ou.over)}. ` +
+      `Sale de los ritmos de anotación de los dos equipos (${num(homePf, 1)} y ${num(awayPf, 1)} ` +
+      `a favor, ${num(homePa, 1)} y ${num(awayPa, 1)} en contra), que mueven el total pero no el margen.`,
+    `Ventaja de campo actual de la liga: ${num(edge / ELO_PER_POINT, 1)} puntos${
       input.neutral ? ', pero este partido es en campo neutral' : ''
     }.`,
   ];
@@ -737,11 +738,11 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
     // strong evidence and the reader should not have to guess which one they got.
     bullets.push(
       market.odds && market.overround != null
-        ? `El mercado da ${pct(market.home)} al local (cuotas ${market.odds.home} / ${market.odds.away}, ` +
-          `margen ${((market.overround - 1) * 100).toFixed(1)}%).`
+        ? `El mercado da ${pct(market.home)} al local (cuotas ${num(market.odds.home)} / ${num(market.odds.away)}, ` +
+          `margen ${pct(market.overround - 1)}).`
         : `El mercado da ${pct(market.home)} al local, deducido de la línea de cierre ` +
-          `(${market.line! > 0 ? '+' : ''}${market.line}). Medido sobre 7.276 partidos, esta cifra ` +
-          `predice mejor que la del modelo: Brier 0.2115 frente a 0.2180.`,
+          `(${market.line! > 0 ? '+' : ''}${num(market.line!)}). Medido sobre 7.276 partidos, esta cifra ` +
+          `predice mejor que la del modelo: Brier 0,2115 frente a 0,2180.`,
     );
   }
   if (h2h.total > 0) {
@@ -783,7 +784,7 @@ export function buildPrediction(input: PredictInput): NafPrediction | null {
       expectedMargin: Number(expectedMargin.toFixed(1)),
       // Short enough for a stat tile: "SEA −5.2", not "Seattle Seahawks −5.2",
       // which truncated to "Seattle Seahawks …" and lost the actual number.
-      label: `${shortName(expectedMargin >= 0 ? home.name : away.name)} ${(-Math.abs(expectedMargin)).toFixed(1)}`,
+      label: `${shortName(expectedMargin >= 0 ? home.name : away.name)} ${num(-Math.abs(expectedMargin), 1)}`,
       line,
       home: quotes.home,
       away: quotes.away,

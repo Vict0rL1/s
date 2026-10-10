@@ -10,7 +10,7 @@
 // para que la barra de deportes se lea como un conjunto.
 
 import type { ReactNode, SVGProps } from 'react';
-import { SPORT_THEMES, type SportId } from '../../lib/theme';
+import { SPORT_THEMES, STATUS, tenido, type SportId } from '../../lib/theme';
 import { useI18n } from '../../i18n';
 
 type Props = Omit<SVGProps<SVGSVGElement>, 'children'> & { size?: number; title?: string };
@@ -342,7 +342,7 @@ export function Verdict({ ok, okText, koText }: { ok: boolean; okText?: string; 
   return (
     <span
       className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-semibold"
-      style={{ color: ok ? '#199e70' : '#e66767', background: ok ? 'rgba(25,158,112,0.12)' : 'rgba(230,103,103,0.12)' }}
+      style={{ color: ok ? STATUS.good : STATUS.critical, background: tenido(ok ? STATUS.good : STATUS.critical, 12) }}
     >
       {ok ? <CheckIcon size={13} strokeWidth={2.4} /> : <CrossIcon size={13} strokeWidth={2.4} />}
       {ok ? (okText ?? t('bkt.acerto')) : (koText ?? t('bkt.fallo'))}

@@ -24,7 +24,7 @@ import { useStake } from '../lib/useStake';
 import { dayChipLabel, groupByDay } from '../lib/format';
 import { RefreshInfo, DataBadge, ShortSlateNote } from './TennisDashboardPartes';
 import { conNodos, localeDe, useI18n } from '../i18n';
-import { conservarDia, contadorDePeticiones } from '../lib/carga';
+import { conservarDia, contadorDePeticiones, torneoValido } from '../lib/carga';
 
 const bloque = (texto: string, clase = 'rounded bg-(--raised) px-1') => <code className={clase}>{texto}</code>;
 
@@ -33,6 +33,8 @@ export default function TennisDashboard() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [tours, setTours] = useState<Tour[]>([]);
   const [tournaments, setTournaments] = useState<TournamentInfo[]>([]);
+  // ¿Llegó ya la lista de torneos de este circuito? Hasta entonces, el ?torneo= del enlace se conserva (G2).
+  const [torneosDe, setTorneosDe] = useState<string | null>(null);
   // El tour va en la ruta (/tenis/atp) y el torneo en la query (?torneo=): un enlace copiado
   // abre lo mismo.
   const [tourRuta, setTour] = useLigaEnRuta('/tenis', 'predictor.tennis.tour');
@@ -81,10 +83,18 @@ export default function TennisDashboard() {
 
   // Tournaments depend on the selected tour (only those with upcoming matches).
   useEffect(() => {
+    let vivo = true;
     api
       .tournaments(tour)
-      .then((tt) => setTournaments(tt.tournaments))
-      .catch((e) => setError(String(e)));
+      .then((tt) => {
+        if (!vivo) return;
+        setTournaments(tt.tournaments);
+        setTorneosDe(tour);
+      })
+      .catch((e) => vivo && setError(String(e)));
+    return () => {
+      vivo = false;
+    };
   }, [tour]);
 
   // Tournaments that actually have upcoming matches for the selected tour.
@@ -116,14 +126,12 @@ export default function TennisDashboard() {
     [tournaments, tour],
   );
 
-  // Keep a valid tournament selected when the tour changes.
+  // Keep a valid tournament selected when the tour changes — but only once this tour's list has
+  // arrived: before that the list is empty and a deep link's ?torneo= was wiped (G2).
   useEffect(() => {
-    if (tourTournaments.length === 0) {
-      setTournamentId(null);
-    } else if (!tourTournaments.some((t) => t.id === tournamentId)) {
-      setTournamentId(tourTournaments[0].id);
-    }
-  }, [tourTournaments, tournamentId]);
+    const valido = torneoValido(tournamentId, tourTournaments, torneosDe === tour);
+    if (valido !== tournamentId) setTournamentId(valido);
+  }, [tourTournaments, tournamentId, torneosDe, tour]);
 
   // Load matches for tour + tournament.
   useEffect(() => {
@@ -213,7 +221,7 @@ export default function TennisDashboard() {
               className={pillClass(tournamentId === t.id)}
             >
               {t.name}
-              <span className="ml-1.5 opacity-60">{t.upcomingCount}</span>
+              <span className="ml-1.5 text-(--ink-soft)">{t.upcomingCount}</span>
             </button>
           ))}
         </div>

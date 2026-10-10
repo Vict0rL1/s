@@ -209,6 +209,9 @@ export function simularTemporada(entrada: EntradaSimulacion): EquipoSimulado[] {
  */
 export type DeporteSimulable = Exclude<SportId, 'tennis' | 'nhl' | 'ufc'>;
 
+/** Los deportes con simulación de temporada (la web solo pide estos: web/src/lib/simulacion.ts). */
+export const DEPORTES_SIMULABLES: DeporteSimulable[] = ['football', 'basketball', 'baseball', 'nfl'];
+
 const TABLAS: Record<DeporteSimulable, { partidos: string; equipos: string; fecha: string; marcador: [string, string]; filtro: string; neutral: string }> = {
   football: { partidos: 'fb_matches', equipos: 'fb_teams', fecha: 'match_date', marcador: ['home_goals', 'away_goals'], filtro: '1 = 1', neutral: '0' },
   basketball: { partidos: 'bb_games', equipos: 'bb_teams', fecha: 'game_date', marcador: ['home_pts', 'away_pts'], filtro: 'COALESCE(is_playoff, 0) = 0', neutral: 'COALESCE(neutral, 0)' },

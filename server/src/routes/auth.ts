@@ -27,7 +27,9 @@ export function registerAuthRoutes(runtime: AuthRuntime) {
     app.get('/me', async (req) => {
       if (!config.activa) return { auth: false, dentro: true, totp: false, sesiones: false };
       const s = featureEncendida('auth.sesiones') ? sesionDe(tokenDeSesion(req)) : null;
-      return { auth: true, dentro: !!s, totp: totpActivo(), sesiones: featureEncendida('auth.sesiones'), sesionId: s?.id ?? null, usuario: config.usuario };
+      // El usuario solo a quien ya ha entrado (G12, lote G): no es la contraseña, pero es la mitad
+      // de lo que se prueba en la entrada, y quien no ha entrado no tiene por qué saberlo.
+      return { auth: true, dentro: !!s, totp: totpActivo(), sesiones: featureEncendida('auth.sesiones'), sesionId: s?.id ?? null, ...(s ? { usuario: config.usuario } : {}) };
     });
 
     app.post<{ Body: { password?: unknown; codigo?: unknown } }>('/login', async (req, reply) => {

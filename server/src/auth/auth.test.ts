@@ -67,7 +67,8 @@ test('sin credenciales, todas las rutas registradas devuelven 401 salvo las exen
     }
   }
   const me = await app.inject({ method: 'GET', url: '/api/auth/me' });
-  assert.deepEqual(me.json(), { auth: true, dentro: false, totp: false, sesiones: true, sesionId: null, usuario: 'victor' });
+  // Sin el usuario: solo se le dice a quien ya ha entrado (G12, lote G).
+  assert.deepEqual(me.json(), { auth: true, dentro: false, totp: false, sesiones: true, sesionId: null });
   await app.close();
 });
 

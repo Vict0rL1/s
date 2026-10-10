@@ -23,7 +23,7 @@ import { useLigaEnRuta, ligaRecordada, useFiltroQuery } from '../../lib/rutas';
 import { TrackRecordPanel } from './FootballDashboardPartes';
 import { conNodos, localeDe, useI18n } from '../../i18n';
 import { num as numF } from '../../lib/formato';
-import { conservarDia, contadorDePeticiones } from '../../lib/carga';
+import { conservarDia, contadorDePeticiones, filasDeLaLiga } from '../../lib/carga';
 
 /**
  * The ⚽ tab.
@@ -40,7 +40,10 @@ export default function FootballDashboard() {
   const [meta, setMeta] = useState<FbMeta | null>(null);
   const [leagues, setLeagues] = useState<FbLeague[]>([]);
   const [league, setLeague] = useLigaEnRuta('/futbol', STORAGE_KEY);
-  const [fixtures, setFixtures] = useState<FbFixtureWithPrediction[]>([]);
+  const [fixturesTodas, setFixtures] = useState<FbFixtureWithPrediction[]>([]);
+  // Solo las filas de la liga elegida (G3): al cambiar de liga, las de la anterior siguen en el
+  // estado hasta que llega la respuesta, y se veían bajo la liga nueva.
+  const fixtures = useMemo(() => filasDeLaLiga(fixturesTodas, (f) => f.fixture.league, league), [fixturesTodas, league]);
   const [power, setPower] = useState<FbPowerTeam[]>([]);
   const [loading, setLoading] = useState(false);
   const [peticiones] = useState(contadorDePeticiones);
@@ -236,7 +239,7 @@ export default function FootballDashboard() {
               >
                 <LeagueFlag country={l.country} className="mr-1.5" />
               {l.name}
-                {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
+                {l.upcomingCount > 0 && <span className="ml-1.5 text-(--ink-soft)">{l.upcomingCount}</span>}
                 {!l.hasModel && (
                   <span className="ml-1.5 text-amber-400" title={tr('fb.sinModeloMercado')}>
                     ◦

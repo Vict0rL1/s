@@ -335,7 +335,7 @@ function ReliabilityBlock({ prediction }: { prediction: BbPrediction }) {
           lo: <strong className="tabular-nums">{pctF(lo, 1)}</strong>,
           hi: <strong className="tabular-nums">{pctF(hi, 1)}</strong>,
         })}{' '}
-        <span className="text-(--ink-soft)">(±{rel.marginPp} pp)</span>
+        <span className="text-(--ink-soft)">(±{numF(rel.marginPp, 1)} pp)</span>
       </p>
       <div className="mt-2 grid grid-cols-2 gap-2 text-[14px]">
         <div className="min-w-0">

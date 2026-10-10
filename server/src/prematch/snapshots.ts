@@ -212,15 +212,18 @@ export interface Horizonte {
 }
 
 /** T-24h, T-6h, T-1h y la final pre-partido, cada una «a fecha» de su marca. */
-export function horizontes(sport: string, matchKey: string, commence: string): Horizonte[] {
+export function horizontes(sport: string, matchKey: string, commence: string, ahora: Date = new Date()): Horizonte[] {
   const inicio = Date.parse(commence);
+  // Una marca que aún no ha llegado está PENDIENTE (G1, lote G): la última instantánea anterior a
+  // una marca futura es la de hoy, no la de T-1h, y enseñarla como T-1h era decir algo falso.
+  const llegada = (marca: number) => marca <= ahora.getTime();
   const out: Horizonte[] = MARCAS.map((m) => {
     const marca = new Date(inicio - m.horas * H).toISOString();
-    const fila = aFecha(sport, matchKey, marca);
+    const fila = llegada(inicio - m.horas * H) ? aFecha(sport, matchKey, marca) : null;
     return { etiqueta: m.etiqueta, marca, fila, minutosAntesDeLaMarca: fila ? Math.round((Date.parse(marca) - Date.parse(fila.captured_at)) / 60_000) : null };
   });
   // La final: lo último ANTES del inicio (la base ya impide que haya algo después).
-  const ultima = aFecha(sport, matchKey, new Date(inicio - 1).toISOString());
+  const ultima = llegada(inicio) ? aFecha(sport, matchKey, new Date(inicio - 1).toISOString()) : null;
   out.push({
     etiqueta: 'Final pre-partido',
     marca: commence,

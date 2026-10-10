@@ -198,19 +198,22 @@ export default function TodayPanel({ pestana = null }: { pestana?: string | null
                         key={i}
                         className="border-t border-(--line) first:border-t-0"
                         // Un partido empezado no se esconde —sigue siendo lo de hoy— pero
-                        // se atenúa: verlo igual que uno por jugar invita a apostarlo.
-                        style={p.empezado ? { opacity: 0.45 } : undefined}
+                        // se atenúa: verlo igual que uno por jugar invita a apostarlo. Con la
+                        // tinta tenue y no con `opacity` (G6: al 45 % quedaba en 2,1:1).
+                        data-empezado={p.empezado || undefined}
                       >
-                        <td className="whitespace-nowrap py-2 pl-4 pr-2 text-(--ink-soft)">
+                        <td className={`whitespace-nowrap py-2 pl-4 pr-2 ${p.empezado ? 'text-(--ink-faint)' : 'text-(--ink-soft)'}`}>
                           {new Date(p.cuando).toLocaleTimeString(localeDe(idioma), { hour: '2-digit', minute: '2-digit' })}
                         </td>
                         <td className="py-2 pr-2"><span title={p.deporte} className="inline-flex"><DeporteIcono nombre={p.deporte} size={24} tile /></span></td>
-                        <td className="py-2 pr-3 text-(--ink-body)">{p.partido}</td>
-                        <td className="whitespace-nowrap py-2 pr-4 text-right">
+                        <td className={`py-2 pr-3 ${p.empezado ? 'text-(--ink-faint)' : 'text-(--ink-body)'}`}>{p.partido}</td>
+                        {/* El favorito puede partirse en dos líneas y el porcentaje no: a 390 px
+                            la fila entera sin cortes era más ancha que la caja (G8). */}
+                        <td className="py-2 pr-4 text-right">
                           {p.favorito && p.probabilidad != null ? (
                             <>
-                              <span className="text-(--ink-strong)">{p.favorito}</span>{' '}
-                              <span className="font-semibold text-(--ink-strong)">
+                              <span className={p.empezado ? 'text-(--ink-muted)' : 'text-(--ink-strong)'}>{p.favorito}</span>{' '}
+                              <span className={`whitespace-nowrap font-semibold ${p.empezado ? 'text-(--ink-muted)' : 'text-(--ink-strong)'}`}>
                                 {pctF(p.probabilidad, 0)}
                               </span>
                             </>

@@ -55,7 +55,8 @@ export function evaluacionPorHorizonte(): EvaluacionHorizontes[] {
       const res = y.get(e.match_key);
       if (res == null) continue;
       conInstantaneas++;
-      const hs = horizontes(deporte, e.match_key, e.c);
+      // Solo partidos jugados: todas sus marcas han llegado (horizontes() deja pendientes las futuras).
+      const hs = horizontes(deporte, e.match_key, e.c, new Date(Date.parse(e.c) + 1));
       if (hs.some((h) => !h.fila)) continue;
       emparejados++;
       for (const h of hs) {

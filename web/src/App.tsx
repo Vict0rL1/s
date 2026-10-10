@@ -20,7 +20,7 @@ import Recorrido from './components/Recorrido';
 import { SeguimientoProvider } from './components/seguimiento';
 import { ESCRITORIO, useMediaQuery } from './lib/useMediaQuery';
 import ErrorBoundary from './components/ErrorBoundary';
-import { ultimaRed, useEnLinea, useDesdeCache } from './lib/sinConexion';
+import { registrarServiceWorker, ultimaRed, useEnLinea, useDesdeCache } from './lib/sinConexion';
 
 // Cada pantalla en su propio trozo (Fase 5 / 7): la primera carga solo trae el armazón y la
 // pestaña que se abre.
@@ -70,9 +70,7 @@ interface AjustesUsuario {
 export default function App() {
   return (
     <I18nProvider>
-      <SeguimientoProvider>
-        <Armazon />
-      </SeguimientoProvider>
+      <Armazon />
     </I18nProvider>
   );
 }
@@ -98,6 +96,11 @@ function Armazon() {
       window.removeEventListener(EVENTO_AUTH, alPedir);
     };
   }, []);
+  // El service worker, una vez dentro (G10): registrarlo pide /api/features, que necesita sesión.
+  useEffect(() => {
+    if (!auth || (auth.auth && !auth.dentro) || auth.sinRed) return;
+    if (import.meta.env.PROD) void registrarServiceWorker();
+  }, [auth]);
   // Los ajustes de la persona (tema, idioma, deportes visibles) una vez dentro.
   useEffect(() => {
     if (!auth || (auth.auth && !auth.dentro)) return;
@@ -155,10 +158,15 @@ function Armazon() {
   const conHoy = pestana === 'picks' || (pestana != null && DEPORTES.includes(pestana) && !pathname.startsWith('/partido') && !pathname.startsWith('/equipo') && !pathname.startsWith('/liga') && !pathname.startsWith('/jugador'));
 
   return (
+    // Dentro de la puerta (G10): la lista de seguidos pide /api/watchlist, que necesita sesión; antes
+    // se pedía también en la pantalla de entrada y dejaba un 401 en consola.
+    <SeguimientoProvider>
     <div className="min-h-screen lg:flex">
       {/* La barra lateral desde 1024 px; debajo, la barra inferior (MobileNav). */}
       <aside className="hidden shrink-0 border-r border-(--line) bg-(--surface-rail) lg:block lg:w-[15rem]">
-        <div className="sticky top-0 flex h-screen flex-col pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]">
+        {/* overflow-y-auto (G7): con «Cuenta» abierta y varias sesiones, el contenido pasa de la altura
+            de la pantalla, y una barra fija sin desplazamiento dejaba «Salir» fuera para siempre. */}
+        <div className="sticky top-0 flex h-screen flex-col overflow-y-auto overscroll-contain pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]">
           <div className="flex items-center gap-2.5 px-4 pb-3 pt-5">
             <AppMark size={34} className="shrink-0" />
             <div className="min-w-0">
@@ -259,6 +267,7 @@ function Armazon() {
       <MobileNav ocultos={ocultos} />
       <Recorrido vistoEnServidor={ajustes ? (ajustes.recorridoVisto ?? false) : null} onVisto={() => void fetch('/api/ajustes', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ recorridoVisto: true }) }).catch(() => undefined)} />
     </div>
+    </SeguimientoProvider>
   );
 }
 

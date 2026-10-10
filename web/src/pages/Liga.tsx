@@ -7,6 +7,7 @@ import { Sparkline } from '../components/charts';
 import { TeamCrest } from '../components/ui';
 import { rutaEquipo } from '../rutas';
 import { useI18n, formato } from '../i18n';
+import { tieneSimulacion } from '../lib/simulacion';
 
 interface Simulacion { season: number | null; motivo: string | null; etiqueta: string; corridas: number; calendario: { origen: string; pendientes: number; nota: string | null }; reglas: { etiquetaTop: string; descenso: number; puntos: unknown } | null; equipos: { id: string; nombre: string; grupo: string | null; actual: { puntos: number; jugados: number; victorias: number; empates: number; derrotas: number }; puntosEsperados: number; titulo: number; top: number; descenso: number }[] }
 interface Historial { dias: { dia: string; equipos: { id: string; titulo: number; top: number; descenso: number }[] }[] }
@@ -30,8 +31,11 @@ function LigaDeEquipos({ sport, league }: { sport: string; league: string }) {
   useEffect(() => {
     let vivo = true;
     setSim(null);
-    fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}`).then((r) => (r.ok ? r.json() : Promise.reject())).then((j) => vivo && setSim(j)).catch(() => vivo && setSim('error'));
-    fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}/historial`).then((r) => (r.ok ? r.json() : null)).then((j) => vivo && setHist(j)).catch(() => undefined);
+    // Sin simulación para este deporte (la NHL, la UFC) ni se pide: era un 404 en consola (G9).
+    if (tieneSimulacion(sport)) {
+      fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}`).then((r) => (r.ok ? r.json() : Promise.reject())).then((j) => vivo && setSim(j)).catch(() => vivo && setSim('error'));
+      fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}/historial`).then((r) => (r.ok ? r.json() : null)).then((j) => vivo && setHist(j)).catch(() => undefined);
+    } else setSim('error');
     fetch(`${API[sport] ?? ''}/power?league=${encodeURIComponent(league)}&limit=60`).then((r) => (r.ok ? r.json() : null)).then((j) => vivo && setPower(j)).catch(() => undefined);
     return () => {
       vivo = false;

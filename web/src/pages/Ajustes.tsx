@@ -137,7 +137,7 @@ function Interruptores() {
   const deArranque = Object.keys(f).filter((k) => f[k].soloArranque);
   return (
     <ul className="space-y-1.5">
-      {error && <li role="alert" className="rounded-lg border border-[#e66767]/40 px-3 py-2 text-[13px] text-[#e66767]">{error}</li>}
+      {error && <li role="alert" className="rounded-lg border border-[#e66767]/40 px-3 py-2 text-[13px] text-(--status-critical)">{error}</li>}
       {deArranque.length > 0 && <li className="text-[12px] text-(--ink-muted)">{conNodos(t('aj.deArranque', { lista: '{lista}' }), { lista: <code className="font-mono">{deArranque.join(', ')}</code> })}</li>}
       {Object.entries(f).filter(([, x]) => !x.soloArranque).map(([k, x]) => (
         <li key={k} className="flex flex-wrap items-start justify-between gap-2 rounded-lg bg-(--raised) px-3 py-2">
@@ -197,7 +197,7 @@ function Cadencias() {
   };
   return (
     <>
-      {error && <p role="alert" className="mb-2 rounded-lg border border-[#e66767]/40 px-3 py-2 text-[13px] text-[#e66767]">{error}</p>}
+      {error && <p role="alert" className="mb-2 rounded-lg border border-[#e66767]/40 px-3 py-2 text-[13px] text-(--status-critical)">{error}</p>}
       <ul className="space-y-1.5">
         {trabajos.map((x) => (
           <li key={x.nombre} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-(--raised) px-3 py-2">
@@ -246,7 +246,7 @@ export default function Ajustes() {
     <div>
       <h2 className="mb-1 text-[20px] font-semibold text-(--ink-strong)">{t('ajustes.titulo')}</h2>
       <p className="mb-4 text-[13px] text-(--ink-muted)">{t('ajustes.intro')}</p>
-      {error && <p role="alert" className="mb-3 rounded-lg border border-[#e66767]/40 px-3 py-2 text-[13px] text-[#e66767]">{error}</p>}
+      {error && <p role="alert" className="mb-3 rounded-lg border border-[#e66767]/40 px-3 py-2 text-[13px] text-(--status-critical)">{error}</p>}
 
       <Seccion titulo={t('ajustes.apariencia')} nota={t('ajustes.aparienciaNota')}>
         <div className="flex flex-wrap gap-2">

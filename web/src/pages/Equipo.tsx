@@ -10,6 +10,7 @@ import { EstrellaSeguir } from '../components/seguimiento';
 import { rutaLiga, rutaPartido } from '../rutas';
 import { aComun, nombrePartido, URL_PROXIMOS, type DeporteId, type PartidoComun } from '../lib/partidos';
 import { useI18n, formato } from '../i18n';
+import { tieneSimulacion } from '../lib/simulacion';
 
 interface Historia { puntos: { fecha: string; elo: number; rival: string; local: boolean }[]; nota: string }
 interface Simulacion { season: number | null; motivo: string | null; etiqueta: string; reglas: { etiquetaTop: string; descenso: number } | null; equipos: { id: string; nombre: string; puntosEsperados: number; titulo: number; top: number; descenso: number; posiciones: number[] }[] }
@@ -45,7 +46,9 @@ function FichaEquipo({ sport, league, id }: { sport: string; league: string; id:
       .catch(() => vivo && setInfo('error'));
     fetch(`/api/elo/historia/${sport}/${encodeURIComponent(league)}/${encodeURIComponent(id)}`).then((r) => (r.ok ? r.json() : null)).then((j) => vivo && setHist(j)).catch(() => undefined);
     // Un 404 es «esta liga no tiene simulación» (la NHL), no algo que siga cargando.
-    fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}`).then((r) => (r.ok ? r.json() : 'no')).then((j) => vivo && setSim(j)).catch(() => vivo && setSim('no'));
+    // Sin simulación para este deporte (la NHL, la UFC) ni se pide: era un 404 en consola (G9).
+    if (tieneSimulacion(sport)) fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}`).then((r) => (r.ok ? r.json() : 'no')).then((j) => vivo && setSim(j)).catch(() => vivo && setSim('no'));
+    else setSim('no');
     if (sport in URL_PROXIMOS) {
       fetch(URL_PROXIMOS[sport as DeporteId](league))
         .then((r) => (r.ok ? r.json() : []))

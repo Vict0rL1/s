@@ -49,7 +49,7 @@ test('un partido con ventaja clara, datos completos y estable: BET, con su contr
   // El contrafactual sale de las reglas: cuota mínima = max((1+minEdge)/p, 1/(p−u)).
   const u = ev.incertidumbre.totalPp / 100;
   const cuotaMin = Math.max((1 + DEFAULT_CONFIG.minEdge) / p0, 1 / (p0 - u));
-  assert.match(ev.decision.contrafactual[0], new RegExp(`por debajo de ${cuotaMin.toFixed(2).replace('.', '\\.')}`));
+  assert.match(ev.decision.contrafactual[0], new RegExp(`por debajo de ${cuotaMin.toFixed(2).replace('.', ',')}`));
 });
 
 // EL CASO QUE MÁS IMPORTA: un número atractivo que no merece confianza.
