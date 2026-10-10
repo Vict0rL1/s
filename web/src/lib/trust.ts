@@ -72,6 +72,8 @@ export interface Horizonte {
   marca: string;
   fila: { probs: number[]; captured_at: string; outcomes: string[] } | null;
   minutosAntesDeLaMarca: number | null;
+  /** El estado que decidió el servidor con su reloj (G1b). Falta en respuestas guardadas de antes. */
+  estado?: 'ok' | 'pendiente' | 'sin_observacion';
 }
 
 /**
@@ -80,13 +82,35 @@ export interface Horizonte {
  */
 export function etiquetaHorizonte(h: Horizonte, ahora: Date = new Date()): 'fiarse.pendiente' | 'fiarse.sinObservacion' | null {
   if (h.fila) return null;
+  // El servidor decide con el mismo reloj con que buscó la fila; el del navegador, solo si no lo dice.
+  if (h.estado === 'pendiente') return 'fiarse.pendiente';
+  if (h.estado === 'sin_observacion') return 'fiarse.sinObservacion';
   const marca = Date.parse(h.marca);
   return Number.isFinite(marca) && marca > ahora.getTime() ? 'fiarse.pendiente' : 'fiarse.sinObservacion';
 }
 
 export interface PrePartido {
   instantaneas: number;
+  /** Los resultados de la última instantánea (G1b); falta en respuestas guardadas de antes. */
+  outcomes?: string[];
   horizontes: Horizonte[];
   cambios: { desde: string; hasta: string; deltaPp: number[]; causas: string[]; atribucion: string }[];
   final: { probs: number[]; frozen_at: string; source: string } | null;
+}
+
+/**
+ * El resultado cuya probabilidad se sigue por horizontes. De las instantáneas, no del primer
+ * horizonte con fila: con los horizontes aún pendientes (G1) no hay ninguno, y el panel decía
+ * «Probabilidad de , tal como…».
+ */
+export function nombreDelPrePartido(d: PrePartido): string {
+  return d.outcomes?.[0] ?? d.horizontes.find((h) => h.fila)?.fila?.outcomes[0] ?? '';
+}
+
+/**
+ * Qué decir cuando no hay deriva que dibujar (menos de dos horizontes con fila). Con varias
+ * instantáneas no es que haya una sola: es que aún no caen en dos horizontes distintos (G1b).
+ */
+export function avisoSinDeriva(d: PrePartido): 'partido.sinInstantaneas' | 'partido.unaInstantanea' | 'partido.sinDosHorizontes' {
+  return !d.instantaneas ? 'partido.sinInstantaneas' : d.instantaneas === 1 ? 'partido.unaInstantanea' : 'partido.sinDosHorizontes';
 }

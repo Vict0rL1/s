@@ -485,6 +485,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       matchKey: key,
       commence,
       instantaneas: filas.length,
+      // Los nombres de los resultados, de la última instantánea: con los horizontes aún pendientes
+      // no hay otra fila de donde sacarlos (G1b).
+      outcomes: filas[filas.length - 1]?.outcomes ?? [],
       horizontes: commence ? horizontes(sport, key, commence) : [],
       cambios: cambios(sport, key),
       final: finalPrePartido(sport, key),

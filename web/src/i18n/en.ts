@@ -82,6 +82,7 @@ export const en: Partial<Record<Clave, string>> = {
   'partido.deriva': 'From T-24h to final',
   'partido.unaInstantanea': 'Only one snapshot so far: no drift to draw yet.',
   'partido.sinInstantaneas': 'No pre-match snapshots yet (taken every 15 minutes while the server runs).',
+  'partido.sinDosHorizontes': 'There are {n} snapshots, but they do not fall in two different horizons yet (T-24h, T-6h, T-1h and final): the drift is drawn between horizons.',
   'partido.finalCongelada': 'Frozen pre-match final: {p}.',
   'partido.publicada': 'Published on {cuando}. With today’s data the model would say {hoy}.',
   'partido.cuotasPorCasa': 'Odds by bookmaker',

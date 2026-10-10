@@ -58,3 +58,17 @@ fondo `color-mix`, y la base de los e2e no tiene partidos empezados, avisos sin 
 clubes reales. `e2e/util.ts` gana `contrastes()`, que mide el contraste que se ve contando la
 opacidad y la pila de fondos, y las pruebas de G6 simulan `/api/today` y `/api/bandeja/contador`
 con las formas reales de la API.
+
+## G1b · Lo que G1 dejó en la web (revisión de `quant-reviewer`)
+
+`quant-reviewer` comprobó G1 numéricamente: ninguna fila posterior a su marca (14.400 casos), la
+evaluación de los partidos jugados idéntica a la de antes (253 partidos emparejados, mismo log loss
+en los cuatro horizontes) y la final, la última instantánea estrictamente antes del saque. G5, sin
+un solo número cambiado fuera del texto (8.634 valores comparados). Pero con los horizontes futuros
+vacíos, la web tenía tres sitios que daban por hecho que siempre había fila:
+
+| | Defecto | Prueba (falla antes) | Arreglo |
+|---|---|---|---|
+| G1b-1 | Ficha del partido: «Solo hay una instantánea» con cinco | `web/src/lib/trust.test.ts` (`avisoSinDeriva`) | con varias instantáneas, dice que aún no caen en dos horizontes (`partido.sinDosHorizontes`) |
+| G1b-2 | Panel de confianza: «Probabilidad de , tal como…» a más de 24 h | `web/src/lib/trust.test.ts` (`nombreDelPrePartido`), `server/src/prematch/pendiente.test.ts` (la ruta) | `/api/prematch/:sport/:key` trae `outcomes` de la última instantánea |
+| G1b-3 | La web volvía a decidir «pendiente» o «sin observación» con el reloj del navegador | `server/src/prematch/pendiente.test.ts` (`estado`), `web/src/lib/trust.test.ts` | cada horizonte lleva su `estado`, decidido con el mismo reloj que su fila |

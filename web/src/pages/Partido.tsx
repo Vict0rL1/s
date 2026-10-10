@@ -17,7 +17,7 @@ import { LineChart } from '../components/charts';
 import { EstrellaSeguir } from '../components/seguimiento';
 import { aComun, nombrePartido, URL_PARTIDO, type DeporteId, type PartidoComun } from '../lib/partidos';
 import { rutaEquipo, rutaJugador, rutaLuchador, RUTA_DE_PESTANA } from '../rutas';
-import type { PrePartido } from '../lib/trust';
+import { avisoSinDeriva, nombreDelPrePartido, type PrePartido } from '../lib/trust';
 import { useI18n, formato } from '../i18n';
 import { PROFIT_COLOR, LOSS_COLOR } from '../lib/theme';
 
@@ -154,13 +154,13 @@ function FichaPartido({ sport, id }: { sport: string; id: string }) {
           <h3 className="mb-2 text-[15px] font-semibold text-(--ink-strong)">{t('partido.deriva')}</h3>
           {deriva.length > 1 ? (
             <>
-              <LineChart series={[{ nombre: pre?.horizontes.find((h) => h.fila)?.fila?.outcomes[0] ?? '1', puntos: deriva }]} unidad=" %" formatoX={(x) => f.fecha(new Date(x).toISOString())} />
+              <LineChart series={[{ nombre: (pre && nombreDelPrePartido(pre)) || '1', puntos: deriva }]} unidad=" %" formatoX={(x) => f.fecha(new Date(x).toISOString())} />
               <ul className="mt-1 flex flex-wrap gap-x-3 text-[12px] text-(--ink-soft)">
                 {deriva.map((d) => <li key={d.etiqueta}>{d.etiqueta}: <span className="tabular-nums text-(--ink-strong)">{f.numero(d.y, 1)} %</span></li>)}
               </ul>
             </>
           ) : (
-            <p className="text-[13px] text-(--ink-muted)">{pre?.instantaneas ? t('partido.unaInstantanea') : t('partido.sinInstantaneas')}</p>
+            <p className="text-[13px] text-(--ink-muted)">{t(pre ? avisoSinDeriva(pre) : 'partido.sinInstantaneas', { n: pre?.instantaneas ?? 0 })}</p>
           )}
           {pre?.final && <p className="mt-1 text-[12px] text-(--ink-soft)">{t('partido.finalCongelada', { p: f.porcentaje(pre.final.probs[0], 1) })}</p>}
         </section>

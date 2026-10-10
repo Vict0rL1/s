@@ -209,6 +209,12 @@ export interface Horizonte {
   fila: FilaInstantanea | null;
   /** Cuánto antes de la marca se capturó la fila usada (null sin fila). */
   minutosAntesDeLaMarca: number | null;
+  /**
+   * Con fila, `ok`; sin ella, `pendiente` si la marca aún no ha llegado y `sin_observacion` si
+   * llegó sin nada anterior. Lo decide el mismo reloj que decide la fila (G1b): la web lo volvía
+   * a deducir con el suyo, y un segundo de desfase cambiaba un estado por el otro.
+   */
+  estado: 'ok' | 'pendiente' | 'sin_observacion';
 }
 
 /** T-24h, T-6h, T-1h y la final pre-partido, cada una «a fecha» de su marca. */
@@ -219,16 +225,19 @@ export function horizontes(sport: string, matchKey: string, commence: string, ah
   const llegada = (marca: number) => marca <= ahora.getTime();
   const out: Horizonte[] = MARCAS.map((m) => {
     const marca = new Date(inicio - m.horas * H).toISOString();
-    const fila = llegada(inicio - m.horas * H) ? aFecha(sport, matchKey, marca) : null;
-    return { etiqueta: m.etiqueta, marca, fila, minutosAntesDeLaMarca: fila ? Math.round((Date.parse(marca) - Date.parse(fila.captured_at)) / 60_000) : null };
+    const llego = llegada(inicio - m.horas * H);
+    const fila = llego ? aFecha(sport, matchKey, marca) : null;
+    return { etiqueta: m.etiqueta, marca, fila, minutosAntesDeLaMarca: fila ? Math.round((Date.parse(marca) - Date.parse(fila.captured_at)) / 60_000) : null, estado: fila ? 'ok' : llego ? 'sin_observacion' : 'pendiente' };
   });
   // La final: lo último ANTES del inicio (la base ya impide que haya algo después).
-  const ultima = llegada(inicio) ? aFecha(sport, matchKey, new Date(inicio - 1).toISOString()) : null;
+  const empezo = llegada(inicio);
+  const ultima = empezo ? aFecha(sport, matchKey, new Date(inicio - 1).toISOString()) : null;
   out.push({
     etiqueta: 'Final pre-partido',
     marca: commence,
     fila: ultima,
     minutosAntesDeLaMarca: ultima ? Math.round((inicio - Date.parse(ultima.captured_at)) / 60_000) : null,
+    estado: ultima ? 'ok' : empezo ? 'sin_observacion' : 'pendiente',
   });
   return out;
 }

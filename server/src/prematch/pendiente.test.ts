@@ -34,3 +34,33 @@ test('G1: un partido ya jugado conserva todas sus filas (la evaluación por hori
   const hs = horizontes('nhl', 'nhl|jugado', commence, ahora);
   assert.ok(hs.every((h) => h.fila !== null));
 });
+
+// G1b (revisión de quant-reviewer al lote G): el estado de cada horizonte lo decide el servidor con
+// el MISMO reloj con que decide si hay fila. La web lo volvía a deducir con el suyo, y un segundo
+// de desfase convertía un «pendiente» en «sin observación».
+test('G1b: cada horizonte dice su estado (ok, pendiente, sin_observacion) con el mismo reloj', () => {
+  const commence = new Date(ahora.getTime() + 3 * H).toISOString();
+  // Una instantánea a T-30h (antes de T-24h) y nada más: T-24h y T-6h ya pasaron y tienen fila.
+  recordSnapshot(instantanea('nhl|estado', commence) as never, new Date(ahora.getTime() - 27 * H));
+  const hs = horizontes('nhl', 'nhl|estado', commence, ahora);
+  assert.deepEqual(hs.map((h) => [h.etiqueta, h.estado]), [['T-24h', 'ok'], ['T-6h', 'ok'], ['T-1h', 'pendiente'], ['Final pre-partido', 'pendiente']]);
+  // Un partido cuya primera instantánea llegó tarde: T-24h ya pasó sin nada anterior.
+  const tarde = new Date(ahora.getTime() + 5 * H).toISOString();
+  recordSnapshot(instantanea('nhl|tarde', tarde) as never, new Date(ahora.getTime() - 1 * H));
+  assert.equal(horizontes('nhl', 'nhl|tarde', tarde, ahora)[0].estado, 'sin_observacion');
+});
+
+test('G1b: /api/prematch trae los nombres de los resultados aunque ningún horizonte haya llegado', async () => {
+  const { buildApp } = await import('../app.ts');
+  const { configAuth } = await import('../auth/mode.ts');
+  const { LimiteDeIntentos } = await import('../auth/rateLimit.ts');
+  const commence = new Date(Date.now() + 30 * H).toISOString();
+  recordSnapshot(instantanea('nhl|nombres', commence) as never, new Date(Date.now() - 2 * H));
+  const app = await buildApp({ auth: { config: configAuth({ APP_AUTH: 'off' }), limite: new LimiteDeIntentos() }, servirWeb: false, logger: false, entorno: { APP_AUTH: 'off' } });
+  const r = await app.inject({ method: 'GET', url: `/api/prematch/nhl/${encodeURIComponent('nhl|nombres')}` });
+  assert.equal(r.statusCode, 200, r.body);
+  const j = r.json() as { outcomes: string[]; horizontes: { fila: unknown }[] };
+  assert.ok(j.horizontes.every((h) => h.fila === null), 'los cuatro, pendientes');
+  assert.deepEqual(j.outcomes, ['Local', 'Visitante']);
+  await app.close();
+});

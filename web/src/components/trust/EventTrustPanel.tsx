@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { LOSS_COLOR, PROFIT_COLOR, PROFIT_TEXT, LOSS_TEXT } from '../../lib/theme';
 import { StatusMark } from '../icons';
-import { etiquetaHorizonte, type EvaluacionConfianza, type PrePartido, type PrePartidoRef } from '../../lib/trust';
+import { etiquetaHorizonte, nombreDelPrePartido, type EvaluacionConfianza, type PrePartido, type PrePartidoRef } from '../../lib/trust';
 import { ConfianzaBadge } from './ConfianzaBadge';
 import { codigo, useI18n } from '../../i18n';
 import { pct as pctF, num as numF } from '../../lib/formato';
@@ -119,7 +119,7 @@ function HistorialPrePartido({ refP }: { refP: PrePartidoRef }) {
   if (error) return <p>{t('fiarse.errorHistorial')}</p>;
   if (!d) return <p>{t('comun.cargando')}</p>;
   if (!d.instantaneas) return <p>{t('fiarse.sinInstantaneas')}</p>;
-  const nombre = d.horizontes.find((h) => h.fila)?.fila?.outcomes[0] ?? '';
+  const nombre = nombreDelPrePartido(d);
   return (
     <>
       <p>{t('fiarse.probabilidadDe', { nombre })}</p>

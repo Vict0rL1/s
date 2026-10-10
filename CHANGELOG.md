@@ -12,7 +12,9 @@ antes del arreglo (`docs/plans/fixes-G.md`). Ningún parámetro de modelo cambia
 migraciones. Tests: 642 → 671 (512 del servidor + 64 de la web + 95 de punta a punta).
 
 - **G1 · Horizontes pendientes, de verdad.** Un T-6h, T-1h o final que aún no ha llegado dice
-  «pendiente»; antes se rellenaba con la última instantánea (D2 solo probaba filas vacías).
+  «pendiente»; antes se rellenaba con la última instantánea (D2 solo probaba filas vacías). Cada
+  horizonte lleva su `estado` decidido por el servidor, y la ficha y el panel de confianza ya no
+  dan por hecho que hay fila (G1b, de la revisión de `quant-reviewer`).
 - **G2 · `?torneo=` sobrevive a la recarga** en el tenis. **G3 · Cambiar de liga** en el fútbol
   ya no enseña los partidos de la anterior mientras carga.
 - **G4 · Salir desde la lista de sesiones** también vacía la caché de la API.

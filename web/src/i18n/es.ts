@@ -82,6 +82,7 @@ export const es = {
   'partido.deriva': 'De T-24h a la final',
   'partido.unaInstantanea': 'Solo hay una instantánea: todavía no hay deriva que dibujar.',
   'partido.sinInstantaneas': 'Sin instantáneas pre-partido todavía (se toman cada 15 minutos con el servidor en marcha).',
+  'partido.sinDosHorizontes': 'Hay {n} instantáneas, pero aún no caen en dos horizontes distintos (T-24h, T-6h, T-1h y final): la deriva se dibuja entre horizontes.',
   'partido.finalCongelada': 'Final pre-partido congelada: {p}.',
   'partido.publicada': 'Publicada el {cuando}. Con los datos de hoy el modelo diría {hoy}.',
   'partido.cuotasPorCasa': 'Cuotas por casa',
