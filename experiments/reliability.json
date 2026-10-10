@@ -1,0 +1,86 @@
+{
+  "ufc": {
+    "origen": "backtest",
+    "deporte": "ufc",
+    "partidos": 7799,
+    "cubetas": [
+      {
+        "desde": 0,
+        "hasta": 0.1,
+        "n": 3,
+        "predicha": 0.08992528732668438,
+        "observada": 0.3333333333333333
+      },
+      {
+        "desde": 0.1,
+        "hasta": 0.2,
+        "n": 86,
+        "predicha": 0.16690545281561053,
+        "observada": 0.27906976744186046
+      },
+      {
+        "desde": 0.2,
+        "hasta": 0.3,
+        "n": 653,
+        "predicha": 0.2636572729186294,
+        "observada": 0.27105666156202146
+      },
+      {
+        "desde": 0.3,
+        "hasta": 0.4,
+        "n": 2377,
+        "predicha": 0.35829294804861334,
+        "observada": 0.3592763988220446
+      },
+      {
+        "desde": 0.4,
+        "hasta": 0.5,
+        "n": 4670,
+        "predicha": 0.45288675582704224,
+        "observada": 0.4486081370449679
+      },
+      {
+        "desde": 0.5,
+        "hasta": 0.6,
+        "n": 4690,
+        "predicha": 0.5469123348161423,
+        "observada": 0.5511727078891258
+      },
+      {
+        "desde": 0.6,
+        "hasta": 0.7,
+        "n": 2377,
+        "predicha": 0.641707051951386,
+        "observada": 0.6407236011779555
+      },
+      {
+        "desde": 0.7,
+        "hasta": 0.8,
+        "n": 653,
+        "predicha": 0.7363427270813709,
+        "observada": 0.7289433384379785
+      },
+      {
+        "desde": 0.8,
+        "hasta": 0.9,
+        "n": 86,
+        "predicha": 0.8330945471843892,
+        "observada": 0.7209302325581395
+      },
+      {
+        "desde": 0.9,
+        "hasta": 1,
+        "n": 3,
+        "predicha": 0.9100747126733156,
+        "observada": 0.6666666666666666
+      }
+    ],
+    "ece": 0.004811766659924042,
+    "aviso": {
+      "nivel": "suficiente",
+      "texto": null
+    },
+    "generado": "2026-10-08T03:58:11.967Z",
+    "model_version": "ufc-7f7694adae76"
+  }
+}

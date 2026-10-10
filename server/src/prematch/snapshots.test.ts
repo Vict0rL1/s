@@ -69,7 +69,8 @@ test('el abridor confirmado a T-2h: nueva fila, con la causa registrada', () => 
 
 // EL TEST QUE PIDE LA FASE: lo de T-24h no puede contener nada de T-1h.
 test('T-24h NO ve la información que llegó después (el abridor de T-2h)', () => {
-  const [t24, t6, t1, final] = horizontes('baseball', 'mlb|nyy|bos|20261111', INICIO);
+  // «Ahora» es después del partido: todas las marcas han llegado (G1: una marca futura está pendiente).
+  const [t24, t6, t1, final] = horizontes('baseball', 'mlb|nyy|bos|20261111', INICIO, new Date(Date.parse(INICIO) + 1));
   assert.equal(t24.etiqueta, 'T-24h');
   assert.deepEqual(t24.fila?.probs, [0.55, 0.45]);
   assert.equal(t24.fila?.entradas.abridorLocal.valor, null, 'a T-24h el abridor no se conocía');

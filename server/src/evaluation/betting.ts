@@ -22,6 +22,7 @@ import { getDb } from '../db.ts';
 import { BANCO_INICIAL } from '../paper/bankroll.ts';
 import { MIN_N, probarMedia, type Prueba } from './validation.ts';
 import { avisoMuestra, type AvisoMuestra } from './sample.ts';
+import { roiDe } from './roi.ts';
 
 export interface Tramo {
   etiqueta: string;
@@ -97,7 +98,7 @@ export function tramo(etiqueta: string, xs: Fila[]): Tramo {
     n: xs.length,
     arriesgado,
     beneficio,
-    roi: arriesgado > 0 ? beneficio / arriesgado : null,
+    roi: roiDe(beneficio, arriesgado),
     // Ponderado por importe, como el ROI: si no, una apuesta de 2 € y otra de 40 € pesarían igual.
     roiPrometido: arriesgadoV > 0 ? conVentaja.reduce((s, a) => s + a.stake * (ventaja(a) as number), 0) / arriesgadoV : null,
     clvMedio: cierre.length ? cierre.reduce((s, a) => s + (a.clv as number), 0) / cierre.length : null,

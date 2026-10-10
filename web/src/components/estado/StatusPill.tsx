@@ -2,10 +2,11 @@
 // última actualización de resultados y cuota restante. Una por app, no un aviso por pestaña:
 // la misma información repetida cinco veces parecía cinco problemas distintos.
 
-import { useEffect, useState } from 'react';
-import { STATUS } from '../../lib/theme';
+import { useEffect, useRef, useState } from 'react';
+import { STATUS, tenido } from '../../lib/theme';
 import { StatusMark } from '../icons';
 import { useI18n, type Clave, type Traducir } from '../../i18n';
+import { useDialogo } from '../ui/useDialogo';
 
 interface Estado {
   generado: string;
@@ -17,7 +18,7 @@ interface Estado {
   trabajosConError: number;
 }
 
-const DEPORTES = new Set(['tennis', 'football', 'basketball', 'baseball', 'nfl']);
+const DEPORTES = new Set(['tennis', 'football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc']);
 const nombreDe = (t: Traducir, sport: string) => (DEPORTES.has(sport) ? t(`deporte.${sport}` as Clave) : sport);
 
 function hace(t: Traducir, iso: string | null): string {
@@ -69,6 +70,8 @@ export default function StatusPill({ compacto = false }: { compacto?: boolean })
   const e = useEstadoGlobal();
   const [abierto, setAbierto] = useState(false);
   const { t, idioma } = useI18n();
+  const dialogo = useRef<HTMLDivElement>(null);
+  useDialogo(abierto, () => setAbierto(false), dialogo, { bloquear: false });
   if (!e) return null;
   const r = resumenEstado(e, t);
   const loc = idioma === 'en' ? 'en-GB' : 'es';
@@ -80,14 +83,14 @@ export default function StatusPill({ compacto = false }: { compacto?: boolean })
         aria-label={t('estado.aria', { texto: r.texto })}
         data-testid="status-pill"
         className="inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium text-(--ink-body) transition hover:bg-(--raised)"
-        style={{ borderColor: `${r.color}66` }}
+        style={{ borderColor: tenido(r.color, 40) }}
       >
         <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: r.color }} />
         <span className={compacto ? 'sr-only sm:not-sr-only' : ''}>{r.texto}</span>
         {!compacto && e.cuotas.restantes != null && <span className="text-(--ink-muted)">{t('estado.peticiones', { n: e.cuotas.restantes })}</span>}
       </button>
       {abierto && (
-        <div role="dialog" aria-label={t('estado.dialogo')} className="absolute left-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-(--line) bg-(--surface-card) p-3 text-[12px] leading-relaxed text-(--ink-soft) shadow-xl">
+        <div ref={dialogo} role="dialog" aria-modal="true" aria-label={t('estado.dialogo')} className="absolute left-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-(--line) bg-(--surface-card) p-3 text-[12px] leading-relaxed text-(--ink-soft) shadow-xl">
           <p className="mb-1 font-semibold text-(--ink-strong)">
             <StatusMark estado={r.nivel === 'ok' ? 'ok' : r.nivel === 'aviso' ? 'aviso' : 'error'} color={r.color} />
             {r.texto}

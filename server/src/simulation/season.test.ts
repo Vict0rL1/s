@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import '../test/setup.ts';
 
 const { simularTemporada, clasificacionDe, reglasDe, simulacionTemporada, simulacionDelDia, configSimulacion } = await import('./season.ts');
-const { reconstruirDobleVuelta, guardarCalendario, calendarioGuardado } = await import('./calendario.ts');
+const { pendientesDe, reconstruirDobleVuelta, guardarCalendario, calendarioGuardado } = await import('./calendario.ts');
 const { rng, elegir } = await import('./rng.ts');
 const { getDb } = await import('../db.ts');
 
@@ -105,4 +105,20 @@ test('simulacionTemporada con la base vacía: motivo claro, nada inventado; la c
   const otra = await simulacionDelDia('football', 'epl', new Date('2026-10-07T23:00:00Z'));
   assert.equal(otra.generado, s.generado, 'el mismo día se sirve de la caché');
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM simulation_runs WHERE league = 'epl'").get() as { n: number }).n, 1);
+});
+
+test('C6: pendiente es «sin resultado emparejado», no «fecha futura»', () => {
+  const cal = [
+    { fecha: '20260301', homeId: 'a', awayId: 'b', neutral: false }, // ya jugado (adelantado un día en los resultados)
+    { fecha: '20260101', homeId: 'b', awayId: 'a', neutral: false }, // aplazado: fecha pasada y sin resultado
+    { fecha: '20260210', homeId: 'c', awayId: 'a', neutral: false },
+  ];
+  const jugados = [{ homeId: 'a', awayId: 'b', hg: 1, ag: 0, fecha: '20260302' }];
+  const p = pendientesDe(cal, jugados);
+  assert.deepEqual(p.map((f) => `${f.homeId}-${f.awayId}`), ['b-a', 'c-a']);
+  // Un par que se repite (dos partidos del mismo cruce en fechas distintas, como en la NBA) solo descuenta el jugado.
+  const nba = [{ fecha: '20260110', homeId: 'x', awayId: 'y', neutral: false }, { fecha: '20260220', homeId: 'x', awayId: 'y', neutral: false }];
+  assert.equal(pendientesDe(nba, [{ homeId: 'x', awayId: 'y', hg: 100, ag: 90, fecha: '20260110' }]).length, 1);
+  // Sin fecha (calendario reconstruido): descuenta por par.
+  assert.equal(pendientesDe([{ fecha: '', homeId: 'a', awayId: 'b', neutral: false }], jugados).length, 0);
 });

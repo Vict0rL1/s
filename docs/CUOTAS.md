@@ -32,7 +32,7 @@ Solo se guardaba *que* había caído, no *por qué*.
 
 | razón | qué pasa | qué hacer |
 | --- | --- | --- |
-| `sin_clave` | falta `ODDS_API_KEY` | ponerla en `.env` y `npm run update-data` |
+| `sin_clave` | falta `ODDS_API_KEY` | `npm run clave` y `npm run update-data` |
 | `fuente_falla` | la clave está, pero el proveedor no contestó: cuota agotada, clave inválida o sin internet | `npm run doctor` — lo dice sin gastar cuota |
 | `sin_eventos` | todo bien, pero no hay tenis en juego | **nada**: entre torneos no se publica nada |
 
@@ -56,7 +56,7 @@ como detalle.
 npm run odds
 ```
 
-Pide las cuotas de los cinco deportes y dice, deporte a deporte, si han llegado y —cuando
+Pide las cuotas de los seis deportes y dice, deporte a deporte, si han llegado y —cuando
 no— **por qué no**:
 
 ```
@@ -96,7 +96,16 @@ The Odds API. Sin key, la app muestra un demo con partidos de ejemplo.
 
 1. Regístrate gratis en **https://the-odds-api.com** y copia tu API key (botón *Get API Key*).
    El plan gratuito da 500 requests/mes.
-2. En tu archivo `.env`:
+2. Ponla con
+
+   ```bash
+   npm run clave
+   ```
+
+   que la pide sin enseñarla, la escribe en el `.env` de la raíz (lo crea desde `.env.example` si
+   no existe), deja **una sola** línea `ODDS_API_KEY=` aunque hubiera varias, la comprueba contra el
+   listado gratuito del proveedor (no gasta créditos) y avisa si la terminal tiene otra
+   `ODDS_API_KEY` que gana sobre el `.env`. A mano también vale:
 
    ```bash
    ODDS_API_KEY=tu_clave_aqui
@@ -176,7 +185,10 @@ respuesta. Con ese número la app calcula tres cosas que antes eran constantes e
 
 El coste de un ciclo también se mide en vez de suponerse: es la diferencia del contador `used` de
 la propia API entre el principio y el final del ciclo. Con las ligas de hoy sale **34 créditos**
-(13 de fútbol + 7 de baloncesto + 4 de béisbol + 6 de NFL + ~4 de tenis, a una región).
+(13 de fútbol + 7 de baloncesto + 4 de béisbol + 6 de NFL + ~4 de tenis, a una región). La NHL
+suma **2 por ciclo** en temporada (ganador y total, `icehockey_nhl`) y cero de junio a septiembre:
+el listado gratuito de `/sports` dice si está activa. La UFC suma **1** (ganador,
+`mma_mixed_martial_arts`, todo el MMA: de ahí solo se guardan las carteleras de la UFC).
 
 El 40 % que no se presupuesta no es timidez: absorbe lo que una recta no puede prever — trece ligas
 de fútbol configuradas de las que juegan cinco en una semana cualquiera, y los refrescos que pidas

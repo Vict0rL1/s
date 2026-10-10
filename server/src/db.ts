@@ -3,6 +3,7 @@
 // repeated network calls once ingested.
 
 import fs from 'node:fs';
+import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { DATA_DIR } from './config.ts';
 import { ODDS_SNAPSHOT_SCHEMA } from './odds/schema.ts';
@@ -10,7 +11,7 @@ import { PREMATCH_SCHEMA } from './prematch/schema.ts';
 import { ASSESSMENT_SCHEMA } from './trust/schema.ts';
 import { SHADOW_SCHEMA } from './shadow/schema.ts';
 import { ALERTS_SCHEMA } from './alerts/schema.ts';
-import { EDGE_SIGNALS_SCHEMA, PAPER_BET_COLUMNS, PAPER_TRIGGERS, PREDICTION_LOG_TRIGGERS } from './paper/schema.ts';
+import { EDGE_SIGNALS_SCHEMA, NHL_LOG_TRIGGERS, PAPER_BET_COLUMNS, PAPER_TRIGGERS, PREDICTION_LOG_TRIGGERS, UFC_LOG_TRIGGERS } from './paper/schema.ts';
 import { SESSIONS_SCHEMA } from './auth/sessions.ts';
 import { EXTERNAL_ELO_SCHEMA } from './football/ingest/clubelo.ts';
 import { BULLPEN_SCHEMA } from './baseball/ingest/bullpen.ts';
@@ -24,12 +25,14 @@ import { WATCHLIST_SCHEMA } from './watchlist/schema.ts';
 import { STRATEGIES_SCHEMA } from './estrategias/schema.ts';
 import { INBOX_SCHEMA } from './bandeja/schema.ts';
 import { REPORTS_SCHEMA } from './informes/schema.ts';
-import { NHL_SCHEMA } from './nhl/schema.ts';
+import { NHL_PUBLICADA_SCHEMA, NHL_REGISTRO_SCHEMA, NHL_SCHEMA } from './nhl/schema.ts';
+import { UFC_PUBLICADA_SCHEMA, UFC_REGISTRO_SCHEMA, UFC_SCHEMA } from './ufc/schema.ts';
 import { ERROR_LOG_SCHEMA } from './security/errors.ts';
-import { HISTORY_DB_PATH, LAYOUT, LEDGER_DB_PATH, LEDGER_SCHEMA, LEGACY_DB_PATH, rutaPrincipal } from './db/layout.ts';
+import { HISTORY_DB_PATH, LAYOUT, LEDGER_DB_PATH, LEDGER_SCHEMA, LEGACY_DB_PATH, rutaPrincipal, LEDGER_MARCA_PATH } from './db/layout.ts';
 import { ledgerize, masterDe } from './db/ledgerize.ts';
 import { migrar, type Migracion } from './db/migrations.ts';
 import { hayQuePartir, partirBase } from './db/split.ts';
+import { QUOTE_STATE_SCHEMA } from './odds/schema.ts';
 import { claveEsLedger } from './db/tables.ts';
 
 let db: DatabaseSync | null = null;
@@ -208,12 +211,78 @@ export const MIGRACIONES: Migracion[] = [
       d.exec(ledgerize(STRATEGIES_SCHEMA, ctx.ledger));
     },
   },
+  // NHL con una segunda fuente (sportsdataverse): `final_period` pasa a admitir NULL (la fuente no dice
+  // si hubo prórroga) y se añade `fuente`. SQLite no cambia un CHECK en sitio: se rehace la tabla
+  // copiando las filas. Es historia (se vuelve a bajar), pero aun así no se pierde nada.
+  {
+    version: 14,
+    nombre: 'nhl-segunda-fuente',
+    destino: 'history',
+    up: (d) => {
+      const t = d.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'nhl_games'").get() as { sql: string } | undefined;
+      if (!t) {
+        d.exec(NHL_SCHEMA);
+        return;
+      }
+      if (t.sql.includes('fuente')) return;
+      d.exec('ALTER TABLE nhl_games RENAME TO nhl_games_v13');
+      d.exec('DROP INDEX IF EXISTS idx_nhl_fecha');
+      d.exec(NHL_SCHEMA);
+      d.exec(
+        `INSERT INTO nhl_games (id, season, game_type, game_date, home_id, away_id, home_name, away_name, home_goals, away_goals, final_period, fuente, ingested_at)
+         SELECT id, season, game_type, game_date, home_id, away_id, home_name, away_name, home_goals, away_goals, final_period, 'nhl-api', ingested_at FROM nhl_games_v13`,
+      );
+      d.exec('DROP TABLE nhl_games_v13');
+    },
+  },
+  // La UFC en sombra (seguimiento: NHL y UFC): eventos, luchadores y peleas. Historia (se vuelve a bajar).
+  { version: 15, nombre: 'ufc-sombra', destino: 'history', up: (d) => d.exec(UFC_SCHEMA) },
+  // La NHL publicada: equipos y próximos (historia) y su registro de predicciones (libro mayor), con
+  // los mismos triggers que los otros cinco. Dos migraciones porque van a ficheros distintos.
+  { version: 16, nombre: 'nhl-publicada', destino: 'history', up: (d) => d.exec(NHL_PUBLICADA_SCHEMA) },
+  { version: 17, nombre: 'nhl-registro', destino: 'ledger', up: (d, ctx) => d.exec(ledgerize(NHL_REGISTRO_SCHEMA + NHL_LOG_TRIGGERS, ctx.ledger)) },
+  // La UFC publicada, igual que la NHL: próximas peleas (historia) y registro de predicciones (libro mayor).
+  { version: 18, nombre: 'ufc-publicada', destino: 'history', up: (d) => d.exec(UFC_PUBLICADA_SCHEMA) },
+  { version: 19, nombre: 'ufc-registro', destino: 'ledger', up: (d, ctx) => d.exec(ledgerize(UFC_REGISTRO_SCHEMA + UFC_LOG_TRIGGERS, ctx.ledger)) },
+  // odds_quote_state al libro mayor (lote B, B2): apunta a odds_snapshots y un fetch-data la perdía.
+  {
+    version: 20,
+    nombre: 'quote-state-al-ledger',
+    destino: 'ledger',
+    up: (d, ctx) => {
+      d.exec(ledgerize(QUOTE_STATE_SCHEMA, ctx.ledger));
+      if (ctx.ledger === 'main') return;
+      const enMain = (d.prepare("SELECT COUNT(*) AS n FROM main.sqlite_master WHERE type = 'table' AND name = 'odds_quote_state'").get() as { n: number }).n;
+      if (enMain) {
+        d.exec(`INSERT OR REPLACE INTO ${ctx.ledger}.odds_quote_state SELECT * FROM main.odds_quote_state`);
+        d.exec('DROP TABLE main.odds_quote_state');
+      }
+    },
+  },
+  // strategy_bets.policy_version_id (lote C, C5): la versión de la política con la que se apostó,
+  // como en paper_bets. ALTER TABLE sobre una tabla con triggers de solo-lectura es válido.
+  {
+    version: 21,
+    nombre: 'strategy-bets-politica',
+    destino: 'ledger',
+    up: (d, ctx) => {
+      const tabla = ctx.ledger === 'main' ? 'strategy_bets' : `${ctx.ledger}.strategy_bets`;
+      const existe = (d.prepare(`SELECT COUNT(*) AS n FROM ${ctx.ledger === 'main' ? '' : `${ctx.ledger}.`}sqlite_master WHERE type = 'table' AND name = 'strategy_bets'`).get() as { n: number }).n;
+      if (!existe) return;
+      const cols = (d.prepare(`PRAGMA ${ctx.ledger === 'main' ? '' : `${ctx.ledger}.`}table_info(strategy_bets)`).all() as { name: string }[]).map((c) => c.name);
+      if (!cols.includes('policy_version_id')) d.exec(`ALTER TABLE ${tabla} ADD COLUMN policy_version_id INTEGER`);
+    },
+  },
 ];
 
 export function aplicarPragmas(d: DatabaseSync, schemas: string[]): void {
   for (const s of schemas) {
     d.exec(`PRAGMA ${s}.journal_mode = WAL;`);
-    d.exec(`PRAGMA ${s}.synchronous = NORMAL;`);
+    // El libro mayor con FULL (lote B, B5): NORMAL con WAL aguanta que caiga el proceso, pero un
+    // corte de luz puede perder los últimos commits, y ahí van las apuestas. La historia se
+    // reconstruye: NORMAL.
+    const libroMayor = s === 'ledger' || LAYOUT === 'single';
+    d.exec(`PRAGMA ${s}.synchronous = ${libroMayor ? 'FULL' : 'NORMAL'};`);
   }
   d.exec('PRAGMA busy_timeout = 5000;');
   d.exec('PRAGMA foreign_keys = ON;');
@@ -226,6 +295,7 @@ export function abrirBase(opts: { reintentar?: boolean; log?: (m: string) => voi
     const r = partirBase(LEGACY_DB_PATH, HISTORY_DB_PATH, LEDGER_DB_PATH);
     opts.log?.(`Base partida en dos: ${r.tablasHistory.length} tablas en history.db, ${r.tablasLedger.length} en ledger.db (${r.settingsCopiadas} claves de estado). El original queda en ${r.original}.`);
   }
+  if (LAYOUT === 'split') comprobarLibroMayor(opts.log);
   const d = new DatabaseSync(rutaPrincipal());
   if (LAYOUT === 'split') d.exec(`ATTACH '${LEDGER_DB_PATH.replace(/'/g, "''")}' AS ledger`);
   aplicarPragmas(d, LAYOUT === 'split' ? ['main', 'ledger'] : ['main']);
@@ -233,7 +303,30 @@ export function abrirBase(opts: { reintentar?: boolean; log?: (m: string) => voi
   migrar(d, 'main', 'history', MIGRACIONES, { ...ctx, fichero: 'history' }, opts);
   if (LAYOUT === 'split') migrar(d, 'ledger', 'ledger', MIGRACIONES, { ...ctx, fichero: 'ledger' }, opts);
   else migrar(d, 'main', 'ledger', MIGRACIONES.filter((m) => m.destino === 'ledger'), { ...ctx, fichero: 'ledger' }, opts);
+  if (LAYOUT === 'split' && !fs.existsSync(LEDGER_MARCA_PATH)) {
+    fs.writeFileSync(LEDGER_MARCA_PATH, `libro mayor creado por la app el ${new Date().toISOString()}\n`);
+  }
   return d;
+}
+
+/**
+ * Sin `ledger.db` pero con la marca de que lo hubo, NO se arranca con uno vacío (lote B, B4):
+ * las apuestas, el registro de predicciones y los precios observados estarían perdidos y la app
+ * seguiría como si nada. `LEDGER_NUEVO=si` empieza uno nuevo a sabiendas.
+ */
+function comprobarLibroMayor(log?: (m: string) => void): void {
+  if (fs.existsSync(LEDGER_DB_PATH) || !fs.existsSync(LEDGER_MARCA_PATH)) return;
+  if (process.env.LEDGER_NUEVO?.trim().toLowerCase() === 'si') {
+    log?.('LEDGER_NUEVO=si: se empieza un libro mayor nuevo a sabiendas (el anterior no está).');
+    fs.rmSync(LEDGER_MARCA_PATH, { force: true });
+    return;
+  }
+  throw new Error(
+    `Falta ${LEDGER_DB_PATH} y ${path.basename(LEDGER_MARCA_PATH)} dice que aquí hubo un libro mayor (apuestas, registro de predicciones, precios observados).\n` +
+      '  No se arranca con uno vacío.\n' +
+      '  · Para recuperarlo:              npm run restore   (lista las copias; npm run restore -- <fichero>)\n' +
+      '  · Para empezar uno nuevo A SABIENDAS:  LEDGER_NUEVO=si npm run dev',
+  );
 }
 
 export function getDb(): DatabaseSync {

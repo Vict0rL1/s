@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type TrackRecord } from '../lib/api';
 import { CheckIcon, CrossIcon } from './icons';
 import { conNodos, useI18n, type Clave } from '../i18n';
+import { pct as pctF, num as numF } from '../lib/formato';
 
 /**
  * The app's own scorecard.
@@ -59,7 +60,7 @@ export default function TrackRecordPanel({ tour }: { tour: string }) {
           ) : (
             <span className="text-(--ink-strong)">
               {conNodos(t('historial.resumen'), {
-                pct: <strong className="tabular-nums">{((acc ?? 0) * 100).toFixed(1)}%</strong>,
+                pct: <strong className="tabular-nums">{pctF((acc ?? 0), 1)}</strong>,
                 n: <strong className="tabular-nums">{data.resolved}</strong>,
               })}
               {data.pending > 0 && <span className="text-(--ink-soft)">{t('historial.pendientes', { n: data.pending })}</span>}
@@ -81,9 +82,9 @@ export default function TrackRecordPanel({ tour }: { tour: string }) {
 
           {data.resolved > 0 && (
             <div className="grid grid-cols-3 gap-2">
-              <Stat label={t('historial.acierto')} value={`${((acc ?? 0) * 100).toFixed(1)}%`} />
-              <Stat label={t('historial.brier')} value={data.brier?.toFixed(4) ?? '—'} hint={t('historial.menorMejor')} />
-              <Stat label={t('historial.logLoss')} value={data.logLoss?.toFixed(4) ?? '—'} hint={t('historial.menorMejor')} />
+              <Stat label={t('historial.acierto')} value={`${pctF((acc ?? 0), 1)}`} />
+              <Stat label={t('historial.brier')} value={(data.brier == null ? undefined : numF(data.brier, 4)) ?? '—'} hint={t('historial.menorMejor')} />
+              <Stat label={t('historial.logLoss')} value={(data.logLoss == null ? undefined : numF(data.logLoss, 4)) ?? '—'} hint={t('historial.menorMejor')} />
             </div>
           )}
 
@@ -105,12 +106,12 @@ export default function TrackRecordPanel({ tour }: { tour: string }) {
                   <tr>
                     <td className="py-1 text-(--ink-soft)">{t('historial.modelo')}</td>
                     <td>{fmtPct(data.vsMarket.modelAccuracy)}</td>
-                    <td>{data.vsMarket.modelBrier?.toFixed(4) ?? '—'}</td>
+                    <td>{(data.vsMarket.modelBrier == null ? undefined : numF(data.vsMarket.modelBrier, 4)) ?? '—'}</td>
                   </tr>
                   <tr>
                     <td className="py-1 text-(--ink-soft)">{t('historial.mercado')}</td>
                     <td>{fmtPct(data.vsMarket.marketAccuracy)}</td>
-                    <td>{data.vsMarket.marketBrier?.toFixed(4) ?? '—'}</td>
+                    <td>{(data.vsMarket.marketBrier == null ? undefined : numF(data.vsMarket.marketBrier, 4)) ?? '—'}</td>
                   </tr>
                 </tbody>
               </table>
@@ -143,7 +144,7 @@ export default function TrackRecordPanel({ tour }: { tour: string }) {
                       <td className="py-1 text-(--ink-soft)">{r.level in NIVEL ? t(NIVEL[r.level]) : r.level}</td>
                       <td>{r.n}</td>
                       <td>{fmtPct(r.accuracy)}</td>
-                      <td>{r.brier?.toFixed(4) ?? '—'}</td>
+                      <td>{(r.brier == null ? undefined : numF(r.brier, 4)) ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -212,7 +213,7 @@ export default function TrackRecordPanel({ tour }: { tour: string }) {
 const NIVEL: Record<string, Clave> = { high: 'historial.alta', medium: 'historial.media', low: 'historial.baja' };
 
 function fmtPct(v: number | null): string {
-  return v == null ? '—' : `${(v * 100).toFixed(1)}%`;
+  return v == null ? '—' : `${pctF(v, 1)}`;
 }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {

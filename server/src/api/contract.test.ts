@@ -8,7 +8,7 @@ import '../test/setup.ts';
 const { buildApp } = await import('../app.ts');
 const { configAuth } = await import('../auth/mode.ts');
 const { LimiteDeIntentos } = await import('../auth/rateLimit.ts');
-const { validar, ESQUEMA_HEALTH, ESQUEMA_READY, ESQUEMA_FEATURES, ESQUEMA_DATOS_ESTADO, ESQUEMA_INGESTION_RUNS, ESQUEMA_SCHEDULER, ESQUEMA_POLICY, ESQUEMA_CANALES, ESQUEMA_EXPORT_JSON, ESQUEMA_FIABILIDAD, ESQUEMA_SEGMENTOS, ESQUEMA_MONITORIZACION, ESQUEMA_SIMULACION, ESQUEMA_TORNEO, ESQUEMA_COMBINADA, ESQUEMA_INTEL, ESQUEMA_ESTADO, ESQUEMA_ERRORES, ESQUEMA_AJUSTES, ESQUEMA_WATCHLIST, ESQUEMA_HISTORIA_ELO, ESQUEMA_HISTORIAL_SIMULACION, ESQUEMA_BUSQUEDA, ESQUEMA_CUOTAS_POR_CASA, ESQUEMA_ESTRATEGIAS, ESQUEMA_ESTRATEGIA, ESQUEMA_HISTORICO_ESTRATEGIA, ESQUEMA_APUESTAS_ESTRATEGIA, ESQUEMA_BANDEJA, ESQUEMA_CONTADOR_BANDEJA, ESQUEMA_MARCADAS, ESQUEMA_INFORMES, ESQUEMA_INFORME, ESQUEMA_INFORME_GENERADO, ESQUEMA_LINEAS, ESQUEMA_ARCHIVO, ESQUEMA_RENDIMIENTO, ESQUEMA_NHL_SOMBRA } = await import('./schemas.ts');
+const { validar, ESQUEMA_HEALTH, ESQUEMA_READY, ESQUEMA_FEATURES, ESQUEMA_DATOS_ESTADO, ESQUEMA_INGESTION_RUNS, ESQUEMA_SCHEDULER, ESQUEMA_POLICY, ESQUEMA_CANALES, ESQUEMA_EXPORT_JSON, ESQUEMA_FIABILIDAD, ESQUEMA_SEGMENTOS, ESQUEMA_MONITORIZACION, ESQUEMA_SIMULACION, ESQUEMA_TORNEO, ESQUEMA_COMBINADA, ESQUEMA_INTEL, ESQUEMA_ESTADO, ESQUEMA_ERRORES, ESQUEMA_AJUSTES, ESQUEMA_WATCHLIST, ESQUEMA_HISTORIA_ELO, ESQUEMA_HISTORIAL_SIMULACION, ESQUEMA_BUSQUEDA, ESQUEMA_CUOTAS_POR_CASA, ESQUEMA_ESTRATEGIAS, ESQUEMA_ESTRATEGIA, ESQUEMA_HISTORICO_ESTRATEGIA, ESQUEMA_APUESTAS_ESTRATEGIA, ESQUEMA_BANDEJA, ESQUEMA_CONTADOR_BANDEJA, ESQUEMA_MARCADAS, ESQUEMA_INFORMES, ESQUEMA_INFORME, ESQUEMA_INFORME_GENERADO, ESQUEMA_LINEAS, ESQUEMA_ARCHIVO, ESQUEMA_RENDIMIENTO, ESQUEMA_NHL_BACKTEST, ESQUEMA_UFC_BACKTEST } = await import('./schemas.ts');
 const { reiniciarRegistro, registrar, arrancar, parar } = await import('../scheduler/registry.ts');
 
 const rutas: { method: string | string[]; url: string }[] = [];
@@ -88,14 +88,17 @@ test('cada ruta con esquema responde algo que lo cumple', async () => {
     assert.equal(res.statusCode, 200, `${url} → ${res.statusCode} ${res.body.slice(0, 120)}`);
     assert.deepEqual(validar(res.json(), esquema as never), [], url);
   }
-  // La NHL en sombra (Fase 8.1): apagada por defecto (404), y con el interruptor, la evaluación.
-  assert.equal((await app.inject({ method: 'GET', url: '/api/nhl/sombra' })).statusCode, 404);
-  assert.equal((await app.inject({ method: 'PATCH', url: '/api/features/deportes.nhl', payload: { on: true } })).statusCode, 200);
-  const nhl = await app.inject({ method: 'GET', url: '/api/nhl/sombra' });
+  // La NHL publicada: la evaluación del backtest con la que se publicó; sin partidos, sin métricas inventadas.
+  const nhl = await app.inject({ method: 'GET', url: '/api/nhl/backtest' });
   assert.equal(nhl.statusCode, 200, nhl.body);
-  assert.deepEqual(validar(nhl.json(), ESQUEMA_NHL_SOMBRA), [], '/api/nhl/sombra');
+  assert.deepEqual(validar(nhl.json(), ESQUEMA_NHL_BACKTEST), [], '/api/nhl/backtest');
   assert.equal((nhl.json() as { modelo: unknown }).modelo, null, 'sin partidos no hay métricas inventadas');
-  assert.equal((await app.inject({ method: 'PATCH', url: '/api/features/deportes.nhl', payload: { on: null } })).statusCode, 200);
+  // La UFC publicada: lo mismo, sin interruptor; sin peleas, ni métricas ni prueba inventadas.
+  const ufc = await app.inject({ method: 'GET', url: '/api/ufc/backtest' });
+  assert.equal(ufc.statusCode, 200, ufc.body);
+  assert.deepEqual(validar(ufc.json(), ESQUEMA_UFC_BACKTEST), [], '/api/ufc/backtest');
+  assert.equal((ufc.json() as { modelo: unknown; prueba: unknown }).modelo, null);
+  assert.equal((ufc.json() as { prueba: unknown }).prueba, null);
   const parlay = await app.inject({ method: 'POST', url: '/api/picks/parlay', payload: { patas: [{ sport: 'football', matchKey: 'a', cuando: '2026-10-10T15:00:00Z', p: 0.5, cuota: 2 }, { sport: 'football', matchKey: 'b', cuando: '2026-10-11T15:00:00Z', p: 0.4 }] } });
   assert.equal(parlay.statusCode, 200, parlay.body);
   assert.deepEqual(validar(parlay.json(), ESQUEMA_COMBINADA), [], '/api/picks/parlay');

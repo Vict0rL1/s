@@ -19,6 +19,8 @@ const LOG: Record<SportId, { tabla: string; clave: string; prob: string; resulta
   basketball: { tabla: 'bb_prediction_log', clave: 'game_key', prob: 'prob_home', resultado: 'home_pts' },
   baseball: { tabla: 'bsb_prediction_log', clave: 'match_key', prob: 'prob_home', resultado: 'home_runs' },
   nfl: { tabla: 'naf_prediction_log', clave: 'match_key', prob: 'COALESCE(shown_home, prob_home)', resultado: 'home_points' },
+  nhl: { tabla: 'nhl_prediction_log', clave: 'match_key', prob: 'COALESCE(shown_home, prob_home)', resultado: 'home_goals' },
+  ufc: { tabla: 'ufc_prediction_log', clave: 'match_key', prob: 'COALESCE(shown_home, prob_home)', resultado: 'home_score' },
 };
 
 const pc = (p: number) => `${(p * 100).toFixed(1).replace('.', ',')} %`;

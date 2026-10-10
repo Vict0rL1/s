@@ -38,6 +38,7 @@ import { registrarCompresionYEtag } from './http/compresion.ts';
 import { registerInformesRoutes } from './routes/informes.ts';
 import { registerLineasArchivoRoutes } from './routes/lineasArchivo.ts';
 import { registerNhlRoutes } from './routes/nhl.ts';
+import { registerUfcRoutes } from './routes/ufc.ts';
 import { conLectorDeAnulaciones } from './features.ts';
 import { incrementar, grupoDeRuta } from './observability/metrics.ts';
 import { registroArrancado } from './scheduler/registry.ts';
@@ -51,6 +52,8 @@ export interface AppOptions {
   auth?: AuthRuntime;
   /** Servir web/dist si existe (producción). Los tests lo dejan apagado. */
   servirWeb?: boolean;
+  /** La carpeta de la web construida (por defecto, WEB_DIST). Los tests de la puerta pasan una de mentira. */
+  webDist?: string;
   /** Logger de Fastify (apagado en tests). */
   logger?: boolean;
   entorno?: NodeJS.ProcessEnv;
@@ -98,7 +101,7 @@ export async function buildApp(opts: AppOptions = {}): Promise<FastifyInstance> 
     const url = req.url;
     // Métricas: cada petición por grupo de ruta y código; las de predicción, además por deporte.
     try {
-      const grupo = grupoDeRuta(url);
+      const grupo = grupoDeRuta(req.routeOptions?.url, url);
       incrementar('http_peticiones_total', { grupo, status: reply.statusCode }, 'peticiones HTTP por grupo de ruta y código');
     } catch {
       // Medir no puede tumbar una respuesta.
@@ -162,7 +165,7 @@ export async function buildApp(opts: AppOptions = {}): Promise<FastifyInstance> 
   await app.register(registerEstrategiasRoutes);
   await app.register(registerInformesRoutes);
   await app.register(registerLineasArchivoRoutes);
-  await app.register(registerNhlRoutes);
+  await app.register(registerUfcRoutes, { prefix: '/api/ufc' });
 
   await app.register(registerRoutes, { prefix: '/api' });
   // Basketball lives in its own namespace: no endpoint can return both sports.
@@ -172,6 +175,7 @@ export async function buildApp(opts: AppOptions = {}): Promise<FastifyInstance> 
   await app.register(registerStakingRoutes, { prefix: '/api/staking' });
   await app.register(registerBaseballRoutes, { prefix: '/api/baseball' });
   await app.register(registerNflRoutes, { prefix: '/api/nfl' });
+  await app.register(registerNhlRoutes, { prefix: '/api/nhl' });
   // The bet log is not a sixth sport: it records what the person staked, not what
   // any model claimed, so it gets its own namespace rather than living under one.
   await app.register(registerBetRoutes, { prefix: '/api/bets' });
@@ -206,15 +210,16 @@ export async function buildApp(opts: AppOptions = {}): Promise<FastifyInstance> 
 
   // La app construida, si la hay. En desarrollo no la hay y la sirve Vite, así que esto
   // no se registra y `/` sigue devolviendo el índice de la API de abajo.
-  const hayWeb = opts.servirWeb !== false && webBuildExists();
+  const webDist = opts.webDist ?? WEB_DIST;
+  const hayWeb = opts.servirWeb !== false && webBuildExists(webDist);
   if (hayWeb) {
-    await registerStatic(app);
-    app.log.info(`Sirviendo la app construida desde ${WEB_DIST}`);
+    await registerStatic(app, webDist);
+    app.log.info(`Sirviendo la app construida desde ${webDist}`);
   } else if (opts.servirWeb !== false && auth.config.produccion) {
     // En producción esto NO es un detalle: significa que el despliegue responde a la API
     // y devuelve 404 en la portada. Mejor no arrancar que quedar así.
     throw new Error(
-      `No hay app construida en ${WEB_DIST}, y NODE_ENV=production.\n\n` +
+      `No hay app construida en ${webDist}, y NODE_ENV=production.\n\n` +
         'El contenedor tiene que construir el frontend (npm run build) antes de arrancar\n' +
         'el servidor; si no, la URL contesta a /api pero no se puede abrir.',
     );

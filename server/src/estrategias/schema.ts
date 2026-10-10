@@ -70,6 +70,7 @@ export const STRATEGIES_SCHEMA = `
     event_result        TEXT,
     bankroll_after      REAL,
     correlation_groups  TEXT,           -- JSON: evento, equipos o jugadores (seguimiento; antes, NULL)
+    policy_version_id   INTEGER,        -- la versión de la política con la que se apostó (lote C, C5)
     UNIQUE (strategy_id, event_id)
   );
   CREATE INDEX IF NOT EXISTS idx_strategy_bets_estado ON strategy_bets (strategy_id, status);

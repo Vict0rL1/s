@@ -4,11 +4,12 @@ import { PROFIT_COLOR } from '../../lib/theme';
 import { StatusMark } from '../icons';
 import { type Inteligencia, AMBAR, num } from './tipos';
 import { useI18n } from '../../i18n';
+import { num as numF } from '../../lib/formato';
 
 export function Mercado() {
   const { t, idioma } = useI18n();
   // Un decimal con la coma en español, como estaba; con punto en inglés.
-  const dec = (x: number) => (idioma === 'es' ? x.toFixed(1).replace('.', ',') : x.toFixed(1));
+  const dec = (x: number) => (idioma === 'es' ? numF(x, 1) : numF(x, 1));
   const [d, setD] = useState<Inteligencia | null | 'error'>(null);
   useEffect(() => {
     let vivo = true;

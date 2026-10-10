@@ -2,13 +2,14 @@
 // snapshot que casar, «¿la habría apostado el modelo?» con la ventaja mínima de la política,
 // y las etiquetas.
 import { useEffect, useState } from 'react';
-import { PROFIT_COLOR, LOSS_COLOR } from '../../lib/theme';
+import { PROFIT_TEXT, LOSS_TEXT } from '../../lib/theme';
 import type { Bet } from '../../lib/bets';
 import { conNodos, useI18n } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 interface Clv { clv: number | null; cierre: number | null; casas: number | null; motivo: string | null }
 
-const pct = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(1).replace('.', ',')} %`;
+const pct = (x: number) => `${x >= 0 ? '+' : '−'}${pctF(Math.abs(x), 1)}`;
 
 export function Etiquetas({ tags }: { tags: string[] }) {
   if (!tags?.length) return null;
@@ -29,7 +30,7 @@ export function LoHabriaApostado({ bet, minEdge }: { bet: Bet; minEdge: number |
   return (
     <span className="text-(--ink-soft)" title={t('extras.lohabriaNota')}>
       {conNodos(t('extras.lohabria', { ventaja: pct(ventaja), minimo: pct(minEdge) }), {
-        respuesta: <strong style={{ color: si ? PROFIT_COLOR : LOSS_COLOR }}>{si ? t('extras.si') : t('extras.no')}</strong>,
+        respuesta: <strong style={{ color: si ? PROFIT_TEXT : LOSS_TEXT }}>{si ? t('extras.si') : t('extras.no')}</strong>,
       })}
     </span>
   );
@@ -49,8 +50,8 @@ export function ClvPropio({ id }: { id: number }) {
   if (c.clv == null) return <span className="text-(--ink-muted)" title={c.motivo ?? undefined}>{t('extras.clvSinCierre', { motivo: c.motivo ?? '—' })}</span>;
   return (
     <span className="text-(--ink-soft)">
-      {conNodos(t('extras.clv', { cierre: c.cierre?.toFixed(2) ?? '—', casas: c.casas ?? '—' }), {
-        clv: <strong style={{ color: c.clv >= 0 ? PROFIT_COLOR : LOSS_COLOR }}>{pct(c.clv)}</strong>,
+      {conNodos(t('extras.clv', { cierre: (c.cierre == null ? undefined : numF(c.cierre, 2)) ?? '—', casas: c.casas ?? '—' }), {
+        clv: <strong style={{ color: c.clv >= 0 ? PROFIT_TEXT : LOSS_TEXT }}>{pct(c.clv)}</strong>,
       })}
     </span>
   );
@@ -75,10 +76,10 @@ export function Sugerencia({ odds, prob }: { odds: number; prob: number | null }
     <p className="text-[13px] text-(--ink-soft)" role="status">
       {conNodos(
         t('extras.sugerencia', {
-          importe: s.importe != null ? t('extras.importeDe', { importe: s.importe.toFixed(2), banco: s.bancoPersonal ?? '—' }) : t('extras.fijaBanco'),
+          importe: s.importe != null ? t('extras.importeDe', { importe: numF(s.importe, 2), banco: s.bancoPersonal ?? '—' }) : t('extras.fijaBanco'),
           nota: s.nota,
         }),
-        { fraccion: <strong className="text-(--ink-strong)">{t('extras.delBanco', { p: (s.fraccion * 100).toFixed(2).replace('.', ',') })}</strong> },
+        { fraccion: <strong className="text-(--ink-strong)">{t('extras.delBanco', { p: numF(s.fraccion * 100, 2) })}</strong> },
       )}
     </p>
   );

@@ -41,7 +41,7 @@ export default function Campana() {
         <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
       </svg>
       {n > 0 && (
-        <span className="absolute -right-1.5 -top-1.5 min-w-[1.1rem] rounded-full px-1 text-center text-[10px] font-semibold leading-[1.1rem]" style={{ backgroundColor: STATUS.critical, color: "#0b0d11" }}>
+        <span className="absolute -right-1.5 -top-1.5 min-w-[1.1rem] rounded-full px-1 text-center text-[10px] font-semibold leading-[1.1rem]" style={{ backgroundColor: STATUS.critical, color: 'var(--ink-on-fill)' }}>
           {n > 99 ? '99+' : n}
         </span>
       )}

@@ -2,6 +2,7 @@ import type { FbGoalMargin, FbPrediction } from '../../lib/football';
 import { AWAY_COLOR, DRAW_COLOR, HOME_COLOR, inkOn, withAlpha } from '../../lib/theme';
 import { Panel, SectionTitle } from '../ui';
 import { useI18n } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 /**
  * The full exact-score grid.
@@ -42,7 +43,7 @@ export default function ScoreMatrix({ prediction }: { prediction: FbPrediction }
         {t('det.probMarcador')}
       </SectionTitle>
 
-      <div className="-mx-1 overflow-x-auto px-1">
+      <div className="-mx-1 overflow-x-auto px-1" tabIndex={0}>
         <table className="w-full min-w-[22rem] border-separate border-spacing-0.5 text-center text-[13px] tabular-nums">
           <thead>
             <tr>
@@ -67,7 +68,7 @@ export default function ScoreMatrix({ prediction }: { prediction: FbPrediction }
                     peak={peak}
                     outcome={h > a ? 'home' : h === a ? 'draw' : 'away'}
                     top={h === best.h && a === best.a}
-                    title={`${home.name} ${h}–${a} ${away.name}: ${(p * 100).toFixed(2)}%`}
+                    title={`${home.name} ${h}–${a} ${away.name}: ${pctF(p, 2)}`}
                   />
                 ))}
               </tr>
@@ -95,7 +96,7 @@ function Cell({
   // Square-rooted so the low-probability cells stay legible instead of collapsing
   // into the background; the eye reads area, not linear opacity.
   const strength = peak > 0 ? Math.sqrt(p / peak) : 0;
-  const shown = p >= 0.001 ? (p * 100).toFixed(1) : '·';
+  const shown = p >= 0.001 ? numF(p * 100, 1) : '·';
   return (
     <td
       title={title}
@@ -130,7 +131,7 @@ function Legend({ prediction, tail }: { prediction: FbPrediction; tail: number }
             />
             <div className="break-words text-(--ink-soft)" title={i.label}>{i.label}</div>
             <div className="font-semibold tabular-nums text-(--ink-strong)">
-              {(i.value * 100).toFixed(1)}%
+              {pctF(i.value, 1)}
             </div>
           </div>
         ))}
@@ -138,7 +139,7 @@ function Legend({ prediction, tail }: { prediction: FbPrediction; tail: number }
       <p className="mt-1.5 text-[13px] text-(--ink-muted)">
         {t('sm.sumaBloque')}
         {tail > 0.0005 && (
-          <> {t('sm.cola', { n: prediction.goals.grid.maxGoals, p: (tail * 100).toFixed(2) })}</>
+          <> {t('sm.cola', { n: prediction.goals.grid.maxGoals, p: numF(tail * 100, 2) })}</>
         )}
       </p>
     </>
@@ -192,11 +193,11 @@ function Margins({
                     width: `${peak > 0 ? (m.probability / peak) * 100 : 0}%`,
                     backgroundColor: color,
                   }}
-                  title={`${label}: ${(m.probability * 100).toFixed(1)}%`}
+                  title={`${label}: ${pctF(m.probability, 1)}`}
                 />
               </div>
               <span className="w-11 text-right tabular-nums text-(--ink-soft)">
-                {(m.probability * 100).toFixed(1)}%
+                {pctF(m.probability, 1)}
               </span>
             </div>
           );

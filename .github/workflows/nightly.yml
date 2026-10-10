@@ -1,4 +1,4 @@
-# Cada noche: los backtests de los cinco deportes sobre la base publicada, y un aviso (el job
+# Cada noche: los backtests de los siete deportes sobre la base publicada, y un aviso (el job
 # falla) si el log loss de un modelo publicado empeora más que la tolerancia de
 # experiments/tolerancias.json respecto a experiments/backtest_metrics.json (lo commiteado).
 name: Backtests nocturnos
@@ -31,6 +31,8 @@ jobs:
           npm run backtest:bb
           npm run backtest:bsb
           npm run backtest:naf
+          npm run backtest:nhl
+          npm run backtest:ufc
           npm run backtest
       - name: ¿Regresión?
         run: node scripts/regresion-backtests.mjs /tmp/backtest_metrics.referencia.json experiments/backtest_metrics.json

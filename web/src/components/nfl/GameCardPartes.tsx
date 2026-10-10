@@ -5,6 +5,7 @@ import { PostprocessPanel } from '../PostprocessPanel';
 import { BarRow, CompareRow, FactorValue, FormDots, Panel, SectionTitle, TeamCrest } from '../ui';
 import { ClimaPanel } from '../ClimaPanel';
 import { useI18n } from '../../i18n';
+import { num as numF } from '../../lib/formato';
 
 export const twoWay = (m: { home: number; away: number }): { home: number; away: number } => ({
   home: m.home / (m.home + m.away),
@@ -323,7 +324,7 @@ export function Detail({ prediction, clima }: { prediction: NflPrediction; clima
           <SectionTitle
             right={
               market.market.overround != null
-                ? t('eq.margenPct', { p: ((market.market.overround - 1) * 100).toFixed(1) })
+                ? t('eq.margenPct', { p: numF((market.market.overround - 1) * 100, 1) })
                 : t('nfld.deCierre')
             }
           >

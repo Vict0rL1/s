@@ -5,12 +5,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import LatencyPanel from '../components/LatencyPanel';
-import NhlSombra from '../components/NhlSombra';
+import NhlBacktest from '../components/NhlBacktest';
+import UfcBacktest from '../components/UfcBacktest';
 import { STATUS } from '../lib/theme';
 import { StatusMark } from '../components/icons';
 import { localeDe, useI18n } from '../i18n';
 import { SubNav } from '../components/nav/SubNav';
 import { useSubnavConfianza } from './subnav';
+import { num as numF } from '../lib/formato';
 
 interface Ejecucion { id: number; source: string; started_at: string; finished_at: string | null; status: 'running' | 'ok' | 'error'; rows_added: number | null; rows_updated: number | null; error: string | null; detail: string | null }
 interface Trabajo { nombre: string; descripcion: string; cadenciaMin: number; cadenciaPorDefecto: number; enabled: boolean; lastRunAt: string | null; lastDurationMs: number | null; lastStatus: 'ok' | 'error' | 'running' | null; lastError: string | null; nextRunAt: string | null; runsOk: number; runsError: number }
@@ -75,7 +77,7 @@ export default function Diagnostico() {
                   <StatusMark estado={x.lastStatus === 'ok' ? 'ok' : x.lastStatus === 'error' ? 'error' : 'aviso'} color={colorEstado(x.lastStatus)} />
                   <span className="text-(--ink-body)">{x.nombre}</span>
                   <span>{x.enabled ? `${t('diag.cada', { n: x.cadenciaMin })}${x.cadenciaMin !== x.cadenciaPorDefecto ? t('diag.codigo', { d: x.cadenciaPorDefecto }) : ''}` : t('aj.apagado')}</span>
-                  <span>{t('diag.ultima', { fecha: fecha(x.lastRunAt) })}{x.lastDurationMs != null ? ` (${(x.lastDurationMs / 1000).toFixed(1)} s)` : ''} · {x.runsOk} ok / {x.runsError} error</span>
+                  <span>{t('diag.ultima', { fecha: fecha(x.lastRunAt) })}{x.lastDurationMs != null ? ` (${numF((x.lastDurationMs / 1000), 1)} s)` : ''} · {x.runsOk} ok / {x.runsError} error</span>
                   {x.lastError && <span style={{ color: STATUS.critical }}>{x.lastError}</span>}
                 </li>
               ))}
@@ -135,7 +137,7 @@ export default function Diagnostico() {
         {datos === 'error' && <p>{t('comun.error')}</p>}
         {datos && datos !== 'error' && (
           <>
-            <p>{t('diag.disposicion', { layout: datos.layout })} · history.db {datos.history.mb != null ? `${datos.history.mb.toFixed(1)} MB` : ''}{datos.ledger ? ` · ledger.db ${datos.ledger.mb != null ? `${datos.ledger.mb.toFixed(1)} MB` : ''}` : ''}</p>
+            <p>{t('diag.disposicion', { layout: datos.layout })} · history.db {datos.history.mb != null ? `${numF(datos.history.mb, 1)} MB` : ''}{datos.ledger ? ` · ledger.db ${datos.ledger.mb != null ? `${numF(datos.ledger.mb, 1)} MB` : ''}` : ''}</p>
             <p>
               {t('diag.copia', {
                 fecha: fecha(String((datos.backup as { ultima?: string | null }).ultima ?? '') || null),
@@ -159,7 +161,8 @@ export default function Diagnostico() {
         ))}
       </Bloque>
 
-      <NhlSombra />
+      <NhlBacktest />
+      <UfcBacktest />
 
       <LatencyPanel />
     </div>

@@ -37,7 +37,7 @@ export default function Markdown({ texto }: { texto: string }) {
           );
         if (b.tipo === 'tabla')
           return (
-            <div key={i} className="overflow-x-auto">
+            <div key={i} className="overflow-x-auto" tabIndex={0}>
               <table className="w-full min-w-[22rem] text-[13px] tabular-nums">
                 <thead>
                   <tr className="text-left text-(--ink-muted)">

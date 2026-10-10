@@ -1,8 +1,8 @@
-// La NHL en sombra (Fase 8.1) en Diagnóstico: solo con `deportes.nhl` encendido. Enseña la
-// evaluación del backtest tal cual (sin holdout) y lo que falta; nunca una predicción.
+// La NHL en Diagnóstico: la evaluación del backtest con la que se publicó (sin el holdout), con sus
+// referencias. Antes era la NHL en sombra, detrás de `deportes.nhl`; publicada, está siempre.
 import { localeDe, useI18n } from '../i18n';
-import { useFeature } from '../lib/features';
 import { useJson } from '../lib/usarJson';
+import { pct as pctF, num as numF } from '../lib/formato';
 
 interface Sombra {
   partidos: number;
@@ -17,12 +17,12 @@ interface Sombra {
   parametros: { k: number; campo: number; golesLiga: number; fuerzaProrroga: number };
 }
 
-const f4 = (x: number | null) => (x == null ? '—' : x.toFixed(4));
-const pct = (x: number | null) => (x == null ? '—' : `${(x * 100).toFixed(1)} %`);
+const f4 = (x: number | null) => (x == null ? '—' : numF(x, 4));
+const pct = (x: number | null) => (x == null ? '—' : `${pctF(x, 1)}`);
 
 function Contenido() {
   const { t, idioma } = useI18n();
-  const d = useJson<Sombra>('/api/nhl/sombra');
+  const d = useJson<Sombra>('/api/nhl/backtest');
   if (d.error) return <p>{d.error}</p>;
   if (!d.datos) return null;
   const s = d.datos;
@@ -49,12 +49,10 @@ function Contenido() {
   );
 }
 
-export default function NhlSombra() {
+export default function NhlBacktest() {
   const { t } = useI18n();
-  const on = useFeature('deportes.nhl');
-  if (!on) return null;
   return (
-    <section className="mb-4 rounded-xl border border-(--line) p-4" data-testid="nhl-sombra">
+    <section className="mb-4 rounded-xl border border-(--line) p-4" data-testid="nhl-backtest">
       <h3 className="mb-2 text-[15px] font-semibold text-(--ink-strong)">{t('diag.nhl')}</h3>
       <div className="text-[13px] leading-relaxed text-(--ink-soft)">
         <Contenido />

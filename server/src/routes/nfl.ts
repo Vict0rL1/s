@@ -4,6 +4,7 @@
 // sport, which is what keeps the five tabs genuinely independent.
 
 import { cacheado, firmaDe, registrarCalentador } from '../cache/respuestas.ts';
+import { aplicarPublicada } from '../prediction/publicada.ts';
 import { versionsFor } from '../versions.ts';
 import type { FastifyInstance } from 'fastify';
 import { env, nflConfig } from '../config.ts';
@@ -76,6 +77,8 @@ function describeRow(row: NafUpcomingRow, withPrediction = true) {
   if (prediction && row.source !== 'fixture') {
     logNflPrediction(row, prediction);
     if (snap) recordSnapshot(snap);
+    // La cabecera es lo publicado (lo mismo que lee Destacados); el cálculo de ahora, aparte.
+    aplicarPublicada('nfl', snap?.matchKey, prediction);
   }
   // Qué versión exacta produjo el número que se enseña (ver versions.ts).
   if (prediction) Object.assign(prediction, { versiones: versionsFor('nfl') });

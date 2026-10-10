@@ -2,6 +2,7 @@
 // {var}; una clave sin traducción cae al español, nunca a la clave. El idioma sale de Ajustes
 // (servidor), si no del navegador, y se recuerda localmente.
 
+import { fijarIdiomaFormato, localeFormato } from '../lib/formato';
 import { createContext, createElement, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { es, type Clave } from './es';
 
@@ -60,14 +61,32 @@ if (typeof window !== 'undefined' && (idiomaGuardado() ?? idiomaDelNavegador()) 
 
 function traducir(idioma: Idioma, clave: Clave, vars?: Record<string, string | number>): string {
   let s: string = (idioma === 'en' ? ingles?.[clave] : undefined) ?? es[clave];
-  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+  if (vars) {
+    // Plurales (D14): «{n|punto|puntos}» elige por el valor de n, en vez de «punto(s)».
+    s = s.replace(/\{(\w+)\|([^|}]*)\|([^}]*)\}/g, (todo, k: string, uno: string, varios: string) => (k in vars ? (Number(vars[k]) === 1 ? uno : varios) : todo));
+    for (const [k, v] of Object.entries(vars)) s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), () => valor(idioma, v));
+  }
   return s;
+}
+
+/**
+ * Un número con decimales sale con la coma o el punto del idioma y los decimales que trae (a lo
+ * sumo 4: lo que pase de ahí es ruido de coma flotante). G5 de la prueba en el navegador: con
+ * `String(v)` salía «cuota 2.29» al lado de «41,2 %». Los enteros, tal cual: un año o un id no
+ * llevan separador de miles.
+ */
+function valor(idioma: Idioma, v: string | number): string {
+  if (typeof v !== 'number' || !Number.isFinite(v) || Number.isInteger(v)) return String(v);
+  const decimales = Math.min(4, String(v).split('.')[1]?.length ?? 0);
+  return new Intl.NumberFormat(localeFormato(idioma), { maximumFractionDigits: decimales, useGrouping: false }).format(v).replace('-', '−');
 }
 
 const Ctx = createContext<{ idioma: Idioma; setIdioma: (i: Idioma) => void; t: Traducir }>({ idioma: 'es', setIdioma: () => {}, t: (c, v) => traducir('es', c, v) });
 
 export function I18nProvider({ children, inicial }: { children: ReactNode; inicial?: Idioma }) {
   const [idioma, setIdiomaState] = useState<Idioma>(inicial ?? idiomaGuardado() ?? idiomaDelNavegador());
+  // Los números (lib/formato.ts) siguen al idioma: se fija al pintar, antes que los hijos.
+  fijarIdiomaFormato(idioma);
   const [, setCargado] = useState(0);
   const [fallo, setFallo] = useState(false);
   useEffect(() => {

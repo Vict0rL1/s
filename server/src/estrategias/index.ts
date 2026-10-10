@@ -20,7 +20,8 @@ import { getDb } from '../db.ts';
 import { featureEncendida } from '../features.ts';
 import { decideEvent, desdeParaPerdidas, perdidasRealizadas, type StakingConfig } from '../staking/policy.ts';
 import type { CalibrationFile } from '../staking/calibration.ts';
-import { politica, politicaPorDefecto, validarPolitica } from '../staking/policyStore.ts';
+import { idPoliticaVigente, politica, politicaPorDefecto, validarPolitica } from '../staking/policyStore.ts';
+import { roiDe } from '../evaluation/roi.ts';
 import {
   BANCO_INICIAL,
   DIAS_CANCELACION,
@@ -32,13 +33,14 @@ import {
   type Candidato,
 } from '../paper/bankroll.ts';
 import { closingLine } from '../odds/snapshots.ts';
-import { cabeEnGrupos, gruposDe, limitesConTopePorPartido, type Abierta } from '../staking/risk.ts';
+import { cabeEnGrupos, gruposDe, type Abierta } from '../staking/risk.ts';
+import { anotarEnCubos, cabeEnCubos, cubosDe } from '../staking/cubos.ts';
 import { avisoMuestra, type AvisoMuestra } from '../evaluation/sample.ts';
 import { maxDrawdown } from '../evaluation/betting.ts';
 
 export { STRATEGIES_SCHEMA } from './schema.ts';
 
-export const DEPORTES_ESTRATEGIA = ['football', 'basketball', 'baseball', 'nfl', 'tennis'] as const;
+export const DEPORTES_ESTRATEGIA = ['football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'tennis'] as const;
 /** El banco de papel solo apuesta ganador; el campo existe para cuando haya más. */
 export const MERCADOS_ESTRATEGIA = ['h2h'] as const;
 /** Estrategias activas a la vez: cada una es una pasada más por todas las candidatas. */
@@ -48,6 +50,12 @@ export interface ConfigEstrategia {
   deportes: string[];
   mercados: string[];
   staking: StakingConfig;
+  /**
+   * Los topes de grupo (mismo equipo, mismo jugador) congelados al crear (lote C, C5). Antes se
+   * leían de la política VIGENTE en cada pasada: cambiarla en Ajustes cambiaba una estrategia ya
+   * creada. Las anteriores a esto no lo tienen y usan la política de entonces.
+   */
+  grupos?: { maxSameTeamExposure: number; maxSamePlayerExposure: number };
   /** Si pasa por la capa de confianza (abstención y recorte), como el banco principal. */
   confianza: boolean;
   /**
@@ -94,7 +102,24 @@ export function configDe(p: PeticionEstrategia, base: StakingConfig = politica()
   const staking = { ...base, ...p.staking } as StakingConfig;
   // Las mismas reglas que una versión de la política: los mismos rangos y la misma razón.
   validarPolitica({ ...politicaPorDefecto(), staking });
-  return { deportes: deportes.sort(), mercados: mercados.sort(), staking, confianza: p.confianza !== false, calibracion: p.calibracion !== false };
+  const g = politica().grupos;
+  return { deportes: deportes.sort(), mercados: mercados.sort(), staking, grupos: { maxSameTeamExposure: g.maxSameTeamExposure, maxSamePlayerExposure: g.maxSamePlayerExposure }, confianza: p.confianza !== false, calibracion: p.calibracion !== false };
+}
+
+/**
+ * Los límites por grupo de una estrategia: su tope por partido para el evento y SUS topes de
+ * equipo/jugador congelados (o los de la política vigente si es anterior a tenerlos). Un tope
+ * de equipo nunca es menor que el tope por partido: existe para dos partidos abiertos del mismo
+ * equipo, no para recortar una sola apuesta por debajo de lo que el banco le permite (C5).
+ */
+export function limitesDeEstrategia(c: ConfigEstrategia): (grupo: string) => number {
+  const g = c.grupos ?? politica().grupos;
+  return (grupo) =>
+    grupo.startsWith('evento:')
+      ? c.staking.maxPerEvent
+      : grupo.startsWith('jugador:')
+        ? Math.max(g.maxSamePlayerExposure, c.staking.maxPerEvent)
+        : Math.max(g.maxSameTeamExposure, c.staking.maxPerEvent);
 }
 
 /**
@@ -209,8 +234,8 @@ export function colocarEstrategias(now = new Date(), candidatas?: Candidato[]): 
   const ins = db.prepare(
     `INSERT OR IGNORE INTO strategy_bets (
        strategy_id, placed_at, sport, league, match_key, event_id, provider_event_id, label, selection, provider_selection,
-       commence_time, p_model, p_market, odds, edge, stake, bankroll_at, kelly_fraction, trust_factor, correlation_groups
-     ) VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?)`,
+       commence_time, p_model, p_market, odds, edge, stake, bankroll_at, kelly_fraction, trust_factor, correlation_groups, policy_version_id
+     ) VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?, ?)`,
   );
   const out: PasadaEstrategia[] = [];
   for (const e of activas) {
@@ -220,8 +245,10 @@ export function colocarEstrategias(now = new Date(), candidatas?: Candidato[]): 
     let abierto = expuestoDe(e.id);
     // Topes por grupo de correlación (partido, equipo, jugador) sobre el banco de la estrategia: su
     // tope por partido y los de equipo y jugador de la política vigente. Solo recortan.
-    const otro = { abiertas: abiertasDe(e.id), limiteDe: limitesConTopePorPartido(e.config.staking.maxPerEvent) };
+    const otro = { abiertas: abiertasDe(e.id), limiteDe: limitesDeEstrategia(e.config) };
     const enGrupos = new Map<string, number>();
+    // Los topes por día y por liga de SU configuración (A6), con lo que ya tiene abierto.
+    const cubos = cubosDe(db.prepare("SELECT commence_time, league, stake FROM strategy_bets WHERE strategy_id = ? AND status = 'pending'").all(e.id) as { commence_time: string | null; league: string | null; stake: number }[]);
     const pasada: PasadaEstrategia = { id: e.id, nombre: e.nombre, evaluadas: 0, colocadas: 0, rechazos: {} };
     const rechazo = (m: string) => (pasada.rechazos[m] = (pasada.rechazos[m] ?? 0) + 1);
     for (const c of todas) {
@@ -247,9 +274,14 @@ export function colocarEstrategias(now = new Date(), candidatas?: Candidato[]): 
         }
         factor = j.factor;
       }
+      const cubo = cabeEnCubos({ commence_time: c.commence, league: c.league }, banco, e.config.staking, cubos);
+      if (cubo.cabe < 0.01) {
+        rechazo(cubo.limitante!.split(' (')[0]);
+        continue;
+      }
       const grupos = gruposDe(c.sport, c.event_id, c.participantes);
       const { cabe } = cabeEnGrupos(grupos, banco, enGrupos, otro);
-      const stake = Math.floor(Math.min(d.stake * factor, cabe) * 100) / 100;
+      const stake = Math.floor(Math.min(d.stake * factor, cabe, cubo.cabe) * 100) / 100;
       const s = c.salidas.find((x) => x.label === d.label);
       if (stake <= 0 && cabe < d.stake * factor) {
         rechazo('tope de grupo de correlación alcanzado');
@@ -262,9 +294,11 @@ export function colocarEstrategias(now = new Date(), candidatas?: Candidato[]): 
       const r = ins.run(
         e.id, ahora, c.sport, c.league, c.match_key, c.event_id, providerId(c.event_id), c.label, s.label, s.proveedor,
         c.commence, s.p, s.pMarket, s.odds, d.edge, stake, banco, e.config.staking.kellyFraction, factor, JSON.stringify(grupos),
+        idPoliticaVigente(),
       );
       if (Number(r.changes)) {
         for (const g of grupos) enGrupos.set(g, (enGrupos.get(g) ?? 0) + stake);
+        anotarEnCubos(cubos, { commence_time: c.commence, league: c.league }, stake);
         abierto += stake;
         pasada.colocadas++;
         ya.add(c.event_id);
@@ -282,13 +316,15 @@ export function colocarEstrategias(now = new Date(), candidatas?: Candidato[]): 
 export function cierreEstrategias(now = new Date()): { fijados: number } {
   const db = getDb();
   const sin = db
-    .prepare('SELECT id, provider_event_id, provider_selection, commence_time, odds FROM strategy_bets WHERE closing_odds IS NULL AND provider_event_id IS NOT NULL AND provider_selection IS NOT NULL AND commence_time IS NOT NULL AND commence_time <= ?')
-    .all(now.toISOString()) as { id: number; provider_event_id: string; provider_selection: string; commence_time: string; odds: number }[];
+    .prepare('SELECT id, provider_event_id, provider_selection, commence_time, odds, placed_at FROM strategy_bets WHERE closing_odds IS NULL AND provider_event_id IS NOT NULL AND provider_selection IS NOT NULL AND commence_time IS NOT NULL AND commence_time <= ?')
+    .all(now.toISOString()) as { id: number; provider_event_id: string; provider_selection: string; commence_time: string; odds: number; placed_at: string }[];
   const upd = db.prepare('UPDATE strategy_bets SET closing_odds = ?, closing_observed_at = ?, clv = ? WHERE id = ?');
   let fijados = 0;
   for (const a of sin) {
     const cl = closingLine(a.provider_event_id, 'h2h', a.provider_selection, a.commence_time);
-    if (!cl) continue;
+    // Un cierre tiene que ser POSTERIOR a la apuesta (lote C, C8): si nadie volvió a pedir
+    // cuotas, el «cierre» sería el snapshot con el que se apostó, y ese CLV no mide nada.
+    if (!cl || cl.at <= a.placed_at) continue;
     upd.run(cl.consensus, cl.at, a.odds / cl.consensus - 1, a.id);
     fijados++;
   }
@@ -383,7 +419,7 @@ export function resumenDe(xs: FilaApuesta[]): Omit<FilaComparacion, 'id' | 'nomb
     pendientes: xs.length - liq.length,
     ganadas,
     perdidas,
-    roi: arriesgado > 0 ? beneficio / arriesgado : null,
+    roi: roiDe(beneficio, arriesgado),
     acierto: ganadas + perdidas > 0 ? ganadas / (ganadas + perdidas) : null,
     clvMedio: conClv.length ? conClv.reduce((s, a) => s + (a.clv as number), 0) / conClv.length : null,
     conCierre: conClv.length,

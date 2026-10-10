@@ -57,6 +57,7 @@ import { newsForTeam, newsTiming, type NewsTiming, type StoredNews } from '../ne
 import { absenceImpacts, combinedImpact, type AbsenceImpact } from '../news/impact.ts';
 import { diffLineup, rotationRisk, type LineupDiff, type RotationRisk } from './lineups.ts';
 import type { FbRecord, LeagueId } from './types.ts';
+import { num, pct } from '../numeros.ts';
 
 export const DISCLAIMER =
   'Estimación estadística basada en Elo con ventaja de campo, goles esperados y odds de mercado. ' +
@@ -386,7 +387,6 @@ function buildSide(league: LeagueId, id: string, isHome: boolean): FbSide {
   };
 }
 
-const pct1 = (p: number) => (p * 100).toFixed(1);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
@@ -950,25 +950,25 @@ export function buildFootballPrediction(
   // Never lowercase the label: it contains a club name, and "gana manchester
   // city fc" reads like a bug even though the number is right.
   const headline = open
-    ? `Partido abierto: ninguna opción llega al 40%. Lo más sólido que se puede decir ` +
-      `es «${doubleChance.label}» (${pct1(doubleChance.probability)}%); la opción suelta ` +
-      `más probable es «${outcomeLabel}» (${pct1(outcomeProb)}%).`
-    : `Lo más probable: ${outcomeLabel} (${pct1(outcomeProb)}%), con ${top.label} como marcador más probable (${pct1(top.probability)}%).`;
+    ? `Partido abierto: ninguna opción llega al 40\u00a0%. Lo más sólido que se puede decir ` +
+      `es «${doubleChance.label}» (${pct(doubleChance.probability)}); la opción suelta ` +
+      `más probable es «${outcomeLabel}» (${pct(outcomeProb)}).`
+    : `Lo más probable: ${outcomeLabel} (${pct(outcomeProb)}), con ${top.label} como marcador más probable (${pct(top.probability)}).`;
 
   const bullets: string[] = [];
   bullets.push(
-    `1X2: ${home.name} ${pct1(probs.home)}% · empate ${pct1(probs.draw)}% · ${away.name} ${pct1(probs.away)}%.` +
+    `1X2: ${home.name} ${pct(probs.home)} · empate ${pct(probs.draw)} · ${away.name} ${pct(probs.away)}.` +
       ` El empate se lleva ~1 de cada 4 partidos en el fútbol, por eso siempre aparece como opción real.`,
   );
   bullets.push(
-    `Goles esperados: ${home.name} ${home.expectedGoals} – ${away.expectedGoals} ${away.name} ` +
-      `(total ${round2(expectedTotalGoals(dist))}).`,
+    `Goles esperados: ${home.name} ${num(home.expectedGoals)} – ${num(away.expectedGoals)} ${away.name} ` +
+      `(total ${num(round2(expectedTotalGoals(dist)))}).`,
   );
   bullets.push(
-    `Más de 2.5 goles: ${pct1(over25)}% · menos de 2.5: ${pct1(1 - over25)}% · ambos marcan: ${pct1(bts)}%.`,
+    `Más de 2,5 goles: ${pct(over25)} · menos de 2,5: ${pct(1 - over25)} · ambos marcan: ${pct(bts)}.`,
   );
   bullets.push(
-    `Marcadores más probables: ${scorelines.slice(0, 3).map((s) => `${s.label} (${pct1(s.probability)}%)`).join(', ')}.`,
+    `Marcadores más probables: ${scorelines.slice(0, 3).map((s) => `${s.label} (${pct(s.probability)})`).join(', ')}.`,
   );
   const homeAbsences = homeSquad ? describeAvailability(homeSquad, home.name) : null;
   const awayAbsences = awaySquad ? describeAvailability(awaySquad, away.name) : null;
@@ -1011,7 +1011,7 @@ export function buildFootballPrediction(
     const e = marketComparison.edge!;
     if (marketComparison.verdict === 'agree') {
       bullets.push(
-        `Las casas coinciden a grandes rasgos (${pct1(m.home)}% / ${pct1(m.draw)}% / ${pct1(m.away)}%).`,
+        `Las casas coinciden a grandes rasgos (${pct(m.home)} / ${pct(m.draw)} / ${pct(m.away)}).`,
       );
     } else {
       const which =
@@ -1023,7 +1023,7 @@ export function buildFootballPrediction(
       const diff =
         marketComparison.verdict === 'value_home' ? e.home : marketComparison.verdict === 'value_away' ? e.away : e.draw;
       bullets.push(
-        `El modelo da ${(diff * 100).toFixed(1)} pp más a ${which} que el mercado: posible value.`,
+        `El modelo da ${num(diff * 100, 1)} pp más a ${which} que el mercado: posible value.`,
       );
     }
   } else {
@@ -1032,7 +1032,7 @@ export function buildFootballPrediction(
   if (reliability.level !== 'high') {
     bullets.push(
       `⚠️ ${reliability.label.charAt(0).toUpperCase() + reliability.label.slice(1)}: ` +
-        `tómalo como un rango (±${reliability.marginPp} pp).` +
+        `tómalo como un rango (±${num(reliability.marginPp, 1)} pp).` +
         (reliability.reasons.length ? ` ${reliability.reasons[0]}` : ''),
     );
   }

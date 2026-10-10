@@ -9,6 +9,7 @@ import { Badge, Card, Flag, MatchTime, ResultBanner, SeriesDot } from './ui';
 import { EnlacePartido } from './ui';
 import EventTrustPanel from './trust/EventTrustPanel';
 import { conNodos, localeDe, useI18n } from '../i18n';
+import { num as numF, pct as pctF } from '../lib/formato';
 
 export default function MatchCard({
   item,
@@ -106,7 +107,7 @@ export default function MatchCard({
                     nombre: <strong className="text-(--ink-strong)">{verdict.favoredName}</strong>,
                     detalle: (
                       <span className="text-(--ink-soft)">
-                        · {confidenceLabelEs(verdict.confidence, idioma)} ({verdict.marginPct} pp)
+                        · {confidenceLabelEs(verdict.confidence, idioma)} ({numF(verdict.marginPct, 1)} pp)
                       </span>
                     ),
                   })}
@@ -199,7 +200,7 @@ function ReliabilityBadge({ reliability }: { reliability: Reliability }) {
       title={title}
       className={`rounded-full px-3 py-1 text-[14px] font-medium ring-1 ${styles[reliability.level]}`}
     >
-      {reliability.label} · ±{reliability.marginPp} pp
+      {reliability.label} · ±{numF(reliability.marginPp, 1)} pp
     </span>
   );
 }
@@ -313,7 +314,8 @@ function PlayerName({
               : t('tt.probMercado')
           }
         >
-          {(prob * 100).toFixed(1)}
+          {/* El número con el espacio duro del idioma («67,5 %», «67.5%») y el «%» más pequeño. */}
+          {pctF(prob, 1).replace(/%$/, '')}
           <span className="text-[26px]">%</span>
           {probSource === 'market' && (
             <span className="ml-1 align-middle text-[14px] font-normal text-(--ink-soft)">{t('tt.mercado')}</span>

@@ -48,8 +48,13 @@ import type { LeagueId as LigaBaloncesto } from '../basketball/types.ts';
 import type { LeagueId as LigaFutbol } from '../football/types.ts';
 import type { LeagueId as LigaNfl } from '../nfl/types.ts';
 import type { LeagueId as LigaBeisbol } from '../baseball/types.ts';
+import { recorrer as recorrerNhl } from '../nhl/ajuste.ts';
+import { leerPartidos as partidosNhl } from '../nhl/evaluacion.ts';
+import { leerFichas as fichasUfc, leerPeleas as peleasUfc, recorrer as recorrerUfc } from '../ufc/evaluacion.ts';
+import { pesosVigentes as pesosUfc, predecirConPesos as predecirUfc } from '../ufc/combinado.ts';
+import { UFC } from '../ufc/model.ts';
 
-export type DeporteReconstruible = 'Fútbol' | 'Baloncesto' | 'Béisbol' | 'NFL';
+export type DeporteReconstruible = 'Fútbol' | 'Baloncesto' | 'Béisbol' | 'NFL' | 'NHL' | 'UFC';
 
 export interface PrediccionReconstruida {
   deporte: DeporteReconstruible;
@@ -69,7 +74,7 @@ export interface PrediccionReconstruida {
  * calentamientos que el backtest de cada deporte. Por debajo, el rating aún no dice
  * nada y la cifra no describiría al modelo sino a su valor inicial.
  */
-export const CALENTAMIENTO: Record<DeporteReconstruible, number> = { 'Fútbol': 20, 'Baloncesto': 20, 'Béisbol': 60, NFL: 0 };
+export const CALENTAMIENTO: Record<DeporteReconstruible, number> = { 'Fútbol': 20, 'Baloncesto': 20, 'Béisbol': 60, NFL: 0, NHL: 20, UFC: 0 };
 
 export interface Reconstruccion {
   partidos: PrediccionReconstruida[];
@@ -142,6 +147,42 @@ function nfl(desde: string, out: Reconstruccion): void {
   }
 }
 
+function nhl(desde: string, out: Reconstruccion): void {
+  // El mismo recorrido que el backtest y la predicción publicada (nhl/ajuste.ts): el moneyline es el
+  // Elo antes del partido. Las fechas de la NHL van con guiones; aquí se pasan a YYYYMMDD.
+  const partidos = partidosNhl();
+  const pasos = recorrerNhl(partidos);
+  const jugados = new Map<string, number>();
+  partidos.forEach((g, i) => {
+    const fecha = g.game_date.replace(/-/g, '');
+    const pocos = (jugados.get(g.home_id) ?? 0) < CALENTAMIENTO.NHL || (jugados.get(g.away_id) ?? 0) < CALENTAMIENTO.NHL;
+    jugados.set(g.home_id, (jugados.get(g.home_id) ?? 0) + 1);
+    jugados.set(g.away_id, (jugados.get(g.away_id) ?? 0) + 1);
+    if (fecha < desde) return;
+    if (pocos) {
+      out.sinHistoria.NHL++;
+      return;
+    }
+    const p = pasos[i].pLocal;
+    out.partidos.push({ deporte: 'NHL', liga: 'nhl', fecha, casaId: g.home_id, fueraId: g.away_id, probs: [p, 1 - p], y: g.home_goals > g.away_goals ? 0 : 1 });
+  });
+}
+
+function ufc(desde: string, out: Reconstruccion): void {
+  // El mismo recorrido que el backtest y la predicción publicada (ufc/evaluacion.ts): los rasgos de
+  // antes de la pelea y los pesos de la logística publicada, ajustados SOLO con lo anterior al
+  // holdout (las peleas recientes son holdout: se miran, no ajustan nada). Sin calentamiento por
+  // luchador: el backtest también puntúa los debuts. A y B son los dos en orden de id.
+  const { pasos } = recorrerUfc(peleasUfc(), UFC, fichasUfc());
+  const { pesos } = pesosUfc(pasos);
+  const desdeGuion = `${desde.slice(0, 4)}-${desde.slice(4, 6)}-${desde.slice(6, 8)}`;
+  for (const x of pasos) {
+    if (x.fecha < desdeGuion) continue;
+    const p = predecirUfc(x.rasgos, pesos).p;
+    out.partidos.push({ deporte: 'UFC', liga: 'ufc', fecha: x.fecha.replace(/-/g, ''), casaId: x.ids[0], fueraId: x.ids[1], probs: [p, 1 - p], y: x.y === 1 ? 0 : 1 });
+  }
+}
+
 function futbol(desde: string, out: Reconstruccion): void {
   for (const liga of ligasDe('fb_matches')) {
     const partidos = loadMatches(liga as LigaFutbol);
@@ -173,9 +214,12 @@ const TABLAS: Record<DeporteReconstruible, { tabla: string; marcador: [string, s
   'Baloncesto': { tabla: 'bb_games', marcador: ['home_pts', 'away_pts'], fecha: 'game_date' },
   'Béisbol': { tabla: 'bsb_games', marcador: ['home_runs', 'away_runs'], fecha: 'game_date' },
   NFL: { tabla: 'naf_games', marcador: ['home_points', 'away_points'], fecha: 'game_date' },
+  NHL: { tabla: 'nhl_games', marcador: ['home_goals', 'away_goals'], fecha: 'game_date' },
+  // Sin marcador: el asalto y el orden en la cartelera hacen de huella (la ingesta reescribe el archivo entero).
+  UFC: { tabla: 'ufc_fights', marcador: ['asalto', 'orden'], fecha: 'fecha' },
 };
 const CALCULO: Record<DeporteReconstruible, (desde: string, out: Reconstruccion) => void> = {
-  'Fútbol': futbol, 'Baloncesto': baloncesto, 'Béisbol': beisbol, NFL: nfl,
+  'Fútbol': futbol, 'Baloncesto': baloncesto, 'Béisbol': beisbol, NFL: nfl, NHL: nhl, UFC: ufc,
 };
 
 /**
@@ -200,13 +244,13 @@ const cache = new Map<string, { huella: string; r: Reconstruccion }>();
 
 /** Todos los partidos jugados desde `desde` (YYYYMMDD) con su predicción reconstruida. */
 export function reconstruirDesde(desde: string): Reconstruccion {
-  const total: Reconstruccion = { partidos: [], sinHistoria: { 'Fútbol': 0, 'Baloncesto': 0, 'Béisbol': 0, NFL: 0 } };
+  const total: Reconstruccion = { partidos: [], sinHistoria: { 'Fútbol': 0, 'Baloncesto': 0, 'Béisbol': 0, NFL: 0, NHL: 0, UFC: 0 } };
   for (const deporte of Object.keys(TABLAS) as DeporteReconstruible[]) {
     const clave = `${deporte}|${desde}`;
     const h = huella(TABLAS[deporte]);
     let e = cache.get(clave);
     if (!e || e.huella !== h) {
-      const r: Reconstruccion = { partidos: [], sinHistoria: { 'Fútbol': 0, 'Baloncesto': 0, 'Béisbol': 0, NFL: 0 } };
+      const r: Reconstruccion = { partidos: [], sinHistoria: { 'Fútbol': 0, 'Baloncesto': 0, 'Béisbol': 0, NFL: 0, NHL: 0, UFC: 0 } };
       try {
         CALCULO[deporte](desde, r);
       } catch {

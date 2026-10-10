@@ -18,13 +18,13 @@ test('comoIcs: un VEVENT por partido con CRLF, hora UTC y la probabilidad en la 
   assert.equal(ics.match(/BEGIN:VEVENT/g)?.length, 2);
   assert.match(ics, /DTSTART:20261010T150000Z/);
   assert.match(ics, /DTEND:20261010T170000Z/);
-  assert.match(ics, /DESCRIPTION:Arsenal: 50\\,0 % según el modelo/, 'la coma decimal también se escapa');
+  assert.match(ics, /DESCRIPTION:Arsenal: 50\\,0\u00a0% según el modelo/, 'la coma decimal también se escapa');
   assert.ok(ics.includes('SUMMARY:Betis\\, Sevilla\\; derbi'), 'comas y punto y coma escapados');
   assert.ok(comoIcs([pick({ partido: 'a\\b' })]).includes('SUMMARY:a\\\\b'), 'la barra invertida también se escapa');
 });
 
 test('comoTexto y borradorDe: una pata va como ganador; varias, como combinada con la conjunta', () => {
-  assert.match(comoTexto([pick()], null), /Arsenal vs Chelsea — Arsenal 50,0 % @ 2.10/);
+  assert.match(comoTexto([pick()], null), /Arsenal vs Chelsea — Arsenal 50,0\u00a0% @ 2,10/);
   const uno = borradorDe([pick()], null);
   assert.equal(uno.market, 'moneyline');
   assert.equal(uno.selection, 'Arsenal');

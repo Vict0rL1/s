@@ -6,6 +6,7 @@ import { AWAY_COLOR, HOME_COLOR, pct } from '../../lib/theme';
 import { BarRow, CompareRow, EmptyState, FactorValue, FormDots, Panel, SectionTitle, SeriesDot, TeamCrest } from '../ui';
 import RunMatrix from './RunMatrix';
 import { conNodos, useI18n } from '../../i18n';
+import { num as numF } from '../../lib/formato';
 
 export function StarterChip({ side, color }: { side: BsbSide; color: string }) {
   const { t } = useI18n();
@@ -23,7 +24,7 @@ export function StarterChip({ side, color }: { side: BsbSide; color: string }) {
         {delta != null && Math.abs(delta) >= 4 && (
           <span
             className="shrink-0 text-[11px] font-semibold tabular-nums"
-            style={{ color: delta > 0 ? '#199e70' : '#e66767' }}
+            style={{ color: delta > 0 ? 'var(--profit-text)' : 'var(--status-critical)' }}
             title={t('bsd.carrerasTitulo')}
           >
             {t('bsd.pctCarreras', { n: `${delta > 0 ? '−' : '+'}${Math.abs(delta)}` })}
@@ -146,7 +147,7 @@ export function StarterPicker({
             {t('bsd.opcion', {
               nombre: p.name,
               n: p.starts,
-              r: p.rating != null ? `${p.rating < 1 ? '−' : '+'}${Math.abs(Math.round((p.rating - 1) * 100))}%` : t('bsd.sd'),
+              r: p.rating != null ? `${p.rating < 1 ? '−' : '+'}${numF(Math.abs(Math.round((p.rating - 1) * 100)), 0)}\u00a0%` : t('bsd.sd'),
             })}
           </option>
         ))}
@@ -326,7 +327,7 @@ export function Detail({
 
       {market.market && (
         <Panel>
-          <SectionTitle right={t('eq.margenPct', { p: ((market.market.overround - 1) * 100).toFixed(1) })}>
+          <SectionTitle right={t('eq.margenPct', { p: numF((market.market.overround - 1) * 100, 1) })}>
             {t('eq.mercado')}
           </SectionTitle>
           <p className="text-[13px] leading-relaxed text-(--ink-body)">

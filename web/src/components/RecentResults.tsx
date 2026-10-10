@@ -11,15 +11,17 @@
 // con qué comando se arregla.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ID_DE_NOMBRE } from '../lib/hoy';
 import { STATUS } from '../lib/theme';
 import { DeporteIcono, Verdict } from './icons';
 
 export { DeporteIcono };
 import { TeamCrest } from './ui';
 import { conNodos, localeDe, useI18n, type Clave, type Traducir } from '../i18n';
+import { num as numF } from '../lib/formato';
 
 /** El servidor manda el nombre del deporte en español: se pasa al catálogo si se conoce. */
-const ID_DE_NOMBRE: Record<string, string> = { Fútbol: 'football', Baloncesto: 'basketball', Béisbol: 'baseball', NFL: 'nfl', Tenis: 'tennis' };
+
 const deporteMostrado = (t: Traducir, nombre: string) => (ID_DE_NOMBRE[nombre] ? t(`deporte.${ID_DE_NOMBRE[nombre]}` as Clave) : nombre);
 
 type Origen = 'en vivo' | 'reconstruida';
@@ -159,7 +161,7 @@ function FranjaDias({ porDia, max, diaSel, onDia }: { porDia: Historial['porDia'
     if (caja.current) caja.current.scrollLeft = caja.current.scrollWidth;
   }, [porDia.length]);
   return (
-    <div ref={caja} className="overflow-x-auto px-3 pb-1">
+    <div ref={caja} className="overflow-x-auto px-3 pb-1" tabIndex={0}>
       <div className="flex items-end gap-1" role="list" aria-label={t('acerto.porDia')}>
         {dias.map((d) => {
           const f = fechaDe(d.dia);
@@ -196,12 +198,12 @@ function FranjaDias({ porDia, max, diaSel, onDia }: { porDia: Historial['porDia'
 }
 
 function Fila({ r }: { r: Resultado }) {
-  // En la NFL se escribe «visitante @ local»; en los demás, el local primero.
+  // En la NFL y la NHL se escribe «visitante @ local»; en los demás, el local primero.
   const lados = [
     { nombre: r.casa, id: r.casaId },
     { nombre: r.fuera, id: r.fueraId },
   ];
-  if (r.deporte === 'NFL') lados.reverse();
+  if (r.deporte === 'NFL' || r.deporte === 'NHL') lados.reverse();
   const empate = r.ganador === 'Empate';
   const { t, idioma } = useI18n();
   return (
@@ -217,7 +219,7 @@ function Fila({ r }: { r: Resultado }) {
               <div key={i} className="flex min-w-0 items-center gap-2">
                 <TeamCrest league={r.liga ?? ''} name={l.nombre} code={l.id} size={24} />
                 <span className={`min-w-0 break-words text-[14px] leading-snug ${gano ? 'font-medium text-(--ink-strong)' : 'text-(--ink-soft)'}`}>{l.nombre}</span>
-                {r.deporte === 'NFL' && i === 0 && <span className="-ml-1 text-[12px] text-(--ink-faint)">@</span>}
+                {(r.deporte === 'NFL' || r.deporte === 'NHL') && i === 0 && <span className="-ml-1 text-[12px] text-(--ink-faint)">@</span>}
                 {gano && <span className="shrink-0 rounded bg-(--raised) px-1.5 py-px text-[10.5px] uppercase tracking-wide text-(--ink-soft)">{t('acerto.gano')}</span>}
               </div>
             );
@@ -255,9 +257,11 @@ function Fila({ r }: { r: Resultado }) {
   );
 }
 
-export default function RecentResults({ estado }: { estado: ReturnType<typeof useHistorial> }) {
+export default function RecentResults({ estado, deporteInicial = null }: { estado: ReturnType<typeof useHistorial>; deporteInicial?: string | null }) {
   const { h, cargando, error, dias, setDias } = estado;
-  const [deporte, setDeporte] = useState<string | null>(null);
+  // Nace filtrado al deporte de la pestaña (D3): en la del fútbol, lo del fútbol. «Todos», a un clic.
+  const [deporte, setDeporte] = useState<string | null>(deporteInicial);
+  useEffect(() => setDeporte(deporteInicial), [deporteInicial]);
   const [origen, setOrigen] = useState<Origen | null>(null);
   const [diaSel, setDiaSel] = useState<string | null>(null);
   const { t, idioma } = useI18n();
@@ -318,7 +322,7 @@ export default function RecentResults({ estado }: { estado: ReturnType<typeof us
           ) : (
             conNodos(
               t('acerto.explica', {
-                unos: (r.esperado ?? 0).toFixed(1).replace('.', ','),
+                unos: numF((r.esperado ?? 0), 1),
                 lo: r.rangoNormal?.[0] ?? '—',
                 hi: r.rangoNormal?.[1] ?? '—',
                 n: r.total,

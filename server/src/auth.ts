@@ -36,6 +36,14 @@
 //
 // Exentos: `/healthz` (Fly comprueba que la máquina vive pidiéndolo; con 401 la reiniciaría
 // en bucle), `/ready`, y las rutas de la propia entrada (`/api/auth/login`, `/api/auth/me`).
+//
+// Y la web construida (lote A, A1): `index.html`, los assets, el service worker, el manifiesto.
+// Sin eso, en producción `GET /` devolvía 401 y no había forma de llegar a la pantalla de
+// entrada. Ningún dato viaja por ahí: lo que se exime es la ruta comodín de @fastify/static
+// (`/*`) para GET y HEAD, y nunca nada bajo `/api/`.
+//
+// Basic Auth con TOTP configurado (A3): la contraseña sola ya no abre; el código va en la
+// cabecera `X-TOTP-Code` (`curl -u victor -H 'X-TOTP-Code: 123456' …`).
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { configAuth, type ConfigAuth } from './auth/mode.ts';
@@ -43,6 +51,7 @@ import { igual } from './auth/compare.ts';
 import { LimiteDeIntentos } from './auth/rateLimit.ts';
 import { sesionDe } from './auth/sessions.ts';
 import { tokenDeSesion } from './auth/cookies.ts';
+import { verificarTotp } from './auth/totp.ts';
 import { featureEncendida } from './features.ts';
 
 export { isProduction } from './auth/mode.ts';
@@ -56,11 +65,33 @@ export function rutaExenta(url: string): boolean {
   return RUTAS_EXENTAS.has(sinQuery);
 }
 
-/** La dirección que cuenta para el límite: la del proxy de confianza si lo hay. */
-export function direccionDe(req: FastifyRequest): string {
-  const xf = req.headers['x-forwarded-for'];
-  const primera = (Array.isArray(xf) ? xf[0] : xf)?.split(',')[0].trim();
-  return primera || req.ip || 'desconocida';
+/**
+ * La dirección que cuenta para el límite de intentos.
+ *
+ * NUNCA `X-Forwarded-For`: la escribe quien manda la petición, así que con ella cada intento
+ * podía venir «de otra dirección» y el límite no frenaba nada (A2). En producción (Fly) cuenta
+ * `Fly-Client-IP`, que la pone el proxy de Fly y el cliente no puede fijar; fuera de Fly, o sin
+ * esa cabecera, cuenta la dirección del socket. Detrás de otro proxy sin esa cabecera todas las
+ * peticiones comparten dirección —un atacante puede bloquear a todos—, pero ya no puede
+ * saltarse el límite; y la sesión válida se mira ANTES del bloqueo, así que el dueño entra.
+ */
+export function direccionDe(req: FastifyRequest, produccion = false): string {
+  if (produccion) {
+    const fly = req.headers['fly-client-ip'];
+    const valor = (Array.isArray(fly) ? fly[0] : fly)?.trim();
+    if (valor) return valor;
+  }
+  return req.socket?.remoteAddress || 'desconocida';
+}
+
+/**
+ * ¿Es una petición de la web construida? La ruta comodín de @fastify/static (`/*`) sirve los
+ * ficheros y el respaldo de la SPA; `/api/...` nunca es estático aunque caiga en ella.
+ */
+export function esEstatica(req: FastifyRequest): boolean {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+  if (req.routeOptions?.url !== '/*') return false;
+  return !req.url.startsWith('/api/') && !req.url.startsWith('/api?');
 }
 
 export function basicAuthValido(header: string | undefined, c: ConfigAuth): boolean | null {
@@ -91,16 +122,13 @@ export function registerAuth(app: FastifyInstance, runtime: AuthRuntime): void {
   const { config, limite } = runtime;
   if (!config.activa) return;
   const sesionesOn = featureEncendida('auth.sesiones');
+  const totpActivo = featureEncendida('auth.totp') && !!config.totpSecret;
 
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
-    if (rutaExenta(req.url)) return;
+    if (rutaExenta(req.url) || esEstatica(req)) return;
 
-    const ip = direccionDe(req);
-    const espera = limite.bloqueadaSegundos(ip);
-    if (espera > 0) {
-      return reply.code(429).header('retry-after', String(espera)).send({ error: `Demasiados intentos. Espera ${espera} s.` });
-    }
-
+    // La sesión ANTES del bloqueo: una dirección bloqueada (o compartida con quien la bloqueó)
+    // no deja fuera a quien ya entró.
     if (sesionesOn) {
       const s = sesionDe(tokenDeSesion(req));
       if (s) {
@@ -109,11 +137,23 @@ export function registerAuth(app: FastifyInstance, runtime: AuthRuntime): void {
       }
     }
 
+    const ip = direccionDe(req, config.produccion);
+    const espera = limite.bloqueadaSegundos(ip);
+    if (espera > 0) {
+      return reply.code(429).header('retry-after', String(espera)).send({ error: `Demasiados intentos. Espera ${espera} s.` });
+    }
+
     const basic = basicAuthValido(req.headers.authorization, config);
-    if (basic === true) return;
-    if (basic === false) {
+    if (basic !== null) {
+      // Con TOTP, las dos comprobaciones siempre (sin cortocircuito), como en el login.
+      const codigo = req.headers['x-totp-code'];
+      const okTotp = totpActivo ? verificarTotp(config.totpSecret, String(Array.isArray(codigo) ? codigo[0] : (codigo ?? ''))) : true;
+      if (basic && okTotp) return;
       const bloqueo = limite.fallo(ip);
       if (bloqueo > 0) return reply.code(429).header('retry-after', String(bloqueo)).send({ error: `Demasiados intentos. Espera ${bloqueo} s.` });
+      if (basic && totpActivo) {
+        return reply.code(401).send({ error: 'Código TOTP requerido (cabecera X-TOTP-Code)', totp: true, login: '/api/auth/login' });
+      }
     }
 
     // Para la API y para la pantalla, 401 con JSON. `WWW-Authenticate` solo se añade si la
@@ -122,7 +162,7 @@ export function registerAuth(app: FastifyInstance, runtime: AuthRuntime): void {
     // propia pantalla de entrada.
     const esNavegador = (req.headers.accept ?? '').includes('text/html') || !!req.headers.cookie || req.headers['sec-fetch-mode'] !== undefined;
     if (!esNavegador) reply.header('WWW-Authenticate', 'Basic realm="Sports Predictor", charset="UTF-8"');
-    return reply.code(401).send({ error: 'Contraseña requerida', login: '/api/auth/login' });
+    return reply.code(401).send({ error: 'Contraseña requerida', login: '/api/auth/login', totp: totpActivo });
   });
 }
 

@@ -2,20 +2,27 @@
 // simulada de final de temporada, con cómo se movieron esas probabilidades en la temporada.
 
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, Navigate } from 'react-router';
 import { Sparkline } from '../components/charts';
 import { TeamCrest } from '../components/ui';
 import { rutaEquipo } from '../rutas';
 import { useI18n, formato } from '../i18n';
+import { tieneSimulacion } from '../lib/simulacion';
 
 interface Simulacion { season: number | null; motivo: string | null; etiqueta: string; corridas: number; calendario: { origen: string; pendientes: number; nota: string | null }; reglas: { etiquetaTop: string; descenso: number; puntos: unknown } | null; equipos: { id: string; nombre: string; grupo: string | null; actual: { puntos: number; jugados: number; victorias: number; empates: number; derrotas: number }; puntosEsperados: number; titulo: number; top: number; descenso: number }[] }
 interface Historial { dias: { dia: string; equipos: { id: string; titulo: number; top: number; descenso: number }[] }[] }
 interface Power { teams: { id: string; name: string; elo: number }[] }
 
-const API: Record<string, string> = { football: '/api/football', basketball: '/api/basketball', baseball: '/api/baseball', nfl: '/api/nfl' };
+const API: Record<string, string> = { football: '/api/football', basketball: '/api/basketball', baseball: '/api/baseball', nfl: '/api/nfl', nhl: '/api/nhl' };
 
 export default function Liga() {
   const { sport = '', league = '' } = useParams();
+  // La UFC no tiene ligas ni clasificación que simular: su «liga» es la pestaña.
+  if (sport === 'ufc') return <Navigate to="/ufc" replace />;
+  return <LigaDeEquipos sport={sport} league={league} />;
+}
+
+function LigaDeEquipos({ sport, league }: { sport: string; league: string }) {
   const { t, idioma } = useI18n();
   const f = formato(idioma);
   const [sim, setSim] = useState<Simulacion | null | 'error'>(null);
@@ -24,8 +31,11 @@ export default function Liga() {
   useEffect(() => {
     let vivo = true;
     setSim(null);
-    fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}`).then((r) => (r.ok ? r.json() : Promise.reject())).then((j) => vivo && setSim(j)).catch(() => vivo && setSim('error'));
-    fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}/historial`).then((r) => (r.ok ? r.json() : null)).then((j) => vivo && setHist(j)).catch(() => undefined);
+    // Sin simulación para este deporte (la NHL, la UFC) ni se pide: era un 404 en consola (G9).
+    if (tieneSimulacion(sport)) {
+      fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}`).then((r) => (r.ok ? r.json() : Promise.reject())).then((j) => vivo && setSim(j)).catch(() => vivo && setSim('error'));
+      fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}/historial`).then((r) => (r.ok ? r.json() : null)).then((j) => vivo && setHist(j)).catch(() => undefined);
+    } else setSim('error');
     fetch(`${API[sport] ?? ''}/power?league=${encodeURIComponent(league)}&limit=60`).then((r) => (r.ok ? r.json() : null)).then((j) => vivo && setPower(j)).catch(() => undefined);
     return () => {
       vivo = false;
@@ -38,7 +48,25 @@ export default function Liga() {
     <div>
       <p className="mb-1 text-[12px] text-(--ink-muted)">{t('liga.titulo')}</p>
       <h2 className="mb-1 text-[20px] font-semibold text-(--ink-strong)">{league.toUpperCase()}</h2>
-      {sim === 'error' && <p className="text-[14px] text-(--ink-soft)">{t('liga.sinDatos')}</p>}
+      {sim === 'error' && !(power?.teams.length) && <p className="text-[14px] text-(--ink-soft)">{t('liga.sinDatos')}</p>}
+      {/* Sin simulación (la NHL no la tiene), al menos la clasificación por Elo. */}
+      {sim === 'error' && !!power?.teams.length && (
+        <>
+          <p className="mb-3 text-[13px] text-(--ink-muted)">{t('liga.soloElo')}</p>
+          <ol className="divide-y divide-(--line) rounded-xl border border-(--line) text-[13px]">
+            {power.teams.map((e, i) => (
+              <li key={e.id} className="flex items-center gap-3 px-3 py-1.5">
+                <span className="w-6 tabular-nums text-(--ink-muted)">{i + 1}</span>
+                <Link to={rutaEquipo(sport, league, e.id)} className="flex min-w-0 flex-1 items-center gap-2 text-(--ink-body) underline-offset-2 hover:underline">
+                  <TeamCrest league={league} name={e.name} code={e.id} size={20} />
+                  <span className="break-words">{e.name}</span>
+                </Link>
+                <span className="tabular-nums text-(--ink-strong)">{Math.round(e.elo)}</span>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
       {sim === null && <p className="text-[13px] text-(--ink-muted)">{t('comun.cargando')}</p>}
       {sim && sim !== 'error' && (
         <>

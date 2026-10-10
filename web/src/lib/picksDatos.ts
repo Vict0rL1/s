@@ -16,6 +16,8 @@ export const CAVEATS: Record<string, Clave> = {
   baseball: 'aviso.baseball',
   basketball: 'aviso.basketball',
   nfl: 'aviso.nfl',
+  nhl: 'aviso.nhl',
+  ufc: 'aviso.ufc',
   tennis: 'aviso.tennis',
 };
 

@@ -10,22 +10,33 @@ import FootballCard from '../components/football/MatchCard';
 import BasketballCard from '../components/basketball/GameCard';
 import BaseballCard from '../components/baseball/GameCard';
 import NflCard from '../components/nfl/GameCard';
+import NhlCard from '../components/nhl/GameCard';
+import UfcCard from '../components/ufc/FightCard';
 import TennisCard from '../components/MatchCard';
 import { LineChart } from '../components/charts';
 import { EstrellaSeguir } from '../components/seguimiento';
 import { aComun, nombrePartido, URL_PARTIDO, type DeporteId, type PartidoComun } from '../lib/partidos';
-import { rutaEquipo, rutaJugador, RUTA_DE_PESTANA } from '../rutas';
-import type { PrePartido } from '../lib/trust';
+import { rutaEquipo, rutaJugador, rutaLuchador, RUTA_DE_PESTANA } from '../rutas';
+import { avisoSinDeriva, nombreDelPrePartido, type PrePartido } from '../lib/trust';
 import { useI18n, formato } from '../i18n';
 import { PROFIT_COLOR, LOSS_COLOR } from '../lib/theme';
 
 interface Resultado { casa: string; fuera: string; cuando: string | null; probabilidades: number[]; resuelto: boolean; resultado: 'casa' | 'empate' | 'fuera' | null; marcador: string | null; probabilidadDada: number | null; acerto: boolean | null }
 interface PorCasa { casas: string[]; series: { casa: string; seleccion: string; puntos: { at: string; cuota: number }[] }[] }
 
-const DEPORTES: DeporteId[] = ['football', 'basketball', 'baseball', 'nfl', 'tennis'];
+const DEPORTES: DeporteId[] = ['football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'tennis'];
 
+/**
+ * La ficha, con una clave por partido (D8): al pasar de un partido a otro sin salir de la ruta,
+ * React reutilizaba el componente y la ficha nueva enseñaba un rato la deriva, el resultado y las
+ * cuotas por casa de la anterior. Con la clave, cada partido empieza de cero.
+ */
 export default function Partido() {
   const { sport = '', id = '' } = useParams();
+  return <FichaPartido key={`${sport}/${id}`} sport={sport} id={id} />;
+}
+
+function FichaPartido({ sport, id }: { sport: string; id: string }) {
   const [q] = useSearchParams();
   const navigate = useNavigate();
   const { t, idioma } = useI18n();
@@ -56,6 +67,9 @@ export default function Partido() {
   }, [deporte, id]);
 
   const comun: PartidoComun | null = deporte && item && item !== 'error' ? aComun(deporte, item) : null;
+  // Lo publicado manda en la cabecera (lo mismo que Destacados); si el modelo de hoy ya dice otra
+  // cosa, se cuenta aquí en vez de cambiar el número en silencio.
+  const publicada = item && item !== 'error' ? ((item.prediction as { publicada?: { en: string; actual: number[]; difiere: boolean } } | null)?.publicada ?? null) : null;
   const clave = comun?.prePartido?.matchKey ?? comun?.confianza?.matchKey ?? q.get('clave');
 
   useEffect(() => {
@@ -118,12 +132,19 @@ export default function Partido() {
       {item === null && <p className="text-[13px] text-(--ink-muted)">{t('comun.cargando')}</p>}
       {item === 'error' && !res && <p className="text-[14px] text-(--ink-soft)">{t('partido.noEncontrado')}</p>}
       {item === 'error' && res && <p className="mb-4 text-[13px] text-(--ink-muted)">{t('partido.yaNoProximo')}</p>}
+      {publicada?.difiere && (
+        <p className="mb-2 text-[13px] text-(--ink-soft)">
+          {t('partido.publicada', { cuando: f.fecha(publicada.en, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), hoy: publicada.actual.map((p) => f.porcentaje(p, 1)).join(' · ') })}
+        </p>
+      )}
       {item && item !== 'error' && (
         <div className="mb-4">
           {deporte === 'football' && <FootballCard item={item as never} onOpenTeam={abrirEquipo} />}
           {deporte === 'basketball' && <BasketballCard item={item as never} onOpenTeam={abrirEquipo} />}
           {deporte === 'baseball' && <BaseballCard item={item as never} onOpenTeam={abrirEquipo} />}
           {deporte === 'nfl' && <NflCard item={item as never} onOpenTeam={abrirEquipo} />}
+          {deporte === 'nhl' && <NhlCard item={item as never} onOpenTeam={(id: string) => abrirEquipo('nhl', id)} />}
+          {deporte === 'ufc' && <UfcCard item={item as never} onOpenFighter={(fid: string) => navigate(rutaLuchador(fid))} />}
           {deporte === 'tennis' && <TennisCard item={item as never} onOpenPlayer={abrirJugador} />}
         </div>
       )}
@@ -133,13 +154,13 @@ export default function Partido() {
           <h3 className="mb-2 text-[15px] font-semibold text-(--ink-strong)">{t('partido.deriva')}</h3>
           {deriva.length > 1 ? (
             <>
-              <LineChart series={[{ nombre: pre?.horizontes.find((h) => h.fila)?.fila?.outcomes[0] ?? '1', puntos: deriva }]} unidad=" %" formatoX={(x) => f.fecha(new Date(x).toISOString())} />
+              <LineChart series={[{ nombre: (pre && nombreDelPrePartido(pre)) || '1', puntos: deriva }]} unidad=" %" formatoX={(x) => f.fecha(new Date(x).toISOString())} />
               <ul className="mt-1 flex flex-wrap gap-x-3 text-[12px] text-(--ink-soft)">
                 {deriva.map((d) => <li key={d.etiqueta}>{d.etiqueta}: <span className="tabular-nums text-(--ink-strong)">{f.numero(d.y, 1)} %</span></li>)}
               </ul>
             </>
           ) : (
-            <p className="text-[13px] text-(--ink-muted)">{pre?.instantaneas ? t('partido.unaInstantanea') : t('partido.sinInstantaneas')}</p>
+            <p className="text-[13px] text-(--ink-muted)">{t(pre ? avisoSinDeriva(pre) : 'partido.sinInstantaneas', { n: pre?.instantaneas ?? 0 })}</p>
           )}
           {pre?.final && <p className="mt-1 text-[12px] text-(--ink-soft)">{t('partido.finalCongelada', { p: f.porcentaje(pre.final.probs[0], 1) })}</p>}
         </section>

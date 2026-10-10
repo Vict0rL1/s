@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { nflApi, type NflMeta, type NflTrackRecord } from '../../lib/nfl';
 import { conNodos, localeDe, useI18n } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 export function DataLine({ meta }: { meta: NflMeta }) {
   const { t, idioma } = useI18n();
@@ -73,7 +74,7 @@ export function NflTrackRecordPanel({ league }: { league: string }) {
           ) : (
             <span className="text-(--ink-strong)">
               {conNodos(t('nflt.acierto'), {
-                pct: <strong className="tabular-nums">{((data.accuracy ?? 0) * 100).toFixed(1)}%</strong>,
+                pct: <strong className="tabular-nums">{pctF((data.accuracy ?? 0), 1)}</strong>,
                 n: <strong className="tabular-nums">{data.resolved}</strong>,
               })}
               {data.marginMae != null && (
@@ -91,8 +92,8 @@ export function NflTrackRecordPanel({ league }: { league: string }) {
               {conNodos(
                 t('nflt.vsMercado', {
                   n: data.vsMarket.n,
-                  m: ((data.vsMarket.modelAccuracy ?? 0) * 100).toFixed(1),
-                  k: ((data.vsMarket.marketAccuracy ?? 0) * 100).toFixed(1),
+                  m: numF((data.vsMarket.modelAccuracy ?? 0) * 100, 1),
+                  k: numF((data.vsMarket.marketAccuracy ?? 0) * 100, 1),
                   bm: data.vsMarket.modelBrier ?? '',
                   bk: data.vsMarket.marketBrier ?? '',
                 }),
@@ -109,7 +110,7 @@ export function NflTrackRecordPanel({ league }: { league: string }) {
               <ul className="space-y-0.5">
                 {data.calibration.map((c) => (
                   <li key={c.label} className="tabular-nums">
-                    {t('nflt.calibLinea', { label: c.label, p: (c.predicted * 100).toFixed(0), o: (c.observed * 100).toFixed(0), n: c.n })}
+                    {t('nflt.calibLinea', { label: c.label, p: numF(c.predicted * 100, 0), o: numF(c.observed * 100, 0), n: c.n })}
                   </li>
                 ))}
               </ul>

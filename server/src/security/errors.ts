@@ -45,12 +45,22 @@ export interface ErrorRegistrado {
   stack: string | null;
 }
 
+/**
+ * Tope de filas de `error_log` (lote B, B6). No es una tabla inmutable (no tiene triggers): por
+ * encima se podan las más viejas. Sin tope, cualquiera que supiera provocar un error por petición
+ * tenía una forma gratis de llenar el libro mayor.
+ */
+export const LIMITE_ERROR_LOG = 5000;
+
 export function registrarError(e: { requestId?: string | null; method?: string; url?: string; status: number; message: string; stack?: string | null; userAgent?: string | null }, ahora = new Date()): void {
   try {
     ensureErrorLogSchema();
-    getDb()
-      .prepare('INSERT INTO error_log (created_at, request_id, method, url, status, message, stack, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(ahora.toISOString(), e.requestId ?? null, e.method ?? null, e.url?.slice(0, 500) ?? null, e.status, e.message.slice(0, 1000), e.stack?.slice(0, 4000) ?? null, e.userAgent?.slice(0, 200) ?? null);
+    const db = getDb();
+    db.prepare('INSERT INTO error_log (created_at, request_id, method, url, status, message, stack, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+      ahora.toISOString(), e.requestId ?? null, e.method ?? null, e.url?.slice(0, 500) ?? null, e.status, e.message.slice(0, 1000), e.stack?.slice(0, 4000) ?? null, e.userAgent?.slice(0, 200) ?? null,
+    );
+    // Barato: por id (el rowid), casi siempre sin filas que borrar.
+    db.prepare('DELETE FROM error_log WHERE id <= (SELECT MAX(id) FROM error_log) - ?').run(LIMITE_ERROR_LOG);
   } catch {
     // Que falle el registro del error no puede tapar la respuesta del error.
   }

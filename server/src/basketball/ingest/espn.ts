@@ -33,8 +33,8 @@ function base(league: LeagueConfig): string {
   return `${basketballConfig.history.espnBase}/${league.espn.sport}/${league.espn.league}`;
 }
 
-async function getJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
+async function getJson(url: string, f: typeof fetch): Promise<unknown> {
+  const res = await f(url, { headers: { accept: 'application/json' } });
   if (!res.ok) throw new Error(`ESPN HTTP ${res.status} en ${url}`);
   return res.json();
 }
@@ -211,23 +211,61 @@ export interface EspnResult {
   seasons: number[];
 }
 
+/** Lo descargado de ESPN para una liga, todavía sin tocar la base. */
+export interface DescargaEspn {
+  teams: ParsedTeam[];
+  games: ParsedGame[];
+  seasons: number[];
+}
+
+export interface OpcionesDescarga {
+  /** `fetch` inyectable: los tests no salen a la red. */
+  fetch?: typeof fetch;
+  log?: (linea: string) => void;
+}
+
 /**
- * Ingest teams + completed games for one league.
- * `seasons` are ESPN season years (the NBA 2024-25 season is 2025).
+ * Descargar equipos y partidos acabados de una liga, A MEMORIA (lote A, A5). No escribe
+ * nada: la base se toca después, en una transacción, cuando ya está todo descargado.
+ * `seasons` son años de temporada de ESPN (la NBA 2024-25 es 2025).
  */
-export async function ingestEspnLeague(
-  league: LeagueConfig,
-  seasons: number[],
-): Promise<EspnResult> {
-  const db = getDb();
+export async function descargarEspn(league: LeagueConfig, seasons: number[], opts: OpcionesDescarga = {}): Promise<DescargaEspn> {
+  const f = opts.fetch ?? fetch;
+  const log = opts.log ?? ((l: string) => process.stdout.write(`${l}\n`));
   const root = base(league);
 
-  const teamsPayload = manualPayload(`${league.id}-teams`) ?? (await getJson(`${root}/teams`));
+  const teamsPayload = manualPayload(`${league.id}-teams`) ?? (await getJson(`${root}/teams`, f));
   const teams = parseTeams(teamsPayload);
   if (teams.length === 0) {
     throw new Error(`ESPN no devolvió equipos para ${league.id}.`);
   }
 
+  const games: ParsedGame[] = [];
+  const done = new Set<string>();
+  for (const season of seasons) {
+    for (const team of teams) {
+      const payload =
+        manualPayload(`${league.id}-schedule-${team.espnId}-${season}`) ??
+        (await getJson(`${root}/teams/${team.espnId}/schedule?season=${season}`, f).catch(() => null));
+      if (!payload) continue;
+      for (const g of parseSchedule(payload, season)) {
+        const key = `${g.date}|${slugify(g.homeName)}|${slugify(g.awayName)}`;
+        if (done.has(key)) continue; // same game seen from the other team
+        done.add(key);
+        games.push(g);
+      }
+    }
+    log(`  ${league.name} ${season}: ${games.length} partidos acumulados`);
+  }
+  return { teams, games, seasons };
+}
+
+/**
+ * Guardar lo descargado en bb_teams y bb_games. SIN transacción propia: quien llama la abre
+ * (actualizar.ts la comparte con el borrado y el recálculo de ratings de la liga).
+ */
+export function guardarEspn(league: LeagueConfig, d: DescargaEspn): { teams: number; games: number } {
+  const db = getDb();
   const insertTeam = db.prepare(
     `INSERT INTO bb_teams (id, league, name, abbreviation, location, conference, division, logo)
      VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)
@@ -235,15 +273,8 @@ export async function ingestEspnLeague(
        name = excluded.name, abbreviation = excluded.abbreviation,
        location = excluded.location, logo = excluded.logo`,
   );
-  db.exec('BEGIN');
-  try {
-    for (const t of teams) {
-      insertTeam.run(t.id, league.id, t.name, t.abbreviation, t.location, t.logo);
-    }
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
+  for (const t of d.teams) {
+    insertTeam.run(t.id, league.id, t.name, t.abbreviation, t.location, t.logo);
   }
 
   const insertGame = db.prepare(
@@ -252,44 +283,20 @@ export async function ingestEspnLeague(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
      ON CONFLICT(league, game_date, home_id, away_id) DO NOTHING`,
   );
-
   let games = 0;
-  const done = new Set<string>();
-  for (const season of seasons) {
-    for (const team of teams) {
-      const payload =
-        manualPayload(`${league.id}-schedule-${team.espnId}-${season}`) ??
-        (await getJson(`${root}/teams/${team.espnId}/schedule?season=${season}`).catch(() => null));
-      if (!payload) continue;
-      const parsed = parseSchedule(payload, season);
-      db.exec('BEGIN');
-      try {
-        for (const g of parsed) {
-          const homeId = slugify(g.homeName);
-          const awayId = slugify(g.awayName);
-          const key = `${g.date}|${homeId}|${awayId}`;
-          if (done.has(key)) continue; // same game seen from the other team
-          done.add(key);
-          insertGame.run(
-            league.id,
-            g.season,
-            g.date,
-            homeId,
-            awayId,
-            g.homePts,
-            g.awayPts,
-            g.neutral ? 1 : 0,
-            g.isPlayoff ? 1 : 0,
-          );
-          games++;
-        }
-        db.exec('COMMIT');
-      } catch (e) {
-        db.exec('ROLLBACK');
-        throw e;
-      }
-    }
-    process.stdout.write(`  ${league.name} ${season}: ${games} partidos acumulados\n`);
+  for (const g of d.games) {
+    insertGame.run(
+      league.id,
+      g.season,
+      g.date,
+      slugify(g.homeName),
+      slugify(g.awayName),
+      g.homePts,
+      g.awayPts,
+      g.neutral ? 1 : 0,
+      g.isPlayoff ? 1 : 0,
+    );
+    games++;
   }
 
   // Any team that appears in a game but not in /teams (renamed, or a college
@@ -310,5 +317,20 @@ export async function ingestEspnLeague(
     insertTeam.run(m.id, league.id, pretty, null, null, null);
   }
 
-  return { league: league.id, teams: teams.length + missing.length, games, seasons };
+  return { teams: d.teams.length + missing.length, games };
+}
+
+/** Descargar y guardar, en una transacción. (El script usa actualizar.ts, que además borra y recalcula.) */
+export async function ingestEspnLeague(league: LeagueConfig, seasons: number[], opts: OpcionesDescarga = {}): Promise<EspnResult> {
+  const d = await descargarEspn(league, seasons, opts);
+  const db = getDb();
+  db.exec('BEGIN');
+  try {
+    const r = guardarEspn(league, d);
+    db.exec('COMMIT');
+    return { league: league.id, ...r, seasons };
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
 }

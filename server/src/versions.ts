@@ -40,6 +40,8 @@ export const MODEL_FILES: Record<SportId, string[]> = {
   basketball: ['basketball/elo.ts', 'basketball/predict.ts', 'basketball/ratings.ts'],
   baseball: ['baseball/model.ts', 'baseball/predict.ts', 'baseball/ratings.ts', 'baseball/parkFactors.ts'],
   nfl: ['nfl/model.ts', 'nfl/predict.ts', 'nfl/ratings.ts', 'postprocess/apply.ts'],
+  nhl: ['nhl/model.ts', 'nhl/predict.ts', 'nhl/repo.ts'],
+  ufc: ['ufc/model.ts', 'ufc/evaluacion.ts', 'ufc/combinado.ts', 'ufc/predict.ts', 'ufc/repo.ts'],
 };
 const CONFIG_FILE: Record<SportId, string> = {
   tennis: 'tournaments.json',
@@ -47,6 +49,8 @@ const CONFIG_FILE: Record<SportId, string> = {
   basketball: 'basketball.json',
   baseball: 'baseball.json',
   nfl: 'americanfootball.json',
+  nhl: 'nhl.json',
+  ufc: 'ufc.json',
 };
 const STRATEGY_FILES = ['staking/policy.ts', 'staking/calibration.ts', 'paper/bankroll.ts'];
 
@@ -111,6 +115,8 @@ const TABLAS_DATOS: Record<SportId, { tabla: string; fecha: string }> = {
   basketball: { tabla: 'bb_games', fecha: 'game_date' },
   baseball: { tabla: 'bsb_games', fecha: 'game_date' },
   nfl: { tabla: 'naf_games', fecha: 'game_date' },
+  nhl: { tabla: 'nhl_games', fecha: 'game_date' },
+  ufc: { tabla: 'ufc_fights', fecha: 'fecha' },
 };
 
 /** La versión de los datos: hasta qué fecha y cuántos partidos hay en la base. */

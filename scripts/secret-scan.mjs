@@ -5,19 +5,26 @@
 //   node scripts/secret-scan.mjs --staged    lo que está a punto de commitearse
 //   node scripts/secret-scan.mjs --tracked   todos los ficheros rastreados por git
 //   node scripts/secret-scan.mjs --json      salida para el doctor
+//   --root <dir>                              otro repositorio (los tests)
+//
+// En --staged se lee lo que hay en el ÍNDICE (`git show :<ruta>`), no el fichero del disco: es
+// lo que va al commit. Antes se leía el disco, así que un `git add -p` parcial o un secreto ya
+// borrado del disco pero no del índice pasaban (D16 de la revisión del 8 de octubre de 2026).
 //
 // Exit 1 si encuentra algo. Lo que busca son FORMAS de clave, no valores concretos: la
 // clave de The Odds API son 32 hex, las de Anthropic empiezan por sk-ant-, etc. Y comprueba
 // que ningún .env esté rastreado.
 
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const args = new Set(process.argv.slice(2));
+const argv = process.argv.slice(2);
+const args = new Set(argv);
 const JSON_OUT = args.has('--json');
 const MODO = args.has('--staged') ? 'staged' : 'tracked';
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const iRoot = argv.indexOf('--root');
+const ROOT = iRoot >= 0 && argv[iRoot + 1] ? path.resolve(argv[iRoot + 1]) : path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 
 /** Patrones. Cada uno con el contexto que evita falsos positivos. */
 const PATRONES = [
@@ -60,9 +67,16 @@ for (const f of ficheros) {
   const ruta = path.join(ROOT, f);
   let texto;
   try {
-    const st = fs.statSync(ruta);
-    if (!st.isFile() || st.size > 2_000_000) continue;
-    texto = fs.readFileSync(ruta, 'utf8');
+    if (MODO === 'staged') {
+      // Lo que va al commit: el contenido del índice.
+      // Sin shell: el nombre del fichero va como argumento, tal cual.
+      texto = execFileSync('git', ['show', `:${f}`], { cwd: ROOT, encoding: 'utf8', maxBuffer: 4_000_000, stdio: ['ignore', 'pipe', 'ignore'] });
+      if (texto.length > 2_000_000) continue;
+    } else {
+      const st = fs.statSync(ruta);
+      if (!st.isFile() || st.size > 2_000_000) continue;
+      texto = fs.readFileSync(ruta, 'utf8');
+    }
   } catch {
     continue;
   }

@@ -94,6 +94,18 @@ const CONSULTAS: Record<string, string> = {
                CASE WHEN home_points IS NULL THEN NULL WHEN home_points > away_points THEN 0 WHEN home_points = away_points THEN -1 ELSE 2 END,
                CASE WHEN home_points IS NULL THEN NULL ELSE home_points || '-' || away_points END, model_version
           FROM naf_prediction_log`,
+  // NHL: el moneyline incluye prórroga y tanda, no hay empate.
+  nhl: `SELECT 'nhl', match_key, upcoming_id, league, commence_time, predicted_at, home_name, away_name, COALESCE(shown_home, prob_home), NULL, 1 - COALESCE(shown_home, prob_home),
+               market_prob_home, NULL, 1 - market_prob_home,
+               CASE WHEN home_goals IS NULL THEN NULL WHEN home_goals > away_goals THEN 0 ELSE 2 END,
+               CASE WHEN home_goals IS NULL THEN NULL ELSE home_goals || '-' || away_goals END, model_version
+          FROM nhl_prediction_log`,
+  // UFC: A y B (sin local); el empate y el «sin resultado» devuelven la apuesta (y = −1). El «marcador» es el método.
+  ufc: `SELECT 'ufc', match_key, upcoming_id, league, commence_time, predicted_at, home_name, away_name, COALESCE(shown_home, prob_home), NULL, 1 - COALESCE(shown_home, prob_home),
+               market_prob_home, NULL, 1 - market_prob_home,
+               CASE WHEN outcome IS NULL THEN NULL WHEN outcome = 'A' THEN 0 WHEN outcome = 'B' THEN 2 ELSE -1 END,
+               CASE WHEN outcome IS NULL THEN NULL WHEN outcome = 'EMPATE' THEN 'empate' WHEN outcome = 'NC' THEN 'sin resultado' ELSE COALESCE(metodo, 'decidida') END, model_version
+          FROM ufc_prediction_log`,
 };
 
 const CABECERA =
@@ -120,8 +132,9 @@ export function normalizarFila(r: Cruda): Omit<FilaArchivo, 'confianza' | 'decis
   // y: 0 local/primero, 1 empate, 2 visitante/segundo; −1 empate devuelto (NFL).
   const yIdx = r.y == null || r.y < 0 ? null : tres ? r.y : r.y === 0 ? 0 : 1;
   const resultado: Resultado = r.y == null ? 'pendiente' : r.y < 0 ? 'nulo' : yIdx === i ? 'acierto' : 'fallo';
-  const sep = r.sport === 'nfl' ? ' @ ' : ' vs ';
-  const partido = r.sport === 'nfl' ? `${r.fuera}${sep}${r.casa}` : `${r.casa}${sep}${r.fuera}`;
+  const arroba = r.sport === 'nfl' || r.sport === 'nhl';
+  const sep = arroba ? ' @ ' : ' vs ';
+  const partido = arroba ? `${r.fuera}${sep}${r.casa}` : `${r.casa}${sep}${r.fuera}`;
   return {
     sport: r.sport,
     matchKey: r.mk,

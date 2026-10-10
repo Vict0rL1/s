@@ -21,6 +21,9 @@ export const RESULTADOS: Record<SportId, string> = {
               WHERE home_runs IS NOT NULL AND home_runs <> away_runs`,
   nfl: `SELECT match_key AS k, CASE WHEN home_points > away_points THEN 0 ELSE 1 END AS y FROM naf_prediction_log
          WHERE home_points IS NOT NULL AND home_points <> away_points`,
+  nhl: `SELECT match_key AS k, CASE WHEN home_goals > away_goals THEN 0 ELSE 1 END AS y FROM nhl_prediction_log
+         WHERE home_goals IS NOT NULL AND home_goals <> away_goals`,
+  ufc: `SELECT match_key AS k, CASE WHEN outcome = 'A' THEN 0 ELSE 1 END AS y FROM ufc_prediction_log WHERE outcome IN ('A', 'B')`,
 };
 
 export interface EvaluacionHorizontes {
@@ -52,7 +55,8 @@ export function evaluacionPorHorizonte(): EvaluacionHorizontes[] {
       const res = y.get(e.match_key);
       if (res == null) continue;
       conInstantaneas++;
-      const hs = horizontes(deporte, e.match_key, e.c);
+      // Solo partidos jugados: todas sus marcas han llegado (horizontes() deja pendientes las futuras).
+      const hs = horizontes(deporte, e.match_key, e.c, new Date(Date.parse(e.c) + 1));
       if (hs.some((h) => !h.fila)) continue;
       emparejados++;
       for (const h of hs) {

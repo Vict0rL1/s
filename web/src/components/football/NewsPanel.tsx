@@ -21,6 +21,7 @@ import type {
 } from '../../lib/football';
 import { Panel, SectionTitle } from '../ui';
 import { conNodos, useI18n, type Clave } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 const KIND_LABEL: Record<string, Clave> = {
   lesion: 'np.kind.lesion',
@@ -77,7 +78,7 @@ function Side({
             {conNodos(t('np.efectoConjunto'), {
               v: (
                 <span className={combined.net < 0 ? 'text-rose-300/90' : 'text-emerald-300/90'}>
-                  {t('np.nGoles', { n: `${combined.net > 0 ? '+' : ''}${combined.net.toFixed(2)}` })}
+                  {t('np.nGoles', { n: `${combined.net > 0 ? '+' : ''}${numF(combined.net, 2)}` })}
                 </span>
               ),
             })}
@@ -111,10 +112,10 @@ function Side({
                   )}
                 </td>
                 <td className="py-0.5 text-right text-(--ink-soft)">
-                  {(a.missProbability * 100).toFixed(0)}%
+                  {pctF(a.missProbability, 0)}
                 </td>
                 <td className="py-0.5 text-right font-medium text-rose-300/90">
-                  {a.net.toFixed(3)}
+                  {numF(a.net, 3)}
                 </td>
               </tr>
             ))}
@@ -132,7 +133,7 @@ function Side({
         <p className="mt-1 text-[12px] leading-relaxed text-(--ink-muted)">
           {conNodos(
             t('np.observacion', {
-              lista: watching.map((w) => `${w.playerName} ${(w.missProbability * 100).toFixed(0)}%`).join(', '),
+              lista: watching.map((w) => `${w.playerName} ${pctF(w.missProbability, 0)}`).join(', '),
             }),
             { titulo: <span className="text-(--ink-soft)">{t('np.enObservacion')}</span> },
           )}

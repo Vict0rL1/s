@@ -8,11 +8,13 @@
 // que la probabilidad de ganar —prórroga y tanda incluidas— sea EXACTAMENTE la del Elo. De ahí salen
 // el ganador (moneyline), el empate a 60 minutos y el total de goles.
 //
-// Los parámetros de abajo son valores de partida razonables, NO ajustados: este entorno no puede bajar
-// los datos de la NHL (la red lo impide) y ajustar sin datos sería inventar. Hasta que su backtest
-// esté en el registro de experimentos con la misma evidencia que los demás, la NHL no se publica.
+// Los parámetros de abajo son los de partida. Con la historia ya bajada (21.960 partidos, 2009-10 en
+// adelante) se probó a ajustarlos por el registro de experimentos (`nhl/ajuste.ts`): ninguna
+// alternativa mejoró de forma demostrable en la validación 2024-25, así que se quedan.
 
-export const NHL = {
+export type ParamsNhl = { inicial: number; k: number; campo: number; golesLiga: number; fuerzaProrroga: number; maxGoles: number; regresion: number };
+
+export const NHL: ParamsNhl = {
   /** Elo inicial de un equipo nuevo. */
   inicial: 1500,
   /** Paso de actualización. */
@@ -25,6 +27,8 @@ export const NHL = {
   fuerzaProrroga: 0.5,
   /** Hasta cuántos goles por equipo se suma la Poisson. */
   maxGoles: 15,
+  /** Al empezar cada temporada, cuánto vuelve cada Elo hacia la media (0 = nada). */
+  regresion: 0,
 };
 
 export const esperado = (dr: number) => 1 / (1 + 10 ** (-dr / 400));
@@ -72,15 +76,15 @@ export interface PrediccionNhl {
  * P(empate) · P(gana la prórroga) sea la probabilidad del Elo. Así el moneyline y el total salen del
  * mismo modelo y no se contradicen.
  */
-export function predecir(eloLocal: number, eloVisitante: number, neutral = false): PrediccionNhl {
-  const dr = eloLocal + (neutral ? 0 : NHL.campo) - eloVisitante;
+export function predecir(eloLocal: number, eloVisitante: number, neutral = false, p: ParamsNhl = NHL, golesLiga = p.golesLiga): PrediccionNhl {
+  const dr = eloLocal + (neutral ? 0 : p.campo) - eloVisitante;
   const objetivo = esperado(dr);
-  const pOt = esperado(dr * NHL.fuerzaProrroga);
-  const total = NHL.golesLiga;
+  const pOt = esperado(dr * p.fuerzaProrroga);
+  const total = golesLiga;
   const con = (c: number) => {
     const lh = (total / 2) * Math.exp(c);
     const la = (total / 2) * Math.exp(-c);
-    const r = resultado60(lh, la);
+    const r = resultado60(lh, la, p.maxGoles);
     return { lh, la, r, p: r.gana + r.empata * pOt };
   };
   let lo = -3;
@@ -111,14 +115,14 @@ export function predecir(eloLocal: number, eloVisitante: number, neutral = false
 }
 
 /** El Elo después de un partido. Lo que gana uno lo pierde el otro; la prórroga cuenta como victoria. */
-export function actualizar(eloLocal: number, eloVisitante: number, golesLocal: number, golesVisitante: number, neutral = false): [number, number] {
-  const dr = eloLocal + (neutral ? 0 : NHL.campo) - eloVisitante;
+export function actualizar(eloLocal: number, eloVisitante: number, golesLocal: number, golesVisitante: number, neutral = false, p: ParamsNhl = NHL): [number, number] {
+  const dr = eloLocal + (neutral ? 0 : p.campo) - eloVisitante;
   const e = esperado(dr);
   const s = golesLocal > golesVisitante ? 1 : 0;
   const dif = Math.abs(golesLocal - golesVisitante);
   // Multiplicador por margen, con la corrección de autocorrelación habitual (el favorito gana por más).
   const drGanador = s === 1 ? dr : -dr;
   const mov = Math.log(Math.max(1, dif) + 1) * (2.2 / (drGanador * 0.001 + 2.2));
-  const delta = NHL.k * mov * (s - e);
+  const delta = p.k * mov * (s - e);
   return [eloLocal + delta, eloVisitante - delta];
 }

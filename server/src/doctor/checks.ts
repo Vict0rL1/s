@@ -82,7 +82,7 @@ export function comprobarConfiguracion(e: EntradaConfig): Hallazgo[] {
     out.push(
       h(S, 'error', `No hay .env en ${e.envPath}`, {
         detalle: ['La app lee el .env de la raíz del proyecto, la misma carpeta que package.json.'],
-        accion: [`cp .env.example .env`, `# y escribe tu clave en la línea ODDS_API_KEY=`],
+        accion: ['npm run clave   # crea el .env y pone tu clave (o: cp .env.example .env y escríbela en ODDS_API_KEY=)'],
       }),
     );
   }
@@ -116,7 +116,7 @@ export function comprobarConfiguracion(e: EntradaConfig): Hallazgo[] {
     out.push(
       h(S, 'error', 'Hay una línea que parece tu clave, pero sin `ODDS_API_KEY=` delante', {
         detalle: ['Un .env es una lista de NOMBRE=valor: una línea sin nombre se ignora entera.'],
-        accion: [`nano "${e.envPath}"   # escribe ODDS_API_KEY= delante de la clave`],
+        accion: ['npm run clave   # la pega bien, con su nombre delante', `# o a mano: nano "${e.envPath}" y escribe ODDS_API_KEY= delante de la clave`],
       }),
     );
   }
@@ -125,7 +125,7 @@ export function comprobarConfiguracion(e: EntradaConfig): Hallazgo[] {
   if (!e.clave.value) {
     out.push(
       h(S, 'error', 'ODDS_API_KEY no encontrada: la app arrancará en modo demostración', {
-        accion: [`echo 'ODDS_API_KEY=tu-clave' >> "${e.envPath}"`, '# y reinicia el servidor: npm run dev'],
+        accion: ['npm run clave   # la pide sin enseñarla, la escribe en el .env y la comprueba', '# y reinicia el servidor: npm run dev'],
       }),
     );
   } else {
@@ -367,11 +367,12 @@ export function comprobarBaseDeDatos(ruta: string, existe: boolean, conteos: Con
   if (t.demo > 0) {
     out.push(
       h(S, hayClave ? 'aviso' : 'info', `${t.demo} de DEMOSTRACIÓN (cuotas inventadas por la app, marcadas como demo)`, {
-        accion: hayClave ? ['npm run odds   # pide las cuotas reales de los cinco deportes'] : undefined,
+        accion: hayClave ? ['npm run odds   # pide las cuotas reales de los siete deportes'] : undefined,
       }),
     );
   }
-  if (t.sin > 0) out.push(h(S, 'aviso', `${t.sin} sin cuotas (calendario sin precio publicado)`));
+  // Sin clave, un calendario sin precio es lo esperado (NFL y NHL lo traen sin cuotas): información, no aviso.
+  if (t.sin > 0) out.push(h(S, hayClave ? 'aviso' : 'info', `${t.sin} sin cuotas (calendario sin precio publicado)`));
   for (const c of conteos) {
     if (c.total === 0) continue;
     const partes = [`${c.total} próximos`, `${c.reales} con cuotas reales`];
@@ -886,7 +887,6 @@ export interface EstadoProducto {
   archivo?: { on: boolean; predicciones: number };
   /** Las ampliaciones de la Fase 8, todas apagadas por defecto. */
   ampliaciones?: {
-    nhl: { on: boolean; partidos: number; ultimo: string | null };
     telegram: { on: boolean; token: boolean; chats: number; offset: number | null };
     enVivo: boolean;
     propsNba: boolean;
@@ -946,21 +946,16 @@ export function comprobarProducto(e: EstadoProducto, ahora: Date): Hallazgo[] {
   }
   if (e.archivo) {
     if (!e.archivo.on) out.push(h(S, 'info', 'Archivo de predicciones apagado (features.json: archivo.predicciones)'));
-    else out.push(h(S, 'info', `Archivo de predicciones: ${e.archivo.predicciones.toLocaleString('es')} predicción(es) registradas en los cinco registros`));
+    else out.push(h(S, 'info', `Archivo de predicciones: ${e.archivo.predicciones.toLocaleString('es')} predicción(es) registradas en los siete registros`));
   }
   if (e.ampliaciones) out.push(...comprobarAmpliaciones(e.ampliaciones));
   return out;
 }
 
-/** Fase 8: NHL en sombra, asistente por Telegram, tenis punto a punto y props de la NBA. */
+/** Fase 8: asistente por Telegram, tenis punto a punto y props de la NBA. (La NHL y la UFC se publicaron: van con los demás deportes.) */
 function comprobarAmpliaciones(a: NonNullable<EstadoProducto['ampliaciones']>): Hallazgo[] {
   const S: Seccion = 'PRODUCTO';
   const out: Hallazgo[] = [];
-  const n = a.nhl.partidos.toLocaleString('es');
-  if (!a.nhl.on) out.push(h(S, 'info', `NHL en sombra apagada (features.json: deportes.nhl); ${n} partido(s) en nhl_games`));
-  else if (a.nhl.partidos === 0)
-    out.push(h(S, 'aviso', 'NHL en sombra encendida pero sin partidos: no hay nada que evaluar', { accion: ['npm run update-data:nhl (necesita alcanzar api-web.nhle.com) y después npm run backtest:nhl'] }));
-  else out.push(h(S, 'ok', `NHL en sombra: ${n} partido(s), el último del ${a.nhl.ultimo}; no se publica hasta tener su experimento en el registro`));
   const t = a.telegram;
   if (!t.on) out.push(h(S, 'info', 'Asistente por Telegram apagado (features.json: asistente.telegram)'));
   else if (!t.token || t.chats === 0)
@@ -983,6 +978,10 @@ export const TEMPORADAS: Record<string, { desde: [number, number]; hasta: [numbe
   Baloncesto: { desde: [10, 20], hasta: [6, 20], comando: 'npm run update-data:bb' },
   Béisbol: { desde: [3, 25], hasta: [10, 31], comando: 'npm run update-data:bsb' },
   NFL: { desde: [9, 5], hasta: [2, 15], comando: 'npm run update-data:naf' },
+  // Regular de octubre a mediados de abril, playoffs hasta junio.
+  NHL: { desde: [10, 1], hasta: [6, 20], comando: 'npm run update-data:nhl' },
+  // Todo el año, una cartelera casi cada semana (la fuente del archivo se actualiza cada semana).
+  UFC: { desde: [1, 1], hasta: [12, 31], comando: 'npm run update-data:ufc' },
 };
 /** Días sin resultados nuevos, en plena temporada, a partir de los que los Elo van atrasados. */
 export const DIAS_SIN_RESULTADOS = 21;

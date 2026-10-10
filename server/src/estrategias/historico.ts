@@ -31,6 +31,7 @@ import { decideEvent, type StakingConfig } from '../staking/policy.ts';
 import { calibrationMultiplier, readCalibration, type CalibrationFile } from '../staking/calibration.ts';
 import { avisoMuestra, type AvisoMuestra } from '../evaluation/sample.ts';
 import type { Juego } from '../evaluation/walkforward.ts';
+import { roiDe } from '../evaluation/roi.ts';
 
 export const DEPORTES_HISTORICO = ['tennis', 'football', 'nfl'] as const;
 export type DeporteHistorico = (typeof DEPORTES_HISTORICO)[number];
@@ -296,14 +297,14 @@ export function reproducir(
     ganadas,
     beneficio: Math.round(beneficio * 100) / 100,
     bancoFinal: Math.round(banco * 100) / 100,
-    roi: arriesgado > 0 ? beneficio / arriesgado : null,
+    roi: roiDe(beneficio, arriesgado),
     acierto: apuestas > 0 ? ganadas / apuestas : null,
     drawdown: dd,
     clvMedio: conClv > 0 ? clvSuma / conClv : null,
     conClv,
     aviso: avisoMuestra(apuestas, 'apuestas'),
     curva: muestrear(curva, 300),
-    porTemporada: [...porTemp].map(([temporada, v]) => ({ temporada, apuestas: v.apuestas, beneficio: Math.round(v.beneficio * 100) / 100, roi: v.arriesgado > 0 ? v.beneficio / v.arriesgado : null })),
+    porTemporada: [...porTemp].map(([temporada, v]) => ({ temporada, apuestas: v.apuestas, beneficio: Math.round(v.beneficio * 100) / 100, roi: roiDe(v.beneficio, v.arriesgado) })),
     notas,
   };
 }

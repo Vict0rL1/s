@@ -33,7 +33,7 @@ import { freshSince } from './freshness.ts';
 import { reconstruirDesde } from './recent/reconstruct.ts';
 
 export interface PartidoDeHoy {
-  deporte: 'Fútbol' | 'Baloncesto' | 'Béisbol' | 'NFL' | 'Tenis';
+  deporte: 'Fútbol' | 'Baloncesto' | 'Béisbol' | 'NFL' | 'NHL' | 'UFC' | 'Tenis';
   /** ISO de inicio. */
   cuando: string;
   partido: string;
@@ -93,7 +93,14 @@ export const FUENTES: Fuente[] = [
   { deporte: 'Béisbol', log: 'bsb_prediction_log', up: 'bsb_upcoming', clave: 'match_key', casa: 'home_name', fuera: 'away_name', prob: 'prob_home', precio: 'odds_home', resuelto: 'resolved_at' },
   { deporte: 'NFL', log: 'naf_prediction_log', up: 'naf_upcoming', clave: 'match_key', casa: 'home_name', fuera: 'away_name', prob: 'prob_home', precio: 'odds_home', resuelto: 'home_points', mostrado: 'shown_home' },
   { deporte: 'Tenis', log: 'prediction_log', up: 'upcoming_matches', clave: 'match_key', casa: 'p1_name', fuera: 'p2_name', prob: 'prob1', precio: 'p1_odds', resuelto: 'resolved_at' },
+  // Al final y no en su sitio alfabético: hay código que lee FUENTES por posición.
+  { deporte: 'NHL', log: 'nhl_prediction_log', up: 'nhl_upcoming', clave: 'match_key', casa: 'home_name', fuera: 'away_name', prob: 'prob_home', precio: 'odds_home', resuelto: 'home_goals', mostrado: 'shown_home' },
+  // La UFC: home_* es el luchador A y away_* el B (sin local). Empate y «sin resultado» quedan 0-0 y no se puntúan.
+  { deporte: 'UFC', log: 'ufc_prediction_log', up: 'ufc_upcoming', clave: 'match_key', casa: 'home_name', fuera: 'away_name', prob: 'prob_home', precio: 'odds_home', resuelto: 'resolved_at', mostrado: 'shown_home' },
 ];
+
+/** Deportes que nombran el partido a la norteamericana: «visitante @ local». */
+export const CON_ARROBA = new Set<PartidoDeHoy['deporte']>(['NFL', 'NHL']);
 
 // ===========================================================================
 // Y EL CIERRE DEL CÍRCULO: ¿ACERTÓ?
@@ -182,8 +189,12 @@ export interface HistorialReciente {
 interface FuenteResuelta extends Fuente {
   /** Columnas del marcador final, o null en el tenis, que guarda el id del ganador. */
   marcador: [string, string] | null;
-  /** El partido del archivo al que se resolvió: para no contarlo dos veces. */
-  enlace: { col: string; tabla: string; fecha: string } | null;
+  /**
+   * El partido del archivo al que se resolvió: para no contarlo dos veces. `casa`/`fuera` dicen de
+   * dónde salen los dos lados de la clave (por defecto, `g.home_id`/`g.away_id` del archivo; la UFC
+   * los toma del registro, que los guarda en el mismo orden que la reconstrucción).
+   */
+  enlace: { col: string; tabla: string; fecha: string; casa?: string; fuera?: string } | null;
   archivo: { tabla: string; fecha: string };
   comando: string;
 }
@@ -206,8 +217,11 @@ const p2 = (n: number) => String(n).padStart(2, '0');
 export function diaLocal(d: Date): string {
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 }
-/** YYYYMMDD del archivo → YYYY-MM-DD. */
-const diaDeArchivo = (ymd: string) => `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
+/** YYYYMMDD (o YYYY-MM-DD, el de la NHL) del archivo → YYYY-MM-DD. */
+const diaDeArchivo = (ymd: string) => {
+  const d = ymd.replace(/-/g, '');
+  return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+};
 
 export function resumir(xs: { probabilidad: number; acerto: boolean }[]): ResumenAciertos {
   const n = xs.length;
@@ -241,10 +255,12 @@ const RESUELTAS = (): FuenteResuelta[] => [
   { ...FUENTES[1], marcador: ['home_pts', 'away_pts'], enlace: { col: 'game_id', tabla: 'bb_games', fecha: 'game_date' }, archivo: { tabla: 'bb_games', fecha: 'game_date' }, comando: 'npm run update-data:bb' },
   { ...FUENTES[2], marcador: ['home_runs', 'away_runs'], enlace: { col: 'game_id', tabla: 'bsb_games', fecha: 'game_date' }, archivo: { tabla: 'bsb_games', fecha: 'game_date' }, comando: 'npm run update-data:bsb' },
   { ...FUENTES[3], marcador: ['home_points', 'away_points'], enlace: { col: 'game_id', tabla: 'naf_games', fecha: 'game_date' }, archivo: { tabla: 'naf_games', fecha: 'game_date' }, comando: 'npm run update-data:naf' },
+  { ...FUENTES[5], marcador: ['home_goals', 'away_goals'], enlace: { col: 'game_id', tabla: 'nhl_games', fecha: 'game_date' }, archivo: { tabla: 'nhl_games', fecha: 'game_date' }, comando: 'npm run update-data:nhl' },
+  { ...FUENTES[6], marcador: ['home_score', 'away_score'], enlace: { col: 'fight_id', tabla: 'ufc_fights', fecha: 'fecha', casa: 'l.home_id', fuera: 'l.away_id' }, archivo: { tabla: 'ufc_fights', fecha: 'fecha' }, comando: 'npm run update-data:ufc' },
   { ...FUENTES[4], marcador: null, enlace: null, archivo: { tabla: 'matches', fecha: 'tourney_date' }, comando: 'npm run update-data' },
 ];
 
-const RECONSTRUYE = new Set<PartidoDeHoy['deporte']>(['Fútbol', 'Baloncesto', 'Béisbol', 'NFL']);
+const RECONSTRUYE = new Set<PartidoDeHoy['deporte']>(['Fútbol', 'Baloncesto', 'Béisbol', 'NFL', 'NHL', 'UFC']);
 
 export function historialReciente(now = new Date(), dias: number = VENTANAS[0]): HistorialReciente {
   rellenarMostrado();
@@ -286,7 +302,7 @@ export function historialReciente(now = new Date(), dias: number = VENTANAS[0]):
                       l.home_id AS casaId, l.away_id AS fueraId,
                       ${probSql(f, 'l.')} AS p ${f.empate ? `, ${empateSql(f, 'l.')} AS pEmpate` : ''},
                       l.${f.marcador[0]} AS gc, l.${f.marcador[1]} AS gf,
-                      g.${f.enlace!.fecha} AS gFecha, g.home_id AS gCasa, g.away_id AS gFuera
+                      g.${f.enlace!.fecha} AS gFecha, ${f.enlace!.casa ?? 'g.home_id'} AS gCasa, ${f.enlace!.fuera ?? 'g.away_id'} AS gFuera
                  FROM ${f.log} l
                  LEFT JOIN ${f.enlace!.tabla} g ON g.id = l.${f.enlace!.col}
                 WHERE l.${f.marcador[0]} IS NOT NULL AND l.commence_time >= ?
@@ -321,7 +337,7 @@ export function historialReciente(now = new Date(), dias: number = VENTANAS[0]):
           // marcador igualado sería dato corrupto, y llamarlo «Empate» inventaría un
           // resultado que ese deporte no tiene.
           ganador = g.gc > g.gf ? r.casa : g.gf > g.gc ? r.fuera : f.empate ? 'Empate' : '';
-          if (g.gFecha && g.gCasa && g.gFuera) vistos.add(`${f.deporte}|${g.gFecha}|${g.gCasa}|${g.gFuera}`);
+          if (g.gFecha && g.gCasa && g.gFuera) vistos.add(`${f.deporte}|${String(g.gFecha).replace(/-/g, '')}|${g.gCasa}|${g.gFuera}`);
         } else {
           const w = r as { winner_id: number; p1_id: number };
           ganador = w.winner_id === w.p1_id ? r.casa : r.fuera;
@@ -332,7 +348,7 @@ export function historialReciente(now = new Date(), dias: number = VENTANAS[0]):
           liga: r.liga,
           dia: diaLocal(new Date(r.cuando)),
           cuando: r.cuando,
-          partido: f.deporte === 'NFL' ? `${r.fuera} @ ${r.casa}` : `${r.casa} vs ${r.fuera}`,
+          partido: CON_ARROBA.has(f.deporte) ? `${r.fuera} @ ${r.casa}` : `${r.casa} vs ${r.fuera}`,
           casa: r.casa,
           fuera: r.fuera,
           casaId: r.casaId,
@@ -364,7 +380,7 @@ export function historialReciente(now = new Date(), dias: number = VENTANAS[0]):
       liga: p.liga,
       dia: diaDeArchivo(p.fecha),
       cuando: null,
-      partido: p.deporte === 'NFL' ? `${fuera} @ ${casa}` : `${casa} vs ${fuera}`,
+      partido: CON_ARROBA.has(p.deporte) ? `${fuera} @ ${casa}` : `${casa} vs ${fuera}`,
       casa,
       fuera,
       casaId: p.casaId,
@@ -404,7 +420,7 @@ export function historialReciente(now = new Date(), dias: number = VENTANAS[0]):
 /** deporte|liga|id → nombre, de las tablas de equipos de los cuatro deportes. */
 function nombresDeEquipos(): Map<string, string> {
   const m = new Map<string, string>();
-  for (const [deporte, tabla] of [['Fútbol', 'fb_teams'], ['Baloncesto', 'bb_teams'], ['Béisbol', 'bsb_teams'], ['NFL', 'naf_teams']] as const) {
+  for (const [deporte, tabla] of [['Fútbol', 'fb_teams'], ['Baloncesto', 'bb_teams'], ['Béisbol', 'bsb_teams'], ['NFL', 'naf_teams'], ['NHL', 'nhl_teams']] as const) {
     try {
       for (const r of getDb().prepare(`SELECT id, league, name FROM ${tabla}`).all() as { id: string; league: string; name: string }[]) {
         m.set(`${deporte}|${r.league}|${r.id}`, r.name);
@@ -412,6 +428,11 @@ function nombresDeEquipos(): Map<string, string> {
     } catch {
       // Sin tabla: se enseña el id, que es mejor que esconder el partido.
     }
+  }
+  try {
+    for (const r of getDb().prepare('SELECT id, nombre FROM ufc_fighters').all() as { id: string; nombre: string }[]) m.set(`UFC|ufc|${r.id}`, r.nombre);
+  } catch {
+    // Sin archivo de la UFC: lo mismo.
   }
   return m;
 }
@@ -472,7 +493,7 @@ export function partidosDeHoy(now = new Date()): { partidos: PartidoDeHoy[]; not
         out.push({
           deporte: f.deporte,
           cuando: r.cuando,
-          partido: f.deporte === 'NFL' ? `${r.fuera} @ ${r.casa}` : `${r.casa} vs ${r.fuera}`,
+          partido: CON_ARROBA.has(f.deporte) ? `${r.fuera} @ ${r.casa}` : `${r.casa} vs ${r.fuera}`,
           favorito,
           probabilidad,
           precioReal: r.fuente != null && r.fuente !== 'fixture' && r.precio != null,

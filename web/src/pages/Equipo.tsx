@@ -3,40 +3,52 @@
 // Es una URL: se puede compartir.
 
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, Navigate } from 'react-router';
 import { LineChart, Histogram } from '../components/charts';
 import { TeamCrest } from '../components/ui';
 import { EstrellaSeguir } from '../components/seguimiento';
 import { rutaLiga, rutaPartido } from '../rutas';
 import { aComun, nombrePartido, URL_PROXIMOS, type DeporteId, type PartidoComun } from '../lib/partidos';
 import { useI18n, formato } from '../i18n';
+import { tieneSimulacion } from '../lib/simulacion';
 
 interface Historia { puntos: { fecha: string; elo: number; rival: string; local: boolean }[]; nota: string }
 interface Simulacion { season: number | null; motivo: string | null; etiqueta: string; reglas: { etiquetaTop: string; descenso: number } | null; equipos: { id: string; nombre: string; puntosEsperados: number; titulo: number; top: number; descenso: number; posiciones: number[] }[] }
 type Registro = { wins: number; losses: number; draws?: number; ties?: number };
-interface Info { gf?: number | null; ga?: number | null; ppg?: number | null; oppg?: number | null; rs?: number | null; ra?: number | null; pf?: number | null; pa?: number | null; pythagorean?: number | null; rotation?: { id: string; name: string; starts: number; runsPer9: number | null; rating: number | null }[];
+interface Info { gf?: number | null; ga?: number | null; goalsFor?: number | null; goalsAgainst?: number | null; ppg?: number | null; oppg?: number | null; rs?: number | null; ra?: number | null; pf?: number | null; pa?: number | null; pythagorean?: number | null; rotation?: { id: string; name: string; starts: number; runsPer9: number | null; rating: number | null }[];
   id: string; name: string; elo: number; eloRank: number; record?: Registro; homeRecord?: Registro; awayRecord?: Registro; form?: { date: string; opponentName: string | null; home: boolean; result: 'W' | 'D' | 'L' }[]; matchesInDb?: number; gamesInDb?: number; conference?: string | null; division?: string | null }
 
-const API: Record<string, string> = { football: '/api/football', basketball: '/api/basketball', baseball: '/api/baseball', nfl: '/api/nfl' };
+const API: Record<string, string> = { football: '/api/football', basketball: '/api/basketball', baseball: '/api/baseball', nfl: '/api/nfl', nhl: '/api/nhl' };
+// La NHL es una sola liga: su ficha va sin liga en la ruta.
+const urlFicha = (sport: string, league: string, id: string) => (sport === 'nhl' ? `/api/nhl/teams/${encodeURIComponent(id)}` : `${API[sport] ?? ''}/teams/${encodeURIComponent(league)}/${encodeURIComponent(id)}`);
 const rec = (r?: Registro) => (r ? `${r.wins}-${r.losses}${r.draws ? `-${r.draws}` : r.ties ? `-${r.ties}` : ''}` : '—');
 
 export default function Equipo() {
   const { sport = '', league = '', id = '' } = useParams();
+  // En la UFC no hay equipos: la ficha es la del luchador.
+  if (sport === 'ufc') return <Navigate to={`/luchador/${encodeURIComponent(id)}`} replace />;
+  return <FichaEquipo sport={sport} league={league} id={id} />;
+}
+
+function FichaEquipo({ sport, league, id }: { sport: string; league: string; id: string }) {
   const { t, idioma } = useI18n();
   const f = formato(idioma);
   const [info, setInfo] = useState<Info | null | 'error'>(null);
   const [hist, setHist] = useState<Historia | null>(null);
-  const [sim, setSim] = useState<Simulacion | null>(null);
+  const [sim, setSim] = useState<Simulacion | null | 'no'>(null);
   const [proximos, setProximos] = useState<PartidoComun[]>([]);
   useEffect(() => {
     let vivo = true;
     setInfo(null);
-    fetch(`${API[sport] ?? ''}/teams/${encodeURIComponent(league)}/${encodeURIComponent(id)}`)
+    fetch(urlFicha(sport, league, id))
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((j: Info) => vivo && setInfo(j))
       .catch(() => vivo && setInfo('error'));
     fetch(`/api/elo/historia/${sport}/${encodeURIComponent(league)}/${encodeURIComponent(id)}`).then((r) => (r.ok ? r.json() : null)).then((j) => vivo && setHist(j)).catch(() => undefined);
-    fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}`).then((r) => (r.ok ? r.json() : null)).then((j) => vivo && setSim(j)).catch(() => undefined);
+    // Un 404 es «esta liga no tiene simulación» (la NHL), no algo que siga cargando.
+    // Sin simulación para este deporte (la NHL, la UFC) ni se pide: era un 404 en consola (G9).
+    if (tieneSimulacion(sport)) fetch(`/api/simulation/season/${sport}/${encodeURIComponent(league)}`).then((r) => (r.ok ? r.json() : 'no')).then((j) => vivo && setSim(j)).catch(() => vivo && setSim('no'));
+    else setSim('no');
     if (sport in URL_PROXIMOS) {
       fetch(URL_PROXIMOS[sport as DeporteId](league))
         .then((r) => (r.ok ? r.json() : []))
@@ -50,7 +62,8 @@ export default function Equipo() {
       vivo = false;
     };
   }, [sport, league, id]);
-  const yo = sim?.equipos.find((e) => e.id === id) ?? null;
+  const simulada = sim === 'no' ? null : sim;
+  const yo = simulada?.equipos.find((e) => e.id === id) ?? null;
   const serie = hist?.puntos.map((p) => ({ x: Date.parse(p.fecha), y: p.elo })) ?? [];
   const nombre = info && info !== 'error' ? info.name : id;
   return (
@@ -87,7 +100,7 @@ export default function Equipo() {
                 <h4 className="mb-1 mt-3 text-[12px] font-medium uppercase tracking-wide text-(--ink-muted)">{t('equipo.forma')}</h4>
                 <ul className="flex flex-wrap gap-1">
                   {info.form.slice(0, 10).map((x, i) => (
-                    <li key={i} title={`${x.date}: ${x.home ? 'vs' : '@'} ${x.opponentName ?? '?'}`} className="grid h-6 w-6 place-items-center rounded text-[11px] font-semibold" style={{ backgroundColor: x.result === 'W' ? 'rgba(25,158,112,0.2)' : x.result === 'L' ? 'rgba(217,89,38,0.2)' : 'var(--raised-2)', color: x.result === 'W' ? '#199e70' : x.result === 'L' ? '#d95926' : 'var(--ink-body)' }}>
+                    <li key={i} title={`${x.date}: ${x.home ? 'vs' : '@'} ${x.opponentName ?? '?'}`} className="grid h-6 w-6 place-items-center rounded text-[11px] font-semibold" style={{ backgroundColor: x.result === 'W' ? 'rgba(25,158,112,0.2)' : x.result === 'L' ? 'rgba(217,89,38,0.2)' : 'var(--raised-2)', color: x.result === 'W' ? 'var(--profit-text)' : x.result === 'L' ? 'var(--loss-text)' : 'var(--ink-body)' }}>
                       {t(x.result === 'W' ? 'equipo.g' : x.result === 'L' ? 'equipo.p' : 'equipo.e')}
                     </li>
                   ))}
@@ -96,8 +109,8 @@ export default function Equipo() {
             )}
           </section>
           {(() => {
-            const a = info.gf ?? info.ppg ?? info.rs ?? info.pf ?? null;
-            const c = info.ga ?? info.oppg ?? info.ra ?? info.pa ?? null;
+            const a = info.gf ?? info.goalsFor ?? info.ppg ?? info.rs ?? info.pf ?? null;
+            const c = info.ga ?? info.goalsAgainst ?? info.oppg ?? info.ra ?? info.pa ?? null;
             if (a == null && c == null && info.pythagorean == null && !info.rotation?.length) return null;
             return (
               <section className="rounded-xl border border-(--line) p-4">
@@ -146,23 +159,24 @@ export default function Equipo() {
           </section>
           <section className="rounded-xl border border-(--line) p-4">
             <h3 className="mb-2 text-[15px] font-semibold text-(--ink-strong)">{t('equipo.simulacion')}</h3>
-            {!sim && <p className="text-[13px] text-(--ink-muted)">{t('comun.cargando')}</p>}
-            {sim && sim.motivo && <p className="text-[13px] text-(--ink-muted)">{t('liga.sinSimulacion', { motivo: sim.motivo })}</p>}
-            {sim && !sim.motivo && yo && (
+            {sim === null && <p className="text-[13px] text-(--ink-muted)">{t('comun.cargando')}</p>}
+            {sim === 'no' && <p className="text-[13px] text-(--ink-muted)">{t('equipo.sinSimulacionLiga')}</p>}
+            {simulada && simulada.motivo && <p className="text-[13px] text-(--ink-muted)">{t('liga.sinSimulacion', { motivo: simulada.motivo })}</p>}
+            {simulada && !simulada.motivo && yo && (
               <>
                 <dl className="grid grid-cols-2 gap-2 text-[13px] sm:grid-cols-4">
                   <div><dt className="text-(--ink-muted)">{t('liga.esperados')}</dt><dd className="tabular-nums text-(--ink-strong)">{f.numero(yo.puntosEsperados, 1)}</dd></div>
                   <div><dt className="text-(--ink-muted)">{t('liga.primero')}</dt><dd className="tabular-nums text-(--ink-strong)">{f.porcentaje(yo.titulo, 1)}</dd></div>
-                  <div><dt className="text-(--ink-muted)">{sim.reglas?.etiquetaTop ?? t('liga.arriba')}</dt><dd className="tabular-nums text-(--ink-strong)">{f.porcentaje(yo.top, 1)}</dd></div>
-                  {(sim.reglas?.descenso ?? 0) > 0 && <div><dt className="text-(--ink-muted)">{t('liga.descenso')}</dt><dd className="tabular-nums text-(--ink-strong)">{f.porcentaje(yo.descenso, 1)}</dd></div>}
+                  <div><dt className="text-(--ink-muted)">{simulada.reglas?.etiquetaTop ?? t('liga.arriba')}</dt><dd className="tabular-nums text-(--ink-strong)">{f.porcentaje(yo.top, 1)}</dd></div>
+                  {(simulada.reglas?.descenso ?? 0) > 0 && <div><dt className="text-(--ink-muted)">{t('liga.descenso')}</dt><dd className="tabular-nums text-(--ink-strong)">{f.porcentaje(yo.descenso, 1)}</dd></div>}
                 </dl>
                 <div className="mt-2">
                   <Histogram titulo={t('equipo.posicionFinal')} valores={yo.posiciones} etiquetas={yo.posiciones.map((_, i) => String(i + 1))} />
                 </div>
-                <p className="mt-1 text-[11px] text-(--ink-faint)">{sim.etiqueta}</p>
+                <p className="mt-1 text-[11px] text-(--ink-faint)">{simulada.etiqueta}</p>
               </>
             )}
-            {sim && !sim.motivo && !yo && <p className="text-[13px] text-(--ink-muted)">{t('equipo.fueraSimulacion')}</p>}
+            {simulada && !simulada.motivo && !yo && <p className="text-[13px] text-(--ink-muted)">{t('equipo.fueraSimulacion')}</p>}
           </section>
         </div>
       )}

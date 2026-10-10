@@ -84,14 +84,51 @@ Todo `GET /api/*` con respuesta 200 lleva `ETag` débil y `Cache-Control: no-cac
 `If-None-Match` igual responde 304 sin cuerpo. Las respuestas de texto de más de 1 KB van con
 Brotli o gzip según `Accept-Encoding`.
 
+## NHL (seguimiento: publicada)
+
+Bajo `/api/nhl`, como los otros cinco deportes bajo el suyo. Una sola liga. Detalle en [NHL.md](NHL.md).
+
+| Ruta | Qué |
+|---|---|
+| `GET /api/nhl/meta` | Última ingesta, calendario y cuotas; por qué no hay cuotas; bandas de acierto; recuentos; ventaja de campo |
+| `GET /api/nhl/games/upcoming?limit=` | Próximos (24 por defecto, hasta 64) con predicción, confianza, resultado si ya se jugó y fichas de los equipos. Servirlos registra la predicción |
+| `GET /api/nhl/games/:id` | Un partido (`nhl-<id de la NHL>` del calendario u `odds-<id>` de la casa) |
+| `GET /api/nhl/teams`, `GET /api/nhl/teams/:id` | Equipos en activo; la ficha de uno (Elo, puesto, balance de la temporada, goles, forma) |
+| `GET /api/nhl/power` | Clasificación por Elo |
+| `POST /api/nhl/predict` | `{home, away, oddsHome?, oddsAway?, totalLine?}` con abreviaturas (TOR, BOS…) |
+| `GET /api/nhl/track-record` | El historial en vivo: acierto, Brier, log loss, error del total, calibración y contra la casa |
+| `GET /api/nhl/backtest` | La evaluación con la que se publicó (sin el holdout), referencias y parámetros |
+| `POST /api/nhl/refresh` | Pide las cuotas ahora (manual: no lo frena el ritmo mensual) |
+
+`GET /api/simulation/season/nhl/:league` responde 404: la NHL no tiene simulación de temporada.
+
+## UFC (publicada)
+
+Bajo `/api/ufc`. Sin ligas; `home_*` es el luchador A y `away_*` el B (A, el de id de ufcstats menor:
+no hay local). Detalle en [UFC.md](UFC.md).
+
+| Ruta | Qué |
+|---|---|
+| `GET /api/ufc/meta` | Última ingesta y cuotas; por qué no hay cuotas; bandas de acierto; recuentos; peleas de otras organizaciones descartadas y sin identificar; el modelo y sus rasgos |
+| `GET /api/ufc/fights/upcoming?limit=` | Las peleas que vienen (40 por defecto, hasta 80) con predicción, confianza, resultado si ya se peleó y fichas de los dos; las que no tienen número traen `sinPrediccion` con el motivo. Servirlas registra la predicción |
+| `GET /api/ufc/fights/:id` | Una pelea (`odds-<id de la casa>`) |
+| `GET /api/ufc/fighters/:id` | La ficha de un luchador (id de ufcstats): Elo, puesto, récord, edad, alcance, altura, guardia, categoría, últimas diez peleas |
+| `GET /api/ufc/power?limit=` | Clasificación por Elo de los luchadores en activo |
+| `POST /api/ufc/predict` | `{a, b, oddsA?, oddsB?}` con ids de ufcstats |
+| `GET /api/ufc/track-record` | El historial en vivo: acierto, Brier, log loss, calibración, contra la casa; empates y «sin resultado» aparte |
+| `GET /api/ufc/backtest` | La evaluación con la que se publicó (walk-forward, sin el holdout): referencias, Elo solo, elección entre candidatos, la prueba en los dos tramos y los pesos vigentes |
+| `POST /api/ufc/refresh` | Pide las cuotas ahora (manual) |
+
+`GET /api/simulation/season/ufc/:league` responde 404: la UFC no tiene temporada.
+`GET /api/elo/historia/ufc/ufc/:id` da el Elo de un luchador antes de cada pelea.
+
 ## Ampliaciones (Fase 8, apagadas por defecto)
 
 | Ruta | Qué |
 |---|---|
 | `POST /api/live/avanzar` | `{"state": {sets, games, points, server, bestOf, inTiebreak}, "winner": 1\|2}`: el marcador tras un punto, con la regla del motor en vivo; `{terminado, ganador, state}` (`tenis.enVivo`) |
-| `GET /api/nhl/sombra` | NHL en sombra: evaluación del backtest sin el holdout, referencias, aviso de muestra y parámetros; nada se publica (`deportes.nhl`) |
 
-Con el interruptor apagado, las dos responden 404 con el motivo.
+Con el interruptor apagado, responden 404 con el motivo.
 
 ## API REST (puerto 7374)
 

@@ -26,6 +26,7 @@ try {
   const r = restaurarCopia(fichero);
   console.log(`${C.green}✓${C.off} Restaurado en ${r.destino}`);
   if (r.apartado) console.log(`${C.dim}· El libro mayor anterior quedó en ${r.apartado} (bórralo cuando te fíes del restaurado)${C.off}`);
+  if (r.aviso) console.log(`${C.amber}⚠ ${r.aviso}${C.off}`);
   console.log(`${C.dim}· Historia intacta en ${ficherosDe().history}. Arranca y pasa  npm run doctor.${C.off}`);
 } catch (e) {
   console.error(`${C.red}✗ ${(e as Error).message}${C.off}`);

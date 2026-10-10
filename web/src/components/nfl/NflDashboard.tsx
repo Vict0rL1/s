@@ -15,6 +15,8 @@ import GameCard from './GameCard';
 import EloRanking from '../EloRanking';
 import { DataLine, NflTrackRecordPanel } from './NflDashboardPartes';
 import { conNodos, localeDe, useI18n } from '../../i18n';
+import { num as numF } from '../../lib/formato';
+import { conservarDia, contadorDePeticiones } from '../../lib/carga';
 
 /**
  * The whole American football tab. Holds its own state and talks only to
@@ -37,6 +39,7 @@ export default function NflDashboard() {
     { id: string; name: string; elo: number; games: number; pf: number | null; pa: number | null }[]
   >([]);
   const [loading, setLoading] = useState(false);
+  const [peticiones] = useState(contadorDePeticiones);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   // Un equipo abre su página (Fase 5.12): una URL, no un modal.
@@ -75,14 +78,17 @@ export default function NflDashboard() {
       setPower([]);
       return;
     }
+    // D8: cambiar dos veces de liga no deja los partidos de la que contestó tarde.
+    const n = peticiones.nueva();
     setLoading(true);
     Promise.all([nflApi.upcoming(league), nflApi.power(league)])
       .then(([g, p]) => {
+        if (!peticiones.esUltima(n)) return;
         setGames(g);
         setPower(p.teams);
       })
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+      .catch((e) => peticiones.esUltima(n) && setError(String(e)))
+      .finally(() => peticiones.esUltima(n) && setLoading(false));
   }, [league]);
 
   async function handleRefresh() {
@@ -127,9 +133,11 @@ export default function NflDashboard() {
   const demoOdds = games.length > 0 && games.every((r) => r.game.source === 'fixture');
   // A day that no longer exists after switching league would filter everything
   // away and look like "no games", so the choice is dropped rather than kept.
+  // D8: mientras carga no hay días (o son los de la liga anterior): el ?dia= del enlace se conserva.
   useEffect(() => {
-    if (day && !dayGroups.some((d) => d.key === day)) setDay(null);
-  }, [dayGroups, day]);
+    const sigue = conservarDia(day, dayGroups.map((d) => d.key), loading);
+    if (sigue !== day) setDay(sigue);
+  }, [dayGroups, day, loading]);
 
   const activeLeague = leagues.find((l) => l.id === league) ?? null;
   const leagueMeta = meta?.leagues.find((l) => l.id === league) ?? null;
@@ -173,7 +181,7 @@ export default function NflDashboard() {
       <NflNoLineNote
         reason={meta?.oddsFallbackReason}
         detail={meta?.oddsFallbackDetail}
-        hasKey={meta?.hasOddsKey ?? false}
+        hasKey={meta ? meta.hasOddsKey : null}
       />
 
       {/* La NFL es la razón por la que esta tabla existe: es el único deporte que no se
@@ -186,7 +194,7 @@ export default function NflDashboard() {
         <VacioPorqueNoHayCuotas
           reason={meta?.oddsFallbackReason}
           detail={meta?.oddsFallbackDetail}
-          hasKey={meta?.hasOddsKey ?? false}
+          hasKey={meta ? meta.hasOddsKey : null}
           demoFixtures={meta?.demoFixtures ?? true}
         />
       )}
@@ -208,7 +216,7 @@ export default function NflDashboard() {
             >
                 <LeagueFlag country={l.country} className="mr-1.5" />
               {l.name}
-              {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
+              {l.upcomingCount > 0 && <span className="ml-1.5 text-(--ink-soft)">{l.upcomingCount}</span>}
               {!l.hasModel && (
                 <span className="ml-1.5 text-amber-400" title={tr('eq.sinModeloElo')}>
                   ◦
@@ -274,13 +282,13 @@ export default function NflDashboard() {
           badge: <TeamCrest league={league!} name={t.name} code={t.id} size={16} />,
           onOpen: () => setTeam({ league: league!, id: t.id }),
           extra: [
-            { label: tr('eq.anota'), value: t.pf?.toFixed(1) ?? '—', title: tr('eq.anotaTitulo') },
-            { label: tr('eq.recibe'), value: t.pa?.toFixed(1) ?? '—', title: tr('eq.recibeTitulo') },
+            { label: tr('eq.anota'), value: (t.pf == null ? undefined : numF(t.pf, 1)) ?? '—', title: tr('eq.anotaTitulo') },
+            { label: tr('eq.recibe'), value: (t.pa == null ? undefined : numF(t.pa, 1)) ?? '—', title: tr('eq.recibeTitulo') },
             {
               label: tr('eq.dif'),
               value:
                 t.pf != null && t.pa != null
-                  ? `${t.pf - t.pa > 0 ? '+' : ''}${(t.pf - t.pa).toFixed(1)}`
+                  ? `${t.pf - t.pa > 0 ? '+' : ''}${numF((t.pf - t.pa), 1)}`
                   : '—',
               title: tr('eq.difPuntosTitulo'),
             },

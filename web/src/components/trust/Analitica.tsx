@@ -8,16 +8,18 @@ import { STATUS } from '../../lib/theme';
 import { conNodos, useI18n, type Clave } from '../../i18n';
 import { DeporteIcono } from '../icons';
 import { Termino } from '../ui';
+import { num as numF } from '../../lib/formato';
+import { pct as pctF } from '../../lib/formato';
 
-type Deporte = 'football' | 'basketball' | 'baseball' | 'nfl' | 'tennis';
+type Deporte = 'football' | 'basketball' | 'baseball' | 'nfl' | 'nhl' | 'ufc' | 'tennis';
 interface Cubeta { desde: number; hasta: number; n: number; predicha: number | null; observada: number | null }
 interface Diagrama { partidos: number; cubetas: Cubeta[]; ece: number | null; aviso: { nivel: string; texto: string | null } }
 interface Fiabilidad { backtest: Diagrama | null; live: Diagrama }
 interface Monitorizacion { serie: { dia: string; n: number; logLoss: number | null; brier: number | null; psi: number | null }[]; actual: { n: number; logLoss: number | null; brier: number | null; psi: number | null } | null; referencia: { logLoss: number | null; brier: number | null } | null; deriva: { hay: boolean; motivos: string[]; aviso: { texto: string | null } } }
 interface Segmentos { predicciones: { n: number; dimensiones: Record<string, Record<string, { n: number; acierto: number | null; publicada: boolean }>> }; apuestas: { n: number; dimensiones: Record<string, Record<string, { n: number; conCierre: number; clvMedio: number | null; publicada: boolean }>> }; umbrales: { predicciones: number; apuestas: number } }
 
-const DEPORTES: Deporte[] = ['football', 'basketball', 'baseball', 'nfl', 'tennis'];
-const pct = (x: number, d = 1) => `${(x * 100).toFixed(d).replace('.', ',')} %`;
+const DEPORTES: Deporte[] = ['football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'tennis'];
+const pct = (x: number, d = 1) => pctF(x, d);
 
 function usar<T>(url: string): T | null | 'error' {
   const [d, setD] = useState<T | null | 'error'>(null);
@@ -83,12 +85,12 @@ export default function Analitica() {
           {mon && mon !== 'error' && (
             <>
               {serieLL.length > 1 ? (
-                <LineChart series={[{ nombre: 'log loss', puntos: serieLL }, { nombre: 'Brier', puntos: serieBr }]} formatoX={(x) => new Date(x).toLocaleDateString(loc, { day: '2-digit', month: 'short' })} referencia={mon.referencia?.logLoss != null ? { y: mon.referencia.logLoss, etiqueta: t('analitica.referencia', { v: mon.referencia.logLoss.toFixed(3) }) } : undefined} />
+                <LineChart series={[{ nombre: 'log loss', puntos: serieLL }, { nombre: 'Brier', puntos: serieBr }]} formatoX={(x) => new Date(x).toLocaleDateString(loc, { day: '2-digit', month: 'short' })} referencia={mon.referencia?.logLoss != null ? { y: mon.referencia.logLoss, etiqueta: t('analitica.referencia', { v: numF(mon.referencia.logLoss, 3) }) } : undefined} />
               ) : (
                 <p className="text-[12px] text-(--ink-muted)">{t('analitica.sinSerie')}</p>
               )}
               <p className="mt-1 text-[12px] text-(--ink-soft)">
-                {mon.actual ? t('analitica.ahora', { n: mon.actual.n, ll: mon.actual.logLoss?.toFixed(3) ?? '—', psi: mon.actual.psi?.toFixed(3) ?? '—' }) : t('analitica.sinVentana')}
+                {mon.actual ? t('analitica.ahora', { n: mon.actual.n, ll: (mon.actual.logLoss == null ? undefined : numF(mon.actual.logLoss, 3)) ?? '—', psi: (mon.actual.psi == null ? undefined : numF(mon.actual.psi, 3)) ?? '—' }) : t('analitica.sinVentana')}
                 {mon.deriva.hay ? <span className="block" style={{ color: STATUS.critical }} role="alert">{t('analitica.deriva', { motivos: mon.deriva.motivos.join('; ') })}</span> : mon.deriva.aviso.texto ? <span className="block text-(--ink-muted)">{mon.deriva.aviso.texto}</span> : null}
               </p>
             </>

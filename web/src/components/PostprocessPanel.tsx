@@ -17,6 +17,7 @@
  */
 import type { FbPostprocess } from '../lib/football';
 import { useI18n, type Traducir } from '../i18n';
+import { pct as pctF, num as numF } from '../lib/formato';
 
 interface Row {
   label: string;
@@ -24,7 +25,7 @@ interface Row {
   final: number;
 }
 
-const pct = (x: number): string => `${(x * 100).toFixed(1)}%`;
+const pct = (x: number): string => `${pctF(x, 1)}`;
 
 function describe(t: Traducir, pp: FbPostprocess): string {
   const parts: string[] = [];
@@ -37,8 +38,8 @@ function describe(t: Traducir, pp: FbPostprocess): string {
   );
   if (pp.weight !== null) {
     parts.push(
-      t('postproceso.mezclada', { peso: pp.weight.toFixed(2) }) +
-        (pp.disagreement !== null && pp.disagreement > 0.05 ? t('postproceso.rebajado', { nats: pp.disagreement.toFixed(2) }) : ''),
+      t('postproceso.mezclada', { peso: numF(pp.weight, 2) }) +
+        (pp.disagreement !== null && pp.disagreement > 0.05 ? t('postproceso.rebajado', { nats: numF(pp.disagreement, 2) }) : ''),
     );
   } else if (pp.note) {
     parts.push(t('postproceso.sinMezclar', { nota: pp.note }));
@@ -99,7 +100,7 @@ export function PostprocessPanel({
                   }`}
                 >
                   {d >= 0 ? '+' : ''}
-                  {(d * 100).toFixed(1)} pp
+                  {numF(d * 100, 1)} pp
                 </td>
               </tr>
             );

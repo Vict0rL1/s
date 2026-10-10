@@ -25,6 +25,16 @@ let cache: Record<string, Feature> | null = null;
 
 /** Anulaciones hechas desde Ajustes (Fase 5.7), guardadas en `settings` como un JSON. */
 export const CLAVE_ANULACIONES = 'features.anulaciones';
+
+/**
+ * Los interruptores que SOLO cambian al arrancar (lote A, A3): la puerta y las cabeceras de
+ * seguridad. Antes `PATCH /api/features/auth.totp {on:false}` apagaba el segundo factor desde
+ * la propia API, y `auth.sesiones` en false dejaba el login en 404. Ahora la API los rechaza,
+ * una anulación guardada para ellos se ignora, y Ajustes no los enseña.
+ */
+export function soloArranque(nombre: string): boolean {
+  return nombre.startsWith('auth.') || nombre.startsWith('seguridad.');
+}
 let anulaciones: Record<string, boolean> | null = null;
 
 function cargarAnulaciones(): Record<string, boolean> {
@@ -49,6 +59,7 @@ export function conLectorDeAnulaciones(f: (clave: string) => string | null): voi
 
 /** Fija (o quita, con null) la anulación de un interruptor. Devuelve el estado resultante. */
 export function fijarAnulacion(nombre: string, on: boolean | null, guardar: (json: string) => void): Record<string, boolean> {
+  if (soloArranque(nombre)) throw new Error(`${nombre} solo se cambia al arrancar (config/features.json)`);
   const a = { ...cargarAnulaciones() };
   if (on == null) delete a[nombre];
   else a[nombre] = on;
@@ -79,7 +90,7 @@ export function reiniciarFeatures(forzar?: Record<string, Feature>, anuladas?: R
 /** ¿Está la función encendida? Una función que no está en el fichero cuenta como encendida. */
 export function featureEncendida(nombre: string): boolean {
   const a = cargarAnulaciones();
-  if (nombre in a) return a[nombre];
+  if (nombre in a && !soloArranque(nombre)) return a[nombre];
   const f = leerFeatures()[nombre];
   return f ? f.on : true;
 }
@@ -93,13 +104,24 @@ export function featureActiva(nombre: string, entorno: NodeJS.ProcessEnv = proce
 }
 
 /** Lo que ve la pantalla: estado de cada flag, sin valores de ninguna variable. */
-export function estadoFeatures(entorno: NodeJS.ProcessEnv = process.env): Record<string, { on: boolean; activa: boolean; descripcion: string; falta: string | null; anulada: boolean }> {
-  const out: Record<string, { on: boolean; activa: boolean; descripcion: string; falta: string | null; anulada: boolean }> = {};
+export interface EstadoFeature {
+  on: boolean;
+  activa: boolean;
+  descripcion: string;
+  falta: string | null;
+  anulada: boolean;
+  /** Solo cambia al arrancar (auth.*, seguridad.*): la API lo rechaza y Ajustes no lo enseña. */
+  soloArranque: boolean;
+}
+
+export function estadoFeatures(entorno: NodeJS.ProcessEnv = process.env): Record<string, EstadoFeature> {
+  const out: Record<string, EstadoFeature> = {};
   const a = cargarAnulaciones();
   for (const [k, f] of Object.entries(leerFeatures())) {
     const on = featureEncendida(k);
     const activa = featureActiva(k, entorno);
-    out[k] = { on, activa, descripcion: f.descripcion, falta: on && !activa && f.opcional ? f.opcional : null, anulada: k in a };
+    const fijo = soloArranque(k);
+    out[k] = { on, activa, descripcion: f.descripcion, falta: on && !activa && f.opcional ? f.opcional : null, anulada: k in a && !fijo, soloArranque: fijo };
   }
   return out;
 }

@@ -144,10 +144,16 @@ export async function ejecutar(nombre: string): Promise<{ ok: boolean; ms: numbe
 function programarTic(nombre: string, enMs: number): void {
   const def = trabajos.get(nombre);
   if (!def) return;
+  // Nunca dos temporizadores para el mismo trabajo (lote B, B5).
+  const previo = temporizadores.get(nombre);
+  if (previo) clearTimeout(previo);
   const t = setTimeout(async () => {
     temporizadores.delete(nombre);
     if (habilitado(nombre)) await ejecutar(nombre);
     else registroLog(`Trabajo ${nombre}: apagado, no se ejecuta.`);
+    // Si mientras corría Ajustes cambió la cadencia, `configurar` ya programó el siguiente tic:
+    // este no programa otro. Antes quedaban dos vivos, uno sin registrar.
+    if (temporizadores.has(nombre)) return;
     const cadencia = cadenciaDe(nombre);
     if (cadencia > 0 && arrancado) programarTic(nombre, cadencia * 60_000);
   }, enMs);

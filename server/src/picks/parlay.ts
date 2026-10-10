@@ -12,6 +12,14 @@
 // par (aproximación: con ρ pequeñas el error es de segundo orden). Dos selecciones del
 // mismo partido son incompatibles: conjunta 0, y se dice. Todo etiquetado como
 // aproximación; nunca se escribe en el libro mayor.
+//
+// ENTRE PARTIDOS DISTINTOS, ρ = 0 (lote C, C1). La ρ de «misma liga y día» que usa el libro
+// manual para DIMENSIONAR es el extremo alto del intervalo medido (0,0047; punto 0,0013,
+// intervalo que incluye el cero): prudente para recortar importes, pero aquí MULTIPLICABA la
+// probabilidad conjunta (con dos patas al 10 %, un 4 % por par; con diez patas de la misma
+// jornada, ×6). La conjunta entre partidos distintos es el producto, y la corrección solo
+// puede recortar (factor ≤ 1): lo único que la mueve hacia arriba sería una ρ positiva medida
+// con el intervalo entero por encima de cero, que no existe.
 
 import { correlation, type Position } from '../staking/correlation.ts';
 import type { SportId } from '../sports.ts';
@@ -55,8 +63,8 @@ export interface Combinada {
 }
 
 export const ETIQUETA_COMBINADA =
-  'Aproximación: la correlación entre patas sale de los grupos medidos en el backtest de fútbol (mismo partido, misma liga y día); ' +
-  'para más de dos patas se aplica par a par. No es una predicción publicada.';
+  'Aproximación: entre partidos distintos la correlación medida (misma liga y día) es indistinguible de cero y se usa cero: la conjunta es el producto; ' +
+  'dos selecciones del mismo partido son incompatibles. La corrección nunca sube la probabilidad. No es una predicción publicada.';
 
 export function posicionDe(x: Pata): Position {
   return {
@@ -120,10 +128,15 @@ export function combinada(patasEntrada: Pata[]): Combinada {
       }
       const c = correlation(posicionDe(a), posicionDe(b));
       if (c.rho === 0) continue;
-      vinculos.push({ a: a.seleccion, b: b.seleccion, rho: c.rho, motivo: c.reason });
-      factor *= 1 + c.rho * Math.sqrt(((1 - a.p) * (1 - b.p)) / (a.p * b.p));
+      // Entre partidos distintos, cero: la ρ medida no se distingue de cero y la de `correlation`
+      // es el extremo prudente para dimensionar, no para multiplicar probabilidades.
+      const rho = a.matchKey !== b.matchKey || a.sport !== b.sport ? 0 : Math.min(0, c.rho);
+      vinculos.push({ a: a.seleccion, b: b.seleccion, rho, motivo: rho === 0 ? `partidos distintos: ρ medida indistinguible de cero (${c.reason}); se usa 0` : c.reason });
+      factor *= 1 + rho * Math.sqrt(((1 - a.p) * (1 - b.p)) / (a.p * b.p));
     }
   }
+  // La corrección solo recorta: nunca por encima de la independencia.
+  factor = Math.max(0, Math.min(1, factor));
   const minP = patas.reduce((m, x) => Math.min(m, x.p), 1);
   const conjunta = incompatibles.size ? 0 : Math.max(0, Math.min(minP, independiente * factor));
   const conCuota = patas.length > 0 && patas.every((x) => x.cuota != null);

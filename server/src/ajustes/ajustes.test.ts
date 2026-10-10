@@ -12,7 +12,7 @@ test('validarAjustes: claves conocidas y valores válidos; el resto se rechaza',
   assert.throws(() => validarAjustes({ idioma: 'fr' }), /idioma/);
   assert.throws(() => validarAjustes({ bancoPersonal: -1 }), /bancoPersonal/);
   assert.throws(() => validarAjustes({ deportesOcultos: ['curling'] }), /deportes conocidos/);
-  assert.throws(() => validarAjustes({ deportesOcultos: ['tennis', 'football', 'basketball', 'baseball', 'nfl'] }), /visible/);
+  assert.throws(() => validarAjustes({ deportesOcultos: ['tennis', 'football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc'] }), /visible/);
   assert.throws(() => validarAjustes({ otra: 1 }), /desconocido/);
   assert.deepEqual(leerAjustes(), AJUSTES_POR_DEFECTO);
   const g = guardarAjustes({ deportesOcultos: ['tennis', 'tennis'], tema: 'oscuro' });

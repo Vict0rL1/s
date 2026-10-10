@@ -22,6 +22,8 @@ De dónde sale cada dato de cada deporte, cómo se actualiza y cómo se verifica
 | Béisbol: histórico **con abridores** | [Retrosheet](https://www.retrosheet.org) vía [chadwickbureau/retrosheet](https://github.com/chadwickbureau/retrosheet) | 37.262 partidos de MLB (2010–2025) con el abridor de cada uno. El marcador se cuenta de las jugadas y se verifica con `npm run verify:bsb`. |
 | Béisbol: temporada en curso + abridores anunciados | [MLB Stats API](https://statsapi.mlb.com) | Gratis y sin clave. Retrosheet publica al acabar la temporada, así que sin esto los Elo irían un año atrasados. |
 | Fútbol americano: resultados, **líneas de cierre** y calendario | [nflverse/nfldata](https://github.com/nflverse/nfldata) | 7.276 partidos (1999–2025) con el spread y el total de cierre en el 100 % y el moneyline desde 2006 — lo que convierte «¿es bueno el modelo?» en una comparación contra el precio real. Trae también el calendario de la temporada siguiente, así que la pestaña funciona sin API key. |
+| NHL: resultados y calendario | [sportsdataverse-data](https://github.com/sportsdataverse/sportsdataverse-data/releases) (releases `nhl_schedules` y `nhl_team_boxscores`) | Copia de la API de la NHL, un CSV por temporada: 21.960 partidos de 2009-10 a hoy y los que faltan de la temporada en curso, con su hora. Nueve temporadas traen marcadores de relleno y se arreglan con las «team box» de la misma fuente, solo si cruzan todos los partidos ([NHL.md](NHL.md)). La API de la NHL (`api-web.nhle.com`) queda como segunda fuente (`--fuente nhl`). |
+| UFC: peleas, luchadores y medidas | [Greco1899/scrape_ufc_stats](https://github.com/Greco1899/scrape_ufc_stats) | Los CSV que rasca de ufcstats.com cada semana: 8.923 peleas hasta la UFC 332 (3 de octubre de 2026), luchadores, fecha de nacimiento, alcance y altura. Solo peleas ya disputadas: las que vienen llegan con las cuotas (`mma_mixed_martial_arts`, de la que solo se guardan las carteleras de la UFC) ([UFC.md](UFC.md)). |
 
 
 ### ¿Hasta cuándo llega cada deporte?
@@ -368,12 +370,12 @@ puesto a mano, así que puedes reintentar sin volver a descargarlos.
 
 ## Actualizar todo (`npm run update-all`)
 
-Los cinco deportes en una tirada:
+Los seis deportes en una tirada:
 
 ```bash
 npm run update-all                   # todo, con cuotas
 npm run update-all -- --skip-odds    # solo el histórico, sin gastar cuota
-npm run update-all -- --only fb,bb   # solo algunos (fb, tennis, bb, bsb, naf)
+npm run update-all -- --only fb,bb   # solo algunos (fb, tennis, bb, bsb, naf, nhl)
 ```
 
 ```

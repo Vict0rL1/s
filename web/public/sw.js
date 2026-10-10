@@ -3,10 +3,20 @@
 // Sin conexión: el armazón (la página y sus ficheros con hash) y la última respuesta de cada
 // GET de la API quedan guardados. Navegación y API van primero a la red y solo si falla se
 // sirve lo guardado; los ficheros con hash, primero de lo guardado (no cambian nunca).
-// Nunca se guardan la sesión, el canal en vivo ni las métricas.
+// Nunca se guardan la sesión, el canal en vivo, las métricas, las exportaciones, las apuestas
+// ni la búsqueda (D6 de la revisión del 8 de octubre: el canal en vivo es /api/latency/stream,
+// no /api/stream, y se clonaba un flujo infinito a la caché; las apuestas de una sesión se
+// servían sin conexión en la siguiente).
 const ARMAZON = 'predictor-armazon-v1';
 const API = 'predictor-api-v1';
-const NO_GUARDAR = ['/api/auth/', '/api/stream', '/api/metrics', '/api/export/'];
+const NO_GUARDAR = ['/api/auth/', '/api/latency/stream', '/api/metrics', '/api/export/', '/api/bets', '/api/buscar'];
+
+/** Lo que sale de la caché lleva una marca: la app enseña «Sin conexión: datos de…». */
+function marcarDeCache(r) {
+  const h = new Headers(r.headers);
+  h.set('X-Desde-Cache', '1');
+  return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(ARMAZON).then((c) => c.addAll(['/'])).catch(() => undefined));
@@ -27,12 +37,17 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // Un flujo (SSE) nunca pasa por aquí: ni se clona ni se guarda.
+  if ((req.headers.get('accept') || '').includes('text/event-stream')) return;
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copia = res.clone();
-          caches.open(ARMAZON).then((c) => c.put('/', copia)).catch(() => undefined);
+          // Solo una página buena es el armazón: un 401, un 404 o un JSON no.
+          if (res.ok && (res.headers.get('content-type') || '').includes('text/html')) {
+            const copia = res.clone();
+            caches.open(ARMAZON).then((c) => c.put('/', copia)).catch(() => undefined);
+          }
           return res;
         })
         .catch(() => caches.match('/').then((r) => r || Response.error())),
@@ -65,9 +80,14 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => caches.match(req).then((r) => r || Response.error())),
+        .catch(() => caches.match(req).then((r) => (r ? marcarDeCache(r) : Response.error()))),
     );
   }
+});
+
+// Al salir, la app pide vaciar la caché de la API: lo de una sesión no se sirve en la siguiente.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.tipo === 'vaciar-api') event.waitUntil(caches.delete(API));
 });
 
 self.addEventListener('push', (event) => {

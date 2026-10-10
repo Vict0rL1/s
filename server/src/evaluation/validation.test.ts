@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import '../test/setup.ts';
 
+const { SPORT_IDS } = await import('../sports.ts');
 const { probarMedia, validacionEnVivo, MIN_N } = await import('./validation.ts');
 const { getDb } = await import('../db.ts');
 
@@ -64,5 +65,5 @@ test('en vivo: el CLV de las señales, separado en apostadas y rechazadas', () =
   assert.equal(v.clvApostadas.n, 10);
   assert.equal(v.clvApostadas.veredicto, 'muestra insuficiente');
   assert.equal(v.retornoBanco.veredicto, 'muestra insuficiente');
-  assert.equal(Object.keys(v.modeloVsMercado).length, 5);
+  assert.equal(Object.keys(v.modeloVsMercado).length, SPORT_IDS.length);
 });

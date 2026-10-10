@@ -4,6 +4,280 @@ Por fases de la hoja de ruta (ver `docs/plans/`). Cada fase termina con doctor, 
 `verify:data`, typecheck, lint y build en verde; las cifras de antes y después van aquí cuando
 cambian.
 
+## Revisión del 8 de octubre · lote G, lo que encontró la prueba en el navegador (2026-10-10)
+
+Doce defectos que el agente `ui-tester` encontró en la app construida con la base real, tres en
+cosas que los lotes D y E daban por arregladas (D2, D5, D8). Cada uno con su prueba, que falla
+antes del arreglo (`docs/plans/fixes-G.md`). Ningún parámetro de modelo cambia y no hay
+migraciones. Tests: 642 → 671 (512 del servidor + 64 de la web + 95 de punta a punta).
+
+- **G1 · Horizontes pendientes, de verdad.** Un T-6h, T-1h o final que aún no ha llegado dice
+  «pendiente»; antes se rellenaba con la última instantánea (D2 solo probaba filas vacías). Cada
+  horizonte lleva su `estado` decidido por el servidor, y la ficha y el panel de confianza ya no
+  dan por hecho que hay fila (G1b, de la revisión de `quant-reviewer`).
+- **G2 · `?torneo=` sobrevive a la recarga** en el tenis. **G3 · Cambiar de liga** en el fútbol
+  ya no enseña los partidos de la anterior mientras carga.
+- **G4 · Salir desde la lista de sesiones** también vacía la caché de la API.
+- **G5 · Un solo formato de número.** `t()` escribe los números en el idioma, el catálogo español
+  lleva «41,6 %» y el texto del servidor («Lectura completa», titulares, motivos de confianza)
+  sale de `server/src/numeros.ts`: coma, «−» y espacio duro.
+- **G6 · Contraste con datos reales.** Campana, filas empezadas de «Hoy» (sin `opacity`),
+  contadores, insignias de confianza, escudos de club, botón y error de la pantalla de entrada,
+  errores de Ajustes. Los estados de cada tema, retocados para pasar de 4,5:1 sobre su tinte.
+  `contrastes()` en los e2e mide lo que axe deja como incompleto.
+- **G7 · «Salir» se alcanza** con muchas sesiones (la barra lateral se desplaza). **G8 · «Hoy» a
+  390 px** cabe entero.
+- **G9 · Sin 404 de simulación** en Equipo y Liga de la NHL. **G10 · Sin 401** en la pantalla de
+  entrada. **G11 · El buscador** atrapa y devuelve el foco. **G12 · `/api/auth/me`** no dice el
+  usuario a quien no ha entrado.
+
+## Mantenimiento: agentes del proyecto y CI de secretos (2026-10-09)
+
+- **Agentes del proyecto.** `CLAUDE.md` con las reglas comunes, `.claude/settings.json` con reglas
+  `deny` para los comandos que no se ejecutan sin pedirlo y seis agentes en `.claude/agents/`
+  (test-runner, security-reviewer, data-guardian, quant-reviewer, ui-tester, fixer). La revisión
+  del 8 de octubre, entera, en `docs/plans/fixes-review.md`.
+- **gitleaks en la PR.** El job «Secretos» de la PR marcaba como `generic-api-key` la contraseña
+  de pruebas del servidor de e2e con la puerta activa (`scripts/e2e-server.mjs`, lote A). Es
+  pública a propósito: va a la lista de permitidos de `.gitleaks.toml`, como `clave-de-test-…`.
+
+## Revisión del 8 de octubre · lote E, las pruebas que lo habrían cazado (2026-10-09)
+
+Las pruebas que habrían cazado los defectos de A–D (`docs/plans/fixes-E.md`), cada una pasada
+contra el código de antes de su arreglo, donde falla. E1, E5 y E6 ya las tenían los lotes A y B.
+Tests: 632 → 642 (505 del servidor + 51 de la web + 86 de punta a punta). Doctor,
+`verify:data`, `audit`, typecheck, lint, build y Playwright en verde.
+
+- **E2 · axe de verdad.** Las 19 rutas, los dos temas, 1280 y 390 px y las dos hojas abiertas;
+  el contraste cuenta desde `serious` (antes solo `critical`, que el contraste nunca es).
+  Destapó contraste insuficiente en tinta tenue, estados, beneficio/pérdida y el ámbar de la
+  selección (ahora tokens por tema) y tablas con scroll que el teclado no alcanzaba.
+- **E3 · Un 500 de la API ya no pasa** por los e2e: fuera el filtro de «Failed to load resource».
+- **E4 · Arranque en frío sin conexión**: la app pinta con lo guardado y lo dice.
+- **E7 · Ficha = Destacados**, por HTTP y tras una ingesta.
+- **E8 · Ninguna clave cruda** del catálogo ni de la política en ninguna ruta; los nombres de
+  los interruptores van como código.
+- **E9 · La ingesta de baloncesto y otro proceso**: un lector con su propia conexión nunca ve los
+  ratings vacíos (y el control con el patrón de antes, sí).
+
+## Revisión del 8 de octubre · lote D, interfaz (2026-10-09)
+
+Los diecisiete hallazgos de la interfaz, reproducidos con un test que fallaba antes y arreglados
+(`docs/plans/fixes-D.md`); ningún parámetro de modelo cambia y no hay migraciones. Tests: 585 →
+632 (502 del servidor + 51 de la web + 79 de punta a punta). Doctor, `verify:data`, `audit`,
+typecheck, lint, build y Playwright en verde.
+
+- **D1 · Un partido, un número.** La ficha y las pestañas enseñan lo publicado (lo que leen
+  Destacados, «¿Acertó?» y el banco de papel) y, aparte, lo que diría el modelo hoy si difiere
+  (`prediction/publicada.ts`). La tarjeta de la NFL enseña la final, no la cruda.
+- **D2 · Horizontes pendientes.** T-6h o T-1h que aún no han llegado dicen «pendiente».
+- **D3 · «Cómo le fue al modelo»** nace plegado y filtrado al deporte de la pestaña.
+- **D4 · Política con etiquetas.** Las 19 claves numéricas, en español e inglés.
+- **D5 · Números con Intl** (`lib/formato.ts`): coma decimal y espacio duro en español, el banco de
+  papel sin una moneda inventada, rangos que no se parten.
+- **D6 · Service worker.** El canal en vivo no pasa por él; solo una página HTML buena es el
+  armazón; apuestas y búsqueda no se guardan; al salir se vacía la caché de la API; con el
+  interruptor apagado se desregistra; lo servido de la caché enciende el banner; sin red en
+  frío, la app arranca con lo guardado.
+- **D7 · Un asset viejo es un 404**, y un `ErrorBoundary` recarga una vez ante un trozo que falta.
+- **D8 · Enlaces profundos.** `?dia=` sobrevive a la carga; una liga que contesta tarde no pisa a
+  la elegida; la ficha de partido empieza de cero al cambiar de partido.
+- **D9 · CSP con `blob:` en `img-src`** (Mi selección → PNG).
+- **D10 · Diálogos accesibles** (`useDialogo`): Escape, foco atrapado y devuelto, fondo quieto;
+  los atajos 1–9/0 no actúan con un diálogo abierto.
+- **D11 · Ajustes.** El campo de cadencia no se vacía al aplicar, los errores del servidor se
+  ven, la cadencia se valida (1 min – 7 días) y el banco personal se puede vaciar.
+- **D12 · Una sola píldora, campana y buscador** (la de la disposición que se ve).
+- **D13 · Tarjetas de Destacados** con el porqué plegado y «Seguir» como campana.
+- **D14 · Pequeños.** Sin estado de cuotas no se culpa a la clave; la tabla de Elo solo con
+  equipos activos; errores con `role="alert"`; el anillo de foco sigue la forma; plurales de
+  verdad (`{n|uno|varios}`).
+- **D15 · Desarrollo en 127.0.0.1** salvo `APP_AUTH=on`, producción o `DEV_LAN=on`.
+- **D16 · `secret-scan --staged` lee el índice**, no el disco.
+- **D17 · SMTP exige TLS** fuera del 465 (`SMTP_TLS=off` solo para un relé local).
+
+## Revisión del 8 de octubre · lote C, dinero y modelo (2026-10-08)
+
+Los diez hallazgos de dinero y medición, reproducidos con un test que fallaba antes y arreglados
+(`docs/plans/fixes-C.md`); ningún parámetro de modelo cambia. Tests: 573 → 585 (492 del servidor
++ 20 + 73); migraciones 20 → 21. Doctor, `verify:data`, `audit`, typecheck, lint, build y
+Playwright en verde.
+
+- **C1 · La combinada no se infla.** Entre partidos distintos la ρ de «misma liga y día» pasa a 0
+  (la medida es indistinguible de cero; la 0,0047 del libro manual es el extremo prudente para
+  dimensionar, no para multiplicar probabilidades) y la corrección nunca sube la conjunta. Dos
+  patas del mismo partido siguen siendo incompatibles (solo se combina el ganador).
+- **C2 · Nada mezcla líneas.** El consenso por instante (`marketAt`) describe la línea más
+  cotizada; las surebets exigen líneas complementarias (misma |línea|) y dicen cuál; el steam
+  solo mide dentro de la misma línea.
+- **C3 · La ventana del steam se aplica.** Sin ningún punto anterior dentro de los 60 minutos no
+  hay steam (antes se medía contra el punto de hace horas).
+- **C4 · La deriva compara lo mismo.** `predicciones()` trae `pModelo` (lo que dijo el modelo) y la
+  monitorización mide PSI y log loss con ello, que es lo que midió el backtest; `p` sigue siendo
+  lo publicado para segmentos y diagramas en vivo.
+- **C5 · Estrategias congeladas del todo.** La configuración guarda también los topes de grupo;
+  el tope de equipo/jugador nunca baja del tope por partido del banco (la primera apuesta de una
+  estrategia con el 4 % ya no se recortaba al 3 %); `strategy_bets.policy_version_id`
+  (migración 21).
+- **C6 · Simulación de temporada.** Pendiente es «sin resultado emparejado» (mismo par y fecha
+  ±1 día), no «fecha futura»: ni se simula lo ya jugado ni se olvida lo aplazado.
+- **C7 · Un solo ROI.** `evaluation/roi.ts` (beneficio / arriesgado) para los siete sitios que lo
+  calculaban; las dos fórmulas daban hoy lo mismo (una unidad por apuesta) y ya no pueden
+  separarse.
+- **C8 · CLV honesto.** El cierre exige una observación POSTERIOR a la apuesta; sin ella se queda a
+  NULL (banco y estrategias).
+- **C9 · Segmentos sin desenlace.** La dimensión «ganó el visitante» (lo que pasó) se sustituye
+  por `lado` (el que favoreció el modelo), que se sabe antes del partido.
+- **C10 · Tenis por id.** La apuesta resuelve su lado contra los nombres del registro y se liquida
+  por `winner_id`; una selección que no es ninguno de los dos se anula, no se pierde.
+
+## Revisión del 8 de octubre · lote B, seguridad de los datos (2026-10-08)
+
+Los seis hallazgos de datos de la revisión, reproducidos con un test que fallaba antes y
+arreglados (`docs/plans/fixes-B.md`). Tests: 557 → 573 (480 del servidor + 20 + 73); migraciones
+19 → 20. Doctor, `verify:data`, `audit`, typecheck, lint, build y Playwright en verde (el doctor
+sigue con sus avisos de entorno).
+
+- **B1 · `restore` y `fetch-data --force`, de verdad con WAL.** Se niegan si otro proceso tiene la
+  base abierta (sonda con `locking_mode=EXCLUSIVE`, medida en el test); lo que se aparta se copia
+  con `VACUUM INTO` (completo, con lo que estuviera en el WAL); lo nuevo se reconstruye con
+  `VACUUM INTO`, pasa `integrity_check`, y los `-wal`/`-shm` del fichero viejo se quitan antes del
+  `rename`. El servidor cierra la base al recibir SIGINT/SIGTERM (`apagado.ts`).
+- **B2 · `odds_quote_state` al libro mayor.** Apunta a `odds_snapshots` y un `--force` la vaciaba;
+  migración 20 la mueve con sus filas.
+- **B3 · Lo medido en tu instalación sobrevive al `--force`.** `fb_odds_history`, `fb_news`,
+  `fb_lineups`, `latency_samples` y `player_ids` se conservan (como `bets` y los registros); se
+  eligió conservar y no mover, y el plan dice por qué.
+- **B4 · Sin `ledger.db` no se arranca uno vacío.** La marca `ledger.db.existe` (la escribe la app
+  al crearlo y la partición) hace que el servidor se niegue y diga cómo restaurar;
+  `LEDGER_NUEVO=si` para empezar de cero a sabiendas.
+- **B5 · Pequeños.** El libro mayor abre con `synchronous=FULL`; `BACKUP_HOURS` y
+  `RESULTS_REFRESH_HOURS` se acotan a 7 días (por encima de 24,8 días un `setTimeout` dispara en el
+  acto); cambiar una cadencia desde Ajustes mientras el trabajo corre ya no deja dos
+  temporizadores; la retención de cuotas ancla T-24h/T-6h/T-1h y el cierre en la ÚLTIMA hora de
+  inicio del partido; `check-publishable` importa la lista de tablas del libro mayor del servidor
+  (le faltaban ocho) y el workflow comprueba el fichero que de verdad exporta; la semilla de la
+  imagen es una exportación consistente (`VACUUM INTO` en la etapa de construcción, con el WAL en
+  el contexto) y `ledger.db` ya no viaja al contexto.
+- **B6 · Métricas y cookie.** Las etiquetas de `/api/metrics` salen del patrón de la ruta
+  (`estatico`, `sin-ruta`), no de la URL cruda; una cookie `sp_session` indescifrable ya no es un
+  500; `error_log` se acota a 5.000 filas.
+
+## Revisión del 8 de octubre · lote A, bloqueantes (2026-10-08)
+
+Los siete hallazgos bloqueantes de la revisión, reproducidos con un test que fallaba antes de
+tocar nada y arreglados (`docs/plans/fixes-A.md`). Tests: 540 → 557 (464 del servidor + 20 + 73).
+Doctor, `verify:data`, `audit`, typecheck, lint, build y Playwright en verde (el doctor sigue
+avisando de lo que es del entorno: sin clave de cuotas, tenis y béisbol atrasados —lote F—, backend
+parado).
+
+- **A1 · La web detrás de la puerta.** En producción `GET /` y los assets devolvían 401 y no había
+  forma de llegar a la pantalla de entrada. La ruta comodín de `@fastify/static` (`/*`, solo GET y
+  HEAD, nunca `/api/`) queda exenta; la API sigue cerrada (un endpoint desconocido es 401 sin
+  credenciales y 404 JSON con ellas, nunca la página). Los e2e corren ahora también con la puerta
+  activa: `scripts/e2e-server.mjs` arranca un segundo servidor en el 7391 con `APP_AUTH=on` y
+  `web/e2e/auth.spec.ts` entra con la contraseña.
+- **A2 · El límite de intentos.** Contaba la primera `X-Forwarded-For` tal cual, que escribe quien
+  ataca: rotándola no se bloqueaba nunca. Ahora cuenta `Fly-Client-IP` en producción (la pone
+  Fly) y la dirección del socket en el resto; la sesión válida se mira ANTES del bloqueo (el dueño
+  entra aunque su dirección esté bloqueada); el Map del limitador poda lo caducado y no pasa de
+  10.000 direcciones.
+- **A3 · Basic Auth y el segundo factor.** Basic Auth abría con la contraseña sola aunque hubiera
+  TOTP; ahora exige el código en `X-TOTP-Code` (`curl -u victor -H 'X-TOTP-Code: 123456'`). Y la API
+  podía apagar `auth.totp` y `auth.sesiones`: los interruptores `auth.*` y `seguridad.*` son de
+  arranque (`PATCH /api/features/...` → 403, una anulación guardada se ignora, `/api/features` los
+  marca `soloArranque` y Ajustes no los enseña).
+- **A4 · La imagen.** `tsx` pasa a dependencia del servidor fijada a `4.23.1` (estaba en
+  devDependencies con `--omit=dev`, y `npx tsx` la descargaba sin fijar en cada arranque frío, como
+  root). El arranque ejecuta `node_modules/.bin/tsx`, cede `/data` a `node` y suelta los
+  privilegios con `setpriv` (o `runuser`); el volumen de Fly se monta de root, por eso no basta
+  con `USER node`.
+- **A5 · La ingesta de baloncesto.** Borraba `bb_games`, `bb_teams` y `bb_team_ratings` ANTES de
+  descargar (minutos), y el ciclo pre-partido registraba mientras tanto predicciones con Elo
+  inicial en tablas inmutables. `basketball/scripts/actualizar.ts`: todo a memoria primero y, por
+  liga, borrar + insertar + recalcular en UNA transacción; si la descarga falla, la base queda como
+  estaba. Las tres fuentes (ESPN, hoopR, FiveThirtyEight) se parten en cargar/guardar.
+- **A6 · Topes por día y por liga.** El banco de papel y las estrategias los ignoraban (solo
+  vivían en el libro manual): seis partidos de la misma liga y tarde se colocaban al 2 % cada uno.
+  `staking/cubos.ts`, compartido: cada candidata se recorta contra lo que queda en su día (UTC del
+  inicio) y en su liga, contando lo abierto y lo de la misma pasada; los rechazos se cuentan como
+  «tope por día» / «tope por liga». La nota de Ajustes dice qué aplica a quién.
+- **A7 · La instalación nueva acababa vacía.** `setup` migraba antes de bajar los datos, eso dejaba
+  un `history.db` solo con esquema, y `fetch-data` lo tomaba por una base. `scripts/datos-estado.mjs`
+  (`hayHistoria`, por filas); `fetch-data` respeta `DATA_DIR`, aparta una base sin filas como
+  `history.db.sin-filas-<fecha>` y descarga; `setup` decide por filas y, si la descarga falla, dice
+  por qué y pregunta antes de construir con `update-all --skip-odds`. La release `data-latest`
+  sigue sin existir (la crea el cron de `main`); queda por comprobar tras su primera ejecución.
+
+## UFC publicada (2026-10-08)
+
+La UFC no pasó la prueba en la etapa A (el Elo de luchador no ganaba a «el de mejor récord»). Un
+segundo intento, **escrito y subido antes de calcular** (`docs/plans/ufc-combinado.md`), sí la pasa,
+y la UFC es el séptimo deporte. Tests: 524 → 540 (449 del servidor + 20 + 71); migraciones: 17 → 19;
+`verify:data` 521 → 528 comprobaciones; auditoría 4.659 → 4.952; bundle principal 442 → 449 kB,
+inglés 109 → 115 kB.
+
+- **El modelo**: una logística simétrica, walk-forward por año, con el Elo, el récord, la edad, el
+  alcance y la experiencia en la UFC; elegida entre dos candidatos fijados de antemano solo con el
+  entrenamiento. Todo lo puntuable (7.799 peleas): 0,6802 → **0,6662**, gana a las cuatro
+  referencias con el intervalo bajo cero (a «mejor récord», −0,0168 [−0,0211, −0,0124]); 2025:
+  **0,6454**, −0,0271 [−0,0435, −0,0110]. Barajar las fichas entre luchadores devuelve 0,6804: la
+  ganancia es de la ficha. Dos experimentos en el registro.
+- **Publicada como los demás**: pestaña `/ufc`, tarjeta de pelea con lo que aporta cada rasgo, ficha
+  de luchador (`/luchador/:id`) con la historia de su Elo, registro de escritura única
+  (`ufc_prediction_log`), banco de papel y estrategias (el empate devuelve, el «sin resultado»
+  anula), Hoy, ¿Acertó? con reconstrucción, Destacados, archivo, búsqueda, confianza, doctor y
+  auditoría (que comprueba la simetría sobre peleas reales).
+- **Sin adivinar**: la cartelera llega con las cuotas (`mma_mixed_martial_arts`) y de ahí solo se
+  guardan las peleas de una cartelera de la UFC; los nombres se resuelven por coincidencia exacta;
+  el debutante se enseña sin número; A es siempre el de id menor aunque la casa dé la vuelta.
+- **Arreglos de paso**: en un deporte de dos resultados, un empate (NFL; UFC) ya no se cuenta como
+  acierto ni fallo en la ficha de partido; la tecla 0 lleva a la décima pestaña.
+
+## Puesta en marcha: la clave y la otra copia (2026-10-08)
+
+Lo que falló al instalar la versión con la NHL en otro ordenador, arreglado en la app y no solo
+explicado. Tests: 514 → 524 (436 del servidor + 20 + 68).
+
+- **`npm run clave`**: pide la clave de The Odds API sin enseñarla, la limpia (comillas, `export`,
+  la línea entera pegada, `\r`), deja **una** línea `ODDS_API_KEY=` en el `.env` de la raíz
+  (creándolo desde `.env.example`), la comprueba contra el listado gratuito (no gasta créditos) y
+  avisa si la terminal tiene una `ODDS_API_KEY` —distinta o vacía— que gana sobre el `.env`. No
+  la acepta como argumento (se quedaría en el historial). `npm run setup`, el doctor, `npm run
+  odds`, el arranque del servidor y los avisos de la app apuntan a él.
+- **`npm run dev` se para si ya hay otra copia de la app abierta** en su puerto (la reconoce por
+  el título de la página o por `/ready`), en vez de irse al 7377 y dejar que la dirección de
+  siempre abra la vieja. Da el comando para cerrarla con `-sTCP:LISTEN`: sin ese filtro, `lsof`
+  lista también al navegador conectado y `xargs kill` lo cerraba. `-- --junto` arranca las dos.
+- El título, la descripción y el manifiesto de la web nombran la NHL; el glosario dice «seis
+  deportes».
+
+## NHL y UFC (2026-10-08)
+
+Petición: añadir la NHL y la UFC. Con la regla de la Fase 8 por delante —un deporte no se publica
+sin la misma evidencia que los demás—. Plan y resultados en `docs/plans/nhl-ufc.md`. Tests: 488 →
+514 (426 del servidor + 20 + 68); migraciones: 13 → 17; bundle principal 437 → 442 kB, inglés 105
+→ 109 kB.
+
+- **NHL, publicada (sexto deporte).** Historia real desde sportsdataverse en GitHub (21.960 partidos
+  desde la 2009-10; nueve temporadas con marcadores de relleno arregladas con las «team box», solo
+  si cruzan todos los partidos). Sobre 20.214 partidos puntuables gana a «siempre el local» (log
+  loss 0,6731 frente a 0,6896, Δ −0,0165 [−0,0193, −0,0135]) y a un Elo básico (0,6805, Δ −0,0073
+  [−0,0090, −0,0057]). El ajuste de K, campo y vuelta a la media, y los goles de la liga móviles, no
+  mejoraron de forma demostrable: registrados como no concluyentes, se quedan los de partida.
+  Pestaña propia con próximos del calendario (sin clave) o de The Odds API (`icehockey_nhl`, ganador
+  y total), registro de escritura única (`nhl_prediction_log`), Hoy, ¿Acertó? (también
+  reconstruido), Destacados, banco de papel y estrategias, confianza, archivo, búsqueda, doctor,
+  auditoría, `update-results` y `update-all`. Sin post-proceso ni mezcla con el mercado (no hay
+  cuotas históricas), sin simulación de temporada. Ver `docs/NHL.md`.
+- **UFC, en sombra.** Ingesta de ufcstats vía Greco1899/scrape_ufc_stats (8.923 peleas), Elo de
+  luchador simétrico (el orden de la fuente pone al ganador primero hasta ~2009 y no se usa) y
+  backtest contra cuatro referencias con holdout desde 2026. **No pasa**: gana a la moneda, a «más
+  peleas» y al Elo básico, pero no queda demostrado que gane a «el de mejor récord» (Δ −0,0028
+  [−0,0056, +0,0000]; en 2025, +0,0038). Detrás de `deportes.ufc`, con sus cifras en Diagnóstico. Ver
+  `docs/UFC.md`.
+- Destacados: la cabecera de la tarjeta ya no se aplasta cuando lleva dos insignias.
+
 ## Seguimiento tras la hoja de ruta (2026-10-07)
 
 Lo que las fases dejaron anotado y se arregla sin decisiones nuevas de política. Plan en

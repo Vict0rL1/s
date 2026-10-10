@@ -1,7 +1,7 @@
 {
   "name": "Sports Predictor",
   "short_name": "Predictor",
-  "description": "Predicciones de fútbol, béisbol, fútbol americano, baloncesto y tenis con modelos Elo explicables, medidos contra resultados reales.",
+  "description": "Predicciones de fútbol, béisbol, fútbol americano, hockey (NHL), baloncesto y tenis con modelos Elo explicables, medidos contra resultados reales.",
   "lang": "es",
   "start_url": "/",
   "scope": "/",

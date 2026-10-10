@@ -15,7 +15,7 @@ interface Fila {
 }
 interface Respuesta { filas: Fila[]; total: number; pagina: number; porPagina: number; resumen: { resueltas: number; aciertos: number; pendientes: number; aviso: { nivel: string; texto: string | null } }; ligas: { sport: string; liga: string }[] }
 
-const DEPORTES = ['football', 'basketball', 'baseball', 'nfl', 'tennis'];
+const DEPORTES = ['football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'tennis'];
 const FILTROS = ['q', 'sport', 'liga', 'confianza', 'banda', 'resultado', 'desde', 'hasta'] as const;
 const sel = 'min-w-0 rounded-lg bg-(--raised) px-2.5 py-1.5 text-[14px] text-(--ink-body) ring-1 ring-(--line)';
 
@@ -91,7 +91,7 @@ export default function Archivo() {
           <input type="date" aria-label={t('archivo.hasta')} value={q.get('hasta') ?? ''} onChange={(e) => cambiar('hasta', e.target.value)} className={`${sel} flex-1`} />
         </span>
       </div>
-      {error && <p className="text-[14px] text-(--ink-soft)">{error}</p>}
+      {error && <p role="alert" className="text-[14px] text-(--ink-soft)">{error}</p>}
       {datos && (
         <p className="mb-3 text-[13px] text-(--ink-body)" data-testid="resumen-archivo">
           {t('archivo.resumen', { total: f.numero(datos.total), aciertos: datos.resumen.aciertos, resueltas: datos.resumen.resueltas, pendientes: datos.resumen.pendientes })}

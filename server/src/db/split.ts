@@ -99,6 +99,8 @@ export function partirBase(original: string, history: string, ledger: string, ah
     const apartado = `${original}.pre-split-${sello}`;
     fs.renameSync(original, apartado);
     for (const suf of ['-wal', '-shm', '-journal']) fs.rmSync(original + suf, { force: true });
+    // La marca de que aquí hay libro mayor (lote B, B4): si un día falta, el servidor lo dirá.
+    fs.writeFileSync(`${ledger}.existe`, `libro mayor creado al partir ${original} el ${ahora.toISOString()}\n`);
     return { history, ledger, original: apartado, tablasHistory, tablasLedger, settingsCopiadas };
   } catch (e) {
     fs.rmSync(tmpH, { force: true });

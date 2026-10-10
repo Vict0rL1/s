@@ -1,0 +1,2390 @@
+{
+ "sport": "nhl",
+ "generado": "2026-10-08T02:19:15.653Z",
+ "model_version": "nhl-46a885f71679",
+ "data_version": "20261006·21960",
+ "holdoutExcluido": 1446,
+ "ventanas": "ventana creciente: cada periodo se evalúa con todo lo anterior; periodos de media temporada",
+ "periodos": [
+  {
+   "periodo": "2009/10 oct–dic",
+   "n": 308,
+   "desde": "2009-11-19",
+   "hasta": "2009-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 308,
+    "logLoss": 0.684172,
+    "brier": 0.245532,
+    "accuracy": 0.548701,
+    "ece": 0.020578,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 308,
+    "logLoss": 0.684172,
+    "brier": 0.245532,
+    "accuracy": 0.548701,
+    "ece": 0.020578,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "identidad (menos de 300 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 308,
+     "logLoss": 0.686322,
+     "brier": 0.246423,
+     "accuracy": 0.545455,
+     "ece": 0.033745,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 308,
+     "logLoss": 0.692625,
+     "brier": 0.249733,
+     "accuracy": 0.532468,
+     "ece": 0.013668,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2009/10 ene–jun",
+   "n": 710,
+   "desde": "2010-01-01",
+   "hasta": "2010-06-09",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 710,
+    "logLoss": 0.678216,
+    "brier": 0.242623,
+    "accuracy": 0.576056,
+    "ece": 0.01336,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 710,
+    "logLoss": 0.687711,
+    "brier": 0.247047,
+    "accuracy": 0.547887,
+    "ece": 0.045661,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=-0.255 b=1.906 (con 308 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 710,
+     "logLoss": 0.687923,
+     "brier": 0.24725,
+     "accuracy": 0.553521,
+     "ece": 0.043803,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 710,
+     "logLoss": 0.684123,
+     "brier": 0.245497,
+     "accuracy": 0.571831,
+     "ece": 0.015829,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2010/11 oct–dic",
+   "n": 565,
+   "desde": "2010-10-07",
+   "hasta": "2010-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 565,
+    "logLoss": 0.68442,
+    "brier": 0.245647,
+    "accuracy": 0.541593,
+    "ece": 0.044481,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 565,
+    "logLoss": 0.68534,
+    "brier": 0.246077,
+    "accuracy": 0.552212,
+    "ece": 0.024659,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.037 b=1.035 (con 1018 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 565,
+     "logLoss": 0.693998,
+     "brier": 0.249919,
+     "accuracy": 0.518584,
+     "ece": 0.078136,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 565,
+     "logLoss": 0.691153,
+     "brier": 0.249,
+     "accuracy": 0.538053,
+     "ece": 0.016502,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2010/11 ene–jun",
+   "n": 753,
+   "desde": "2011-01-01",
+   "hasta": "2011-06-15",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 753,
+    "logLoss": 0.68016,
+    "brier": 0.243611,
+    "accuracy": 0.547145,
+    "ece": 0.030853,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 753,
+    "logLoss": 0.68103,
+    "brier": 0.244045,
+    "accuracy": 0.543161,
+    "ece": 0.029382,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.025 b=0.922 (con 1583 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 753,
+     "logLoss": 0.685766,
+     "brier": 0.246112,
+     "accuracy": 0.549801,
+     "ece": 0.052598,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 753,
+     "logLoss": 0.696384,
+     "brier": 0.25161,
+     "accuracy": 0.505976,
+     "ece": 0.036304,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2011/12 oct–dic",
+   "n": 567,
+   "desde": "2011-10-06",
+   "hasta": "2011-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 567,
+    "logLoss": 0.677314,
+    "brier": 0.24232,
+    "accuracy": 0.569665,
+    "ece": 0.018206,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 567,
+    "logLoss": 0.678326,
+    "brier": 0.2428,
+    "accuracy": 0.569665,
+    "ece": 0.024399,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=-0.060 b=1.043 (con 2336 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 567,
+     "logLoss": 0.690881,
+     "brier": 0.248408,
+     "accuracy": 0.557319,
+     "ece": 0.050628,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 567,
+     "logLoss": 0.687879,
+     "brier": 0.24737,
+     "accuracy": 0.553792,
+     "ece": 0.014971,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2011/12 ene–jun",
+   "n": 749,
+   "desde": "2012-01-01",
+   "hasta": "2012-06-11",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 749,
+    "logLoss": 0.684636,
+    "brier": 0.245807,
+    "accuracy": 0.560748,
+    "ece": 0.020391,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 749,
+    "logLoss": 0.684455,
+    "brier": 0.245719,
+    "accuracy": 0.555407,
+    "ece": 0.020184,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=-0.030 b=0.968 (con 2903 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 749,
+     "logLoss": 0.694059,
+     "brier": 0.250149,
+     "accuracy": 0.543391,
+     "ece": 0.062304,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 749,
+     "logLoss": 0.68838,
+     "brier": 0.24762,
+     "accuracy": 0.550067,
+     "ece": 0.005935,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2012/13 ene–jun",
+   "n": 806,
+   "desde": "2013-01-19",
+   "hasta": "2013-06-24",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 806,
+    "logLoss": 0.672513,
+    "brier": 0.239912,
+    "accuracy": 0.584367,
+    "ece": 0.006038,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 806,
+    "logLoss": 0.672937,
+    "brier": 0.240092,
+    "accuracy": 0.580645,
+    "ece": 0.009097,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=-0.002 b=0.868 (con 3652 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 806,
+     "logLoss": 0.677112,
+     "brier": 0.241933,
+     "accuracy": 0.548387,
+     "ece": 0.053079,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 806,
+     "logLoss": 0.682549,
+     "brier": 0.244713,
+     "accuracy": 0.580645,
+     "ece": 0.035559,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2013/14 oct–dic",
+   "n": 609,
+   "desde": "2013-10-01",
+   "hasta": "2013-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 609,
+    "logLoss": 0.665734,
+    "brier": 0.236624,
+    "accuracy": 0.592775,
+    "ece": 0.005848,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 609,
+    "logLoss": 0.666675,
+    "brier": 0.237047,
+    "accuracy": 0.599343,
+    "ece": 0.022976,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.028 b=0.853 (con 4458 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 609,
+     "logLoss": 0.676765,
+     "brier": 0.241452,
+     "accuracy": 0.594417,
+     "ece": 0.03572,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 609,
+     "logLoss": 0.689843,
+     "brier": 0.248349,
+     "accuracy": 0.541872,
+     "ece": 0.006944,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2013/14 ene–jun",
+   "n": 714,
+   "desde": "2014-01-01",
+   "hasta": "2014-06-14",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 714,
+    "logLoss": 0.686203,
+    "brier": 0.246494,
+    "accuracy": 0.557423,
+    "ece": 0.030139,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 714,
+    "logLoss": 0.684852,
+    "brier": 0.245875,
+    "accuracy": 0.560224,
+    "ece": 0.024956,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.018 b=0.896 (con 5067 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 714,
+     "logLoss": 0.692198,
+     "brier": 0.249167,
+     "accuracy": 0.551821,
+     "ece": 0.053927,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 714,
+     "logLoss": 0.690049,
+     "brier": 0.248452,
+     "accuracy": 0.540616,
+     "ece": 0.007375,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2014/15 oct–dic",
+   "n": 556,
+   "desde": "2014-10-08",
+   "hasta": "2014-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 556,
+    "logLoss": 0.674259,
+    "brier": 0.24076,
+    "accuracy": 0.582734,
+    "ece": 0.020746,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 556,
+    "logLoss": 0.673357,
+    "brier": 0.240333,
+    "accuracy": 0.588129,
+    "ece": 0.018421,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.023 b=0.846 (con 5781 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 556,
+     "logLoss": 0.676579,
+     "brier": 0.241762,
+     "accuracy": 0.577338,
+     "ece": 0.033406,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 556,
+     "logLoss": 0.686412,
+     "brier": 0.246639,
+     "accuracy": 0.559353,
+     "ece": 0.01198,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2014/15 ene–jun",
+   "n": 763,
+   "desde": "2015-01-01",
+   "hasta": "2015-06-16",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 763,
+    "logLoss": 0.671037,
+    "brier": 0.239241,
+    "accuracy": 0.563565,
+    "ece": 0.034308,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 763,
+    "logLoss": 0.671641,
+    "brier": 0.2395,
+    "accuracy": 0.577982,
+    "ece": 0.021393,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.029 b=0.836 (con 6337 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 763,
+     "logLoss": 0.672892,
+     "brier": 0.240049,
+     "accuracy": 0.568807,
+     "ece": 0.042098,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 763,
+     "logLoss": 0.691655,
+     "brier": 0.249253,
+     "accuracy": 0.53211,
+     "ece": 0.015631,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2015/16 oct–dic",
+   "n": 564,
+   "desde": "2015-10-07",
+   "hasta": "2015-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 564,
+    "logLoss": 0.689665,
+    "brier": 0.248003,
+    "accuracy": 0.544326,
+    "ece": 0.052736,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 564,
+    "logLoss": 0.68677,
+    "brier": 0.24672,
+    "accuracy": 0.547872,
+    "ece": 0.038004,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.017 b=0.862 (con 7100 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 564,
+     "logLoss": 0.705154,
+     "brier": 0.254575,
+     "accuracy": 0.553191,
+     "ece": 0.069212,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 564,
+     "logLoss": 0.690287,
+     "brier": 0.248571,
+     "accuracy": 0.539007,
+     "ece": 0.006875,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2015/16 ene–jun",
+   "n": 757,
+   "desde": "2016-01-01",
+   "hasta": "2016-06-13",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 757,
+    "logLoss": 0.683427,
+    "brier": 0.245232,
+    "accuracy": 0.550859,
+    "ece": 0.030538,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 757,
+    "logLoss": 0.682612,
+    "brier": 0.244841,
+    "accuracy": 0.55218,
+    "ece": 0.022729,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.022 b=0.821 (con 7664 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 757,
+     "logLoss": 0.692155,
+     "brier": 0.249271,
+     "accuracy": 0.554822,
+     "ece": 0.045651,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 757,
+     "logLoss": 0.693843,
+     "brier": 0.250344,
+     "accuracy": 0.519155,
+     "ece": 0.026156,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2016/17 oct–dic",
+   "n": 557,
+   "desde": "2016-10-12",
+   "hasta": "2016-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 557,
+    "logLoss": 0.670643,
+    "brier": 0.23907,
+    "accuracy": 0.572711,
+    "ece": 0.030126,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 557,
+    "logLoss": 0.670716,
+    "brier": 0.239045,
+    "accuracy": 0.570916,
+    "ece": 0.014336,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.013 b=0.821 (con 8421 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 557,
+     "logLoss": 0.682574,
+     "brier": 0.244555,
+     "accuracy": 0.572711,
+     "ece": 0.033281,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 557,
+     "logLoss": 0.683156,
+     "brier": 0.245015,
+     "accuracy": 0.578097,
+     "ece": 0.031949,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2016/17 ene–jun",
+   "n": 760,
+   "desde": "2017-01-01",
+   "hasta": "2017-06-12",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 760,
+    "logLoss": 0.673735,
+    "brier": 0.240472,
+    "accuracy": 0.589474,
+    "ece": 0.009185,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 760,
+    "logLoss": 0.67358,
+    "brier": 0.240392,
+    "accuracy": 0.589474,
+    "ece": 0.013679,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.022 b=0.821 (con 8978 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 760,
+     "logLoss": 0.679137,
+     "brier": 0.242938,
+     "accuracy": 0.578947,
+     "ece": 0.0289,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 760,
+     "logLoss": 0.689437,
+     "brier": 0.248147,
+     "accuracy": 0.543421,
+     "ece": 0.002512,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2017/18 oct–dic",
+   "n": 600,
+   "desde": "2017-10-04",
+   "hasta": "2017-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 600,
+    "logLoss": 0.675152,
+    "brier": 0.241144,
+    "accuracy": 0.58,
+    "ece": 0.01116,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 600,
+    "logLoss": 0.674164,
+    "brier": 0.240674,
+    "accuracy": 0.58,
+    "ece": 0.00966,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.020 b=0.828 (con 9738 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 600,
+     "logLoss": 0.685734,
+     "brier": 0.245818,
+     "accuracy": 0.59,
+     "ece": 0.059298,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 600,
+     "logLoss": 0.684153,
+     "brier": 0.245513,
+     "accuracy": 0.571667,
+     "ece": 0.025818,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2017/18 ene–jun",
+   "n": 755,
+   "desde": "2018-01-01",
+   "hasta": "2018-06-08",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 755,
+    "logLoss": 0.671974,
+    "brier": 0.239346,
+    "accuracy": 0.58543,
+    "ece": 0.038509,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 755,
+    "logLoss": 0.672197,
+    "brier": 0.239555,
+    "accuracy": 0.588079,
+    "ece": 0.019638,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.027 b=0.820 (con 10338 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 755,
+     "logLoss": 0.672357,
+     "brier": 0.239216,
+     "accuracy": 0.589404,
+     "ece": 0.058312,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 755,
+     "logLoss": 0.688765,
+     "brier": 0.247812,
+     "accuracy": 0.54702,
+     "ece": 0.000089,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2018/19 oct–dic",
+   "n": 611,
+   "desde": "2018-10-03",
+   "hasta": "2018-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 611,
+    "logLoss": 0.684398,
+    "brier": 0.245435,
+    "accuracy": 0.569558,
+    "ece": 0.024093,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 611,
+    "logLoss": 0.682525,
+    "brier": 0.24463,
+    "accuracy": 0.576105,
+    "ece": 0.035145,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.026 b=0.830 (con 11093 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 611,
+     "logLoss": 0.694057,
+     "brier": 0.249626,
+     "accuracy": 0.581015,
+     "ece": 0.067499,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 611,
+     "logLoss": 0.690688,
+     "brier": 0.24877,
+     "accuracy": 0.536825,
+     "ece": 0.010601,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2018/19 ene–jun",
+   "n": 747,
+   "desde": "2019-01-01",
+   "hasta": "2019-06-12",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 747,
+    "logLoss": 0.678264,
+    "brier": 0.242789,
+    "accuracy": 0.562249,
+    "ece": 0.029631,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 747,
+    "logLoss": 0.677896,
+    "brier": 0.24257,
+    "accuracy": 0.566265,
+    "ece": 0.010135,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.025 b=0.818 (con 11704 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 747,
+     "logLoss": 0.68373,
+     "brier": 0.24529,
+     "accuracy": 0.579652,
+     "ece": 0.04959,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 747,
+     "logLoss": 0.69116,
+     "brier": 0.249006,
+     "accuracy": 0.534137,
+     "ece": 0.012298,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2019/20 oct–dic",
+   "n": 625,
+   "desde": "2019-10-02",
+   "hasta": "2019-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 625,
+    "logLoss": 0.679831,
+    "brier": 0.243525,
+    "accuracy": 0.5728,
+    "ece": 0.031556,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 625,
+    "logLoss": 0.67859,
+    "brier": 0.242911,
+    "accuracy": 0.5776,
+    "ece": 0.03307,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.022 b=0.821 (con 12451 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 625,
+     "logLoss": 0.691794,
+     "brier": 0.249053,
+     "accuracy": 0.5632,
+     "ece": 0.054666,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 625,
+     "logLoss": 0.689906,
+     "brier": 0.248381,
+     "accuracy": 0.5408,
+     "ece": 0.005323,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2019/20 ene–jun",
+   "n": 457,
+   "desde": "2020-01-01",
+   "hasta": "2020-03-11",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 457,
+    "logLoss": 0.678595,
+    "brier": 0.242981,
+    "accuracy": 0.555799,
+    "ece": 0.035043,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 457,
+    "logLoss": 0.677723,
+    "brier": 0.242539,
+    "accuracy": 0.560175,
+    "ece": 0.019523,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.021 b=0.817 (con 13076 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 457,
+     "logLoss": 0.688334,
+     "brier": 0.247391,
+     "accuracy": 0.551422,
+     "ece": 0.057641,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 457,
+     "logLoss": 0.693144,
+     "brier": 0.249995,
+     "accuracy": 0.522976,
+     "ece": 0.022411,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2020/21 oct–dic",
+   "n": 130,
+   "desde": "2020-08-01",
+   "hasta": "2020-09-28",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 130,
+    "logLoss": 0.707532,
+    "brier": 0.256923,
+    "accuracy": 0.538462,
+    "ece": 0.048067,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 130,
+    "logLoss": 0.704513,
+    "brier": 0.255532,
+    "accuracy": 0.546154,
+    "ece": 0.024508,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.019 b=0.818 (con 13533 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 130,
+     "logLoss": 0.714475,
+     "brier": 0.260032,
+     "accuracy": 0.484615,
+     "ece": 0.106228,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 130,
+     "logLoss": 0.705452,
+     "brier": 0.256133,
+     "accuracy": 0.453846,
+     "ece": 0.090963,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2020/21 ene–jun",
+   "n": 952,
+   "desde": "2021-01-13",
+   "hasta": "2021-07-07",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 952,
+    "logLoss": 0.661435,
+    "brier": 0.234411,
+    "accuracy": 0.607143,
+    "ece": 0.011612,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 952,
+    "logLoss": 0.662722,
+    "brier": 0.235068,
+    "accuracy": 0.605042,
+    "ece": 0.030202,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.016 b=0.816 (con 13663 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 952,
+     "logLoss": 0.668367,
+     "brier": 0.237552,
+     "accuracy": 0.592437,
+     "ece": 0.030964,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 952,
+     "logLoss": 0.690949,
+     "brier": 0.248901,
+     "accuracy": 0.534664,
+     "ece": 0.009082,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2021/22 oct–dic",
+   "n": 493,
+   "desde": "2021-10-12",
+   "hasta": "2021-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 493,
+    "logLoss": 0.660468,
+    "brier": 0.234077,
+    "accuracy": 0.592292,
+    "ece": 0.034744,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 493,
+    "logLoss": 0.661309,
+    "brier": 0.234451,
+    "accuracy": 0.592292,
+    "ece": 0.021609,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.009 b=0.840 (con 14615 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 493,
+     "logLoss": 0.667756,
+     "brier": 0.237534,
+     "accuracy": 0.592292,
+     "ece": 0.031602,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 493,
+     "logLoss": 0.687591,
+     "brier": 0.247226,
+     "accuracy": 0.553753,
+     "ece": 0.009885,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2021/22 ene–jun",
+   "n": 908,
+   "desde": "2022-01-01",
+   "hasta": "2022-06-26",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 908,
+    "logLoss": 0.647602,
+    "brier": 0.227749,
+    "accuracy": 0.635463,
+    "ece": 0.031325,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 908,
+    "logLoss": 0.649834,
+    "brier": 0.228818,
+    "accuracy": 0.634361,
+    "ece": 0.039546,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.009 b=0.847 (con 15108 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 908,
+     "logLoss": 0.650432,
+     "brier": 0.22864,
+     "accuracy": 0.635463,
+     "ece": 0.021849,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 908,
+     "logLoss": 0.691028,
+     "brier": 0.248941,
+     "accuracy": 0.534141,
+     "ece": 0.009158,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2022/23 oct–dic",
+   "n": 584,
+   "desde": "2022-10-07",
+   "hasta": "2022-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 584,
+    "logLoss": 0.669538,
+    "brier": 0.238183,
+    "accuracy": 0.587329,
+    "ece": 0.041651,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 584,
+    "logLoss": 0.667898,
+    "brier": 0.237525,
+    "accuracy": 0.587329,
+    "ece": 0.018468,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=0.001 b=0.879 (con 16016 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 584,
+     "logLoss": 0.677352,
+     "brier": 0.24129,
+     "accuracy": 0.57363,
+     "ece": 0.066101,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 584,
+     "logLoss": 0.692466,
+     "brier": 0.249658,
+     "accuracy": 0.525685,
+     "ece": 0.017438,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2022/23 ene–jun",
+   "n": 816,
+   "desde": "2023-01-01",
+   "hasta": "2023-06-13",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 816,
+    "logLoss": 0.663706,
+    "brier": 0.235629,
+    "accuracy": 0.606618,
+    "ece": 0.022777,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 816,
+    "logLoss": 0.663001,
+    "brier": 0.235323,
+    "accuracy": 0.606618,
+    "ece": 0.030137,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=-0.001 b=0.875 (con 16600 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 816,
+     "logLoss": 0.665285,
+     "brier": 0.236277,
+     "accuracy": 0.605392,
+     "ece": 0.024118,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 816,
+     "logLoss": 0.69405,
+     "brier": 0.250448,
+     "accuracy": 0.515931,
+     "ece": 0.026311,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2023/24 oct–dic",
+   "n": 572,
+   "desde": "2023-10-10",
+   "hasta": "2023-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 572,
+    "logLoss": 0.672641,
+    "brier": 0.239775,
+    "accuracy": 0.583916,
+    "ece": 0.038751,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 572,
+    "logLoss": 0.670274,
+    "brier": 0.238797,
+    "accuracy": 0.589161,
+    "ece": 0.018514,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=-0.006 b=0.879 (con 17416 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 572,
+     "logLoss": 0.685633,
+     "brier": 0.24514,
+     "accuracy": 0.597902,
+     "ece": 0.069346,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 572,
+     "logLoss": 0.688775,
+     "brier": 0.247817,
+     "accuracy": 0.547203,
+     "ece": 0.005739,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2023/24 ene–jun",
+   "n": 828,
+   "desde": "2024-01-01",
+   "hasta": "2024-06-25",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 828,
+    "logLoss": 0.653936,
+    "brier": 0.231272,
+    "accuracy": 0.597826,
+    "ece": 0.0266,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 828,
+    "logLoss": 0.654406,
+    "brier": 0.231387,
+    "accuracy": 0.596618,
+    "ece": 0.024191,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=-0.003 b=0.866 (con 17988 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 828,
+     "logLoss": 0.662668,
+     "brier": 0.235185,
+     "accuracy": 0.59058,
+     "ece": 0.038275,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 828,
+     "logLoss": 0.691605,
+     "brier": 0.249229,
+     "accuracy": 0.530193,
+     "ece": 0.011046,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2024/25 oct–dic",
+   "n": 600,
+   "desde": "2024-10-04",
+   "hasta": "2024-12-31",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 600,
+    "logLoss": 0.672257,
+    "brier": 0.239605,
+    "accuracy": 0.593333,
+    "ece": 0.034099,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 600,
+    "logLoss": 0.670162,
+    "brier": 0.238742,
+    "accuracy": 0.591667,
+    "ece": 0.020732,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=-0.007 b=0.878 (con 18816 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 600,
+     "logLoss": 0.682519,
+     "brier": 0.243848,
+     "accuracy": 0.59,
+     "ece": 0.047828,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 600,
+     "logLoss": 0.689421,
+     "brier": 0.248139,
+     "accuracy": 0.543333,
+     "ece": 0.0022,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  },
+  {
+   "periodo": "2024/25 ene–jun",
+   "n": 798,
+   "desde": "2025-01-01",
+   "hasta": "2025-06-18",
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 798,
+    "logLoss": 0.666983,
+    "brier": 0.237321,
+    "accuracy": 0.58396,
+    "ece": 0.022116,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "recalibrado": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 798,
+    "logLoss": 0.666581,
+    "brier": 0.237125,
+    "accuracy": 0.582707,
+    "ece": 0.028756,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25,
+    "parametros": "Platt a=-0.005 b=0.869 (con 19416 partidos anteriores)"
+   },
+   "baselines": {
+    "Elo básico": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 798,
+     "logLoss": 0.672151,
+     "brier": 0.2396,
+     "accuracy": 0.588972,
+     "ece": 0.028568,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "Gana el local": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 798,
+     "logLoss": 0.682984,
+     "brier": 0.244928,
+     "accuracy": 0.581454,
+     "ece": 0.0396,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    }
+   },
+   "mercado": null,
+   "roi": null,
+   "clv": null
+  }
+ ],
+ "resumen": {
+  "Recalibrado (solo pasado)": {
+   "periodos": 31,
+   "ganaModelo": 13,
+   "ganaRival": 18
+  },
+  "Elo básico": {
+   "periodos": 31,
+   "ganaModelo": 31,
+   "ganaRival": 0
+  },
+  "Gana el local": {
+   "periodos": 31,
+   "ganaModelo": 30,
+   "ganaRival": 1
+  }
+ },
+ "global": {
+  "modelo": {
+   "origen": "backtest",
+   "deporte": "nhl",
+   "n": 20214,
+   "logLoss": 0.673106,
+   "brier": 0.240171,
+   "accuracy": 0.578312,
+   "ece": 0.014518,
+   "mercado": null,
+   "logLossUniforme": 0.693147,
+   "brierUniforme": 0.25
+  },
+  "recalibrado": {
+   "origen": "backtest",
+   "deporte": "nhl",
+   "n": 20214,
+   "logLoss": 0.67321,
+   "brier": 0.24023,
+   "accuracy": 0.578807,
+   "ece": 0.004738,
+   "mercado": null,
+   "logLossUniforme": 0.693147,
+   "brierUniforme": 0.25
+  },
+  "baselines": {
+   "Elo básico": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 20214,
+    "logLoss": 0.68045,
+    "brier": 0.243408,
+    "accuracy": 0.574157,
+    "ece": 0.039835,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "Gana el local": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 20214,
+    "logLoss": 0.689605,
+    "brier": 0.248231,
+    "accuracy": 0.542693,
+    "ece": 0.002617,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   }
+  },
+  "mercado": null
+ },
+ "porRegimen": {
+  "temporada regular": {
+   "n": 16683,
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 16683,
+    "logLoss": 0.670934,
+    "brier": 0.239135,
+    "accuracy": 0.582809,
+    "ece": 0.011772,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "mercado": null
+  },
+  "playoffs": {
+   "n": 1446,
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 1446,
+    "logLoss": 0.685664,
+    "brier": 0.246261,
+    "accuracy": 0.55325,
+    "ece": 0.015041,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "mercado": null
+  },
+  "inicio de temporada": {
+   "n": 2085,
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 2085,
+    "logLoss": 0.681775,
+    "brier": 0.244236,
+    "accuracy": 0.559712,
+    "ece": 0.03655,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "mercado": null
+  }
+ },
+ "porSegmento": {
+  "favorito": {
+   "local favorito": {
+    "n": 13970,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 13970,
+     "logLoss": 0.668789,
+     "brier": 0.238111,
+     "accuracy": 0.587545,
+     "ece": 0.014474,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "visitante favorito": {
+    "n": 6244,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 6244,
+     "logLoss": 0.682763,
+     "brier": 0.244778,
+     "accuracy": 0.557655,
+     "ece": 0.014616,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   }
+  },
+  "banda de probabilidad": {
+   "50–60 %": {
+    "n": 12221,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 12221,
+     "logLoss": 0.689834,
+     "brier": 0.248344,
+     "accuracy": 0.534817,
+     "ece": 0.013043,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "60–70 %": {
+    "n": 6307,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 6307,
+     "logLoss": 0.659152,
+     "brier": 0.23321,
+     "accuracy": 0.628508,
+     "ece": 0.012662,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "70–80 %": {
+    "n": 1603,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 1603,
+     "logLoss": 0.609137,
+     "brier": 0.209264,
+     "accuracy": 0.701185,
+     "ece": 0.032487,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   }
+  },
+  "mes": {
+   "noviembre": {
+    "n": 2815,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 2815,
+     "logLoss": 0.677602,
+     "brier": 0.242234,
+     "accuracy": 0.574423,
+     "ece": 0.019545,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "diciembre": {
+    "n": 2911,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 2911,
+     "logLoss": 0.669263,
+     "brier": 0.238391,
+     "accuracy": 0.585366,
+     "ece": 0.010474,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "enero": {
+    "n": 2941,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 2941,
+     "logLoss": 0.672782,
+     "brier": 0.239987,
+     "accuracy": 0.580075,
+     "ece": 0.015005,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "febrero": {
+    "n": 2763,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 2763,
+     "logLoss": 0.679208,
+     "brier": 0.24309,
+     "accuracy": 0.562432,
+     "ece": 0.027906,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "marzo": {
+    "n": 3488,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 3488,
+     "logLoss": 0.664894,
+     "brier": 0.236322,
+     "accuracy": 0.595757,
+     "ece": 0.011984,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "abril": {
+    "n": 2259,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 2259,
+     "logLoss": 0.6678,
+     "brier": 0.237643,
+     "accuracy": 0.583001,
+     "ece": 0.019477,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "mayo": {
+    "n": 690,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 690,
+     "logLoss": 0.674288,
+     "brier": 0.240748,
+     "accuracy": 0.578261,
+     "ece": 0.015732,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "octubre": {
+    "n": 2085,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 2085,
+     "logLoss": 0.681775,
+     "brier": 0.244236,
+     "accuracy": 0.559712,
+     "ece": 0.03655,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   }
+  },
+  "día de la semana": {
+   "jueves": {
+    "n": 3777,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 3777,
+     "logLoss": 0.671925,
+     "brier": 0.239624,
+     "accuracy": 0.578766,
+     "ece": 0.016478,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "viernes": {
+    "n": 2170,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 2170,
+     "logLoss": 0.669444,
+     "brier": 0.238558,
+     "accuracy": 0.578802,
+     "ece": 0.016447,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "sábado": {
+    "n": 4634,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 4634,
+     "logLoss": 0.67033,
+     "brier": 0.238878,
+     "accuracy": 0.57855,
+     "ece": 0.015402,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "domingo": {
+    "n": 2168,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 2168,
+     "logLoss": 0.669893,
+     "brier": 0.238608,
+     "accuracy": 0.588561,
+     "ece": 0.013912,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "lunes": {
+    "n": 1956,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 1956,
+     "logLoss": 0.680602,
+     "brier": 0.243613,
+     "accuracy": 0.571575,
+     "ece": 0.019902,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "martes": {
+    "n": 3585,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 3585,
+     "logLoss": 0.67761,
+     "brier": 0.242242,
+     "accuracy": 0.578243,
+     "ece": 0.015096,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   },
+   "miércoles": {
+    "n": 1924,
+    "modelo": {
+     "origen": "backtest",
+     "deporte": "nhl",
+     "n": 1924,
+     "logLoss": 0.673845,
+     "brier": 0.240576,
+     "accuracy": 0.571726,
+     "ece": 0.017524,
+     "mercado": null,
+     "logLossUniforme": 0.693147,
+     "brierUniforme": 0.25
+    },
+    "mercado": null
+   }
+  }
+ },
+ "cobertura": [
+  {
+   "cobertura": 1,
+   "n": 20214,
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 20214,
+    "logLoss": 0.673106,
+    "brier": 0.240171,
+    "accuracy": 0.578312,
+    "ece": 0.014518,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "mercado": null
+  },
+  {
+   "cobertura": 0.75,
+   "n": 15161,
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 15161,
+    "logLoss": 0.671193,
+    "brier": 0.239245,
+    "accuracy": 0.582481,
+    "ece": 0.01525,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "mercado": null
+  },
+  {
+   "cobertura": 0.5,
+   "n": 10107,
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 10107,
+    "logLoss": 0.668365,
+    "brier": 0.23788,
+    "accuracy": 0.588305,
+    "ece": 0.013116,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "mercado": null
+  },
+  {
+   "cobertura": 0.25,
+   "n": 5054,
+   "modelo": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 5054,
+    "logLoss": 0.661623,
+    "brier": 0.234637,
+    "accuracy": 0.599525,
+    "ece": 0.013047,
+    "mercado": null,
+    "logLossUniforme": 0.693147,
+    "brierUniforme": 0.25
+   },
+   "mercado": null
+  }
+ ]
+}

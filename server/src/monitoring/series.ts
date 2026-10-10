@@ -3,6 +3,9 @@
 // Tres cosas, por deporte y por día:
 //   · log loss y Brier en ventana móvil de 4 semanas (28 días) sobre las predicciones
 //     puntuadas en vivo: la misma definición que la capa común (evaluation/metrics.ts);
+//   · Todo con lo que dijo el MODELO (`pModelo`, antes de calibrar y mezclar con el mercado),
+//     que es lo que midió el backtest; comparar lo publicado con lo crudo era comparar dos
+//     cosas distintas (lote C, C4).
 //   · PSI (population stability index) de la distribución de probabilidades dichas, vivo
 //     contra el backtest: si el modelo empieza a decir cosas que en el backtest no decía
 //     (todo 50/50, o todo 90 %), el PSI lo ve antes que el acierto;
@@ -66,12 +69,15 @@ export function psi(referencia: number[], actual: number[], eps = 1e-4): number 
   return s;
 }
 
-/** Proporción de probabilidades dichas que cae en cada cubeta de 10 puntos. */
+/** Lo que dijo el modelo: es lo que midió el backtest, y por eso lo que se compara (lote C, C4). */
+const delModelo = (x: PrediccionEnVivo): number[] => x.pModelo ?? x.p;
+
+/** Proporción de probabilidades del modelo que cae en cada cubeta de 10 puntos. */
 export function distribucion(xs: PrediccionEnVivo[], cubetas = CUBETAS): number[] {
   const c = new Array<number>(cubetas).fill(0);
   let total = 0;
   for (const x of xs) {
-    for (const pk of x.p) {
+    for (const pk of delModelo(x)) {
       c[Math.min(cubetas - 1, Math.max(0, Math.floor(pk * cubetas)))]++;
       total++;
     }
@@ -80,8 +86,8 @@ export function distribucion(xs: PrediccionEnVivo[], cubetas = CUBETAS): number[
 }
 
 const dia = (iso: string) => iso.slice(0, 10);
-const perdida = (x: PrediccionEnVivo) => -Math.log(Math.max(x.p[x.y], 1e-15));
-const brierDe = (x: PrediccionEnVivo) => x.p.reduce((s, pk, k) => s + (pk - (k === x.y ? 1 : 0)) ** 2, 0) / 2;
+const perdida = (x: PrediccionEnVivo) => -Math.log(Math.max(delModelo(x)[x.y], 1e-15));
+const brierDe = (x: PrediccionEnVivo) => delModelo(x).reduce((s, pk, k) => s + (pk - (k === x.y ? 1 : 0)) ** 2, 0) / 2;
 
 /** Las predicciones cuya fecha cae en los `dias` días que acaban en `hasta` (inclusive). */
 export function ventana(xs: PrediccionEnVivo[], hasta: string, dias = VENTANA_DIAS): PrediccionEnVivo[] {

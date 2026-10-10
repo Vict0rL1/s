@@ -4,7 +4,7 @@ Desde la Fase 2 la app guarda sus datos en **dos ficheros SQLite** dentro de `da
 
 | Fichero | Qué contiene | Si se pierde |
 |---|---|---|
-| `history.db` | Historia de los cinco deportes: resultados, equipos, jugadores, ratings, próximos partidos, medidas derivadas. | Se vuelve a bajar (`npm run fetch-data`) o a reconstruir (`npm run update-all`). |
+| `history.db` | Historia de los siete deportes: resultados, equipos, jugadores, ratings, próximos partidos, medidas derivadas. | Se vuelve a bajar (`npm run fetch-data`) o a reconstruir (`npm run update-all`). |
 | `ledger.db` | **El libro mayor**: lo que el modelo dijo antes de cada partido (`*_prediction_log`), las apuestas de papel y las tuyas (`paper_bets`, `bets`), cada precio observado (`odds_snapshots`), las evaluaciones de confianza, las alertas, las sesiones, `settings`, `ingestion_runs`. | **No se puede volver a conseguir.** Por eso tiene copias y por eso nunca se publica. |
 
 El servidor abre `history.db` como base principal y adjunta `ledger.db` como esquema `ledger`.
@@ -37,9 +37,21 @@ como `failed` y **el servidor no arranca** hasta que se mire el error y se vuelv
 con `npm run db:migrate -- --reintentar` (o se restaure la última copia). `npm run db:migrate`
 sin argumentos enseña el estado de cada versión en cada fichero.
 
+Las últimas, del seguimiento «NHL y UFC»:
+
+| Versión | Destino | Qué |
+|---|---|---|
+| 14 `nhl-segunda-fuente` | historia | `nhl_games`: `final_period` admite NULL (la fuente no dice si hubo prórroga) y se añade `fuente`; la tabla se rehace copiando las filas |
+| 15 `ufc-sombra` | historia | `ufc_events`, `ufc_fighters`, `ufc_fights` (la UFC en sombra) |
+| 16 `nhl-publicada` | historia | `nhl_teams`, `nhl_upcoming` y los índices por equipo de `nhl_games` |
+| 17 `nhl-registro` | libro mayor | `nhl_prediction_log` con los mismos triggers que los otros cinco registros (no se borra; lo que dijo no se reescribe; el resultado y la probabilidad enseñada se anotan una vez) |
+| 18 `ufc-publicada` | historia | `ufc_upcoming` (las peleas que vienen, de la casa; `home_*` = luchador A, sin local) y los índices por luchador de `ufc_fights` |
+| 19 `ufc-registro` | libro mayor | `ufc_prediction_log` con los mismos triggers (congelados también sus cinco rasgos); el resultado es 1-0 / 0-1 y 0-0 para el empate o el «sin resultado», con `outcome` y el método |
+
 ## PRAGMAs e índices
 
-Los dos ficheros abren con `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`,
+Los dos ficheros abren con `journal_mode=WAL` (`synchronous=FULL` el libro mayor —un corte de luz no
+puede llevarse una apuesta— y `NORMAL` la historia, que se reconstruye), `foreign_keys=ON`,
 `busy_timeout=5000` y `temp_store=MEMORY`. Los índices de la Fase 2 (migración v2) cubren las
 consultas más calientes —el registro de predicciones pendientes, los snapshots por evento y
 casa, las sesiones por token— y `server/src/db/hot.ts` las lista con su `EXPLAIN QUERY PLAN`:
@@ -60,8 +72,18 @@ el test `db/hot.test.ts` y `verify:data` fallan si alguna vuelve a recorrer su t
   después de arrancar si la última es más vieja que el intervalo, para que reiniciar no
   dispare copias. A mano: `npm run backup`.
 - **Restaurar**: `npm run restore` lista las copias; `npm run restore -- <fichero>`, **con el
-  servidor parado**, comprueba la integridad y que el fichero es un libro mayor, aparta el
-  actual como `ledger.db.antes-de-restaurar-<fecha>` y copia.
+  servidor parado** (y se niega si no lo está: comprueba que nadie tiene `ledger.db` abierto),
+  comprueba la integridad y que el fichero es un libro mayor, aparta el actual como
+  `ledger.db.antes-de-restaurar-<fecha>` con `VACUUM INTO` (completo, con lo que hubiera en su
+  WAL), reconstruye el nuevo también con `VACUUM INTO`, lo comprueba, quita los `-wal`/`-shm`
+  viejos y renombra. `npm run fetch-data -- --force` hace lo mismo con `history.db` (y conserva,
+  además de tus registros, lo medido en tu instalación: `fb_odds_history`, `fb_news`,
+  `fb_lineups`, `latency_samples`, `player_ids`).
+- **La marca `ledger.db.existe`**: la escribe la app al crear el libro mayor y la partición al
+  partir. Si está y `ledger.db` no, el servidor **no arranca** con uno vacío: dice que falta y
+  cómo restaurarlo (`LEDGER_NUEVO=si` para empezar uno nuevo a sabiendas).
+- **Parar bien**: SIGINT/SIGTERM paran los trabajos, cierran Fastify y la conexión, que vuelca el
+  WAL y quita `-wal`/`-shm`.
 - **Doctor**: sección DATOS Y COPIAS. Aviso si la última copia tiene más de 36 h; error si
   nunca se ha hecho una y hay apuestas de papel registradas.
 - En Fly, además, el volumen tiene instantáneas diarias (`fly.toml` → `snapshot_retention`;

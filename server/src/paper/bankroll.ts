@@ -44,7 +44,9 @@ import { versionsFor, type SportId } from '../versions.ts';
 import { captureSignalClosing, recordSignal } from './signals.ts';
 import { devig } from '../market/devig.ts';
 import { gruposDe, cabeEnGrupos } from '../staking/risk.ts';
+import { anotarEnCubos, cabeEnCubos, cubosDe } from '../staking/cubos.ts';
 import { emitirAlerta } from '../alerts/engine.ts';
+import { roiDe } from '../evaluation/roi.ts';
 
 /** El banco inicial del experimento. Se guarda para que cambiarlo sea deliberado. */
 export const BANCO_INICIAL = 1000;
@@ -236,7 +238,7 @@ export function resumen(motivo: string | null = null): Resumen {
     pendientes: todas.length - liq.length,
     // Sin apuestas liquidadas el ROI no es cero: no existe. Enseñar «0 %» invitaría a
     // leerlo como «no gana nada» cuando lo que pasa es que todavía no ha jugado.
-    roi: arriesgado > 0 ? beneficio / arriesgado : null,
+    roi: roiDe(beneficio, arriesgado),
     arriesgado,
     empezado: getMeta(KEY_INICIO),
     ultima: ultimaPasada(),
@@ -361,6 +363,12 @@ function candidatasDosSalidas(excluir: boolean, cfg: {
   oddsCasa: string;
   oddsFuera: string;
   mostrada?: string;
+  /**
+   * false: no exigir el mercado del momento de la predicción. La NHL registra muchas predicciones desde
+   * el calendario, antes de que haya precio; el banco reprecia con la cuota de ahora (conMercadoActual)
+   * igual en todos los deportes, así que ese dato solo hacía de filtro.
+   */
+  mercadoRegistrado?: boolean;
 }): Candidato[] {
   const cal = cfg.mostrada ? `COALESCE(l.${cfg.mostrada}, l.prob_home)` : 'l.prob_home';
   const rows = getDb()
@@ -372,7 +380,7 @@ function candidatasDosSalidas(excluir: boolean, cfg: {
          FROM ${cfg.tablaLog} l
          JOIN ${cfg.tablaUp} u ON u.id = l.upcoming_id
         WHERE l.${cfg.resuelto} IS NULL
-          AND l.market_prob_home IS NOT NULL
+          ${cfg.mercadoRegistrado === false ? '' : 'AND l.market_prob_home IS NOT NULL'}
           AND u.source <> 'fixture'
           AND u.${cfg.oddsCasa} IS NOT NULL AND u.${cfg.oddsFuera} IS NOT NULL
           AND u.commence_time > ?
@@ -380,24 +388,26 @@ function candidatasDosSalidas(excluir: boolean, cfg: {
     )
     .all(AHORA()) as unknown as {
     match_key: string; upcoming_id: string; home_id: string; away_id: string; home_name: string; away_name: string; league: string | null;
-    raw: number; cal: number; market_prob_home: number; predicted_at: string;
+    raw: number; cal: number; market_prob_home: number | null; predicted_at: string;
     odds_home: number; odds_away: number; commence_time: string; updated_at: string | null; books: number | null;
   }[];
 
+  // Sin mercado registrado, el de las cuotas de la fila (el banco lo recalcula igual al apostar).
+  const mercado = (r: (typeof rows)[number]) => r.market_prob_home ?? (1 / r.odds_home) / (1 / r.odds_home + 1 / r.odds_away);
   return rows.map((r) => ({
     sport: cfg.sport,
     league: r.league,
     match_key: r.match_key,
     event_id: r.upcoming_id,
-    label: cfg.sport === 'nfl' ? `${r.away_name} @ ${r.home_name}` : `${r.home_name} vs ${r.away_name}`,
+    label: cfg.sport === 'nfl' || cfg.sport === 'nhl' ? `${r.away_name} @ ${r.home_name}` : `${r.home_name} vs ${r.away_name}`,
     commence: r.commence_time,
     predictedAt: r.predicted_at,
     oddsAt: r.updated_at,
     books: r.books,
     participantes: [r.home_id, r.away_id],
     salidas: [
-      { label: r.home_name, proveedor: r.home_name, p: r.cal, pRaw: r.raw, odds: r.odds_home, pMarket: r.market_prob_home },
-      { label: r.away_name, proveedor: r.away_name, p: 1 - r.cal, pRaw: 1 - r.raw, odds: r.odds_away, pMarket: 1 - r.market_prob_home },
+      { label: r.home_name, proveedor: r.home_name, p: r.cal, pRaw: r.raw, odds: r.odds_home, pMarket: mercado(r) },
+      { label: r.away_name, proveedor: r.away_name, p: 1 - r.cal, pRaw: 1 - r.raw, odds: r.odds_away, pMarket: 1 - mercado(r) },
     ],
   }));
 }
@@ -463,6 +473,17 @@ const BEISBOL = {
   sport: 'baseball' as const, tablaLog: 'bsb_prediction_log', tablaUp: 'bsb_upcoming',
   clave: 'match_key', resuelto: 'home_runs', oddsCasa: 'odds_home', oddsFuera: 'odds_away',
 };
+const NHL = {
+  sport: 'nhl' as const, tablaLog: 'nhl_prediction_log', tablaUp: 'nhl_upcoming',
+  clave: 'match_key', resuelto: 'home_goals', oddsCasa: 'odds_home', oddsFuera: 'odds_away', mostrada: 'shown_home',
+  mercadoRegistrado: false,
+};
+/** La UFC: A y B (home_* y away_*, sin local); ganador a dos vías, el empate y el «sin resultado» devuelven la apuesta. */
+const UFC = {
+  sport: 'ufc' as const, tablaLog: 'ufc_prediction_log', tablaUp: 'ufc_upcoming',
+  clave: 'match_key', resuelto: 'resolved_at', oddsCasa: 'odds_home', oddsFuera: 'odds_away', mostrada: 'shown_home',
+  mercadoRegistrado: false,
+};
 
 /**
  * Todas las candidatas con cuotas REALES y partido por delante, de los cinco deportes.
@@ -478,6 +499,8 @@ export function candidatasPapel(excluirApostadas = true): Candidato[] {
     ...candidatasFutbol(excluirApostadas),
     ...candidatasDosSalidas(excluirApostadas, BALONCESTO),
     ...candidatasDosSalidas(excluirApostadas, BEISBOL),
+    ...candidatasDosSalidas(excluirApostadas, NHL),
+    ...candidatasDosSalidas(excluirApostadas, UFC),
   ];
 }
 
@@ -582,6 +605,9 @@ export function place(): { colocadas: number; motivo: string | null; detalle: st
   const ahora = AHORA();
   const banco = bancoActual();
   let abierto = expuesto();
+  // Los topes por día y por liga de la política (A6): lo abierto en la base más lo de esta pasada.
+  const cubos = cubosDe(db.prepare("SELECT commence_time, league, stake FROM paper_bets WHERE status = 'pending'").all() as { commence_time: string | null; league: string | null; stake: number }[]);
+  const topes = politica().staking;
   // Las pérdidas no cambian dentro de una pasada: apostar no realiza nada.
   const perdidas = perdidasPapel(new Date(ahora));
   /** Lo decidido en esta pasada por grupo de correlación (aún no está en la base). */
@@ -617,12 +643,21 @@ export function place(): { colocadas: number; motivo: string | null; detalle: st
       senalDe('rechazada', 0, null);
       continue;
     }
+    // Topes por día y por liga (A6): antes que la confianza y los grupos, y solo recortan.
+    const cubo = cabeEnCubos({ commence_time: c.commence, league: c.league }, banco, topes, cubos);
+    if (cubo.cabe < 0.01) {
+      const motivoRechazo = `${cubo.limitante} alcanzado`;
+      rechazos[cubo.limitante!.split(' (')[0]] = (rechazos[cubo.limitante!.split(' (')[0]] ?? 0) + 1;
+      detalle.push(`${c.label}: no se apuesta — ${motivoRechazo}`);
+      senalDe('rechazada', 0, null, motivoRechazo);
+      continue;
+    }
     // La capa de confianza (trust/): puede abstenerse o recortar, nunca subir el importe.
     const juicio = juicioDeConfianza(c, d.label, ahora);
     // Topes por grupo de correlación (mismo evento, equipo o jugador): solo recortan.
     const grupos = gruposDe(c.sport, c.event_id, c.participantes);
     const { cabe, limitante } = cabeEnGrupos(grupos, banco, enGrupos);
-    const stakeConfianza = Math.floor(Math.min(d.stake * juicio.factor, cabe) * 100) / 100;
+    const stakeConfianza = Math.floor(Math.min(d.stake * juicio.factor, cabe, cubo.cabe) * 100) / 100;
     if (juicio.apostar && stakeConfianza <= 0 && cabe < d.stake * juicio.factor) {
       const motivoRechazo = `tope de grupo de correlación alcanzado (${limitante})`;
       emitirAlerta({ type: 'limite_riesgo', severity: 'aviso', sport: c.sport, matchKey: c.match_key, title: `${c.label}: tope de riesgo`, body: motivoRechazo });
@@ -664,6 +699,7 @@ export function place(): { colocadas: number; motivo: string | null; detalle: st
       idPoliticaVigente(),
     );
     for (const g of grupos) enGrupos.set(g, (enGrupos.get(g) ?? 0) + stake);
+    anotarEnCubos(cubos, { commence_time: c.commence, league: c.league }, stake);
     senalDe('apostada', stake, Number(alta.changes) ? Number(alta.lastInsertRowid) : null);
     if (Number(alta.changes)) void notificar('papel_apostada', { titulo: `Banco de papel: ${c.label}`, cuerpo: `${e.label} a ${e.odds.toFixed(2)} · ${stake.toFixed(2)} (${(d.edge * 100).toFixed(1)} pp de ventaja)`, url: urlPartido(c.sport, c.match_key) ?? '/apuestas' }, { sport: c.sport, matchKey: c.match_key });
     // La exposición se acumula DENTRO del bucle: sin esto, veinte candidatas se
@@ -702,15 +738,17 @@ export function captureClosing(now = new Date()): { fijados: number } {
   const db = getDb();
   const sinCierre = db
     .prepare(
-      `SELECT id, provider_event_id, provider_selection, market, commence_time, odds FROM paper_bets
+      `SELECT id, provider_event_id, provider_selection, market, commence_time, odds, placed_at FROM paper_bets
         WHERE closing_odds IS NULL AND provider_event_id IS NOT NULL AND commence_time IS NOT NULL AND commence_time <= ?`,
     )
-    .all(now.toISOString()) as { id: number; provider_event_id: string; provider_selection: string; market: string; commence_time: string; odds: number }[];
+    .all(now.toISOString()) as { id: number; provider_event_id: string; provider_selection: string; market: string; commence_time: string; odds: number; placed_at: string }[];
   const upd = db.prepare('UPDATE paper_bets SET closing_odds = ?, closing_line = ?, closing_observed_at = ?, clv = ? WHERE id = ?');
   let fijados = 0;
   for (const a of sinCierre) {
     const cl = closingLine(a.provider_event_id, a.market ?? 'h2h', a.provider_selection, a.commence_time);
-    if (!cl) continue;
+    // Un cierre tiene que ser POSTERIOR a la apuesta (lote C, C8): si nadie volvió a pedir cuotas,
+    // el «cierre» sería el snapshot con el que se apostó (CLV 0) o uno anterior, y no mide nada.
+    if (!cl || cl.at <= a.placed_at) continue;
     upd.run(cl.consensus, cl.line, cl.at, a.odds / cl.consensus - 1, a.id);
     fijados++;
   }
@@ -775,12 +813,11 @@ type Stmt = ReturnType<ReturnType<typeof getDb>['prepare']>;
  */
 export function liquidador(): (a: Pick<ApuestaPapel, 'sport' | 'match_key' | 'selection'>) => Liquidacion | null {
   const db = getDb();
+  // Los nombres del REGISTRO, que son los que vio la apuesta; no los actuales de `players`.
   const tenis = db.prepare(
-    `SELECT l.winner_id, l.p1_id, p1.name AS p1, p2.name AS p2
+    `SELECT l.winner_id, l.p1_id, l.p2_id, l.p1_name AS p1, l.p2_name AS p2
        FROM prediction_log l
-       LEFT JOIN players p1 ON p1.tour = l.tour AND p1.id = l.p1_id
-       LEFT JOIN players p2 ON p2.tour = l.tour AND p2.id = l.p2_id
-      WHERE l.match_key = ? AND l.resolved_at IS NOT NULL`,
+      WHERE l.match_key = ? AND l.resolved_at IS NOT NULL AND l.winner_id IS NOT NULL`,
   );
   const futbol = db.prepare(
     'SELECT home_name, away_name, home_goals AS pc, away_goals AS pf FROM fb_prediction_log WHERE match_key = ? AND resolved_at IS NOT NULL',
@@ -790,20 +827,35 @@ export function liquidador(): (a: Pick<ApuestaPapel, 'sport' | 'match_key' | 'se
   const bb = dosSalidas('bb_prediction_log', 'game_key', 'home_pts', 'away_pts');
   const bsb = dosSalidas('bsb_prediction_log', 'match_key', 'home_runs', 'away_runs');
   const nfl = dosSalidas('naf_prediction_log', 'match_key', 'home_points', 'away_points');
-  return (a) => liquidar(a, { tenis, futbol, bb, bsb, nfl });
+  const nhl = dosSalidas('nhl_prediction_log', 'match_key', 'home_goals', 'away_goals');
+  const ufc = db.prepare('SELECT home_name, away_name, outcome, metodo FROM ufc_prediction_log WHERE match_key = ? AND outcome IS NOT NULL');
+  return (a) => liquidar(a, { tenis, futbol, bb, bsb, nfl, nhl, ufc });
 }
 
 /** El resultado de una apuesta, o null si su partido aún no tiene resultado. */
-function liquidar(a: Pick<ApuestaPapel, 'sport' | 'match_key' | 'selection'>, q: { tenis: Stmt; futbol: Stmt; bb: Stmt; bsb: Stmt; nfl: Stmt }): Liquidacion | null {
-  if (a.sport === 'tennis') {
-    const r = q.tenis.get(a.match_key) as { winner_id: number; p1_id: number; p1: string; p2: string } | undefined;
+function liquidar(a: Pick<ApuestaPapel, 'sport' | 'match_key' | 'selection'>, q: { tenis: Stmt; futbol: Stmt; bb: Stmt; bsb: Stmt; nfl: Stmt; nhl: Stmt; ufc: Stmt }): Liquidacion | null {
+  if (a.sport === 'ufc') {
+    const r = q.ufc.get(a.match_key) as { home_name: string; away_name: string; outcome: 'A' | 'B' | 'EMPATE' | 'NC'; metodo: string | null } | undefined;
     if (!r) return null;
-    // El log guarda el id del ganador; la apuesta, el nombre. Se compara por nombre
-    // porque es lo que se enseñó y lo que se puede auditar leyendo la fila.
-    const ganador = r.winner_id === r.p1_id ? r.p1 : r.p2;
-    return { status: ganador === a.selection ? 'won' : 'lost', resultado: `ganó ${ganador}` };
+    const como = r.metodo ? ` (${r.metodo})` : '';
+    // Ganador a dos vías: el empate devuelve la apuesta (push) y el «sin resultado» la anula, como las casas.
+    if (r.outcome === 'EMPATE') return { status: 'push', resultado: `empate${como}` };
+    if (r.outcome === 'NC') return { status: 'void', resultado: `sin resultado${como}` };
+    const ganador = r.outcome === 'A' ? r.home_name : r.away_name;
+    return { status: ganador === a.selection ? 'won' : 'lost', resultado: `ganó ${ganador}${como}` };
   }
-  const st = a.sport === 'football' ? q.futbol : a.sport === 'basketball' ? q.bb : a.sport === 'baseball' ? q.bsb : a.sport === 'nfl' ? q.nfl : null;
+  if (a.sport === 'tennis') {
+    const r = q.tenis.get(a.match_key) as { winner_id: number; p1_id: number; p2_id: number; p1: string | null; p2: string | null } | undefined;
+    if (!r) return null;
+    // La apuesta guarda el nombre que se enseñó (el del registro). Con él se resuelve el LADO y se
+    // liquida por id (lote C, C10): antes se comparaba con el nombre actual de la ficha y una
+    // inicial o un acento distinto la daban por perdida.
+    const ladoId = a.selection === r.p1 ? r.p1_id : a.selection === r.p2 ? r.p2_id : null;
+    const ganador = r.winner_id === r.p1_id ? r.p1 : r.p2;
+    if (ladoId == null) return { status: 'void', resultado: `la selección «${a.selection}» no es ninguno de los dos del registro (${r.p1} / ${r.p2}); anulada` };
+    return { status: ladoId === r.winner_id ? 'won' : 'lost', resultado: `ganó ${ganador}` };
+  }
+  const st = a.sport === 'football' ? q.futbol : a.sport === 'basketball' ? q.bb : a.sport === 'baseball' ? q.bsb : a.sport === 'nfl' ? q.nfl : a.sport === 'nhl' ? q.nhl : null;
   if (!st) return null;
   const r = st.get(a.match_key) as { home_name: string; away_name: string; pc: number; pf: number } | undefined;
   if (!r) return null;
@@ -811,7 +863,8 @@ function liquidar(a: Pick<ApuestaPapel, 'sport' | 'match_key' | 'selection'>, q:
   if (r.pc === r.pf) {
     // Fútbol: el empate es un resultado más, no una anulación (regalarle al modelo el 25 %
     // de los partidos sin riesgo sería falsear el banco). NFL: el moneyline se devuelve
-    // (push). Baloncesto y béisbol no admiten empate: es un dato corrupto y se anula.
+    // (push). Baloncesto, béisbol y la NHL (prórroga y tanda) no admiten empate: es un dato
+    // corrupto y se anula.
     if (a.sport === 'football') return { status: a.selection === 'Empate' ? 'won' : 'lost', resultado: marcador };
     return { status: a.sport === 'nfl' ? 'push' : 'void', resultado: marcador };
   }

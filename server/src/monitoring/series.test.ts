@@ -59,3 +59,27 @@ test('monitorizar: guarda la serie reconstruible en monitoring_series y no inven
   db.prepare('INSERT OR REPLACE INTO monitoring_series (day, sport, metric, value, computed_at) VALUES (?, ?, ?, ?, ?)').run('2026-04-30', 'tennis', 'n_4s', 150, 'x');
   assert.deepEqual(serieGuardada('tennis'), [{ dia: '2026-04-30', n: 150, logLoss: 0.61, brier: null, psi: null }]);
 });
+
+test('C4: la deriva se mide con lo que dijo el MODELO (pModelo), que es lo que midió el backtest, no con lo publicado', () => {
+  const x = { p: [0.5, 0.5], pModelo: [0.95, 0.05], y: 0, version: null, cuando: '2026-10-01T12:00:00Z', liga: null };
+  const d = distribucion([x]);
+  assert.equal(d[9], 0.5, 'la cubeta del 90-100 lleva el 0,95 del modelo');
+  assert.equal(d[0], 0.5);
+  assert.equal(d[5], 0, 'lo publicado (0,5) no cuenta para la deriva');
+});
+
+test('C4: predicciones() trae pModelo distinto de p cuando lo publicado difiere del modelo', async () => {
+  const { getDb } = await import('../db.ts');
+  const { predicciones } = await import('../evaluation/live.ts');
+  getDb()
+    .prepare(
+      `INSERT INTO fb_prediction_log (match_key, league, upcoming_id, commence_time, home_id, away_id, home_name, away_name,
+         prob_home, prob_draw, prob_away, shown_home, shown_draw, shown_away, market_prob_home, market_prob_draw, market_prob_away, reliability, predicted_at, home_goals, away_goals, resolved_at)
+       VALUES ('mon|a|b', 'epl', 'mon-1', '2026-10-01T15:00:00Z', 'a', 'b', 'A', 'B', 0.7, 0.2, 0.1, 0.5, 0.3, 0.2, 0.45, 0.3, 0.25, 'high', '2026-09-30T12:00:00Z', 2, 0, '2026-10-01T17:00:00Z')`,
+    )
+    .run();
+  const x = predicciones('football').find((q) => q.liga === 'epl' && q.cuando === '2026-10-01T15:00:00Z');
+  assert.ok(x);
+  assert.ok(Math.abs(x!.p[0] - 0.5) < 1e-9, 'p es lo publicado');
+  assert.ok(Math.abs((x!.pModelo as number[])[0] - 0.7) < 1e-9, 'pModelo es lo que dijo el modelo');
+});

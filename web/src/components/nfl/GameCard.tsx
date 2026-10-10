@@ -30,7 +30,8 @@ export default function GameCard({
 }) {
   const { t } = useI18n();
   const { game, prediction, marketOnly, teams } = item;
-  const probs = prediction?.model ?? marketOnly ?? null;
+  // La cabecera es la final publicada (la que registra el historial y lee Destacados), no la cruda.
+  const probs = prediction?.final ?? marketOnly ?? null;
 
   return (
     <Card as="article" className="p-4">
@@ -69,7 +70,7 @@ export default function GameCard({
             ? item.outcome.result.homeScore === item.outcome.result.awayScore
               ? null
               : (item.outcome.result.homeScore > item.outcome.result.awayScore) ===
-                (item.prediction.model.home >= 0.5)
+                (item.prediction.final.home >= 0.5)
             : null
         }
       />

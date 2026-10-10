@@ -12,12 +12,13 @@ import {
   type BetInput,
   type FieldError,
 } from '../../lib/bets';
-import { HOME_COLOR, PROFIT_COLOR } from '../../lib/theme';
+import { HOME_COLOR, PROFIT_TEXT } from '../../lib/theme';
 import { Payout, ModeTab, Field, inputClass, selectClass, todayLocal } from './BetFormPartes';
 import { conNodos, useI18n } from '../../i18n';
+import { num as numF } from '../../lib/formato';
 
 const MARKETS = ['moneyline', 'spread', 'total', 'btts', 'score', 'other'];
-const SPORTS = ['football', 'basketball', 'baseball', 'nfl', 'tennis', 'other'];
+const SPORTS = ['football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'tennis', 'other'];
 
 /**
  * Log a bet, or edit one.
@@ -217,11 +218,11 @@ export default function BetForm({
                             <span className="block font-medium">{s.label}</span>
                             <span className="block text-[11px] tabular-nums text-(--ink-muted)">
                               {s.odds ? t('form.cuota', { c: s.odds }) : t('form.sinCuota')}
-                              {s.marketProb != null && t('form.mercadoPct', { p: (s.marketProb * 100).toFixed(0) })}
+                              {s.marketProb != null && t('form.mercadoPct', { p: numF(s.marketProb * 100, 0) })}
                               {s.modelProb != null && (
-                                <span style={{ color: PROFIT_COLOR }}>
+                                <span style={{ color: PROFIT_TEXT }}>
                                   {' '}
-                                  {t('form.modeloPct', { p: (s.modelProb * 100).toFixed(0) })}
+                                  {t('form.modeloPct', { p: numF(s.modelProb * 100, 0) })}
                                 </span>
                               )}
                             </span>

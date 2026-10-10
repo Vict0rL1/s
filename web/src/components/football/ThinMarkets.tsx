@@ -22,6 +22,7 @@ import type { FbPrediction } from '../../lib/football';
 import { Panel, SectionTitle } from '../ui';
 import { pct } from '../../lib/theme';
 import { conNodos, localeDe, useI18n, type Clave } from '../../i18n';
+import { num as numF } from '../../lib/formato';
 
 const DEPTH_STYLE: Record<string, string> = {
   profundo: 'text-emerald-300/90',
@@ -44,7 +45,7 @@ function Calibration({ pp }: { pp: number | undefined }): React.ReactElement | n
   const strong = Math.abs(pp) >= 2;
   return (
     <span className={`ml-1.5 text-[11px] ${strong ? 'text-amber-300/80' : 'text-(--ink-muted)'}`}>
-      {t('tm.medido', { pp: `${pp >= 0 ? '+' : ''}${pp.toFixed(1)}` })}
+      {t('tm.medido', { pp: `${pp >= 0 ? '+' : ''}${numF(pp, 1)}` })}
     </span>
   );
 }
@@ -140,7 +141,7 @@ export default function ThinMarkets({
             calibration={halves.calibration['visitante-gana-una-mitad']}
           />
           <p className="mt-1 text-[12px] text-(--ink-muted)">
-            {t('tm.golesMitades', { a: halves.expected.first.toFixed(2), b: halves.expected.second.toFixed(2) })}
+            {t('tm.golesMitades', { a: numF(halves.expected.first, 2), b: numF(halves.expected.second, 2) })}
           </p>
         </div>
       )}
@@ -156,8 +157,8 @@ export default function ThinMarkets({
                 <div key={c.market} className="mb-1.5">
                   <Row
                     label={c.market === 'corners' ? t('tm.cornersEsp') : t('tm.tarjetasEsp')}
-                    value={c.total.toFixed(1)}
-                    sub={t('tm.varMedia', { dist: c.distribution === 'negbin' ? t('tm.binNeg') : 'Poisson', d: c.dispersion.toFixed(2) })}
+                    value={numF(c.total, 1)}
+                    sub={t('tm.varMedia', { dist: c.distribution === 'negbin' ? t('tm.binNeg') : 'Poisson', d: numF(c.dispersion, 2) })}
                   />
                   {c.lines.map((l) => (
                     <Row key={l.line} label={t('pm.masDe', { linea: l.line })} value={pct(l.over)} />
@@ -180,7 +181,7 @@ export default function ThinMarkets({
           <h4 className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-(--ink-soft)">
             {t('tm.props')}
           </h4>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0}>
             <table className="w-full text-[12px] tabular-nums">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-(--ink-muted)">
@@ -200,7 +201,7 @@ export default function ThinMarkets({
                       <span className="ml-1 text-[10px] text-(--ink-muted)">{p.position}</span>
                     </td>
                     <td className="py-0.5 text-right text-(--ink-soft)">
-                      {p.minutes.expected.toFixed(0)}
+                      {numF(p.minutes.expected, 0)}
                     </td>
                     <td className="py-0.5 text-right text-(--ink-soft)">
                       {pct(p.minutes.pDidNotPlay)}
@@ -239,7 +240,7 @@ export default function ThinMarkets({
                 {DEPTH_LABEL[l.depth] ? t(DEPTH_LABEL[l.depth]) : undefined}
               </span>{' '}
               <span className="tabular-nums text-(--ink-body)">
-                ≥{(l.minEdge * 100).toFixed(0)} pp
+                ≥{numF(l.minEdge * 100, 0)} pp
               </span>
             </span>
           ))}

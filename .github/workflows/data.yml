@@ -73,7 +73,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Actualizar los cinco deportes
+      - name: Actualizar los seis deportes
         # --skip-odds a propósito: ver la cabecera. El script no para en el primer
         # fallo y sale con código 1 si alguno falló, así que un deporte con la fuente
         # caída no impide publicar los otros cuatro — pero sí queda anotado en el log.
@@ -86,17 +86,21 @@ jobs:
         # que está mal, y la app le enseñará números con toda naturalidad.
         run: npm run verify:data
 
-      - name: Comprobar que no se publica nada personal
-        run: npm run check-publishable
-
-      - name: Exportar y comprimir
-        id: pack
+      - name: Exportar
         # Desde la Fase 2 se publica SOLO la historia (history.db). `db:export-history` hace
         # un `VACUUM INTO`: un único fichero consistente aunque haya WAL, con integridad
         # comprobada y sin ninguna tabla del libro mayor dentro. El libro mayor (ledger.db:
         # apuestas, predicciones registradas, precios observados) no se publica nunca.
+        run: npm run db:export-history -- data/history.export.db
+
+      - name: Comprobar que no se publica nada personal
+        # Sobre el fichero EXPORTADO, que es el que se sube (lote B, B5): antes se comprobaba
+        # data/history.db y se publicaba otro fichero.
+        run: npm run check-publishable -- data/history.export.db
+
+      - name: Comprimir
+        id: pack
         run: |
-          npm run db:export-history -- data/history.export.db
           gzip -9 -c data/history.export.db > history.db.gz
           sha256sum history.db.gz | cut -d' ' -f1 > history.db.gz.sha256
           echo "size=$(du -h history.db.gz | cut -f1)" >> "$GITHUB_OUTPUT"

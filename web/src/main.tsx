@@ -8,12 +8,12 @@ import '@fontsource/ibm-plex-sans/600.css';
 import './index.css';
 import App from './App.tsx';
 import { aplicarTema, temaGuardado } from './lib/tema';
-import { instalarMarcaDeRed, registrarServiceWorker } from './lib/sinConexion';
+import { instalarMarcaDeRed } from './lib/sinConexion';
 
 // Antes del primer pintado, para que un tema fijado no parpadee.
 aplicarTema(temaGuardado());
 instalarMarcaDeRed();
-if (import.meta.env.PROD) void registrarServiceWorker();
+// El service worker se registra en App, una vez dentro de la puerta (G10).
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

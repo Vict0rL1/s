@@ -28,6 +28,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Panel, SectionTitle, Disclosure } from './ui';
 import { money } from '../lib/bets';
 import { conNodos, useI18n } from '../i18n';
+import { pct as pctF, num as numF } from '../lib/formato';
 
 interface BookEntry {
   key: string;
@@ -71,7 +72,7 @@ interface Book {
   };
 }
 
-const pct = (x: number): string => `${(x * 100).toFixed(1)} %`;
+const pct = (x: number): string => `${pctF(x, 1)}`;
 
 /**
  * El banco, que lo pone el usuario.
@@ -180,7 +181,7 @@ export default function ExposurePanel() {
             />
             <Figure
               label={t('cartera.concentracion')}
-              value={`${(aggregate.concentration * 100).toFixed(0)} %`}
+              value={`${pctF(aggregate.concentration, 0)}`}
               hint={aggregate.positions === 1 ? t('cartera.unaPosicion') : t('cartera.todoJunto')}
             />
           </div>
@@ -196,7 +197,7 @@ export default function ExposurePanel() {
                 {book.caps.map((c) => (
                   <li key={c.scope} className="text-[13px] tabular-nums text-(--ink-soft)">
                     <span className="text-(--ink-body)">{c.scope}</span>
-                    {t('cartera.topeLinea', { limite: money(c.limit), usado: money(c.used), factor: c.factor.toFixed(2) })}
+                    {t('cartera.topeLinea', { limite: money(c.limit), usado: money(c.used), factor: numF(c.factor, 2) })}
                   </li>
                 ))}
               </ul>
@@ -213,7 +214,7 @@ export default function ExposurePanel() {
                       className={`tabular-nums ${l.rho > 0 ? 'text-amber-300/90' : 'text-emerald-300/90'}`}
                     >
                       ρ {l.rho >= 0 ? '+' : ''}
-                      {l.rho.toFixed(3)}
+                      {numF(l.rho, 3)}
                     </span>{' '}
                     {l.reason}
                   </li>
@@ -221,7 +222,7 @@ export default function ExposurePanel() {
               </ul>
             ) : (
               <p className="text-[13px] leading-relaxed text-(--ink-muted)">
-                {conNodos(t('cartera.sinCorrelacion', { rho: correlation.sameLeagueDay.rho.toFixed(4) }), {
+                {conNodos(t('cartera.sinCorrelacion', { rho: numF(correlation.sameLeagueDay.rho, 4) }), {
                   medicion: <strong className="text-(--ink-soft)">{t('cartera.medicion')}</strong>,
                 })}
               </p>
@@ -237,18 +238,18 @@ export default function ExposurePanel() {
                 <ul className="space-y-1 tabular-nums">
                   {Object.entries(correlation.sameMatch).map(([k, v]) => (
                     <li key={k}>
-                      {t('cartera.mismoPartido', { par: k.replace('~', ' ~ '), rho: `${v.rho >= 0 ? '+' : ''}${v.rho.toFixed(3)}`, lo: v.lo.toFixed(3), hi: v.hi.toFixed(3) })}
+                      {t('cartera.mismoPartido', { par: k.replace('~', ' ~ '), rho: `${v.rho >= 0 ? '+' : ''}${numF(v.rho, 3)}`, lo: numF(v.lo, 3), hi: numF(v.hi, 3) })}
                     </li>
                   ))}
                   <li>
                     {t('cartera.distintos', {
-                      rho: correlation.sameLeagueDay.rho.toFixed(4),
-                      lo: correlation.sameLeagueDay.lo.toFixed(4),
-                      hi: correlation.sameLeagueDay.hi.toFixed(4),
-                      usado: correlation.used.toFixed(4),
+                      rho: numF(correlation.sameLeagueDay.rho, 4),
+                      lo: numF(correlation.sameLeagueDay.lo, 4),
+                      hi: numF(correlation.sameLeagueDay.hi, 4),
+                      usado: numF(correlation.used, 4),
                     })}
                   </li>
-                  <li>{t('cartera.control', { rho: correlation.control.toFixed(4) })}</li>
+                  <li>{t('cartera.control', { rho: numF(correlation.control, 4) })}</li>
                 </ul>
                 <p>
                   {t('cartera.controlNota')}
@@ -265,7 +266,7 @@ export default function ExposurePanel() {
             </Disclosure>
           </div>
 
-          <div className="mt-3 overflow-x-auto">
+          <div className="mt-3 overflow-x-auto" tabIndex={0}>
             <table className="w-full min-w-[30rem] text-[13px] tabular-nums">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-[0.06em] text-(--ink-muted)">
@@ -282,7 +283,7 @@ export default function ExposurePanel() {
                     <td className="py-1 text-right text-(--ink-muted)">{money(e.soloStake)}</td>
                     <td className="py-1 text-right text-(--ink-strong)">{money(e.stake)}</td>
                     <td className="py-1 text-right text-(--ink-muted)">
-                      ×{(e.portfolioFactor * e.exposureFactor).toFixed(2)}
+                      ×{numF((e.portfolioFactor * e.exposureFactor), 2)}
                     </td>
                   </tr>
                 ))}

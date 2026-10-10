@@ -11,13 +11,13 @@ import { ejecuciones } from '../ingest/runs.ts';
 import { ultimaCopia } from '../db/backup.ts';
 import { contarErrores, leerErrores } from '../security/errors.ts';
 import { estado as estadoTrabajos } from '../scheduler/registry.ts';
-import { leerFeatures, fijarAnulacion, estadoFeatures, CLAVE_ANULACIONES, featureEncendida } from '../features.ts';
+import { leerFeatures, fijarAnulacion, estadoFeatures, CLAVE_ANULACIONES, featureEncendida, soloArranque } from '../features.ts';
 import { leerAjustes, guardarAjustes, idiomaDeAcceptLanguage } from '../ajustes/index.ts';
 import { listarSeguidos, seguir, dejarDeSeguir, validarSeguido } from '../watchlist/index.ts';
 import { SPORT_IDS, type SportId } from '../sports.ts';
 import { ESQUEMA_ERROR, ESQUEMA_ESTADO, ESQUEMA_ERRORES, ESQUEMA_FEATURE, ESQUEMA_AJUSTES, ESQUEMA_WATCHLIST, ESQUEMA_SEGUIDO } from '../api/schemas.ts';
 
-const TABLA_PROXIMOS: Record<SportId, string> = { tennis: 'upcoming_matches', football: 'fb_upcoming', basketball: 'bb_upcoming', baseball: 'bsb_upcoming', nfl: 'naf_upcoming' };
+const TABLA_PROXIMOS: Record<SportId, string> = { tennis: 'upcoming_matches', football: 'fb_upcoming', basketball: 'bb_upcoming', baseball: 'bsb_upcoming', nfl: 'naf_upcoming', nhl: 'nhl_upcoming', ufc: 'ufc_upcoming' };
 
 /** El estado que resume la píldora: una sola petición, nada que se repita por pestaña. */
 export function estadoGlobal(ahora = new Date()) {
@@ -77,10 +77,11 @@ export async function registerAjustesRoutes(app: FastifyInstance): Promise<void>
 
   app.patch<{ Params: { nombre: string }; Body: { on?: boolean | null } }>(
     '/api/features/:nombre',
-    { schema: { tags: ['interfaz'], summary: 'Anular un interruptor desde Ajustes (on: true/false; null quita la anulación)', body: { type: 'object', properties: { on: { type: ['boolean', 'null'] } }, required: ['on'] }, response: { 200: ESQUEMA_FEATURE, 404: ESQUEMA_ERROR } } },
+    { schema: { tags: ['interfaz'], summary: 'Anular un interruptor desde Ajustes (on: true/false; null quita la anulación). Los de arranque (auth.*, seguridad.*) se rechazan con 403', body: { type: 'object', properties: { on: { type: ['boolean', 'null'] } }, required: ['on'] }, response: { 200: ESQUEMA_FEATURE, 403: ESQUEMA_ERROR, 404: ESQUEMA_ERROR } } },
     async (req, reply) => {
       if (!featureEncendida('interfaz.ajustes')) return reply.code(404).send({ error: 'apagado (features.json: interfaz.ajustes)' });
       if (!(req.params.nombre in leerFeatures())) return reply.code(404).send({ error: 'interruptor desconocido' });
+      if (soloArranque(req.params.nombre)) return reply.code(403).send({ error: `${req.params.nombre} solo se cambia al arrancar (config/features.json): la puerta y las cabeceras de seguridad no se apagan desde la API` });
       fijarAnulacion(req.params.nombre, req.body.on ?? null, (json) => setMeta(CLAVE_ANULACIONES, json));
       return estadoFeatures()[req.params.nombre];
     },

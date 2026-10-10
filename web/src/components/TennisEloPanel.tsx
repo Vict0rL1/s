@@ -32,6 +32,7 @@ import { api, type EloRankPlayer, type EloRankingResponse } from '../lib/api';
 import EloRanking from './EloRanking';
 import { Flag } from './ui';
 import { conNodos, useI18n, type Clave } from '../i18n';
+import { num as numF } from '../lib/formato';
 
 type Surface = 'overall' | 'hard' | 'clay' | 'grass';
 
@@ -110,7 +111,7 @@ export default function TennisEloPanel({
           // pretemporada o por una lesión corta es normal y marcarlo sería ruido.
           note:
             years != null && years >= 1.5
-              ? t('etn.sinJugar', { n: years.toFixed(0) })
+              ? t('etn.sinJugar', { n: numF(years, 0) })
               : undefined,
           onOpen: onOpenPlayer ? () => onOpenPlayer(tour, p.id) : undefined,
           extra: [

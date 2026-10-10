@@ -47,6 +47,8 @@ export interface Surebet extends EventoMercado {
   suma: number;
   margenPct: number;
   patas: { seleccion: string; cuota: number; casa: string }[];
+  /** La |línea| de la surebet (totales, hándicap); null sin línea (lote C, C2). */
+  linea: number | null;
 }
 
 export interface Referencia extends EventoMercado {
@@ -89,18 +91,24 @@ export function eventosRecientes(now = new Date(), horas = VENTANA_HORAS): Event
 
 const implicita = (cuota: number) => 1 / cuota;
 
-/** El último movimiento rápido de una selección, si lo hubo. */
-export function steamDe(puntos: { at: string; consensus: number; books: number }[]): Omit<Steam, keyof EventoMercado | 'seleccion'> | null {
+/**
+ * El último movimiento rápido de una selección, si lo hubo: medido contra el punto más antiguo
+ * DENTRO de la ventana (lote C, C3: antes, sin ningún punto dentro, se medía contra el anterior
+ * aunque fuera de hace horas) y solo entre puntos de la MISMA línea (C2: pasar de Más 2,5 a Más
+ * 3,0 no es un movimiento, es otra línea).
+ */
+export function steamDe(puntos: { at: string; consensus: number; books: number; line?: number | null }[]): Omit<Steam, keyof EventoMercado | 'seleccion'> | null {
   if (puntos.length < 2) return null;
   const ultimo = puntos[puntos.length - 1];
   if (ultimo.books < STEAM_MIN_CASAS) return null;
   const tUlt = Date.parse(ultimo.at);
-  // El punto más antiguo dentro de la ventana, para medir el movimiento acumulado.
-  let base = puntos[puntos.length - 2];
+  let base: (typeof puntos)[number] | null = null;
   for (let i = puntos.length - 2; i >= 0; i--) {
     if (tUlt - Date.parse(puntos[i].at) > STEAM_MIN_MINUTOS * 60_000) break;
+    if ((puntos[i].line ?? null) !== (ultimo.line ?? null)) continue;
     base = puntos[i];
   }
+  if (!base) return null;
   const movimiento = (implicita(ultimo.consensus) - implicita(base.consensus)) * 100;
   if (Math.abs(movimiento) < STEAM_MIN_PP) return null;
   return {
@@ -113,16 +121,31 @@ export function steamDe(puntos: { at: string; consensus: number; books: number }
   };
 }
 
-/** La surebet de un mercado con las mejores cuotas actuales de cada selección. */
+/**
+ * La surebet de un mercado con las mejores cuotas actuales de cada selección. Con líneas, solo
+ * entre líneas COMPLEMENTARIAS (lote C, C2): Más 2,5 se cubre con Menos 2,5, y el hándicap −3,5
+ * con el +3,5 (misma |línea|). Más 2,5 con Menos 3,0 «suma menos de 1» y no cubre nada.
+ */
 export function surebetDe(porSeleccion: { seleccion: string; cuotas: BookQuote[] }[]): Omit<Surebet, keyof EventoMercado> | null {
   if (porSeleccion.length < 2 || porSeleccion.some((s) => s.cuotas.length === 0)) return null;
-  const patas = porSeleccion.map((s) => {
-    const mejor = s.cuotas.reduce((a, b) => (b.odds > a.odds ? b : a));
-    return { seleccion: s.seleccion, cuota: mejor.odds, casa: mejor.bookmaker };
-  });
-  const suma = patas.reduce((a, p) => a + implicita(p.cuota), 0);
-  if (suma >= 1) return null;
-  return { suma: Math.round(suma * 10000) / 10000, margenPct: Math.round((1 - suma) * 1000) / 10, patas };
+  const claveDe = (q: BookQuote) => (q.line == null ? 'sin-linea' : String(Math.abs(q.line)));
+  const claves = new Set(porSeleccion[0].cuotas.map(claveDe));
+  let mejorSurebet: Omit<Surebet, keyof EventoMercado> | null = null;
+  for (const clave of claves) {
+    const patas: { seleccion: string; cuota: number; casa: string }[] = [];
+    for (const s of porSeleccion) {
+      const enLinea = s.cuotas.filter((q) => claveDe(q) === clave);
+      if (enLinea.length === 0) break;
+      const mejor = enLinea.reduce((a, b) => (b.odds > a.odds ? b : a));
+      patas.push({ seleccion: s.seleccion, cuota: mejor.odds, casa: mejor.bookmaker });
+    }
+    if (patas.length !== porSeleccion.length) continue;
+    const suma = patas.reduce((a, p) => a + implicita(p.cuota), 0);
+    if (suma >= 1) continue;
+    const candidata = { suma: Math.round(suma * 10000) / 10000, margenPct: Math.round((1 - suma) * 1000) / 10, patas, linea: clave === 'sin-linea' ? null : Number(clave) };
+    if (!mejorSurebet || candidata.suma < mejorSurebet.suma) mejorSurebet = candidata;
+  }
+  return mejorSurebet;
 }
 
 const sinMargen = (xs: number[]) => {

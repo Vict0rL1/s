@@ -16,3 +16,8 @@ test('aComun: fútbol publica `final`; NFL a dos vías sin empate; tenis prob1',
   assert.equal(t?.league, 'atp');
   assert.equal(aComun('basketball', { game: g, prediction: null })?.probs, null, 'sin modelo, sin probabilidad');
 });
+
+test('D1: la NFL en la ficha es la final publicada (la que lee Destacados), no la cruda', () => {
+  const nfl = aComun('nfl', { game: g, prediction: { model: { home: 0.6, away: 0.38, tie: 0.02 }, final: { home: 0.55, away: 0.45 } } });
+  assert.deepEqual(nfl!.probs, [0.55, 0.45]);
+});

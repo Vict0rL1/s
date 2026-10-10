@@ -18,7 +18,11 @@
 # despliegue significaría tocar los 160 ficheros del servidor y tener dos formas
 # distintas de arrancar la misma app, una de ellas probada solo en producción.
 #
-# `tsx` en la imagen final es una dependencia más y un poco de arranque. Barato.
+# `tsx` en la imagen final es una dependencia más y un poco de arranque. Barato. Por eso es
+# una dependencia normal del servidor, fijada a una versión exacta (lote A, A4): antes era de
+# desarrollo, `--omit=dev` la dejaba fuera y `npx tsx` la descargaba sin fijar en cada
+# arranque frío, como root. El arranque la ejecuta desde node_modules/.bin y suelta los
+# privilegios a `node` (ver scripts/docker-start.sh).
 
 # ---------------------------------------------------------------------------
 # Etapa 1: construir el frontend
@@ -37,6 +41,11 @@ RUN npm ci
 
 COPY . .
 RUN npm run build --workspace web
+
+# La SEMILLA, exportada aquí y no copiada tal cual (lote B, B5): `db:export-history` hace un
+# `VACUUM INTO` de data/history.db (con lo que haya en history.db-wal: por eso el WAL entra en
+# el contexto) y la comprueba con `integrity_check`. El fichero crudo perdía las páginas del WAL.
+RUN mkdir -p /seed && npm run db:export-history --workspace server -- /seed/history.db
 
 # ---------------------------------------------------------------------------
 # Etapa 2: la imagen que se ejecuta
@@ -65,9 +74,10 @@ COPY --from=build /app/web/dist ./web/dist
 # La HISTORIA de semilla viaja en la imagen y el arranque la copia al disco SOLO si está
 # vacío (ver docker-start.sh). Así el primer despliegue funciona sin subir nada a mano, y
 # los siguientes no pisan los datos que ya haya. El libro mayor (ledger.db) no viaja nunca:
-# nace vacío en el disco persistente y es tuyo. Si aún tienes el tennis.db antiguo en local,
-# `npm run db:migrate` lo parte y deja el history.db que esta línea necesita.
-COPY data/history.db /seed/history.db
+# nace vacío en el disco persistente y es tuyo (.dockerignore lo deja fuera del contexto). Si aún
+# tienes el tennis.db antiguo en local, `npm run db:migrate` lo parte y deja el history.db que la
+# exportación de arriba necesita.
+COPY --from=build /seed/history.db /seed/history.db
 COPY scripts/docker-start.sh /app/docker-start.sh
 RUN chmod +x /app/docker-start.sh
 

@@ -7,7 +7,7 @@ const { buildApp } = await import('../app.ts');
 const { configAuth } = await import('../auth/mode.ts');
 const { LimiteDeIntentos } = await import('../auth/rateLimit.ts');
 const { CABECERAS, CSP } = await import('./headers.ts');
-const { leerErrores, contarErrores } = await import('./errors.ts');
+const { leerErrores, contarErrores, registrarError, LIMITE_ERROR_LOG } = await import('./errors.ts');
 const { origenesPermitidos } = await import('./cors.ts');
 
 async function appAbierta(entorno: Partial<NodeJS.ProcessEnv> = {}) {
@@ -77,4 +77,18 @@ test('un error no controlado deja fila en error_log con el mismo requestId que l
   await app.inject({ method: 'GET', url: '/api/no-existe' });
   assert.equal(contarErrores('1970-01-01'), antes + 1);
   await app.close();
+});
+
+test('B6: error_log no crece sin tope: por encima del límite se podan las más viejas', () => {
+  assert.ok(LIMITE_ERROR_LOG >= 1000 && LIMITE_ERROR_LOG <= 20_000, String(LIMITE_ERROR_LOG));
+  for (let i = 0; i < LIMITE_ERROR_LOG + 120; i++) registrarError({ status: 500, message: `fallo ${i}`, url: '/x' }, new Date(Date.UTC(2026, 0, 1, 0, 0, 0, i)));
+  assert.ok(contarErrores('1970-01-01') <= LIMITE_ERROR_LOG, `${contarErrores('1970-01-01')} filas con tope ${LIMITE_ERROR_LOG}`);
+  assert.equal(leerErrores(1)[0].message, `fallo ${LIMITE_ERROR_LOG + 119}`, 'se quedan las más recientes');
+});
+
+test('D9: la CSP deja cargar imágenes blob: (Mi selección → PNG) y solo en img-src', async () => {
+  const { CSP } = await import('./headers.ts');
+  const directivas = Object.fromEntries(CSP.split(';').map((d) => d.trim().split(/\s+/)).map(([k, ...v]) => [k, v]));
+  assert.ok(directivas['img-src'].includes('blob:'), `img-src: ${directivas['img-src'].join(' ')}`);
+  for (const [k, v] of Object.entries(directivas)) if (k !== 'img-src') assert.ok(!v.includes('blob:'), `${k} no lleva blob:`);
 });

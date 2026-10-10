@@ -68,7 +68,7 @@ arregla en vez de fallar a secas. Sirve igual para abrirla y para actualizarla �
 mismo comando las dos veces. Detalle en [«Un solo comando»](#un-solo-comando-npm-run-go).
 
 **`npm run odds`** es para una sola cosa: la app dice «cuotas de demostración» y quieres
-las de verdad. Pide las de los cinco deportes y dice, deporte a deporte, si han llegado y
+las de verdad. Pide las de los siete deportes y dice, deporte a deporte, si han llegado y
 —cuando no— por qué. Cuesta cinco peticiones del plan y lo avisa antes de gastarlas.
 Detalle en [«Quiero las cuotas reales»](#quiero-las-cuotas-reales-npm-run-odds).
 
@@ -273,7 +273,7 @@ Y lo que devuelve el modelo se **valida**: el nombre contra la lista y cada argu
 tipo. No es desconfianza decorativa — eso es texto de un servicio externo que va directo
 a elegir qué consulta se ejecuta.
 
-### «Hoy», en los cinco deportes a la vez
+### «Hoy», en los siete deportes a la vez
 
 La app se organiza **por deporte** y eso es correcto: los modelos son distintos, los
 mercados son distintos, y mezclarlos en una lista haría ilegibles los cinco. Pero hay una
@@ -284,7 +284,7 @@ pestaña.
 Ahora sale arriba del todo, encima del contenido y fuera de las pestañas:
 
 ```
-Hoy · 13 partidos en los cinco deportes · 13 por jugar
+Hoy · 13 partidos en los siete deportes · 13 por jugar
 
   17:00  🏈  Carolina Panthers @ Atlanta Falcons      Atlanta Falcons 64%
   17:00  🏈  New Orleans Saints @ Baltimore Ravens    Baltimore Ravens 70%
@@ -536,7 +536,7 @@ npm run doctor -- --fuentes # además, una petición ligera a cada fuente de dat
 | DATOS Y COPIAS | los dos ficheros, migraciones (`schema_version`) fallidas o al día, copia del libro mayor y su cadencia, copia fuera (S3), retención de snapshots, ingestas recientes y las que se quedaron a medias |
 | OPERACIÓN | trabajos programados (los que fallaron en su última pasada o se quedaron «en marcha»), canales de notificación configurados y envíos fallidos en 24 h, interruptores (encendidos, inactivos por falta de variable, anulaciones huérfanas), **frescura de los resultados por deporte** (aviso si en plena temporada llevan más de 21 días sin uno nuevo) y, con `--fuentes`, qué fuentes no contestan |
 | ANALÍTICA E INTERFAZ | deriva de los modelos, diagramas de fiabilidad, simulación de temporada, calendario pendiente, anulaciones y seguimiento |
-| PRODUCTO | laboratorio de estrategias, «¿qué habría pasado?», bandeja, informes, comparador de líneas, archivo y las ampliaciones de la Fase 8 (NHL en sombra, asistente por Telegram, tenis punto a punto, props de la NBA) |
+| PRODUCTO | laboratorio de estrategias, «¿qué habría pasado?», bandeja, informes, comparador de líneas, archivo y las ampliaciones de la Fase 8 (asistente por Telegram, tenis punto a punto, props de la NBA; la NHL y la UFC ya van con los demás deportes) |
 | SEGURIDAD | contraseña, cabeceras, CORS, errores de servidor, `.env` fuera de git, escáner de secretos y hook de pre-commit |
 | SERVIDOR Y PANTALLA | backend vivo, cuántos partidos ve la pantalla y cuántos con cuota real |
 
@@ -770,7 +770,7 @@ probar ese caso concreto, no leyendo el código.
 | `npm run odds:retention -- --dias N` | Enseña qué snapshots de cuotas de más de N días sobrarían (se conservan apertura, T-24h, T-6h, T-1h y cierre por casa). `--confirmar` los exporta a `data/archive/` y los quita. Nunca corre sola |
 | `npm run db:explain` | `EXPLAIN QUERY PLAN` de las consultas calientes: ninguna puede recorrer su tabla entera |
 | `npm run fetch-flags` | Baja al repo los SVG de las banderas (211, ~1,4 MB). **Solo hace falta una vez**: ya están commiteadas. Se vuelve a correr al añadir un país a `config/countries.json` |
-| `npm run update-all` | **Los cinco deportes de una tirada.** `-- --skip-odds` no gasta cuota; `-- --only fb,bb` limita a algunos. Un deporte que falle no para a los demás y el resumen dice cuál fue |
+| `npm run update-all` | **Los seis deportes de una tirada.** `-- --skip-odds` no gasta cuota; `-- --only fb,bb` limita a algunos. Un deporte que falle no para a los demás y el resumen dice cuál fue |
 | `npm run update-data` | Tenis: refresca histórico real + odds |
 | `npm run backtest` | Tenis: mide la exactitud del modelo |
 | `npm run update-data:bb` | **Baloncesto**: equipos, resultados, partidos próximos y cuotas |

@@ -24,7 +24,7 @@
     "update-all": "node scripts/update-all.mjs",
     "fetch-data": "node --experimental-sqlite --disable-warning=ExperimentalWarning scripts/fetch-data.mjs",
     "fetch-flags": "node scripts/fetch-flags.mjs",
-    "check-publishable": "node --experimental-sqlite --disable-warning=ExperimentalWarning scripts/check-publishable.mjs",
+    "check-publishable": "cross-env NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" tsx scripts/check-publishable.mjs",
     "backtest": "npm run backtest --workspace server --",
     "benchmark:report": "npm run benchmark:report --workspace server --",
     "model:report": "npm run model:report --workspace server --",
@@ -98,11 +98,14 @@
     "study": "npm run study --workspace server --",
     "help": "node scripts/help.mjs",
     "setup": "node scripts/setup.mjs",
+    "clave": "node scripts/clave.mjs",
     "e2e": "npm run e2e --workspace web --",
     "carga": "node scripts/carga.mjs",
     "carga:ci": "node scripts/carga.mjs --arrancar --presupuesto",
     "update-data:nhl": "npm run update-data:nhl --workspace server --",
-    "backtest:nhl": "npm run backtest:nhl --workspace server --"
+    "backtest:nhl": "npm run backtest:nhl --workspace server --",
+    "update-data:ufc": "npm run update-data:ufc --workspace server --",
+    "backtest:ufc": "npm run backtest:ufc --workspace server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

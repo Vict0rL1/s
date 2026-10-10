@@ -12,7 +12,7 @@ import { SPORT_IDS, type SportId } from '../sports.ts';
 import { fechaLarga, horaCorta, local, sumarDias, zonaApp } from './tiempo.ts';
 import { conSigno, dinero, pct, tabla } from './formato.ts';
 
-export const NOMBRE_DEPORTE: Record<SportId, string> = { football: 'Fútbol', basketball: 'Baloncesto', baseball: 'Béisbol', nfl: 'NFL', tennis: 'Tenis' };
+export const NOMBRE_DEPORTE: Record<SportId, string> = { football: 'Fútbol', basketball: 'Baloncesto', baseball: 'Béisbol', nfl: 'NFL', nhl: 'NHL', ufc: 'UFC', tennis: 'Tenis' };
 /** Cuántos partidos de hoy caben en la tabla; el resto se cuenta. */
 const MAX_PARTIDOS = 15;
 

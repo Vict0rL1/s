@@ -48,7 +48,6 @@
     "rendimiento.cacheProximos": { "on": true, "descripcion": "Las listas de próximos se guardan en memoria mientras no cambien sus datos (firma de la tabla y PRAGMA data_version) y como mucho dos minutos; el ciclo pre-partido las calienta. No cambia ninguna probabilidad." },
     "tenis.enVivo": { "on": false, "descripcion": "Fase 8 (ampliación): modo punto a punto en el motor en vivo del tenis; el marcador avanza con la regla del servidor (POST /api/live/avanzar) y el saque de hoy y el último juego salen del registro de puntos. Sin fuente de marcador en vivo: se teclea." },
     "asistente.telegram": { "on": false, "opcional": "TELEGRAM_BOT_TOKEN", "descripcion": "Fase 8 (ampliación): el asistente determinista por un bot de Telegram (mismo token que las notificaciones), solo para los chats de TELEGRAM_CHAT_ID y TELEGRAM_ASISTENTE_CHATS." },
-    "deportes.nhl": { "on": false, "descripcion": "Fase 8 (ampliación): la NHL en sombra (ingesta, Elo + Poisson, backtest). No se publica ni entra en pestañas, Destacados ni banco hasta tener la misma evidencia que los demás deportes." },
     "apuestas.propsNba": { "on": false, "descripcion": "Fase 8 (ampliación): reservado. Evaluado y descartado por ahora: no hay box scores de la NBA gratuitos, legítimos y alcanzables (docs/plans/phase-8.md)." },
     "interfaz.muestras": { "on": false, "descripcion": "Galería de componentes con datos de EJEMPLO (/_muestras) para las capturas de Playwright. Apagada por defecto: no es una pantalla de uso." }
   }

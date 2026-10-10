@@ -125,7 +125,7 @@ export function reproducir(id: string): Reproduccion {
   }
 
   if (isSportId(tipo)) {
-    const tabla = { tennis: ['prediction_log', 'match_key'], football: ['fb_prediction_log', 'match_key'], basketball: ['bb_prediction_log', 'game_key'], baseball: ['bsb_prediction_log', 'match_key'], nfl: ['naf_prediction_log', 'match_key'] }[tipo];
+    const tabla = { tennis: ['prediction_log', 'match_key'], football: ['fb_prediction_log', 'match_key'], basketball: ['bb_prediction_log', 'game_key'], baseball: ['bsb_prediction_log', 'match_key'], nfl: ['naf_prediction_log', 'match_key'], nhl: ['nhl_prediction_log', 'match_key'], ufc: ['ufc_prediction_log', 'match_key'] }[tipo];
     const r = db.prepare(`SELECT * FROM ${tabla[0]} WHERE ${tabla[1]} = ?`).get(valor) as Record<string, unknown> | undefined;
     if (!r) return { encontrado: false, campos: [], avisos: [`No hay predicción registrada de ${tipo}:${valor}.`] };
     versionActual(tipo, r.model_version, avisos);

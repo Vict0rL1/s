@@ -151,7 +151,7 @@ export default function TopPicks() {
   return (
     <div>
       <header className="mb-4 flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ color: '#f5b544', backgroundColor: 'rgba(245,181,68,0.12)' }}>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ color: 'var(--seleccion)', backgroundColor: 'rgba(245,181,68,0.12)' }}>
           <StarIcon size={22} />
         </span>
         <div>
@@ -213,7 +213,7 @@ export default function TopPicks() {
         <aside id="mi-seleccion" className="scroll-mt-24 lg:sticky lg:top-4 lg:self-start">
           <div className="rounded-xl border border-(--line) bg-(--tint) p-4">
             <h3 className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-(--ink-strong)">
-              <span style={{ color: '#f5b544' }}>
+              <span style={{ color: 'var(--seleccion)' }}>
                 <StarIcon size={17} filled />
               </span>
               {t('tp.miSeleccion')}
@@ -242,7 +242,7 @@ export default function TopPicks() {
         <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-(--line) bg-(--surface-card)/95 px-4 pb-3 pt-3 backdrop-blur lg:hidden">
           <a href="#mi-seleccion" className="flex items-center justify-between gap-3 text-[14px]">
             <span className="flex items-center gap-2 text-(--ink-strong)">
-              <span style={{ color: '#f5b544' }}>
+              <span style={{ color: 'var(--seleccion)' }}>
                 <StarIcon size={17} filled />
               </span>
               {t('tp.enMiSeleccion', { n: elegidos.length })}

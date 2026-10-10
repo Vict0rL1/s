@@ -10,7 +10,7 @@ import { SPORT_IDS } from '../sports.ts';
 import { leerWalkForward } from '../evaluation/walkforward.ts';
 import type { Informe } from '../evaluation/metrics.ts';
 
-const NOMBRE: Record<string, string> = { tennis: 'TENIS', football: 'FÚTBOL', basketball: 'NBA', baseball: 'MLB', nfl: 'NFL' };
+const NOMBRE: Record<string, string> = { tennis: 'TENIS', football: 'FÚTBOL', basketball: 'NBA', baseball: 'MLB', nfl: 'NFL', nhl: 'NHL', ufc: 'UFC' };
 const f4 = (x: number | null | undefined) => (x == null ? '   —  ' : x.toFixed(4));
 
 export function informeBenchmark(log: (s: string) => void = console.log): number {

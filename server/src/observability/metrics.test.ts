@@ -19,10 +19,16 @@ test('contadores y medidores en formato Prometheus, con etiquetas escapadas y or
   assert.ok(t.endsWith('\n'));
 });
 
-test('grupoDeRuta agrupa por familia y quita ids', () => {
-  assert.equal(grupoDeRuta('/api/football/fixtures/123?x=1'), '/api/football');
-  assert.equal(grupoDeRuta('/api/today'), '/api/today');
-  assert.equal(grupoDeRuta('/api/ingestion-runs'), '/api/ingestion-runs');
-  assert.equal(grupoDeRuta('/docs/static/x.js'), '/docs');
-  assert.equal(grupoDeRuta('/healthz'), '/healthz');
+test('grupoDeRuta agrupa por el PATRÓN de la ruta, nunca por la URL cruda (B6)', () => {
+  assert.equal(grupoDeRuta('/api/football/fixtures/:id', '/api/football/fixtures/123?x=1'), '/api/football');
+  assert.equal(grupoDeRuta('/api/today', '/api/today'), '/api/today');
+  assert.equal(grupoDeRuta('/api/ingestion-runs', '/api/ingestion-runs?limit=3'), '/api/ingestion-runs');
+  assert.equal(grupoDeRuta('/docs/static/*', '/docs/static/x.js'), '/docs');
+  assert.equal(grupoDeRuta('/healthz', '/healthz'), '/healthz');
+  // Lo que cae en la comodín de la web construida y lo que no tiene ruta: una etiqueta fija
+  // cada uno. Antes, /apuestas, /wp-admin y cada sondeo eran una etiqueta nueva en memoria.
+  assert.equal(grupoDeRuta('/*', '/apuestas'), 'estatico');
+  assert.equal(grupoDeRuta('/*', '/wp-admin/x.php'), 'estatico');
+  assert.equal(grupoDeRuta(undefined, '/no/existe/123'), 'sin-ruta');
+  assert.equal(grupoDeRuta(null, '/api/no-existe'), 'sin-ruta');
 });

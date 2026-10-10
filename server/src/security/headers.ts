@@ -2,7 +2,9 @@
 //
 // La CSP está escrita para ESTA app: la pantalla es un bundle de Vite servido desde el
 // mismo origen, con estilos en línea (los `style={{…}}` de React) y logos de equipo que
-// vienen de otros dominios (`img-src https:`). No carga scripts de fuera, así que
+// vienen de otros dominios (`img-src https:`), y `blob:` en imágenes porque «Mi selección →
+// PNG» dibuja el SVG de la tarjeta en un <img> con `URL.createObjectURL` (D9 de la revisión
+// del 8 de octubre: sin él, la descarga fallaba en producción). No carga scripts de fuera, así que
 // `script-src 'self'` basta y es lo que de verdad protege: un XSS que consiga inyectar HTML
 // no puede traer código de otro sitio ni ejecutar uno en línea.
 //
@@ -12,7 +14,7 @@
 import type { FastifyInstance } from 'fastify';
 
 export const CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; " +
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; " +
   "font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
 
 export const CABECERAS: Record<string, string> = {

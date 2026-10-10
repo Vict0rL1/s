@@ -1,3 +1,4 @@
+import { pct as pctFormato, num } from '../../lib/formato';
 // Tipos y utilidades de Destacados (partido de TopPicks.tsx en la Fase 5).
 import type { SportId } from '../../lib/theme';
 
@@ -70,11 +71,12 @@ export interface Respuesta {
 
 export type Orden = 'confianza' | 'probabilidad' | 'ventaja' | 'hora';
 
-export const AMBAR = '#d9a441';
+export const AMBAR = 'var(--status-warning)';
 export const RANGO: Record<string, number> = { ALTA: 0, MEDIA: 1, BAJA: 2 };
 
-export const pct = (x: number, d = 0) => `${(x * 100).toFixed(d).replace('.', ',')} %`;
-export const num = (x: number, d = 2) => x.toFixed(d).replace('.', ',');
+// Con Intl y en el idioma activo (lib/formato.ts). Aquí el porcentaje va sin decimales por defecto.
+export const pct = (x: number, d = 0) => pctFormato(x, d);
+export { num };
 export const clave = (p: Pick) => `${p.sport}|${p.matchKey}`;
 export const CLAVE_SEL = 'predictor.picks.seleccion';
 export const CLAVE_HORAS = 'predictor.picks.horas';

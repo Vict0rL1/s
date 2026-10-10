@@ -27,6 +27,10 @@ import { SIGMA_MIN_GAMES } from '../basketball/elo.ts';
 import { listTeams as bbTeams, listUpcoming as bbUpcoming } from '../basketball/repo.ts';
 
 import { buildPrediction as buildNflPrediction } from '../nfl/predict.ts';
+import { listUpcoming as listarProximosNhl } from '../nhl/repo.ts';
+import { buildPrediction as prediccionNhl } from '../nhl/predict.ts';
+import { listUpcoming as listarProximasUfc } from '../ufc/repo.ts';
+import { buildPrediction as prediccionUfc } from '../ufc/predict.ts';
 import { listTeams as nafTeams, listUpcoming as nafUpcoming } from '../nfl/repo.ts';
 import { coverProbability, buildDistribution, MAX_MARGIN } from '../nfl/model.ts';
 
@@ -648,6 +652,75 @@ function auditNfl(): void {
   auditUpcoming('fútbol americano', nafUpcoming('nfl', 64));
 }
 
+function auditNhl(): void {
+  section('NHL');
+  const filas = listarProximosNhl(64);
+  if (filas.length === 0) {
+    console.log('  sin próximos: saltado (npm run update-data:nhl)');
+    return;
+  }
+  let n = 0;
+  for (const r of filas.filter((x) => x.home_id && x.away_id).slice(0, 24)) {
+    const p = prediccionNhl({ homeId: r.home_id!, awayId: r.away_id!, oddsHome: r.odds_home, oddsAway: r.odds_away, totalLine: r.total_line });
+    const tag = `NHL ${r.away_name} @ ${r.home_name}`;
+    check(`${tag}: hay predicción`, !!p, r.id);
+    if (!p) continue;
+    n++;
+    check(`${tag}: ganador suma 1`, Math.abs(p.model.home + p.model.away - 1) < 1e-6);
+    check(`${tag}: 60 minutos suma 1`, Math.abs(p.regulation.home + p.regulation.draw + p.regulation.away - 1) < 1e-3);
+    check(`${tag}: el empate a 60 hace que ganar en 60 sea menos que ganar`, p.regulation.home < p.model.home && p.regulation.away < p.model.away);
+    check(`${tag}: total suma 1`, Math.abs(p.total.over + p.total.under + p.total.push - 1) < 1e-3);
+    check(`${tag}: la publicada es la del modelo (sin post-proceso)`, p.final.home === p.model.home);
+  }
+  console.log(`  ${n} predicciones comprobadas`);
+  auditUpcoming('NHL', filas);
+}
+
+function auditUfc(): void {
+  section('UFC');
+  // Las peleas que vienen (con clave) y, siempre, una muestra del archivo: la predicción no depende de
+  // que haya cuotas, así que se puede comprobar aunque no haya cartelera.
+  const filas = listarProximasUfc(80);
+  const db = getDb();
+  let muestra: { a: string; b: string; tag: string }[] = [];
+  try {
+    muestra = (
+      db
+        .prepare("SELECT luchador_a AS a, luchador_b AS b, nombre_a, nombre_b FROM ufc_fights WHERE ambigua = 0 AND luchador_a IS NOT NULL AND luchador_b IS NOT NULL ORDER BY fecha DESC LIMIT 12")
+        .all() as { a: string; b: string; nombre_a: string; nombre_b: string }[]
+    ).map((r) => ({ a: r.a < r.b ? r.a : r.b, b: r.a < r.b ? r.b : r.a, tag: `UFC ${r.nombre_a} vs ${r.nombre_b}` }));
+  } catch {
+    // Sin archivo.
+  }
+  const conIds = filas.filter((x) => x.home_id && x.away_id).map((r) => ({ a: r.home_id!, b: r.away_id!, tag: `UFC ${r.home_name} vs ${r.away_name}`, odds: [r.odds_home, r.odds_away] as const }));
+  if (conIds.length === 0 && muestra.length === 0) {
+    console.log('  sin archivo ni próximas: saltado (npm run update-data:ufc)');
+    return;
+  }
+  let n = 0;
+  for (const x of [...conIds.slice(0, 24), ...muestra]) {
+    // La fila de próximas ya viene en orden canónico (A = id menor): el registro depende de ello.
+    check(`${x.tag}: A es el de id menor`, x.a < x.b, `${x.a} / ${x.b}`);
+    const p = prediccionUfc({ homeId: x.a, awayId: x.b });
+    check(`${x.tag}: hay predicción`, !!p, `${x.a} / ${x.b}`);
+    if (!p) continue;
+    n++;
+    check(`${x.tag}: ganador suma 1`, Math.abs(p.model.home + p.model.away - 1) < 1e-6);
+    check(`${x.tag}: la publicada es la del modelo (sin post-proceso)`, p.final.home === p.model.home);
+    const logit = Math.log(p.model.home / p.model.away);
+    const suma = p.factors.reduce((s, f) => s + f.logit, 0);
+    check(`${x.tag}: los aportes de los rasgos suman el logit`, Math.abs(suma - logit) < 2e-3, `${suma.toFixed(4)} vs ${logit.toFixed(4)}`);
+    const girada = prediccionUfc({ homeId: x.b, awayId: x.a });
+    check(`${x.tag}: simétrica (dar la vuelta a los dos da la vuelta a la probabilidad)`, !!girada && Math.abs(girada.model.home - p.model.away) < 1e-4);
+    for (const f of [p.fighters.home, p.fighters.away]) {
+      const r = f.record;
+      check(`${x.tag}: el récord de ${f.name} cuadra con las peleas detrás de su Elo`, r.wins + r.losses + r.draws + r.noContests === f.fightsInDb, `${r.wins}-${r.losses}-${r.draws} (${r.noContests} NC) vs ${f.fightsInDb}`);
+    }
+  }
+  console.log(`  ${n} predicciones comprobadas (${conIds.length} de próximas, ${muestra.length} del archivo)`);
+  auditUpcoming('UFC', filas);
+}
+
 // ---------------------------------------------------------------------------
 // Upcoming rows: shared shape checks
 // ---------------------------------------------------------------------------
@@ -746,6 +819,8 @@ function auditWindow(): void {
     ['baloncesto', 'bb_upcoming', 'bb_odds_refreshed_at'],
     ['béisbol', 'bsb_upcoming', 'bsb_odds_refreshed_at'],
     ['fútbol americano', 'naf_upcoming', 'naf_odds_refreshed_at'],
+    ['NHL', 'nhl_upcoming', 'nhl_odds_refreshed_at'],
+    ['UFC', 'ufc_upcoming', 'ufc_odds_refreshed_at'],
     ['tenis', 'upcoming_matches', 'odds_refreshed_at'],
   ];
   let n = 0;
@@ -961,6 +1036,8 @@ function main(): void {
   auditBaseball();
   auditBasketball();
   auditNfl();
+  auditNhl();
+  auditUfc();
   auditTennis();
 
   console.log('\n' + '='.repeat(46));

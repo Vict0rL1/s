@@ -1,9 +1,13 @@
 # Lo que NO entra en la imagen.
 #
-# OJO con `data/`: NO está aquí, y es deliberado. El Dockerfile copia data/tennis.db
-# como semilla para que el primer despliegue funcione sin subir nada a mano. Si
-# alguien añade `data/` a esta lista, el build fallará en el COPY — que es el fallo
-# correcto: ruidoso y en el sitio, en vez de una app desplegada y vacía.
+# OJO con `data/`: NO está aquí, y es deliberado. La etapa de construcción exporta
+# data/history.db (con su history.db-wal, por eso el WAL de la historia SÍ entra) como
+# semilla para que el primer despliegue funcione sin subir nada a mano. Si alguien añade
+# `data/` a esta lista, el build fallará en la exportación — que es el fallo correcto:
+# ruidoso y en el sitio, en vez de una app desplegada y vacía.
+#
+# Lo que sí se queda fuera: el libro mayor (ledger.db y sus laterales: tus apuestas no
+# tienen nada que hacer en un contexto de construcción), las copias y lo apartado.
 
 node_modules
 **/node_modules
@@ -13,8 +17,15 @@ web/dist
 data/raw
 data/seed
 data/*.db-journal
-data/*.db-wal
+data/ledger.db*
+data/tennis.db*
+data/*.backup-*
+data/*.sin-filas-*
+data/*.antes-de-restaurar-*
+data/*.pre-split-*
+data/*.export.db
 data/backups
+data/archive
 *.log
 .DS_Store
 experiments

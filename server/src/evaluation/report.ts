@@ -63,7 +63,7 @@ const f = (x: number | null, d = 4) => (x == null ? '—' : x.toFixed(d));
  */
 export function informeComun(sport: SportId, xs: Prediccion[], log: (s: string) => void = console.log, guardar = true, fuenteMercado: string | null = null): Informe {
   const r = evaluate('backtest', sport, xs);
-  log('\n── Capa común de métricas (backtest, misma definición en los cinco deportes) ──');
+  log('\n── Capa común de métricas (backtest, misma definición en los siete deportes) ──');
   log(`  partidos: ${r.n}`);
   log(`  log loss: ${f(r.logLoss)}   (no saber nada: ${f(r.logLossUniforme)})`);
   log(`  Brier:    ${f(r.brier)}   (no saber nada: ${f(r.brierUniforme)})`);

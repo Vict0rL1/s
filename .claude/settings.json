@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(npm run odds *)",
+      "Bash(npm run restore *)",
+      "Bash(npm run fetch-data *--force*)",
+      "Bash(fly deploy *)",
+      "Bash(flyctl deploy *)",
+      "Bash(git push *--force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * -f*)",
+      "Bash(*--unlock*)"
+    ]
+  }
+}

@@ -2,27 +2,20 @@
 // la política crea una versión nueva (nunca reescribe), los interruptores se anulan con
 // registro, las cadencias cambian el temporizador, y el tema y el idioma son de la persona.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import NotificacionesPanel from '../components/auth/NotificacionesPanel';
 import { aplicarTema, type Tema } from '../lib/tema';
 import { DEPORTES } from '../rutas';
-import { localeDe, useI18n, type Clave, type Idioma, type Traducir } from '../i18n';
+import { ETIQUETA_POLITICA } from '../lib/politica';
+import { conNodos, localeDe, useI18n, type Clave, type Idioma, type Traducir } from '../i18n';
+import { useDialogo } from '../components/ui/useDialogo';
+import { borradorTrasAplicar, CADENCIA_MAX, CADENCIA_MIN, errorDeRespuesta, leerImporte, validarCadencia } from '../lib/ajustes';
 
 interface Version { id: number; created_at: string; parent_id: number | null; hash: string; nota: string | null; origen: string; config: Record<string, Record<string, number>> }
-interface Feature { on: boolean; activa: boolean; descripcion: string; falta: string | null; anulada: boolean }
+interface Feature { on: boolean; activa: boolean; descripcion: string; falta: string | null; anulada: boolean; soloArranque?: boolean }
 interface Trabajo { nombre: string; descripcion: string; cadenciaMin: number; cadenciaPorDefecto: number; enabled: boolean }
 interface Ajustes { deportesOcultos: string[]; tema: Tema; idioma: Idioma; bancoPersonal: number | null; recorridoVisto: boolean }
 
-const ETIQUETA_POLITICA: Record<string, Clave> = {
-  'staking.kellyFraction': 'aj.pol.kellyFraction',
-  'staking.maxPerEvent': 'aj.pol.maxPerEvent',
-  'staking.dailyLossLimit': 'aj.pol.dailyLossLimit',
-  'staking.weeklyLossLimit': 'aj.pol.weeklyLossLimit',
-  'staking.minEdge': 'aj.pol.minEdge',
-  'staking.maxTotalExposure': 'aj.pol.maxTotalExposure',
-  'staking.maxExposurePerDay': 'aj.pol.maxExposurePerDay',
-  'abstencion.calidadDatosMin': 'aj.pol.calidadDatosMin',
-};
 const etiquetaPolitica = (t: Traducir, clave: string) => (ETIQUETA_POLITICA[clave] ? t(ETIQUETA_POLITICA[clave]) : clave);
 
 function Seccion({ titulo, nota, children }: { titulo: string; nota?: string; children: React.ReactNode }) {
@@ -38,8 +31,10 @@ function Seccion({ titulo, nota, children }: { titulo: string; nota?: string; ch
 /** El diálogo «antes → después»: nada numérico cambia sin pasar por aquí. */
 function Confirmar({ cambios, onOk, onNo, ocupado }: { cambios: { etiqueta: string; antes: string; despues: string }[]; onOk: () => void; onNo: () => void; ocupado: boolean }) {
   const { t } = useI18n();
+  const dialogo = useRef<HTMLDivElement>(null);
+  useDialogo(true, onNo, dialogo);
   return (
-    <div role="dialog" aria-modal="true" aria-label={t('aj.confirmarCambios')} className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
+    <div ref={dialogo} role="dialog" aria-modal="true" aria-label={t('aj.confirmarCambios')} className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl border border-(--line) bg-(--surface-card) p-4 text-[13px] text-(--ink-soft)">
         <p className="mb-2 text-[15px] font-semibold text-(--ink-strong)">{t('aj.aplicarPregunta')}</p>
         <ul className="mb-3 space-y-1">
@@ -124,21 +119,32 @@ function Politica() {
 function Interruptores() {
   const { t } = useI18n();
   const [f, setF] = useState<Record<string, Feature> | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const cargar = () => fetch('/api/features').then((r) => r.json()).then((j: { features: Record<string, Feature> }) => setF(j.features)).catch(() => setF({}));
   useEffect(() => {
     void cargar();
   }, []);
   if (!f) return <p>{t('comun.cargando')}</p>;
   const cambiar = async (nombre: string, on: boolean | null) => {
-    await fetch(`/api/features/${encodeURIComponent(nombre)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on }) });
+    // D11: un PATCH rechazado ya no se traga en silencio.
+    const r = await fetch(`/api/features/${encodeURIComponent(nombre)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on }) }).catch(() => null);
+    const e = r ? await errorDeRespuesta(r) : t('aj.sinRed');
+    setError(e ? t('aj.noAplico', { error: e }) : null);
     void cargar();
   };
+  // La puerta y las cabeceras de seguridad (auth.*, seguridad.*) solo cambian al arrancar: la API
+  // las rechaza y aquí no hay interruptor que pulsar, solo se dice dónde están.
+  const deArranque = Object.keys(f).filter((k) => f[k].soloArranque);
   return (
     <ul className="space-y-1.5">
-      {Object.entries(f).map(([k, x]) => (
+      {error && <li role="alert" className="rounded-lg border border-[#e66767]/40 px-3 py-2 text-[13px] text-(--status-critical)">{error}</li>}
+      {deArranque.length > 0 && <li className="text-[12px] text-(--ink-muted)">{conNodos(t('aj.deArranque', { lista: '{lista}' }), { lista: <code className="font-mono">{deArranque.join(', ')}</code> })}</li>}
+      {Object.entries(f).filter(([, x]) => !x.soloArranque).map(([k, x]) => (
         <li key={k} className="flex flex-wrap items-start justify-between gap-2 rounded-lg bg-(--raised) px-3 py-2">
           <div className="min-w-0 flex-1">
-            <p className="text-(--ink-body)">{k}{x.anulada && <span className="ml-1.5 text-[11px] text-(--ink-muted)">{t('aj.anulado')}</span>}{x.falta && <span className="ml-1.5 text-[11px]" style={{ color: '#c98500' }}>{t('notif.falta', { vars: x.falta })}</span>}</p>
+            {/* El nombre del interruptor es un identificador de configuración (config/features.json,
+                npm run features), no texto que traducir: va como código (E8). */}
+            <p className="text-(--ink-body)"><code className="font-mono text-[12px]">{k}</code>{x.anulada && <span className="ml-1.5 text-[11px] text-(--ink-muted)">{t('aj.anulado')}</span>}{x.falta && <span className="ml-1.5 text-[11px]" style={{ color: 'var(--status-warning)' }}>{t('notif.falta', { vars: x.falta })}</span>}</p>
             <p className="text-[12px] text-(--ink-muted)">{x.descripcion}</p>
           </div>
           <div className="flex items-center gap-1.5">
@@ -158,6 +164,7 @@ function Cadencias() {
   const [trabajos, setTrabajos] = useState<Trabajo[] | null>(null);
   const [borrador, setBorrador] = useState<Record<string, string>>({});
   const [pendiente, setPendiente] = useState<{ nombre: string; antes: number; despues: number | null } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const cargar = () => fetch('/api/scheduler').then((r) => r.json()).then((j: { trabajos: Trabajo[] }) => setTrabajos(j.trabajos)).catch(() => setTrabajos([]));
   useEffect(() => {
     void cargar();
@@ -165,13 +172,32 @@ function Cadencias() {
   if (!trabajos) return <p>{t('comun.cargando')}</p>;
   const aplicar = async () => {
     if (!pendiente) return;
-    await fetch(`/api/scheduler/${encodeURIComponent(pendiente.nombre)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cadenciaMin: pendiente.despues }) });
+    const r = await fetch(`/api/scheduler/${encodeURIComponent(pendiente.nombre)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cadenciaMin: pendiente.despues }) }).catch(() => null);
+    const e = r ? await errorDeRespuesta(r) : t('aj.sinRed');
     setPendiente(null);
-    setBorrador((b) => ({ ...b, [pendiente.nombre]: '' }));
+    setError(e ? t('aj.noAplico', { error: e }) : null);
+    // D11: el borrador se olvida (antes quedaba '' y el campo se veía vacío).
+    if (!e) setBorrador((b) => borradorTrasAplicar(b, pendiente.nombre));
     void cargar();
+  };
+  const conmutar = async (x: Trabajo) => {
+    const r = await fetch(`/api/scheduler/${encodeURIComponent(x.nombre)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: !x.enabled }) }).catch(() => null);
+    const e = r ? await errorDeRespuesta(r) : t('aj.sinRed');
+    setError(e ? t('aj.noAplico', { error: e }) : null);
+    void cargar();
+  };
+  const pedirCambio = (x: Trabajo) => {
+    const v = validarCadencia(borrador[x.nombre] ?? String(x.cadenciaMin));
+    if (!v.ok) {
+      setError(t('aj.cadenciaFuera', { min: CADENCIA_MIN, max: CADENCIA_MAX }));
+      return;
+    }
+    setError(null);
+    if (v.minutos !== x.cadenciaMin) setPendiente({ nombre: x.nombre, antes: x.cadenciaMin, despues: v.minutos });
   };
   return (
     <>
+      {error && <p role="alert" className="mb-2 rounded-lg border border-[#e66767]/40 px-3 py-2 text-[13px] text-(--status-critical)">{error}</p>}
       <ul className="space-y-1.5">
         {trabajos.map((x) => (
           <li key={x.nombre} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-(--raised) px-3 py-2">
@@ -185,9 +211,9 @@ function Cadencias() {
                 <input type="text" inputMode="numeric" aria-label={t('aj.cadenciaDe', { nombre: x.nombre })} value={borrador[x.nombre] ?? String(x.cadenciaMin)} onChange={(e) => setBorrador((b) => ({ ...b, [x.nombre]: e.target.value }))} className="w-16 rounded border border-(--line) bg-transparent px-2 py-1 text-right tabular-nums text-(--ink-strong)" />
                 min
               </label>
-              <button onClick={() => { const n = Number(borrador[x.nombre]); if (Number.isFinite(n) && n >= 1 && n !== x.cadenciaMin) setPendiente({ nombre: x.nombre, antes: x.cadenciaMin, despues: n }); }} className="rounded px-2 py-1 text-[12px] text-(--ink-body) ring-1 ring-(--line) hover:bg-(--raised-2)">{t('ajustes.cambiar')}</button>
+              <button onClick={() => pedirCambio(x)} className="rounded px-2 py-1 text-[12px] text-(--ink-body) ring-1 ring-(--line) hover:bg-(--raised-2)">{t('ajustes.cambiar')}</button>
               {x.cadenciaMin !== x.cadenciaPorDefecto && <button onClick={() => setPendiente({ nombre: x.nombre, antes: x.cadenciaMin, despues: null })} className="text-[11px] text-(--ink-muted) underline-offset-2 hover:underline">{t('aj.codigo', { n: x.cadenciaPorDefecto })}</button>}
-              <button onClick={async () => { await fetch(`/api/scheduler/${encodeURIComponent(x.nombre)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: !x.enabled }) }); void cargar(); }} className="rounded px-2 py-1 text-[12px] text-(--ink-body) ring-1 ring-(--line) hover:bg-(--raised-2)">{x.enabled ? t('aj.apagar') : t('aj.encender')}</button>
+              <button onClick={() => void conmutar(x)} className="rounded px-2 py-1 text-[12px] text-(--ink-body) ring-1 ring-(--line) hover:bg-(--raised-2)">{x.enabled ? t('aj.apagar') : t('aj.encender')}</button>
             </div>
           </li>
         ))}
@@ -200,7 +226,8 @@ function Cadencias() {
 export default function Ajustes() {
   const { t, idioma, setIdioma } = useI18n();
   const [a, setA] = useState<Ajustes | null>(null);
-  const [banco, setBanco] = useState('');
+  // null = sin tocar (el campo enseña lo guardado); '' = vaciado a propósito (sin banco).
+  const [banco, setBanco] = useState<string | null>(null);
   const [confirmarBanco, setConfirmarBanco] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -219,7 +246,7 @@ export default function Ajustes() {
     <div>
       <h2 className="mb-1 text-[20px] font-semibold text-(--ink-strong)">{t('ajustes.titulo')}</h2>
       <p className="mb-4 text-[13px] text-(--ink-muted)">{t('ajustes.intro')}</p>
-      {error && <p className="mb-3 rounded-lg border border-[#e66767]/40 px-3 py-2 text-[13px] text-[#e66767]">{error}</p>}
+      {error && <p role="alert" className="mb-3 rounded-lg border border-[#e66767]/40 px-3 py-2 text-[13px] text-(--status-critical)">{error}</p>}
 
       <Seccion titulo={t('ajustes.apariencia')} nota={t('ajustes.aparienciaNota')}>
         <div className="flex flex-wrap gap-2">
@@ -253,11 +280,11 @@ export default function Ajustes() {
 
       <Seccion titulo={t('ajustes.banco')} nota={t('ajustes.bancoNota')}>
         <div className="flex flex-wrap items-center gap-2">
-          <input type="text" inputMode="decimal" aria-label={t('ajustes.banco')} value={banco || (a?.bancoPersonal != null ? fmt(a.bancoPersonal, idioma) : '')} onChange={(e) => setBanco(e.target.value)} placeholder={t('aj.ejemplo')} className="w-32 rounded border border-(--line) bg-transparent px-2 py-1 text-right tabular-nums text-(--ink-strong)" />
-          <button onClick={() => setConfirmarBanco(true)} disabled={!banco || !Number.isFinite(Number(banco.replace(',', '.')))} className="rounded-lg bg-(--raised-2) px-3 py-1.5 font-medium text-(--ink-strong) disabled:opacity-40">{t('ajustes.cambiar')}</button>
+          <input type="text" inputMode="decimal" aria-label={t('ajustes.banco')} value={banco ?? (a?.bancoPersonal != null ? fmt(a.bancoPersonal, idioma) : '')} onChange={(e) => setBanco(e.target.value)} placeholder={t('aj.ejemplo')} className="w-32 rounded border border-(--line) bg-transparent px-2 py-1 text-right tabular-nums text-(--ink-strong)" />
+          <button onClick={() => setConfirmarBanco(true)} disabled={banco == null || (banco.trim() !== '' && leerImporte(banco) == null)} className="rounded-lg bg-(--raised-2) px-3 py-1.5 font-medium text-(--ink-strong) disabled:opacity-40">{t('ajustes.cambiar')}</button>
         </div>
         {confirmarBanco && a && (
-          <Confirmar ocupado={false} onNo={() => setConfirmarBanco(false)} onOk={() => { void guardar({ bancoPersonal: Number(banco.replace(',', '.')) }); setConfirmarBanco(false); setBanco(''); }} cambios={[{ etiqueta: t('ajustes.banco'), antes: a.bancoPersonal == null ? '—' : fmt(a.bancoPersonal, idioma), despues: banco }]} />
+          <Confirmar ocupado={false} onNo={() => setConfirmarBanco(false)} onOk={() => { void guardar({ bancoPersonal: leerImporte(banco ?? '') }); setConfirmarBanco(false); setBanco(null); }} cambios={[{ etiqueta: t('ajustes.banco'), antes: a.bancoPersonal == null ? '—' : fmt(a.bancoPersonal, idioma), despues: leerImporte(banco ?? '') == null ? '—' : fmt(leerImporte(banco ?? ''), idioma) }]} />
         )}
       </Seccion>
 

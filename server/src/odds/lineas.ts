@@ -19,7 +19,7 @@
 // cotizada de cada selección y se dice cuál es.
 
 import { getDb } from '../db.ts';
-import { quotesAt, selectionsOf, type BookQuote } from './snapshots.ts';
+import { quotesAt, selectionsOf, type BookQuote, deLaLineaMasCotizada } from './snapshots.ts';
 import { eventosRecientes, VENTANA_HORAS } from './intel.ts';
 
 export interface LineaSeleccion {
@@ -73,14 +73,9 @@ function mediana(xs: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-/** Las cotizaciones de la línea más cotizada (todas, si no hay línea). */
-export function deLaLineaMasCotizada(qs: BookQuote[]): { linea: number | null; cuotas: BookQuote[] } {
-  if (qs.every((q) => q.line == null)) return { linea: null, cuotas: qs };
-  const cuenta = new Map<number, number>();
-  for (const q of qs) if (q.line != null) cuenta.set(q.line, (cuenta.get(q.line) ?? 0) + 1);
-  const [linea] = [...cuenta].sort((a, b) => b[1] - a[1] || Math.abs(a[0]) - Math.abs(b[0]))[0];
-  return { linea, cuotas: qs.filter((q) => q.line === linea) };
-}
+// `deLaLineaMasCotizada` vive en snapshots.ts desde el lote C (C2): la usan también el consenso
+// por instante (`marketAt`) y la inteligencia de mercado. Aquí se reexporta.
+export { deLaLineaMasCotizada };
 
 export function lineaDe(seleccion: string, qs: BookQuote[]): LineaSeleccion | null {
   const { linea, cuotas } = deLaLineaMasCotizada(qs.filter((q) => q.odds > 1));
@@ -109,7 +104,7 @@ export function margen(cuotas: number[]): number | null {
   return cuotas.reduce((a, c) => a + 1 / c, 0) - 1;
 }
 
-const PROXIMOS: Record<string, string> = { tennis: 'upcoming_matches', football: 'fb_upcoming', basketball: 'bb_upcoming', baseball: 'bsb_upcoming', nfl: 'naf_upcoming' };
+const PROXIMOS: Record<string, string> = { tennis: 'upcoming_matches', football: 'fb_upcoming', basketball: 'bb_upcoming', baseball: 'bsb_upcoming', nfl: 'naf_upcoming', nhl: 'nhl_upcoming', ufc: 'ufc_upcoming' };
 
 /** El id de la fila de próximos para un evento del proveedor (la NFL lo guarda con «odds-»). */
 export function idProximo(sport: string, eventId: string): string | null {

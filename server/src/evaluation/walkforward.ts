@@ -47,6 +47,7 @@ import { DEFAULT_CONFIG } from '../staking/policy.ts';
 import { versionsFor } from '../versions.ts';
 import { isFinalHoldout, type EvaluationSport } from '../experiments/holdout.ts';
 import type { SportId } from '../sports.ts';
+import { roiDe } from './roi.ts';
 
 /** Un partido del histórico, en orden. `modelo` es null en los de calentamiento. */
 export interface Juego {
@@ -86,6 +87,8 @@ export const ELO_BASICO: Record<SportId, { k: number; campo: number }> = {
   basketball: { k: 20, campo: 100 },
   baseball: { k: 4, campo: 24 },
   nfl: { k: 20, campo: 65 },
+  nhl: { k: 20, campo: 35 },
+  ufc: { k: 32, campo: 0 },
 };
 
 /** El periodo de un partido. Distinto por deporte, porque sus calendarios lo son. */
@@ -105,6 +108,12 @@ export function periodoDe(sport: SportId, j: Pick<Juego, 'fecha' | 'temporada'>)
       return mes <= 6 ? `${anio} mar–jun` : `${anio} jul–oct`;
     case 'nfl':
       return `${j.temporada ?? (mes >= 8 ? anio : anio - 1)}`;
+    case 'nhl':
+      // Medias temporadas: octubre–diciembre y enero–junio (con los playoffs).
+      return mes >= 8 ? `${anio}/${String((anio + 1) % 100).padStart(2, '0')} oct–dic` : `${anio - 1}/${String(anio % 100).padStart(2, '0')} ene–jun`;
+    case 'ufc':
+      // Medio año: la UFC pelea todo el año, sin temporadas.
+      return mes <= 6 ? `${anio} ene–jun` : `${anio} jul–dic`;
   }
 }
 
@@ -211,7 +220,7 @@ export const MIN_SEGMENTO = 300;
  * periodo. Los de calentamiento (`modelo` null) alimentan los baselines y no se puntúan.
  */
 export function walkForward(sport: SportId, juegos: Juego[]): ResultadoWalkForward {
-  const conHoldout = sport === 'football' || sport === 'nfl';
+  const conHoldout = sport === 'football' || sport === 'nfl' || sport === 'nhl' || sport === 'ufc';
   const elo = new Map<string, number>();
   const cfg = ELO_BASICO[sport];
   let partidosCampo = 0;
@@ -326,10 +335,11 @@ export function walkForward(sport: SportId, juegos: Juego[]): ResultadoWalkForwa
       };
       const r1 = conCuotas.map((j) => apuesta(j.modelo as number[], j)).filter((x): x is number => x != null);
       const r2 = conCuotas.map((j) => apuesta(recal(j.modelo as number[]), j)).filter((x): x is number => x != null);
+      // Una unidad por apuesta: lo arriesgado es el número de apuestas.
       roi = {
         apuestas: r1.length,
-        roi: r1.length ? r1.reduce((u, v) => u + v, 0) / r1.length : null,
-        roiRecalibrado: r2.length ? r2.reduce((u, v) => u + v, 0) / r2.length : null,
+        roi: roiDe(r1.reduce((u, v) => u + v, 0), r1.length),
+        roiRecalibrado: roiDe(r2.reduce((u, v) => u + v, 0), r2.length),
       };
     }
 
@@ -434,7 +444,7 @@ export function walkForward(sport: SportId, juegos: Juego[]): ResultadoWalkForwa
     data_version: v.data_version,
     holdoutExcluido,
     ventanas: `ventana creciente: cada periodo se evalúa con todo lo anterior; periodos de ${
-      { tennis: 'un trimestre', football: 'media temporada', basketball: 'media temporada', baseball: 'media temporada', nfl: 'una temporada' }[sport]
+      { tennis: 'un trimestre', football: 'media temporada', basketball: 'media temporada', baseball: 'media temporada', nfl: 'una temporada', nhl: 'media temporada', ufc: 'medio año' }[sport]
     }`,
     periodos: out,
     resumen,

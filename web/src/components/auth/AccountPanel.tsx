@@ -5,7 +5,7 @@ import { revocar, salir, sesiones, type SesionVista } from '../../lib/auth';
 import { CrossIcon, LogoutIcon, UserIcon } from '../icons';
 import NotificacionesPanel from './NotificacionesPanel';
 import { useI18n, type Traducir } from '../../i18n';
-import { STATUS } from '../../lib/theme';
+import { STATUS, tenido } from '../../lib/theme';
 
 const cuando = (iso: string, loc: string) => new Date(iso).toLocaleString(loc, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -56,7 +56,7 @@ export default function AccountPanel({ usuario, onSalir, compacto = false }: { u
       {abierto && (
         <div className="mx-1 mb-1 rounded-lg bg-(--tint) p-2 text-[12.5px] ring-1 ring-(--line)">
           <p className="mb-1.5 px-1 text-[11px] uppercase tracking-wide text-(--ink-muted)">{t('cuenta.sesiones')}</p>
-          {error && <p className="px-1" style={{ color: STATUS.critical }}>{t('cuenta.errorSesiones')}</p>}
+          {error && <p role="alert" className="px-1" style={{ color: STATUS.critical }}>{t('cuenta.errorSesiones')}</p>}
           {lista && (
             <ul className="divide-y divide-(--line)">
               {lista.map((s) => (
@@ -65,7 +65,7 @@ export default function AccountPanel({ usuario, onSalir, compacto = false }: { u
                     <div className="break-words text-(--ink-body)">
                       {dispositivo(t, s.user_agent)}
                       {s.actual && (
-                        <span className="ml-1.5 rounded px-1.5 py-px text-[10.5px]" style={{ color: STATUS.good, background: `${STATUS.good}26` }}>
+                        <span className="ml-1.5 rounded px-1.5 py-px text-[10.5px]" style={{ color: STATUS.good, background: tenido(STATUS.good, 15) }}>
                           {t('cuenta.esta')}
                         </span>
                       )}

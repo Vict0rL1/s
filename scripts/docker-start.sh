@@ -35,4 +35,19 @@ else
   echo "   $(du -m "$HISTORY" | cut -f1) MB instalados"
 fi
 
-exec npx tsx server/src/index.ts
+# ---------------------------------------------------------------------------
+# SOLTAR LOS PRIVILEGIOS (lote A, A4)
+# ---------------------------------------------------------------------------
+# El volumen de Fly se monta propiedad de root, así que la imagen no puede fijar `USER node`
+# sin dejar /data ilegible. Root hace solo lo de arriba (copiar la semilla) y cederle el
+# disco a node; el servidor corre como node. Y el tsx es el instalado con las dependencias
+# (fijado en server/package.json), no uno que npx descargue en cada arranque frío.
+if [ "$(id -u)" = "0" ] && chown -R node:node "$DATA"; then
+  if command -v setpriv >/dev/null 2>&1; then
+    exec setpriv --reuid=node --regid=node --init-groups node_modules/.bin/tsx server/src/index.ts
+  elif command -v runuser >/dev/null 2>&1; then
+    exec runuser -u node -- node_modules/.bin/tsx server/src/index.ts
+  fi
+  echo "⚠ ni setpriv ni runuser en la imagen: el servidor corre como root"
+fi
+exec node_modules/.bin/tsx server/src/index.ts

@@ -13,7 +13,7 @@ interface Linea { seleccion: string; linea: number | null; mejor: { cuota: numbe
 interface Mercado { eventId: string; sport: string; league: string; market: string; partido: string; cuando: string | null; eventoId: string | null; selecciones: Linea[]; margenMejor: number | null; margenConsenso: number | null; surebet: boolean; observado: string | null }
 interface Respuesta { generado: string; ventanaHoras: number; mercados: Mercado[]; eventos: number; nota: string }
 
-const DEPORTES = ['football', 'basketball', 'baseball', 'nfl', 'tennis'];
+const DEPORTES = ['football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'tennis'];
 const MERCADOS = ['h2h', 'spreads', 'totals'];
 
 export default function Lineas() {
@@ -51,7 +51,7 @@ export default function Lineas() {
         </select>
         <button className={pillClass(soloSurebets)} aria-pressed={soloSurebets} onClick={() => setSoloSurebets((x) => !x)}>{t('lineas.soloSurebets')}</button>
       </div>
-      {error && <p className="text-[14px] text-(--ink-soft)">{error}</p>}
+      {error && <p role="alert" className="text-[14px] text-(--ink-soft)">{error}</p>}
       {datos && mercados.length === 0 && <p className="text-[14px] text-(--ink-muted)">{t('lineas.vacio', { horas: datos.ventanaHoras })}</p>}
       <div className="grid gap-3 lg:grid-cols-2" data-testid="lista-lineas">
         {mercados.map((m) => (
@@ -68,7 +68,7 @@ export default function Lineas() {
               {m.margenConsenso != null ? ` · ${t('lineas.margenConsenso', { v: f.porcentaje(m.margenConsenso, 1) })}` : ''}
               {m.margenMejor != null ? ` · ${t('lineas.margenMejor', { v: f.porcentaje(m.margenMejor, 1) })}` : ''}
             </p>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" tabIndex={0}>
               <table className="w-full min-w-[20rem] text-[13px] tabular-nums">
                 <thead>
                   <tr className="text-left text-(--ink-muted)">

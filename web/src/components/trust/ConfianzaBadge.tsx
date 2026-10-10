@@ -1,12 +1,12 @@
 // La insignia de confianza (Fase 5.9): nivel (ALTA / MEDIA / BAJA) y, aparte, «Sin mercado» en
 // gris cuando no hay cuotas. No tener mercado no es tener confianza baja: son dos estados.
-import { PROFIT_COLOR, STATUS } from '../../lib/theme';
+import { STATUS, tenido } from '../../lib/theme';
 import { useI18n, type Clave } from '../../i18n';
 
 const NIVEL: Record<'ALTA' | 'MEDIA' | 'BAJA', { color: string; fondo: string; texto: Clave; corta: Clave }> = {
-  ALTA: { color: PROFIT_COLOR, fondo: 'rgba(25,158,112,0.14)', texto: 'insignia.alta', corta: 'insignia.altaCorta' },
-  MEDIA: { color: STATUS.warning, fondo: 'rgba(201,133,0,0.14)', texto: 'insignia.media', corta: 'insignia.mediaCorta' },
-  BAJA: { color: STATUS.critical, fondo: 'rgba(230,103,103,0.12)', texto: 'insignia.baja', corta: 'insignia.bajaCorta' },
+  ALTA: { color: STATUS.good, fondo: tenido(STATUS.good, 14), texto: 'insignia.alta', corta: 'insignia.altaCorta' },
+  MEDIA: { color: STATUS.warning, fondo: tenido(STATUS.warning, 14), texto: 'insignia.media', corta: 'insignia.mediaCorta' },
+  BAJA: { color: STATUS.critical, fondo: tenido(STATUS.critical, 12), texto: 'insignia.baja', corta: 'insignia.bajaCorta' },
 };
 
 export function ConfianzaBadge({ nivel, decision, motivo, compacta = false }: { nivel: 'ALTA' | 'MEDIA' | 'BAJA' | null; decision?: 'BET' | 'NO BET' | 'SIN MERCADO' | null; motivo?: string | null; compacta?: boolean }) {

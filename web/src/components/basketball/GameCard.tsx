@@ -22,6 +22,7 @@ import { realMarket } from '../../lib/picks';
 import { EnlacePartido } from '../ui';
 import EventTrustPanel from '../trust/EventTrustPanel';
 import { conNodos, useI18n } from '../../i18n';
+import { pct as pctF } from '../../lib/formato';
 
 /**
  * A readable label for a margin band.
@@ -378,8 +379,8 @@ function MissingModel({ item }: { item: BbGameWithPrediction }) {
       {marketOnly && (
         <p className="mt-2 text-amber-100">
           {conNodos(t('bkc.implicita', { equipoA: game.away_name, equipoB: game.home_name }), {
-            a: <strong>{(marketOnly.implied2 * 100).toFixed(1)}%</strong>,
-            b: <strong>{(marketOnly.implied1 * 100).toFixed(1)}%</strong>,
+            a: <strong>{pctF(marketOnly.implied2, 1)}</strong>,
+            b: <strong>{pctF(marketOnly.implied1, 1)}</strong>,
           })}
         </p>
       )}

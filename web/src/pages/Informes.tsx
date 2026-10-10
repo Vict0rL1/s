@@ -33,7 +33,7 @@ export default function Informes() {
     <div>
       <h2 className="mb-1 text-[20px] font-semibold text-(--ink-strong)">{t('nav.informes')}</h2>
       <p className="mb-4 max-w-3xl text-[14px] leading-relaxed text-(--ink-soft)">{t('informes.intro', { zona: datos?.zona ?? '—' })}</p>
-      {error && <p className="text-[14px] text-(--ink-soft)">{error}</p>}
+      {error && <p role="alert" className="text-[14px] text-(--ink-soft)">{error}</p>}
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
         <button className={pillClass(tipo === '')} onClick={() => setTipo('')}>{t('informes.todos')}</button>
         <button className={pillClass(tipo === 'diario')} onClick={() => setTipo('diario')}>{t('informes.diarios')}</button>

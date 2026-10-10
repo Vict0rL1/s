@@ -5,6 +5,7 @@
 // would be wrong on most installs.
 
 import type { Clave, Traducir } from '../i18n';
+import { num, pct } from './formato';
 
 export type BetStatus = 'pending' | 'won' | 'lost' | 'void' | 'half_won' | 'half_lost' | 'cashout';
 
@@ -176,6 +177,8 @@ export const SPORT_LABEL: Record<string, string> = {
   basketball: 'Baloncesto',
   baseball: 'Béisbol',
   nfl: 'NFL',
+  nhl: 'NHL',
+  ufc: 'UFC',
   tennis: 'Tenis',
   other: 'Otro',
 };
@@ -187,15 +190,18 @@ export const deporteDe = (t: Traducir, k: string) => (k in SPORT_LABEL ? t(`depo
 
 /** A signed amount, always with its sign — so colour is never the only cue. */
 export function signed(n: number, digits = 2): string {
-  const s = n.toFixed(digits).replace(/\.00$/, '');
+  const s = sinCeros(num(n, digits));
   return n > 0 ? `+${s}` : s;
 }
 
 export function money(n: number, digits = 2): string {
-  return n.toFixed(digits).replace(/\.00$/, '');
+  return sinCeros(num(n, digits));
 }
 
 export function pctSigned(n: number): string {
-  const s = (n * 100).toFixed(1);
-  return n > 0 ? `+${s}%` : `${s}%`;
+  const s = pct(n, 1);
+  return n > 0 ? `+${s}` : s;
 }
+
+/** «12,00» → «12»: un importe redondo se lee mejor sin decimales (en los dos idiomas). */
+const sinCeros = (s: string) => s.replace(/[.,]00$/, '');

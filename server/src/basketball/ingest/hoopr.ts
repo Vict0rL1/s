@@ -220,9 +220,28 @@ export interface HooprResult {
   unmatched: number;
 }
 
+/** Descargar (con caché de un día) y parsear, A MEMORIA. No toca la base. */
+export async function cargarHoopr(opts: { fromSeason?: number } = {}): Promise<HooprGame[]> {
+  return parseHoopr(await download(), opts.fromSeason ?? 2003);
+}
+
+/** Descargar y guardar, en una transacción propia. (actualizar.ts usa cargar + guardar.) */
 export async function ingestHoopr(opts: { fromSeason?: number } = {}): Promise<HooprResult> {
-  const fromSeason = opts.fromSeason ?? 2003;
-  const games = parseHoopr(await download(), fromSeason);
+  const games = await cargarHoopr(opts);
+  const db = getDb();
+  db.exec('BEGIN');
+  try {
+    const r = guardarHoopr(games);
+    db.exec('COMMIT');
+    return r;
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+}
+
+/** Guardar lo cargado en bb_teams y bb_games. SIN transacción propia: quien llama la abre. */
+export function guardarHoopr(games: HooprGame[]): HooprResult {
   if (games.length === 0) return { games: 0, teams: 0, seasons: [], through: null, unmatched: 0 };
 
   const db = getDb();
@@ -255,8 +274,7 @@ export async function ingestHoopr(opts: { fromSeason?: number } = {}): Promise<H
   let unmatched = 0;
   let through: string | null = null;
 
-  db.exec('BEGIN');
-  try {
+  {
     for (const g of games) {
       // Alias first, then the resolver, then a fresh slug as the last resort.
       const homeId = aliasOf(g.homeName) ?? resolve(index, g.homeName) ?? g.homeId;
@@ -287,10 +305,6 @@ export async function ingestHoopr(opts: { fromSeason?: number } = {}): Promise<H
       seasons.add(g.season);
       if (!through || g.date > through) through = g.date;
     }
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
   }
 
   return {

@@ -21,6 +21,8 @@ import GameCard from './GameCard';
 import EloRanking from '../EloRanking';
 import { formatDate, formatDateTime, dayChipLabel, groupByDay } from '../../lib/format';
 import { conNodos, localeDe, useI18n, type Traducir } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
+import { conservarDia, contadorDePeticiones } from '../../lib/carga';
 
 /**
  * The whole baseball tab. Holds its own state and talks only to /api/baseball/*,
@@ -35,6 +37,7 @@ export default function BaseballDashboard() {
   const [games, setGames] = useState<BsbGameWithPrediction[]>([]);
   const [power, setPower] = useState<BsbPowerTeam[]>([]);
   const [loading, setLoading] = useState(false);
+  const [peticiones] = useState(contadorDePeticiones);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   // Un equipo abre su página (Fase 5.12): una URL, no un modal.
@@ -77,14 +80,17 @@ export default function BaseballDashboard() {
       setPower([]);
       return;
     }
+    // D8: cambiar dos veces de liga no deja los partidos de la que contestó tarde.
+    const n = peticiones.nueva();
     setLoading(true);
     Promise.all([bsbApi.upcoming(league), bsbApi.power(league, 40)])
       .then(([g, p]) => {
+        if (!peticiones.esUltima(n)) return;
         setGames(g);
         setPower(p.teams);
       })
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+      .catch((e) => peticiones.esUltima(n) && setError(String(e)))
+      .finally(() => peticiones.esUltima(n) && setLoading(false));
   }, [league]);
 
   async function handleRefresh() {
@@ -124,9 +130,11 @@ export default function BaseballDashboard() {
   const demoOdds = games.length > 0 && games.every((r) => r.game.source === 'fixture');
   // A day that no longer exists after switching league would filter everything
   // away and look like "no games", so the choice is dropped rather than kept.
+  // D8: mientras carga no hay días (o son los de la liga anterior): el ?dia= del enlace se conserva.
   useEffect(() => {
-    if (day && !dayGroups.some((d) => d.key === day)) setDay(null);
-  }, [dayGroups, day]);
+    const sigue = conservarDia(day, dayGroups.map((d) => d.key), loading);
+    if (sigue !== day) setDay(sigue);
+  }, [dayGroups, day, loading]);
 
   const activeLeague = leagues.find((l) => l.id === league) ?? null;
   const leagueMeta = meta?.leagues.find((l) => l.id === league) ?? null;
@@ -172,7 +180,7 @@ export default function BaseballDashboard() {
         <VacioPorqueNoHayCuotas
           reason={meta?.oddsFallbackReason}
           detail={meta?.oddsFallbackDetail}
-          hasKey={meta?.hasOddsKey ?? false}
+          hasKey={meta ? meta.hasOddsKey : null}
           demoFixtures={meta?.demoFixtures ?? true}
         />
       )}
@@ -194,7 +202,7 @@ export default function BaseballDashboard() {
             >
                 <LeagueFlag country={l.country} className="mr-1.5" />
               {l.name}
-              {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
+              {l.upcomingCount > 0 && <span className="ml-1.5 text-(--ink-soft)">{l.upcomingCount}</span>}
               {!l.hasModel && <span className="ml-1.5 text-amber-400" title={tr('eq.sinModeloElo')}>◦</span>}
             </button>
           ))}
@@ -257,8 +265,8 @@ export default function BaseballDashboard() {
           badge: <TeamCrest league={league!} name={t.name ?? t.id} code={t.id} size={16} />,
           onOpen: () => setTeam({ league: league!, id: t.id }),
           extra: [
-            { label: tr('bsb.cfp'), value: t.rs?.toFixed(2) ?? '—', title: tr('bsb.cfpTitulo') },
-            { label: tr('bsb.ccp'), value: t.ra?.toFixed(2) ?? '—', title: tr('bsb.ccpTitulo') },
+            { label: tr('bsb.cfp'), value: (t.rs == null ? undefined : numF(t.rs, 2)) ?? '—', title: tr('bsb.cfpTitulo') },
+            { label: tr('bsb.ccp'), value: (t.ra == null ? undefined : numF(t.ra, 2)) ?? '—', title: tr('bsb.ccpTitulo') },
             { label: tr('bsb.partidos'), value: String(t.games), title: tr('bsb.partidosTitulo') },
           ],
         }))}
@@ -356,8 +364,8 @@ function TrackRecordPanel({ league }: { league: string }) {
           {rec.resolved > 0 ? (
             <>
               {t('bsbt.resueltas', { n: rec.resolved })}
-              {rec.accuracy != null && <>{t('bsbt.acierto', { p: (rec.accuracy * 100).toFixed(1) })}</>}
-              {rec.brier != null && <> · Brier {rec.brier.toFixed(4)}</>}
+              {rec.accuracy != null && <>{t('bsbt.acierto', { p: numF(rec.accuracy * 100, 1) })}</>}
+              {rec.brier != null && <> · Brier {numF(rec.brier, 4)}</>}
             </>
           ) : (
             <>{t('bsbt.pendientes', { n: rec.pending })}</>
@@ -369,9 +377,9 @@ function TrackRecordPanel({ league }: { league: string }) {
         <div className="mt-2 space-y-2 border-t border-(--line) pt-2 text-(--ink-body)">
           {rec.totalMae != null && (
             <p>
-              {t('bsbt.errorTotal', { n: rec.totalMae.toFixed(2) })}
+              {t('bsbt.errorTotal', { n: numF(rec.totalMae, 2) })}
               {rec.totalBias != null && (
-                <>{t('bsbt.sesgo', { n: `${rec.totalBias >= 0 ? '+' : ''}${rec.totalBias.toFixed(2)}` })}</>
+                <>{t('bsbt.sesgo', { n: `${rec.totalBias >= 0 ? '+' : ''}${numF(rec.totalBias, 2)}` })}</>
               )}
             </p>
           )}
@@ -382,8 +390,8 @@ function TrackRecordPanel({ league }: { league: string }) {
                 <div key={String(b.known)} className="flex justify-between">
                   <span>{b.known ? t('bsbt.anunciados') : t('bsbt.estimados')} ({b.n})</span>
                   <span className="tabular-nums">
-                    {b.accuracy != null ? `${(b.accuracy * 100).toFixed(1)}%` : '—'}
-                    {b.brier != null && ` · Brier ${b.brier.toFixed(4)}`}
+                    {b.accuracy != null ? `${pctF(b.accuracy, 1)}` : '—'}
+                    {b.brier != null && ` · Brier ${numF(b.brier, 4)}`}
                   </span>
                 </div>
               ))}
@@ -393,8 +401,8 @@ function TrackRecordPanel({ league }: { league: string }) {
             <p>
               {t('bsbt.vsMercado', {
                 n: rec.vsMarket.n,
-                m: rec.vsMarket.modelBrier?.toFixed(4) ?? '—',
-                k: rec.vsMarket.marketBrier?.toFixed(4) ?? '—',
+                m: (rec.vsMarket.modelBrier == null ? undefined : numF(rec.vsMarket.modelBrier, 4)) ?? '—',
+                k: (rec.vsMarket.marketBrier == null ? undefined : numF(rec.vsMarket.marketBrier, 4)) ?? '—',
               })}
             </p>
           )}

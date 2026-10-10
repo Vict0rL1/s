@@ -5,5 +5,7 @@
   "football": 0.004,
   "basketball": 0.003,
   "baseball": 0.003,
-  "nfl": 0.006
+  "nfl": 0.006,
+  "nhl": 0.003,
+  "ufc": 0.004
 }

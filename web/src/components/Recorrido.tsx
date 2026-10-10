@@ -1,7 +1,8 @@
 // El recorrido de primer uso (Fase 5.19): tres cosas, descartable y recordado (en el
 // navegador y en Ajustes para no repetirlo en otro dispositivo).
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
+import { useDialogo } from './ui/useDialogo';
 
 const CLAVE = 'predictor.recorrido';
 
@@ -19,8 +20,6 @@ export default function Recorrido({ vistoEnServidor, onVisto }: { vistoEnServido
     }
     setAbierto(!vistoEnServidor && !local);
   }, [vistoEnServidor]);
-  if (!abierto) return null;
-  const pasos = [t('recorrido.pildora'), t('recorrido.confianza'), t('recorrido.demo')];
   const cerrar = () => {
     try {
       localStorage.setItem(CLAVE, '1');
@@ -30,8 +29,12 @@ export default function Recorrido({ vistoEnServidor, onVisto }: { vistoEnServido
     setAbierto(false);
     onVisto();
   };
+  const dialogo = useRef<HTMLDivElement>(null);
+  useDialogo(abierto, cerrar, dialogo);
+  if (!abierto) return null;
+  const pasos = [t('recorrido.pildora'), t('recorrido.confianza'), t('recorrido.demo')];
   return (
-    <div role="dialog" aria-modal="true" aria-label={t('recorrido.titulo')} className="fixed inset-0 z-[60] grid place-items-end bg-black/40 p-4 sm:place-items-center">
+    <div ref={dialogo} role="dialog" aria-modal="true" aria-label={t('recorrido.titulo')} className="fixed inset-0 z-[60] grid place-items-end bg-black/40 p-4 sm:place-items-center">
       <div className="w-full max-w-md rounded-xl border border-(--line) bg-(--surface-card) p-4 text-[14px] text-(--ink-soft) shadow-xl">
         <p className="text-[16px] font-semibold text-(--ink-strong)">{t('recorrido.titulo')}</p>
         <p className="mt-2 min-h-[4.5rem] leading-relaxed">{pasos[paso]}</p>

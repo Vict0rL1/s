@@ -113,14 +113,29 @@ export const LOSS_COLOR = '#d95926';
 /** The zero pole. Gray on purpose: a hue here would read as a third category. */
 export const BREAK_EVEN_COLOR = '#64748b';
 
+// Los mismos polos como TEXTO (E2 de la revisión del 8 de octubre): el verde y el naranja de
+// las marcas pasan 3:1 (lo que pide un gráfico) pero no 4,5:1 sobre el tema claro, que es lo que
+// pide un número escrito. Cada tema define los suyos en index.css.
+export const PROFIT_TEXT = 'var(--profit-text)';
+export const LOSS_TEXT = 'var(--loss-text)';
+export const NEUTRAL_TEXT = 'var(--status-neutral)';
+
 // ---------------------------------------------------------------------------
 // Status — reserved, never reused as a series colour
 // ---------------------------------------------------------------------------
+//
+// Variables CSS y no hex (E2 de la revisión del 8 de octubre): se usan como TEXTO, y un ámbar
+// que se lee sobre el tema oscuro (#c98500) da 2,5:1 sobre el claro. Cada tema define el suyo
+// en index.css. Para un fondo tenido: `tenido(STATUS.x, 14)`, no `${STATUS.x}22`.
 export const STATUS = {
-  good: '#199e70',
-  warning: '#c98500',
-  critical: '#e66767',
+  good: 'var(--status-good)',
+  warning: 'var(--status-warning)',
+  critical: 'var(--status-critical)',
+  neutral: 'var(--status-neutral)',
 } as const;
+
+/** Un color (hex o variable) al `pct` % sobre transparente: el fondo tenido de una insignia. */
+export const tenido = (color: string, pct: number) => `color-mix(in srgb, ${color} ${pct}%, transparent)`;
 
 /** Reliability tiers wear status colours and always ship with a word, never colour alone. */
 export const RELIABILITY_STYLE: Record<'high' | 'medium' | 'low', string> = {
@@ -134,7 +149,7 @@ export const RELIABILITY_STYLE: Record<'high' | 'medium' | 'low', string> = {
 // ---------------------------------------------------------------------------
 // 'bets' rides in this union because it is a TAB, and the tab bar is typed by it.
 // It is not a sport: nothing under it has a model, a league or a prediction.
-export type SportId = 'picks' | 'football' | 'basketball' | 'baseball' | 'nfl' | 'tennis' | 'bets' | 'trust';
+export type SportId = 'picks' | 'football' | 'basketball' | 'baseball' | 'nfl' | 'nhl' | 'ufc' | 'tennis' | 'bets' | 'trust';
 
 export interface SportTheme {
   id: SportId;
@@ -160,6 +175,10 @@ export const SPORT_THEMES: Record<SportId, SportTheme> = {
   basketball: { id: 'basketball', label: 'Baloncesto', accent: '#fb923c', accentSoft: 'rgba(251,146,60,0.12)' },
   baseball: { id: 'baseball', label: 'Béisbol', accent: '#facc15', accentSoft: 'rgba(250,204,21,0.12)' },
   nfl: { id: 'nfl', label: 'NFL', accent: '#f472b6', accentSoft: 'rgba(244,114,182,0.12)' },
+  // Rojo: el único tono saturado que quedaba lejos de los otros seis (el cian del hielo es de Confianza).
+  nhl: { id: 'nhl', label: 'NHL', accent: '#f87171', accentSoft: 'rgba(248,113,113,0.12)' },
+  // Verde azulado: a medio camino (unos 30° de tono) del verde del fútbol y del cian de Confianza.
+  ufc: { id: 'ufc', label: 'UFC', accent: '#2dd4bf', accentSoft: 'rgba(45,212,191,0.12)' },
   tennis: { id: 'tennis', label: 'Tenis', accent: '#a78bfa', accentSoft: 'rgba(167,139,250,0.12)' },
   // Slate, deliberately the quietest accent of the six: this tab is about the
   // reader's own money, and the five saturated hues belong to the sports.
@@ -189,4 +208,5 @@ export function inkOn(strength: number): string {
   return strength > 0.55 ? '#0b1220' : '#cbd5e1';
 }
 
-export const pct = (p: number, digits = 1): string => `${(p * 100).toFixed(digits)}%`;
+// Con Intl y en el idioma activo (lib/formato.ts): «52,3 %» en español, «52.3%» en inglés.
+export { pct } from './formato';

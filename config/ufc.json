@@ -1,0 +1,13 @@
+{
+  "$comment": "La UFC. El archivo de peleas y las fichas de los luchadores salen de Greco1899/scrape_ufc_stats (GitHub, rascado de ufcstats.com cada semana); las peleas que vienen y sus cuotas, de The Odds API. El modelo (Elo de luchador + récord + edad, alcance y experiencia en una logística) está en server/src/ufc/ y solo cambia por el registro de experimentos.",
+  "odds": {
+    "$comment": "Solo h2h (ganador): un crédito por región y ciclo. La clave es la de todo el MMA (UFC, PFL…): de lo que llega solo se guardan las peleas de una cartelera de la UFC (server/src/ufc/proximos.ts).",
+    "sportKey": "mma_mixed_martial_arts",
+    "markets": "h2h"
+  },
+  "cartelera": {
+    "$comment": "Una pelea es de una cartelera de la UFC si, en una ventana de ±horas alrededor de su hora, hay al menos `minimoConocidas` peleas con los DOS luchadores ya en la UFC. Las demás (otras organizaciones) se descartan y se cuentan.",
+    "ventanaHoras": 12,
+    "minimoConocidas": 3
+  }
+}

@@ -16,6 +16,7 @@
 
 import { devigShin } from '../market/devig.ts';
 import { VALUE_THRESHOLD } from '../model/market.ts';
+import { roiDe } from '../evaluation/roi.ts';
 
 export interface PartidoConPinnacle {
   /** Probabilidades del modelo [local, empate, visitante]. */
@@ -93,5 +94,6 @@ export function clvHistorico(partidos: PartidoConPinnacle[], umbral = VALUE_THRE
     if (a.clv > 0) positivos++;
     beneficio += a.beneficio;
   }
-  return { n, clvMedio: n ? sumaClv / n : null, positivos, beneficio, roi: n ? beneficio / n : null, conAmbas };
+  // Una unidad por apuesta: lo arriesgado es n.
+  return { n, clvMedio: n ? sumaClv / n : null, positivos, beneficio, roi: roiDe(beneficio, n), conAmbas };
 }

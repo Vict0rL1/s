@@ -34,7 +34,7 @@
 
 import { recordUnlock } from './registry.ts';
 
-export type EvaluationSport = 'football' | 'nfl' | 'nhl';
+export type EvaluationSport = 'football' | 'nfl' | 'nhl' | 'ufc';
 
 /**
  * La primera temporada reservada, por deporte. Todo lo igual o posterior está cerrado.
@@ -51,6 +51,8 @@ export const FINAL_HOLDOUT_FROM: Record<EvaluationSport, number> = {
   nfl: 2024,
   // NHL (Fase 8.1, en sombra): reservada desde la 2025-26, la última completa cuando se escribió.
   nhl: 2025,
+  // UFC (en sombra): reservado desde 2026, el año en curso cuando se escribió (~400 peleas hasta octubre).
+  ufc: 2026,
 };
 
 /**
@@ -62,6 +64,7 @@ export const VALIDATION_SEASON: Record<EvaluationSport, number> = {
   football: 2025,
   nfl: 2023,
   nhl: 2024,
+  ufc: 2025,
 };
 
 /** ¿Esta temporada está cerrada? */

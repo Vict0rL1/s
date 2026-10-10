@@ -9,6 +9,7 @@ import ThinMarkets from './ThinMarkets';
 import NewsPanel from './NewsPanel';
 import SquadPanel from './SquadPanel';
 import { conNodos, useI18n } from '../../i18n';
+import { num as numF } from '../../lib/formato';
 
 export function TeamName({
   league, id, name, elo, eloRank, seededFrom = null, alignRight = false, homeBadge = false, onClick,
@@ -236,7 +237,7 @@ export function Detail({
 
       {market.market && (
         <Panel>
-          <SectionTitle right={t('eq.margenPct', { p: ((market.market.overround - 1) * 100).toFixed(1) })}>
+          <SectionTitle right={t('eq.margenPct', { p: numF((market.market.overround - 1) * 100, 1) })}>
             {t('eq.mercado')}
           </SectionTitle>
           <p className="text-[13px] leading-relaxed text-(--ink-body)">

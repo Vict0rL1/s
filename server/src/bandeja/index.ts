@@ -34,6 +34,8 @@ const LOGS: Record<string, { tabla: string; clave: string }> = {
   basketball: { tabla: 'bb_prediction_log', clave: 'game_key' },
   baseball: { tabla: 'bsb_prediction_log', clave: 'match_key' },
   nfl: { tabla: 'naf_prediction_log', clave: 'match_key' },
+  nhl: { tabla: 'nhl_prediction_log', clave: 'match_key' },
+  ufc: { tabla: 'ufc_prediction_log', clave: 'match_key' },
 };
 
 /**

@@ -1,4 +1,4 @@
-// El backtest de la NHL en sombra (Fase 8.1): el Elo recorre los partidos en orden, predice ANTES de
+// El backtest de la NHL (Fase 8.1; publicada en el seguimiento): el Elo recorre los partidos en orden, predice ANTES de
 // actualizarse y se puntúa contra dos referencias (siempre el local según su tasa histórica, y un
 // Elo básico sin margen ni Poisson). El holdout final (desde la temporada 2025-26) no se puntúa.
 // Sin partidos en `nhl_games` no hay nada que evaluar, y se dice.
@@ -9,6 +9,8 @@ import { isFinalHoldout } from '../experiments/holdout.ts';
 import { avisoMuestra, type AvisoMuestra } from '../evaluation/sample.ts';
 import { NHL, actualizar, esperado, predecir } from './model.ts';
 import type { PartidoNhl } from './ingest.ts';
+import type { Juego } from '../evaluation/walkforward.ts';
+import { recorrer } from './ajuste.ts';
 
 /** Partidos de calentamiento: los primeros, con todos los Elo en 1500, no dicen nada. */
 export const CALENTAMIENTO = 300;
@@ -83,7 +85,36 @@ export function evaluarNhl(partidos: PartidoNhl[] = leerPartidos()): EvaluacionN
     aviso: avisoMuestra(xs.length, 'predicciones'),
     nota:
       partidos.length === 0
-        ? 'sin partidos en nhl_games: corre npm run update-data:nhl donde la red alcance api-web.nhle.com.'
-        : 'Sombra: parámetros de partida sin ajustar; no se publica nada hasta que esto entre en el registro de experimentos con la misma evidencia que los demás deportes.',
+        ? 'sin partidos en nhl_games: corre npm run update-data:nhl (baja el archivo de GitHub).'
+        : 'El backtest con el que se publicó: parámetros de partida (el ajuste por el registro de experimentos no mejoró de forma demostrable). Sin el holdout.',
   };
+}
+
+/**
+ * Los partidos en el formato del walk-forward común (evaluation/walkforward.ts), con la probabilidad
+ * del modelo ANTES de cada uno (el mismo recorrido que el backtest). Los de calentamiento van sin
+ * modelo; el holdout lo quita el propio walk-forward por la temporada.
+ */
+export function juegosWalkForward(partidos: PartidoNhl[] = leerPartidos()): Juego[] {
+  const pasos = recorrer(partidos);
+  const jugados = new Map<string, number>();
+  return partidos.map((g, i) => {
+    const prof = Math.min(jugados.get(g.home_id) ?? 0, jugados.get(g.away_id) ?? 0);
+    jugados.set(g.home_id, (jugados.get(g.home_id) ?? 0) + 1);
+    jugados.set(g.away_id, (jugados.get(g.away_id) ?? 0) + 1);
+    const mes = Number(g.game_date.slice(5, 7));
+    const p = pasos[i].pLocal;
+    return {
+      fecha: g.game_date,
+      temporada: g.season,
+      a: g.home_id,
+      b: g.away_id,
+      local: true,
+      y: g.home_goals > g.away_goals ? 0 : 1,
+      K: 2,
+      modelo: i >= CALENTAMIENTO ? [p, 1 - p] : null,
+      regimen: g.game_type === 3 ? 'playoffs' : mes === 10 ? 'inicio de temporada' : 'temporada regular',
+      profundidad: prof,
+    };
+  });
 }

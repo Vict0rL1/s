@@ -40,7 +40,7 @@ export const REGISTRY_PATH = path.join(ROOT, 'experiments', 'registry.jsonl');
  * sería tan incorrecto como no corregir.
  */
 export interface DatasetId {
-  sport: 'football' | 'nfl' | 'basketball' | 'baseball' | 'tennis';
+  sport: 'football' | 'nfl' | 'basketball' | 'baseball' | 'tennis' | 'nhl' | 'ufc';
   /** El tramo que se puntuó: 'validation' o 'holdout'. */
   split: 'validation' | 'holdout';
   /** Partidos evaluados. Va en la clave: cambiar el tamaño cambia el conjunto. */

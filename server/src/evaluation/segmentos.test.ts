@@ -6,17 +6,19 @@ import '../test/setup.ts';
 
 const { segmentos, dimensionesPrediccion, dimensionesApuesta, celdaPrediccion, celdaApuestas, MIN_CELDA_PREDICCIONES, MIN_CELDA_APUESTAS } = await import('./segmentos.ts');
 
-test('dimensionesPrediccion: favorito, resultado, banda, mes y día; el tenis no tiene local', () => {
+test('dimensionesPrediccion: favorito, lado, banda, mes y día; el tenis no tiene local (C9: el desenlace no es un segmento)', () => {
   const d = dimensionesPrediccion('football', { p: [0.2, 0.3, 0.5], y: 1, version: null, cuando: '2026-03-07T20:00:00Z', liga: 'La Liga' });
   assert.equal(d.liga, 'La Liga');
   assert.equal(d.favorito, 'el visitante favorito');
-  assert.equal(d.resultado, 'empate');
+  assert.equal(d.lado, 'al visitante', 'el lado que favoreció el modelo: se sabe antes del partido');
+  assert.equal(d.resultado, undefined, 'segmentar por lo que pasó no selecciona nada');
   assert.equal(d['banda de probabilidad'], '50–60 %');
   assert.equal(d.mes, 'marzo');
   assert.equal(d['día de la semana'], 'sábado');
   const t = dimensionesPrediccion('tennis', { p: [0.7, 0.3], y: 1, version: null, cuando: null, liga: 'ATP' });
   assert.equal(t.favorito, 'el primero favorito');
-  assert.equal(t.resultado, 'ganó el segundo');
+  assert.equal(t.lado, 'al primero');
+  assert.equal(t.resultado, undefined);
   assert.equal(t.mes, undefined);
 });
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { BREAK_EVEN_COLOR, LOSS_COLOR, PROFIT_COLOR } from '../../lib/theme';
+import { BREAK_EVEN_COLOR, LOSS_COLOR, PROFIT_COLOR, NEUTRAL_TEXT, PROFIT_TEXT, LOSS_TEXT } from '../../lib/theme';
 import { signed } from '../../lib/bets';
 import { useI18n } from '../../i18n';
 
@@ -107,7 +107,7 @@ export default function BetCalendar({
         {monthBets > 0 && (
           <span
             className="text-[16px] font-semibold tabular-nums"
-            style={{ color: monthProfit > 0 ? PROFIT_COLOR : monthProfit < 0 ? LOSS_COLOR : BREAK_EVEN_COLOR }}
+            style={{ color: monthProfit > 0 ? PROFIT_TEXT : monthProfit < 0 ? LOSS_TEXT : NEUTRAL_TEXT }}
           >
             {signed(monthProfit)}
           </span>

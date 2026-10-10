@@ -8,6 +8,7 @@ import { useI18n } from '../i18n';
 // colour means one thing across all four tabs.
 export { HOME_COLOR as P1_COLOR, AWAY_COLOR as P2_COLOR } from '../lib/theme';
 import { AWAY_COLOR as P2, HOME_COLOR as P1 } from '../lib/theme';
+import { num as numF } from '../lib/formato';
 
 function SplitBar({
   leftFrac,
@@ -55,6 +56,7 @@ function SplitBar({
             width: `${left}%`,
             backgroundColor: hasData ? P1 : '#475569',
           }}
+          role="img"
           aria-label={`${title} ${leftLabel}`}
         >
           {hasData && left >= 18 ? leftLabel : ''}
@@ -65,6 +67,7 @@ function SplitBar({
             width: `${100 - left}%`,
             backgroundColor: hasData ? P2 : '#334155',
           }}
+          role="img"
           aria-label={`${title} ${rightLabel}`}
         >
           {hasData && 100 - left >= 18 ? rightLabel : ''}
@@ -110,7 +113,7 @@ export default function ProbabilityBars({ prediction }: { prediction: Prediction
           gap != null && Math.abs(gap) >= 0.5 ? (
             <span className="tabular-nums text-[13px] text-(--ink-muted)">
               <span className="mr-1 inline-block h-[9px] w-[2px] translate-y-[1px] bg-white/80" />
-              {t('pb.mercadoA', { pp: Math.abs(gap).toFixed(1) })}
+              {t('pb.mercadoA', { pp: numF(Math.abs(gap), 1) })}
             </span>
           ) : gap != null ? (
             <span className="text-[13px] text-(--ink-muted)">{t('pb.coincide')}</span>

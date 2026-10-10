@@ -68,10 +68,18 @@ export function renderPrometheus(): string {
 }
 
 /** El grupo de una URL para no explotar las etiquetas con ids: `/api/football/fixtures/123` → `/api/football`. */
-export function grupoDeRuta(url: string): string {
-  const sinQuery = url.split('?')[0];
+/**
+ * La etiqueta `grupo` de una petición, a partir del PATRÓN de su ruta (`req.routeOptions.url`:
+ * `/api/football/fixtures/:id`), nunca de la URL cruda (lote B, B6). Con la URL, cada ruta de
+ * la SPA, cada `/wp-admin` y cada sondeo era una etiqueta nueva: cardinalidad sin tope en
+ * memoria y en /api/metrics. Sin ruta (un 404) → `sin-ruta`; la comodín de la web → `estatico`.
+ */
+export function grupoDeRuta(ruta: string | null | undefined, _url?: string): string {
+  if (!ruta) return 'sin-ruta';
+  if (ruta === '/*') return 'estatico';
+  const sinQuery = ruta.split('?')[0];
   const m = sinQuery.match(/^\/api\/([a-z-]+)(?:\/([a-z-]+))?/);
-  if (!m) return sinQuery.startsWith('/docs') ? '/docs' : sinQuery === '/' ? '/' : sinQuery.replace(/\/\d+.*/, '');
-  const deportes = new Set(['football', 'basketball', 'baseball', 'nfl', 'bets', 'auth', 'latency', 'staking', 'notifications', 'export', 'scheduler', 'policy', 'datos']);
+  if (!m) return sinQuery.startsWith('/docs') ? '/docs' : sinQuery === '/' ? '/' : sinQuery.replace(/\/(:|\*).*$/, '');
+  const deportes = new Set(['football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'bets', 'auth', 'latency', 'staking', 'notifications', 'export', 'scheduler', 'policy', 'datos']);
   return deportes.has(m[1]) ? `/api/${m[1]}` : `/api/${m[1]}${m[2] ? `/${m[2]}` : ''}`;
 }

@@ -22,7 +22,7 @@ export default function InformeDetalle() {
           </a>
         )}
       </p>
-      {error && <p className="text-[14px] text-(--ink-soft)">{error}</p>}
+      {error && <p role="alert" className="text-[14px] text-(--ink-soft)">{error}</p>}
       {!datos && !error && <p className="text-[13px] text-(--ink-muted)">{t('comun.cargando')}</p>}
       {datos && (
         <article className="rounded-xl border border-(--line) bg-(--surface-card) p-4" data-testid="informe">

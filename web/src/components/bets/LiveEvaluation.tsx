@@ -6,9 +6,10 @@
 // predicciones reales registradas antes de cada partido: ningún backtest entra aquí.
 
 import { useEffect, useState } from 'react';
-import { LOSS_COLOR, PROFIT_COLOR } from '../../lib/theme';
+import { PROFIT_TEXT, STATUS, LOSS_TEXT } from '../../lib/theme';
 import { AlertIcon, DeporteIcono } from '../icons';
 import { codigo, conNodos, useI18n, type Clave, type Traducir } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 interface Informe {
   origen: 'live';
@@ -76,13 +77,13 @@ interface Rendimiento {
   lecturaEdge: string | null;
 }
 const COLOR_VEREDICTO: Record<Prueba['veredicto'], string> = {
-  'a favor': PROFIT_COLOR,
-  'en contra': LOSS_COLOR,
-  'no concluyente': '#d9a441',
+  'a favor': PROFIT_TEXT,
+  'en contra': LOSS_TEXT,
+  'no concluyente': STATUS.warning,
   'muestra insuficiente': 'var(--ink-muted)',
 };
 
-const DEPORTES = new Set(['tennis', 'football', 'basketball', 'baseball', 'nfl']);
+const DEPORTES = new Set(['tennis', 'football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc']);
 const nombreDe = (t: Traducir, id: string) => (DEPORTES.has(id) ? t(`deporte.${id}` as Clave) : id);
 /** El deporte con su icono, para celdas y títulos (`nombreDe` se queda para el texto corrido). */
 function Dep({ id }: { id: string }) {
@@ -94,9 +95,9 @@ function Dep({ id }: { id: string }) {
     </span>
   );
 }
-const f3 = (x: number | null | undefined) => (x == null ? '—' : x.toFixed(3).replace('.', ','));
-const pct = (x: number | null | undefined) => (x == null ? '—' : `${(x * 100).toFixed(1).replace('.', ',')} %`);
-const signo = (x: number | null | undefined) => (x == null ? '—' : `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(1).replace('.', ',')} %`);
+const f3 = (x: number | null | undefined) => (x == null ? '—' : numF(x, 3));
+const pct = (x: number | null | undefined) => (x == null ? '—' : `${pctF(x, 1)}`);
+const signo = (x: number | null | undefined) => (x == null ? '—' : `${x >= 0 ? '+' : '−'}${pctF(Math.abs(x), 1)}`);
 
 export default function LiveEvaluation() {
   const [d, setD] = useState<Informe[] | null>(null);
@@ -136,7 +137,7 @@ export default function LiveEvaluation() {
           {t('eval.vacio')}
         </p>
       ) : (
-        <div className="overflow-x-auto border-t border-(--line)">
+        <div className="overflow-x-auto border-t border-(--line)" tabIndex={0}>
           <table className="w-full min-w-[620px] border-collapse text-[14px]">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-(--ink-muted)">
@@ -160,14 +161,14 @@ export default function LiveEvaluation() {
                     <td className="px-4 py-2.5 text-(--ink-body)"><Dep id={x.deporte} /></td>
                     <td className="px-4 py-2.5 text-right text-(--ink-soft)" title={x.aviso?.texto ?? undefined}>
                       {x.n}
-                      {x.aviso?.nivel === 'insuficiente' && <span className="ml-1 inline-flex align-[-2px]" style={{ color: '#d9a441' }} title={t('eval.muestraInsuficiente')}><AlertIcon size={14} /></span>}
+                      {x.aviso?.nivel === 'insuficiente' && <span className="ml-1 inline-flex align-[-2px]" style={{ color: STATUS.warning }} title={t('eval.muestraInsuficiente')}><AlertIcon size={14} /></span>}
                     </td>
                     <td className="px-4 py-2.5 text-right font-semibold text-(--ink-strong)">{f3(x.logLoss)}</td>
                     <td className="px-4 py-2.5 text-right text-(--ink-soft)">
                       {x.mercado ? (
                         <>
                           {f3(x.mercado.logLoss)}
-                          <span className="block text-[11px]" style={{ color: mejor ? PROFIT_COLOR : LOSS_COLOR }}>
+                          <span className="block text-[11px]" style={{ color: mejor ? PROFIT_TEXT : LOSS_TEXT }}>
                             {mejor ? t('eval.modeloMejor') : t('eval.mercadoMejor')} · {t('eval.conPrecio', { n: x.mercado.n })}
                           </span>
                         </>
@@ -222,18 +223,18 @@ export default function LiveEvaluation() {
             <>
               <p className="mt-1 text-[13px] leading-relaxed text-(--ink-soft)">
                 {conNodos(t('eval.dineroResumen', { n: rend.total.n, prometido: signo(rend.total.roiPrometido) }), {
-                  roi: <strong style={{ color: (rend.total.roi ?? 0) >= 0 ? PROFIT_COLOR : LOSS_COLOR }}>{signo(rend.total.roi)}</strong>,
+                  roi: <strong style={{ color: (rend.total.roi ?? 0) >= 0 ? PROFIT_TEXT : LOSS_TEXT }}>{signo(rend.total.roi)}</strong>,
                 })}
-                {rend.aciertosEsperados != null && t('eval.aciertosEsperados', { a: rend.aciertos, e: rend.aciertosEsperados.toFixed(1).replace('.', ',') })}
+                {rend.aciertosEsperados != null && t('eval.aciertosEsperados', { a: rend.aciertos, e: numF(rend.aciertosEsperados, 1) })}
                 {rend.drawdown && rend.drawdown.importe > 0 && t('eval.peorCaida', { p: pct(rend.drawdown.pct) })}
                 {rend.peorRacha > 0 && t('eval.racha', { n: rend.peorRacha })}
               </p>
               {rend.total.aviso?.texto && (
-                <p className="text-[12px]" style={{ color: '#d9a441' }}>
+                <p className="text-[12px]" style={{ color: STATUS.warning }}>
                   {rend.total.aviso.texto}
                 </p>
               )}
-              <div className="mt-2 overflow-x-auto">
+              <div className="mt-2 overflow-x-auto" tabIndex={0}>
                 <table className="w-full border-collapse whitespace-nowrap text-[12px] sm:text-[13px]">
                   <thead>
                     <tr className="text-left text-[11px] uppercase tracking-wide text-(--ink-muted)">
@@ -262,9 +263,9 @@ export default function LiveEvaluation() {
                           <td className="py-1.5 pr-2 sm:pr-3 text-(--ink-body)">{x.etiqueta}</td>
                           <td className="py-1.5 pr-2 sm:pr-3 text-right text-(--ink-soft)" title={x.aviso?.texto ?? undefined}>
                             {x.n}
-                            {x.aviso?.nivel === 'insuficiente' && <span className="ml-1 inline-flex align-[-2px]" style={{ color: '#d9a441' }} title={t('eval.muestraInsuficiente')}><AlertIcon size={14} /></span>}
+                            {x.aviso?.nivel === 'insuficiente' && <span className="ml-1 inline-flex align-[-2px]" style={{ color: STATUS.warning }} title={t('eval.muestraInsuficiente')}><AlertIcon size={14} /></span>}
                           </td>
-                          <td className="py-1.5 pr-2 sm:pr-3 text-right" style={{ color: (x.roi ?? 0) >= 0 ? PROFIT_COLOR : LOSS_COLOR }}>
+                          <td className="py-1.5 pr-2 sm:pr-3 text-right" style={{ color: (x.roi ?? 0) >= 0 ? PROFIT_TEXT : LOSS_TEXT }}>
                             {signo(x.roi)}
                           </td>
                           <td className="py-1.5 pr-2 sm:pr-3 text-right text-(--ink-muted)">{signo(x.roiPrometido)}</td>
@@ -313,7 +314,7 @@ export default function LiveEvaluation() {
                     <span className="text-(--ink-body)">{g.nombre}</span>: {t('eval.grupoLinea', { n: g.informe.n, g: f3(g.ganancia ?? null) })}
                     {g.mezcla && Object.keys(g.mezcla).length > 1 && ` (${Object.entries(g.mezcla).map(([d, n]) => `${nombreDe(t, d)} ${n}`).join(', ')})`}
                     {g.roiHipotetico && t('eval.roiHipotetico', { roi: signo(g.roiHipotetico.roi), n: g.roiHipotetico.apuestas })}
-                    {g.aviso.texto && <span className="block text-[12px]" style={{ color: '#d9a441' }}>{g.aviso.texto}</span>}
+                    {g.aviso.texto && <span className="block text-[12px]" style={{ color: STATUS.warning }}>{g.aviso.texto}</span>}
                   </li>
                 ))}
               </ul>

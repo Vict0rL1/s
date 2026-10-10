@@ -47,7 +47,7 @@
 
 export { MIN_EDGE, MAX_PICKS, realMarket, devig2, rankPicks, type Pick } from './picksNucleo';
 export { CAVEATS } from './picksDatos';
-export { footballPicks, baseballPicks, basketballPicks, nflPicks, tennisPicks } from './picksDeportes';
+export { footballPicks, baseballPicks, basketballPicks, nflPicks, nhlPicks, ufcPicks, tennisPicks } from './picksDeportes';
 
 /**
  * The stake used for the "devolvería" column, shared by every tab.

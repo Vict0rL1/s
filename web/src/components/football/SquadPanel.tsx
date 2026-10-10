@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fbApi, type FbAvailability, type FbSquad, type FbSquadPlayer } from '../../lib/football';
 import { BanIcon } from '../icons';
 import { useI18n } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 /**
  * Who is playing — the one input the user has and the model does not.
@@ -157,7 +158,7 @@ function PlayerRow({
             className="shrink-0 tabular-nums text-(--ink-muted)"
             title={t('sq.parteAtaque')}
           >
-            {(player.attackShare * 100).toFixed(0)}%
+            {pctF(player.attackShare, 0)}
           </span>
         )}
       </label>
@@ -175,7 +176,7 @@ function Effect({ availability }: { availability: FbAvailability }) {
   return (
     <span
       className="shrink-0 whitespace-nowrap text-[11px] text-rose-300"
-      title={t('sq.efectoTitulo', { a: availability.attack.toFixed(3), d: availability.defence.toFixed(3) })}
+      title={t('sq.efectoTitulo', { a: numF(availability.attack, 3), d: numF(availability.defence, 3) })}
     >
       {t('sq.efecto', { a: attack, d: defence })}
     </span>

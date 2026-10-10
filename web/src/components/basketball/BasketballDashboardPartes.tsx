@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { bbApi, type BbMeta, type BbTrackRecord } from '../../lib/basketball';
 import { CheckIcon, CrossIcon } from '../icons';
 import { conNodos, localeDe, useI18n } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 export function DataLine({ meta }: { meta: BbMeta }) {
   const { t, idioma } = useI18n();
@@ -74,7 +75,7 @@ export function BbTrackRecordPanel({ league }: { league: string }) {
           ) : (
             <span className="text-(--ink-strong)">
               {conNodos(t('bkt.acierto'), {
-                pct: <strong className="tabular-nums">{((data.accuracy ?? 0) * 100).toFixed(1)}%</strong>,
+                pct: <strong className="tabular-nums">{pctF((data.accuracy ?? 0), 1)}</strong>,
                 n: <strong className="tabular-nums">{data.resolved}</strong>,
               })}
               {data.marginMae != null && (
@@ -97,8 +98,8 @@ export function BbTrackRecordPanel({ league }: { league: string }) {
           </p>
           {data.resolved > 0 && (
             <div className="grid grid-cols-4 gap-x-4 gap-y-3 border-y border-(--line) py-3">
-              <Cell label={t('bkt.aciertoCol')} value={`${((data.accuracy ?? 0) * 100).toFixed(1)}%`} />
-              <Cell label="Brier" value={data.brier?.toFixed(4) ?? '—'} />
+              <Cell label={t('bkt.aciertoCol')} value={`${pctF((data.accuracy ?? 0), 1)}`} />
+              <Cell label="Brier" value={(data.brier == null ? undefined : numF(data.brier, 4)) ?? '—'} />
               <Cell label={t('bkt.errorMargenCol')} value={data.marginMae != null ? t('bkt.pts', { n: data.marginMae }) : '—'} />
               <Cell
                 label={t('bkt.sesgoMargen')}
@@ -128,12 +129,12 @@ export function BbTrackRecordPanel({ league }: { league: string }) {
                   <tr>
                     <td className="py-1 text-(--ink-soft)">{t('pb.modelo')}</td>
                     <td>{fmtPct(data.vsMarket.modelAccuracy)}</td>
-                    <td>{data.vsMarket.modelBrier?.toFixed(4) ?? '—'}</td>
+                    <td>{(data.vsMarket.modelBrier == null ? undefined : numF(data.vsMarket.modelBrier, 4)) ?? '—'}</td>
                   </tr>
                   <tr>
                     <td className="py-1 text-(--ink-soft)">{t('eq.mercado')}</td>
                     <td>{fmtPct(data.vsMarket.marketAccuracy)}</td>
-                    <td>{data.vsMarket.marketBrier?.toFixed(4) ?? '—'}</td>
+                    <td>{(data.vsMarket.marketBrier == null ? undefined : numF(data.vsMarket.marketBrier, 4)) ?? '—'}</td>
                   </tr>
                 </tbody>
               </table>
@@ -182,5 +183,5 @@ export function Cell({ label, value, hint }: { label: string; value: string; hin
 }
 
 export function fmtPct(v: number | null): string {
-  return v == null ? '—' : `${(v * 100).toFixed(1)}%`;
+  return v == null ? '—' : `${pctF(v, 1)}`;
 }

@@ -2,6 +2,7 @@ import type { BsbPrediction, BsbRunMargin } from '../../lib/baseball';
 import { AWAY_COLOR, HOME_COLOR, inkOn, withAlpha } from '../../lib/theme';
 import { Panel, SectionTitle } from '../ui';
 import { useI18n } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 /**
  * The full run-by-run grid.
@@ -38,7 +39,7 @@ export default function RunMatrix({ prediction }: { prediction: BsbPrediction })
         {t('det.probMarcador')}
       </SectionTitle>
 
-      <div className="-mx-1 overflow-x-auto px-1">
+      <div className="-mx-1 overflow-x-auto px-1" tabIndex={0}>
         <table className="w-full min-w-[26rem] border-separate border-spacing-0.5 text-center text-[11px] tabular-nums">
           <thead>
             <tr>
@@ -67,7 +68,7 @@ export default function RunMatrix({ prediction }: { prediction: BsbPrediction })
                     title={
                       h === a
                         ? t('rm.empate')
-                        : `${home.name} ${h}–${a} ${away.name}: ${(p * 100).toFixed(2)}%`
+                        : `${home.name} ${h}–${a} ${away.name}: ${pctF(p, 2)}`
                     }
                   />
                 ))}
@@ -82,21 +83,21 @@ export default function RunMatrix({ prediction }: { prediction: BsbPrediction })
           <div className="mx-auto mb-1 h-1 w-8 rounded" style={{ backgroundColor: HOME_COLOR }} />
           <div className="break-words text-(--ink-soft)" title={home.name}>{t('pm.gana', { nombre: home.name })}</div>
           <div className="font-semibold tabular-nums text-(--ink-strong)">
-            {(prediction.model.home * 100).toFixed(1)}%
+            {pctF(prediction.model.home, 1)}
           </div>
         </div>
         <div className="rounded bg-(--tint) px-1 py-1.5">
           <div className="mx-auto mb-1 h-1 w-8 rounded" style={{ backgroundColor: AWAY_COLOR }} />
           <div className="break-words text-(--ink-soft)" title={away.name}>{t('pm.gana', { nombre: away.name })}</div>
           <div className="font-semibold tabular-nums text-(--ink-strong)">
-            {(prediction.model.away * 100).toFixed(1)}%
+            {pctF(prediction.model.away, 1)}
           </div>
         </div>
       </div>
       <p className="mt-1.5 text-[13px] leading-relaxed text-(--ink-muted)">
-        {t('rm.diagonal', { p: (extraInnings * 100).toFixed(1) })}
+        {t('rm.diagonal', { p: numF(extraInnings * 100, 1) })}
         {grid.tail > 0.0005 && (
-          <> {t('rm.cola', { n, p: (grid.tail * 100).toFixed(2) })}</>
+          <> {t('rm.cola', { n, p: numF(grid.tail * 100, 2) })}</>
         )}
       </p>
 
@@ -134,7 +135,7 @@ function Cell({
         fontWeight: top ? 700 : 400,
       }}
     >
-      {p >= 0.001 ? (p * 100).toFixed(1) : '·'}
+      {p >= 0.001 ? numF(p * 100, 1) : '·'}
     </td>
   );
 }
@@ -176,11 +177,11 @@ function Margins({
                     width: `${peak > 0 ? (m.probability / peak) * 100 : 0}%`,
                     backgroundColor: m.margin > 0 ? HOME_COLOR : AWAY_COLOR,
                   }}
-                  title={`${label}: ${(m.probability * 100).toFixed(1)}%`}
+                  title={`${label}: ${pctF(m.probability, 1)}`}
                 />
               </div>
               <span className="w-11 text-right tabular-nums text-(--ink-soft)">
-                {(m.probability * 100).toFixed(1)}%
+                {pctF(m.probability, 1)}
               </span>
             </div>
           );

@@ -4,6 +4,7 @@
 import { useId, type ReactNode } from 'react';
 import { useI18n } from '../../i18n';
 import { HOME_COLOR, AWAY_COLOR, DRAW_COLOR, NEUTRAL_COLOR, PROFIT_COLOR, LOSS_COLOR } from '../../lib/theme';
+import { num as numF } from '../../lib/formato';
 
 export const SERIES = [HOME_COLOR, AWAY_COLOR, DRAW_COLOR, '#a78bfa', '#f5b544', NEUTRAL_COLOR];
 
@@ -13,7 +14,7 @@ export interface Serie {
   color?: string;
 }
 
-const fmt = (v: number, d = 2) => (Number.isInteger(v) ? String(v) : v.toFixed(d).replace('.', ','));
+const fmt = (v: number, d = 2) => (Number.isInteger(v) ? String(v) : numF(v, d));
 /** Las etiquetas del eje: sin decimales a partir de 100, que con el margen izquierdo no caben. */
 const fmtEje = (v: number) => (Math.abs(v) >= 100 ? String(Math.round(v)) : fmt(v));
 

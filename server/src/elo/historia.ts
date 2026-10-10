@@ -78,6 +78,28 @@ async function reproducir(sport: Exclude<SportId, 'tennis'>, league: string): Pr
       });
       break;
     }
+    case 'nhl': {
+      // Una sola liga: el mismo recorrido que el backtest y la predicción publicada (nhl/ajuste.ts).
+      const { leerPartidos } = await import('../nhl/evaluacion.ts');
+      const { recorrer } = await import('../nhl/ajuste.ts');
+      const partidos = leerPartidos();
+      const pasos = recorrer(partidos);
+      partidos.forEach((g, i) => {
+        anota(g.home_id, { fecha: g.game_date, elo: Math.round(pasos[i].eloLocal), rival: g.away_id, local: true });
+        anota(g.away_id, { fecha: g.game_date, elo: Math.round(pasos[i].eloVisitante), rival: g.home_id, local: false });
+      });
+      break;
+    }
+    case 'ufc': {
+      // El mismo recorrido que el backtest y la predicción publicada (ufc/evaluacion.ts): el Elo de
+      // antes de cada pelea con ganador. Sin local.
+      const { leerPeleas, recorrer } = await import('../ufc/evaluacion.ts');
+      for (const x of recorrer(leerPeleas()).pasos) {
+        anota(x.ids[0], { fecha: x.fecha, elo: Math.round(x.elos[0]), rival: x.ids[1], local: false });
+        anota(x.ids[1], { fecha: x.fecha, elo: Math.round(x.elos[1]), rival: x.ids[0], local: false });
+      }
+      break;
+    }
   }
   return por;
 }

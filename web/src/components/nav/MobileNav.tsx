@@ -1,12 +1,13 @@
 // La barra inferior del móvil (Fase 5.3): cuatro destinos y nada fuera de pantalla a 390 px.
 // «Deportes» abre una hoja con los cinco; los demás llevan directamente.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { SPORT_THEMES, type SportId } from '../../lib/theme';
 import { DEPORTES, RUTA_DE_PESTANA, pestanaDeRuta, recordarPestana } from '../../rutas';
 import { SportIcon } from '../icons';
 import { useI18n, type Clave } from '../../i18n';
+import { useDialogo } from '../ui/useDialogo';
 
 const DESTINOS: { id: SportId | 'deportes'; etiqueta: Clave }[] = [
   { id: 'picks', etiqueta: 'nav.destacados' },
@@ -23,6 +24,8 @@ export default function MobileNav({ ocultos = [] }: { ocultos?: string[] }) {
   const activa = pestanaDeRuta(pathname);
   const enDeporte = activa != null && DEPORTES.includes(activa);
   useEffect(() => setHoja(false), [pathname]);
+  const dialogo = useRef<HTMLDivElement>(null);
+  useDialogo(hoja, () => setHoja(false), dialogo);
   const ir = (id: SportId) => {
     recordarPestana(id);
     navigate(RUTA_DE_PESTANA[id]);
@@ -30,7 +33,7 @@ export default function MobileNav({ ocultos = [] }: { ocultos?: string[] }) {
   return (
     <>
       {hoja && (
-        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-label={t('nav.deportes')}>
+        <div ref={dialogo} className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label={t('nav.deportes')}>
           <button aria-label={t('comun.cerrar')} className="absolute inset-0 bg-black/50" onClick={() => setHoja(false)} />
           <div className="absolute inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] rounded-t-2xl border-t border-(--line) bg-(--surface-card) p-3 pb-4">
             <p className="mb-2 px-1 text-[12px] font-medium uppercase tracking-wide text-(--ink-muted)">{t('nav.deportes')}</p>

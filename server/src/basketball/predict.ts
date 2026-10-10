@@ -56,6 +56,7 @@ import {
 } from './repo.ts';
 import { daysBetween } from './ratings.ts';
 import type { LeagueId, TeamRecord } from './types.ts';
+import { num, pct } from '../numeros.ts';
 
 export const DISCLAIMER =
   'Estimación estadística basada en Elo con ventaja de campo, margen de puntos, descanso y ' +
@@ -350,7 +351,7 @@ function buildH2H(league: LeagueId, homeId: string, awayId: string): HeadToHead 
   };
 }
 
-const pct1 = (p: number) => (p * 100).toFixed(1);
+const pct1 = (p: number) => pct(p);
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
@@ -362,7 +363,7 @@ function clamp01(n: number): number {
 function spreadLabel(margin: number, homeName: string, awayName: string): string {
   if (Math.abs(margin) < 0.25) return 'sin favorito claro (pick’em)';
   const fav = margin > 0 ? homeName : awayName;
-  return `${fav} ${(-Math.abs(margin)).toFixed(1)}`;
+  return `${fav} ${num(-Math.abs(margin), 1)}`;
 }
 
 function describeRest(side: TeamSide): string | null {
@@ -525,10 +526,10 @@ export function buildGamePrediction(
   const favProb = pct1(Math.max(probHome, probAway));
   const headline =
     confidence === 'toss_up'
-      ? `Partido muy parejo: ligerísima ventaja para ${favName} (${favProb}%). Cualquiera puede ganar.`
-      : `Lo más probable: gana ${favName} (${favProb}%)` +
+      ? `Partido muy parejo: ligerísima ventaja para ${favName} (${favProb}). Cualquiera puede ganar.`
+      : `Lo más probable: gana ${favName} (${favProb})` +
         (Math.abs(margin) >= 0.5
-          ? `, por unos ${Math.abs(margin).toFixed(1)} puntos.`
+          ? `, por unos ${num(Math.abs(margin), 1)} puntos.`
           : ', en un partido muy ajustado.');
 
   const bullets: string[] = [];
@@ -539,14 +540,14 @@ export function buildGamePrediction(
       : `${home.name} juega en casa, lo que vale ${Math.round(homeAdvantage)} puntos de Elo ` +
         // Del número y no de una frase fija: la frase antigua decía «~60 %», que era
         // la NBA de hace veinte años y justo el error que la ventaja aprendida corrige.
-        `(entre dos equipos iguales, el local ganaría el ${Math.round(100 / (1 + Math.pow(10, -homeAdvantage / 400)))} %; ` +
+        `(entre dos equipos iguales, el local ganaría el ${pct(1 / (1 + Math.pow(10, -homeAdvantage / 400)), 0)}; ` +
         'se aprende de los resultados y ha bajado mucho en la última década).',
   );
 
   if (pretemporada) {
     bullets.push(
       `Primer partido de temporada: los Elo de la temporada pasada se acercan a la media ` +
-        `(conservan el ${Math.round(SEASON_CARRYOVER * 100)} %), porque las plantillas cambian en verano.`,
+        `(conservan el ${pct(SEASON_CARRYOVER, 0)}), porque las plantillas cambian en verano.`,
     );
   }
 
@@ -618,14 +619,14 @@ export function buildGamePrediction(
     const gapPp = (Math.max(probHome, probAway) - mFav) * 100;
     const mFavPct = pct1(mFav);
     if (Math.abs(gapPp) < VALUE_THRESHOLD * 100) {
-      bullets.push(`Las casas coinciden (${mFavPct}% para ${favName}).`);
+      bullets.push(`Las casas coinciden (${mFavPct} para ${favName}).`);
     } else if (gapPp > 0) {
       bullets.push(
-        `El modelo es más optimista con ${favName} (${favProb}%) que el mercado (${mFavPct}%): posible value en ${favName}.`,
+        `El modelo es más optimista con ${favName} (${favProb}) que el mercado (${mFavPct}): posible value en ${favName}.`,
       );
     } else {
       bullets.push(
-        `El mercado ve a ${favName} más favorito (${mFavPct}%) que el modelo (${favProb}%): el valor estaría en ${dogName}.`,
+        `El mercado ve a ${favName} más favorito (${mFavPct}) que el modelo (${favProb}): el valor estaría en ${dogName}.`,
       );
     }
   } else {
@@ -635,7 +636,7 @@ export function buildGamePrediction(
   if (reliability.level !== 'high') {
     bullets.push(
       `⚠️ ${reliability.label.charAt(0).toUpperCase() + reliability.label.slice(1)}: ` +
-        `tómalo como un rango (${favProb}% ± ${reliability.marginPp} pp) más que como una cifra exacta.` +
+        `tómalo como un rango (${favProb} ± ${num(reliability.marginPp, 1)} pp) más que como una cifra exacta.` +
         (reliability.reasons.length ? ` ${reliability.reasons[0]}` : ''),
     );
   }

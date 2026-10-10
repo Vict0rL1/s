@@ -14,6 +14,23 @@ export const isProduction = process.env.NODE_ENV === 'production';
 
 export type ModoAuth = 'auto' | 'on' | 'off';
 
+/**
+ * En qué dirección escucha la API (D15 de la revisión del 8 de octubre de 2026).
+ *
+ * Antes, siempre 0.0.0.0: con la puerta apagada —lo normal en el portátil— cualquiera en la
+ * misma wifi abría la app y el registro de apuestas. Ahora 127.0.0.1 salvo en producción (el
+ * contenedor necesita escuchar fuera, y ahí la contraseña es obligatoria), con APP_AUTH=on (hay
+ * contraseña) o con DEV_LAN=on (abrirla sin contraseña, a sabiendas). HOST, si se fija, manda.
+ * La misma regla está en scripts/escucha.mjs para Vite y dev.mjs; un test comprueba que coinciden.
+ */
+export function hostDeEscucha(entorno: NodeJS.ProcessEnv = process.env): string {
+  const fijo = entorno.HOST?.trim();
+  if (fijo) return fijo;
+  const si = (v: string | undefined) => ['on', '1', 'true', 'si', 'sí'].includes((v ?? '').trim().toLowerCase());
+  if (entorno.NODE_ENV === 'production' || entorno.APP_AUTH?.trim().toLowerCase() === 'on' || si(entorno.DEV_LAN)) return '0.0.0.0';
+  return '127.0.0.1';
+}
+
 export function modoAuth(entorno: NodeJS.ProcessEnv = process.env): ModoAuth {
   const v = entorno.APP_AUTH?.trim().toLowerCase();
   return v === 'on' || v === 'off' ? v : 'auto';

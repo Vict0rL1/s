@@ -5,6 +5,7 @@
 // independent of one another.
 
 import { cacheado, firmaDe, registrarCalentador } from '../cache/respuestas.ts';
+import { aplicarPublicada } from '../prediction/publicada.ts';
 import { versionsFor } from '../versions.ts';
 import type { FastifyInstance } from 'fastify';
 import { env, baseballConfig } from '../config.ts';
@@ -78,6 +79,8 @@ function describeRow(
   if (prediction && row.source === 'live' && !userChose) {
     logBaseballPrediction(row, prediction);
     if (snap) recordSnapshot(snap);
+    // La cabecera es lo publicado (lo mismo que lee Destacados); el cálculo de ahora, aparte.
+    aplicarPublicada('baseball', snap?.matchKey, prediction);
   }
   // Qué versión exacta produjo el número que se enseña (ver versions.ts).
   if (prediction) Object.assign(prediction, { versiones: versionsFor('baseball') });

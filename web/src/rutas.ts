@@ -11,13 +11,15 @@ export const RUTA_DE_PESTANA: Record<SportId, string> = {
   basketball: '/baloncesto',
   baseball: '/beisbol',
   nfl: '/nfl',
+  nhl: '/nhl',
+  ufc: '/ufc',
   tennis: '/tenis',
   bets: '/apuestas',
   trust: '/confianza',
 };
 
-export const PESTANAS: SportId[] = ['picks', 'football', 'basketball', 'baseball', 'nfl', 'tennis', 'bets', 'trust'];
-export const DEPORTES: SportId[] = ['football', 'basketball', 'baseball', 'nfl', 'tennis'];
+export const PESTANAS: SportId[] = ['picks', 'football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'tennis', 'bets', 'trust'];
+export const DEPORTES: SportId[] = ['football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'tennis'];
 
 /** La pestaña a la que pertenece una ruta, o null si es una página fuera de pestañas. */
 export function pestanaDeRuta(pathname: string): SportId | null {
@@ -30,12 +32,14 @@ export function pestanaDeRuta(pathname: string): SportId | null {
     return DEPORTES.includes(s) ? s : null;
   }
   if (seg[1] === 'jugador') return 'tennis';
+  if (seg[1] === 'luchador') return 'ufc';
   return null;
 }
 
 export const rutaPartido = (sport: string, id: string) => `/partido/${sport}/${encodeURIComponent(id)}`;
 export const rutaEquipo = (sport: string, league: string, id: string) => `/equipo/${sport}/${encodeURIComponent(league)}/${encodeURIComponent(id)}`;
 export const rutaJugador = (tour: string, id: string | number) => `/jugador/${encodeURIComponent(tour)}/${id}`;
+export const rutaLuchador = (id: string) => `/luchador/${encodeURIComponent(id)}`;
 export const rutaLiga = (sport: string, league: string) => `/liga/${sport}/${encodeURIComponent(league)}`;
 export const RUTA_AJUSTES = '/ajustes';
 export const RUTA_DIAGNOSTICO = '/confianza/diagnostico';

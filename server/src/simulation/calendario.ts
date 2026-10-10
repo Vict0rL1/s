@@ -43,8 +43,8 @@ export function guardarCalendario(sport: SportId, league: string, season: number
   return partidos.length;
 }
 
-/** Lo pendiente de la fuente a partir de `desde` (YYYYMMDD inclusive). */
-export function calendarioGuardado(sport: SportId, league: string, season: number, desde: string): Calendario {
+/** El calendario de la fuente desde `desde` (YYYYMMDD inclusive; '' = entero: lo pendiente lo decide `pendientesDe`). */
+export function calendarioGuardado(sport: SportId, league: string, season: number, desde = ''): Calendario {
   const filas = getDb()
     .prepare(
       `SELECT fixture_date AS fecha, home_id AS homeId, away_id AS awayId, neutral, source, updated_at
@@ -70,5 +70,41 @@ export function reconstruirDobleVuelta(equipos: string[], jugados: { homeId: str
   const out: Fixture[] = [];
   const ids = [...equipos].sort();
   for (const h of ids) for (const a of ids) if (h !== a && !hecho.has(`${h}|${a}`)) out.push({ fecha: '', homeId: h, awayId: a, neutral: false });
+  return out;
+}
+
+/** Un partido jugado, tal como lo devuelve `temporadaActual`. */
+export interface Jugado {
+  homeId: string;
+  awayId: string;
+  fecha?: string | null;
+}
+
+const diaDe = (ymd: string) => Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8)));
+
+/**
+ * Lo pendiente de un calendario: lo que NO tiene resultado emparejado (lote C, C6). Antes era
+ * «fecha ≥ hoy»: un partido adelantado o con la fecha de la fuente en otra zona horaria se
+ * simulaba ADEMÁS de contar en la clasificación, y uno aplazado dejaba de contar.
+ *
+ * Emparejado = mismo local y visitante y fecha a ±1 día (zonas horarias); sin fecha en el
+ * calendario (reconstruido), por par. Cada resultado descuenta un solo partido del calendario,
+ * para las ligas donde un cruce se repite (NBA, MLB).
+ */
+export function pendientesDe<J extends Jugado>(calendario: Fixture[], jugados: J[]): Fixture[] {
+  const libres = jugados.map((j) => ({ ...j, usado: false }));
+  const out: Fixture[] = [];
+  for (const f of calendario) {
+    const j = libres.find((x) => {
+      if (x.usado || x.homeId !== f.homeId || x.awayId !== f.awayId) return false;
+      if (!f.fecha || !x.fecha) return true;
+      return Math.abs(diaDe(f.fecha) - diaDe(x.fecha)) <= 86_400_000;
+    });
+    if (j) {
+      j.usado = true;
+      continue;
+    }
+    out.push(f);
+  }
   return out;
 }

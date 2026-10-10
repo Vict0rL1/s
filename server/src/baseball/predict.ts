@@ -40,6 +40,7 @@ import {
 import { getHomePark, getParkFactor } from './parkFactors.ts';
 import { getLeagueRunsPerGame, PITCHER_CARRYOVER } from './ratings.ts';
 import type { BsbRecord, LeagueId } from './types.ts';
+import { num, pct as pctEs } from '../numeros.ts';
 
 export const DISCLAIMER =
   'Estimación estadística basada en Elo con ventaja de campo, el lanzador abridor anunciado, ' +
@@ -171,7 +172,7 @@ export interface BsbPrediction {
   disclaimer: string;
 }
 
-const pct1 = (p: number) => (p * 100).toFixed(1);
+const pct1 = (p: number) => pctEs(p);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function sigmaFor(games: number, monthsStale: number): number {
@@ -193,8 +194,8 @@ function describeStarter(rating: number | null, starts: number): string {
   const pctBetter = Math.round((1 - rating) * 100);
   if (Math.abs(pctBetter) < 4) return `en la media (${starts} aperturas)`;
   return pctBetter > 0
-    ? `permite ~${pctBetter}% menos carreras de lo esperado (${starts} aperturas)`
-    : `permite ~${-pctBetter}% más carreras de lo esperado (${starts} aperturas)`;
+    ? `permite ~${pctBetter}\u00a0% menos carreras de lo esperado (${starts} aperturas)`
+    : `permite ~${-pctBetter}\u00a0% más carreras de lo esperado (${starts} aperturas)`;
 }
 
 function buildStarter(league: LeagueId, id: string | null, weightApplied: number): BsbStarter {
@@ -437,8 +438,8 @@ export function buildBaseballPrediction(
   // ---- summary ----
   const top = scorelines[0];
   const headline = close
-    ? `Partido muy igualado: ${outcomeLabel} es solo ligeramente favorito (${pct1(outcomeProb)}%).`
-    : `Lo más probable: ${outcomeLabel} (${pct1(outcomeProb)}%), con ${top.label} como marcador más probable (${pct1(top.probability)}%).`;
+    ? `Partido muy igualado: ${outcomeLabel} es solo ligeramente favorito (${pct1(outcomeProb)}).`
+    : `Lo más probable: ${outcomeLabel} (${pct1(outcomeProb)}), con ${top.label} como marcador más probable (${pct1(top.probability)}).`;
 
   const bullets: string[] = [];
   if (inviernos > 0) {
@@ -449,7 +450,7 @@ export function buildBaseballPrediction(
     );
   }
   bullets.push(
-    `Ganador: ${home.name} ${pct1(win.home)}% · ${away.name} ${pct1(win.away)}%. ` +
+    `Ganador: ${home.name} ${pct1(win.home)} · ${away.name} ${pct1(win.away)}. ` +
       `El béisbol es el deporte más igualado de los cuatro: el mejor equipo de la liga pierde ~60 partidos al año.`,
   );
   bullets.push(
@@ -457,24 +458,24 @@ export function buildBaseballPrediction(
       `${away.name} ${away.starter.name ?? 'sin anunciar'} (${away.starter.label}).`,
   );
   bullets.push(
-    `Carreras esperadas: ${home.name} ${home.expectedRuns} – ${away.expectedRuns} ${away.name} ` +
-      `(total ${round2(expectedTotalRuns(dist))}).`,
+    `Carreras esperadas: ${home.name} ${num(home.expectedRuns)} – ${num(away.expectedRuns)} ${away.name} ` +
+      `(total ${num(round2(expectedTotalRuns(dist)))}).`,
   );
   bullets.push(
-    `Más de ${totalLine} carreras: ${pct1(over)}% · menos: ${pct1(1 - over)}%. ` +
-      `Línea de carreras: ${home.name} −1.5 al ${pct1(line.homeCovers)}%.`,
+    `Más de ${num(totalLine)} carreras: ${pct1(over)} · menos: ${pct1(1 - over)}. ` +
+      `Línea de carreras: ${home.name} −1,5 al ${pct1(line.homeCovers)}.`,
   );
   if (park && Math.abs(park.factor - 1) >= 0.02) {
     const pct = Math.round((park.factor - 1) * 100);
     const runs = round2(expectedTotal - expectedTotal / park.factor);
     bullets.push(
-      `Estadio: ${park.name} ${pct > 0 ? 'sube' : 'baja'} el total un ${Math.abs(pct)}% ` +
-        `(${runs > 0 ? '+' : ''}${runs} carreras) sobre un estadio neutro, medido en ${park.games} partidos allí. ` +
+      `Estadio: ${park.name} ${pct > 0 ? 'sube' : 'baja'} el total un ${Math.abs(pct)}\u00a0% ` +
+        `(${runs > 0 ? '+' : ''}${num(runs)} carreras) sobre un estadio neutro, medido en ${park.games} partidos allí. ` +
         `Ya está dentro de las carreras esperadas.`,
     );
   }
   bullets.push(
-    `Probabilidad de entradas extra: ${pct1(dist.extraInnings)}% (en MLB ocurre en ~8-9% de los partidos).`,
+    `Probabilidad de entradas extra: ${pct1(dist.extraInnings)} (en MLB ocurre en ~8-9\u00a0% de los partidos).`,
   );
   bullets.push(
     `Elo: ${home.name} ${Math.round(home.elo)} (#${home.eloRank}) vs ${away.name} ${Math.round(away.elo)} (#${away.eloRank}).`,
@@ -487,8 +488,8 @@ export function buildBaseballPrediction(
   );
   if (home.pythagorean != null && away.pythagorean != null) {
     bullets.push(
-      `Pitagórico (lo que dicen sus carreras): ${home.name} ${pct1(home.pythagorean)}% · ` +
-        `${away.name} ${pct1(away.pythagorean)}%. La diferencia con el balance real es la parte de suerte.`,
+      `Pitagórico (lo que dicen sus carreras): ${home.name} ${pct1(home.pythagorean)} · ` +
+        `${away.name} ${pct1(away.pythagorean)}. La diferencia con el balance real es la parte de suerte.`,
     );
   }
   if (home.last10.length && away.last10.length) {
@@ -503,11 +504,11 @@ export function buildBaseballPrediction(
   if (marketComparison.market) {
     const m = marketComparison.market;
     if (marketComparison.verdict === 'agree') {
-      bullets.push(`Las casas coinciden a grandes rasgos (${pct1(m.home)}% / ${pct1(m.away)}%).`);
+      bullets.push(`Las casas coinciden a grandes rasgos (${pct1(m.home)} / ${pct1(m.away)}).`);
     } else {
       const which = marketComparison.verdict === 'value_home' ? home.name : away.name;
       const diff = marketComparison.verdict === 'value_home' ? marketComparison.edge!.home : marketComparison.edge!.away;
-      bullets.push(`El modelo da ${(diff * 100).toFixed(1)} pp más a ${which} que el mercado: posible value.`);
+      bullets.push(`El modelo da ${num(diff * 100, 1)} pp más a ${which} que el mercado: posible value.`);
     }
   } else {
     bullets.push('Sin cuotas disponibles para comparar con el mercado.');
@@ -515,7 +516,7 @@ export function buildBaseballPrediction(
   if (reliability.level !== 'high') {
     bullets.push(
       `⚠️ ${reliability.label.charAt(0).toUpperCase() + reliability.label.slice(1)}: ` +
-        `tómalo como un rango (±${reliability.marginPp} pp).` +
+        `tómalo como un rango (±${num(reliability.marginPp, 1)} pp).` +
         (reliability.reasons.length ? ` ${reliability.reasons[0]}` : ''),
     );
   }

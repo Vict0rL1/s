@@ -1,6 +1,6 @@
 // Piezas compartidas de la interfaz: days. Partido de ui/index.tsx en la Fase 5 (ningún import cambia: index.tsx reexporta).
 import type { ReactNode } from 'react';
-import { LOSS_COLOR, PROFIT_COLOR } from '../../lib/theme';
+import { PROFIT_TEXT, LOSS_TEXT } from '../../lib/theme';
 import { relativeTime, shortTime } from '../../lib/format';
 import { CheckIcon, CrossIcon } from '../icons';
 import { pillClass } from './states';
@@ -80,7 +80,7 @@ export function DayFilter({
         className={pillClass(selected === null)}
       >
         {t('dias.todos')}
-        <span className="ml-1.5 opacity-60">{total}</span>
+        <span className="ml-1.5 text-(--ink-soft)">{total}</span>
       </button>
       {days.map((d) => (
         <button
@@ -91,7 +91,7 @@ export function DayFilter({
           className={pillClass(selected === d.key)}
         >
           {d.label}
-          <span className="ml-1.5 opacity-60">{d.count}</span>
+          <span className="ml-1.5 text-(--ink-soft)">{d.count}</span>
         </button>
       ))}
     </div>
@@ -171,7 +171,7 @@ export function ResultBanner({
         {modelCalledIt != null && (
           <span
             className="text-[13px] font-medium"
-            style={{ color: modelCalledIt ? PROFIT_COLOR : LOSS_COLOR }}
+            style={{ color: modelCalledIt ? PROFIT_TEXT : LOSS_TEXT }}
           >
             <span className="inline-flex items-center gap-1">
               {modelCalledIt ? <CheckIcon size={14} strokeWidth={2.4} /> : <CrossIcon size={14} strokeWidth={2.4} />}

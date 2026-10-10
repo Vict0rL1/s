@@ -2,6 +2,7 @@ import type { ClimaFicha } from '../lib/clima';
 import { TECHO } from '../lib/clima';
 import { Panel, SectionTitle } from './ui';
 import { useI18n, type Clave } from '../i18n';
+import { num as numF } from '../lib/formato';
 
 /**
  * El clima del partido, como información: la previsión más reciente (T-24h → T-1h) o lo
@@ -40,7 +41,7 @@ export function ClimaPanel({ clima }: { clima: ClimaFicha | null | undefined }) 
           <div>
             <dt className="text-(--ink-muted)">{t('clima.lluvia')}</dt>
             <dd className="text-(--ink-strong)">
-              {clima.probLluvia != null ? `${Math.round(clima.probLluvia)} %` : clima.lluviaMm != null ? `${clima.lluviaMm.toFixed(1)} mm` : '—'}
+              {clima.probLluvia != null ? `${Math.round(clima.probLluvia)} %` : clima.lluviaMm != null ? `${numF(clima.lluviaMm, 1)} mm` : '—'}
             </dd>
           </div>
           <div>

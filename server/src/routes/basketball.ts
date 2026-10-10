@@ -5,6 +5,7 @@
 // mixed up by a client — which is the whole point of the separate tab.
 
 import { cacheado, firmaDe, registrarCalentador } from '../cache/respuestas.ts';
+import { aplicarPublicada } from '../prediction/publicada.ts';
 import { versionsFor } from '../versions.ts';
 import type { FastifyInstance } from 'fastify';
 import { basketballConfig, env } from '../config.ts';
@@ -77,6 +78,8 @@ function describeRow(row: UpcomingGameRow, withPrediction = true) {
   if (prediction && row.source === 'live') {
     logGamePrediction(row, prediction);
     if (snap) recordSnapshot(snap);
+    // La cabecera es lo publicado (lo mismo que lee Destacados); el cálculo de ahora, aparte.
+    aplicarPublicada('basketball', snap?.matchKey, prediction);
   }
   // Qué versión exacta produjo el número que se enseña (ver versions.ts).
   if (prediction) Object.assign(prediction, { versiones: versionsFor('basketball') });

@@ -62,7 +62,10 @@ export function decidir(filas: Fila[]): { conservar: number[]; borrar: number[] 
   for (const g of grupos.values()) {
     g.sort((a, b) => a.observed_at.localeCompare(b.observed_at) || a.id - b.id);
     conservar.add(g[0].id); // apertura
-    const inicio = g[0].commence_time ? Date.parse(g[0].commence_time) : null;
+    // El ancla es la ÚLTIMA hora de inicio conocida (lote B, B5): un partido aplazado trae la
+    // nueva en sus últimas observaciones, y T-24h, T-6h, T-1h y el cierre son respecto a ella.
+    const conHora = [...g].reverse().find((f) => f.commence_time);
+    const inicio = conHora?.commence_time ? Date.parse(conHora.commence_time) : null;
     if (inicio != null) {
       for (const h of MARCAS_HORAS) {
         const marca = inicio - h * 3_600_000;

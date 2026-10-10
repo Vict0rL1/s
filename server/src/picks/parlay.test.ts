@@ -21,12 +21,16 @@ test('patas sin vínculo: la conjunta es el producto', () => {
   assert.ok(Math.abs((r.ventaja as number) - 0) < 1e-12);
 });
 
-test('misma liga y día: corrección pequeña y positiva, con el vínculo explicado', () => {
-  const r = combinada([pata('a', 0.5), pata('b', 0.5)]);
-  assert.equal(r.vinculos.length, 1);
-  assert.ok(Math.abs(r.vinculos[0].rho - SAME_LEAGUE_DAY_RHO) < 1e-12);
-  assert.ok(Math.abs(r.conjunta - 0.25 * (1 + SAME_LEAGUE_DAY_RHO)) < 1e-12);
-  assert.ok(r.conjunta > r.independiente);
+test('C1: misma liga y día: la conjunta NO se infla (ρ medida indistinguible de cero → 0 entre partidos distintos)', () => {
+  const r = combinada([pata('a', 0.1), pata('b', 0.1)]);
+  assert.ok(Math.abs(r.conjunta - 0.01) < 1e-12, `${r.conjunta}: el producto, sin el 4 % de inflación del extremo alto del intervalo`);
+  assert.ok(r.factorCorrelacion <= 1 && r.factorCorrelacion > 0);
+  assert.ok(SAME_LEAGUE_DAY_RHO > 0, 'la ρ prudente sigue existiendo para DIMENSIONAR (libro manual)');
+  assert.ok(r.vinculos.every((v) => v.rho === 0), JSON.stringify(r.vinculos));
+  // Diez patas de la misma jornada: antes el factor pasaba de 6; ahora nunca más de 1.
+  const diez = combinada(Array.from({ length: 10 }, (_, i) => pata(`p${i}`, 0.1)));
+  assert.ok(diez.conjunta <= diez.independiente + 1e-15);
+  assert.ok(diez.factorCorrelacion <= 1);
 });
 
 test('dos selecciones del mismo partido son incompatibles; la misma selección repetida cuenta una vez', () => {

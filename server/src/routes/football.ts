@@ -4,6 +4,7 @@
 // basketball game, which is what keeps the three tabs genuinely independent.
 
 import { cacheado, firmaDe, registrarCalentador } from '../cache/respuestas.ts';
+import { aplicarPublicada } from '../prediction/publicada.ts';
 import { versionsFor } from '../versions.ts';
 import type { FastifyInstance } from 'fastify';
 import { env, footballConfig } from '../config.ts';
@@ -81,6 +82,8 @@ function describeRow(
   if (prediction && row.source === 'live' && !userAdjusted) {
     logFootballPrediction(row, prediction);
     if (snap) recordSnapshot(snap);
+    // La cabecera es lo publicado (lo mismo que lee Destacados); el cálculo de ahora, aparte.
+    aplicarPublicada('football', snap?.matchKey, prediction);
   }
   // Qué versión exacta produjo el número que se enseña (ver versions.ts).
   if (prediction) Object.assign(prediction, { versiones: versionsFor('football') });

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { fbApi } from '../../lib/football';
 import { conNodos, useI18n } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 export function TrackRecordPanel({ league }: { league: string }) {
   const { t } = useI18n();
@@ -43,7 +44,7 @@ export function TrackRecordPanel({ league }: { league: string }) {
               })}
               <span className="text-(--ink-soft)">
                 {' '}
-                {t('fbt.acerto', { pct: ((data.accuracy ?? 0) * 100).toFixed(1) })}
+                {t('fbt.acerto', { pct: numF((data.accuracy ?? 0) * 100, 1) })}
               </span>
             </span>
           )}
@@ -60,7 +61,7 @@ export function TrackRecordPanel({ league }: { league: string }) {
               {conNodos(t('fbt.empates'), {
                 pred: <strong>{data.draws.predicted}</strong>,
                 real: <strong>{data.draws.actual}</strong>,
-                pct: <strong>{((data.draws.meanProbability ?? 0) * 100).toFixed(1)}%</strong>,
+                pct: <strong>{pctF((data.draws.meanProbability ?? 0), 1)}</strong>,
               })}
             </p>
           )}

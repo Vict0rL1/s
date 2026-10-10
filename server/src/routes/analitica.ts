@@ -55,6 +55,9 @@ export async function registerAnaliticaRoutes(app: FastifyInstance): Promise<voi
       if (!featureEncendida('simulacion.temporada')) return reply.code(404).send({ error: 'apagado (features.json: simulacion.temporada)' });
       const s = req.params.sport;
       if (!isSportId(s) || s === 'tennis') return reply.code(404).send({ error: 'deporte sin temporada de liga' });
+      // La NHL no tiene simulación: ver DeporteSimulable en simulation/season.ts.
+      if (s === 'nhl') return reply.code(404).send({ error: 'la NHL no tiene simulación de temporada (sin calendario completo ni derrotas en la prórroga en el archivo)' });
+      if (s === 'ufc') return reply.code(404).send({ error: 'la UFC no tiene temporada ni clasificación de liga que simular' });
       if (!/^[a-z0-9_-]{1,32}$/.test(req.params.league)) return reply.code(404).send({ error: 'liga desconocida' });
       return simulacionDelDia(s, req.params.league);
     },
@@ -111,12 +114,13 @@ export async function registerAnaliticaRoutes(app: FastifyInstance): Promise<voi
     async (req, reply) => {
       const s = req.params.sport;
       if (!isSportId(s)) return reply.code(404).send({ error: 'deporte desconocido' });
-      const DEPORTE: Record<SportId, string> = { football: 'Fútbol', basketball: 'Baloncesto', baseball: 'Béisbol', nfl: 'NFL', tennis: 'Tenis' };
+      const DEPORTE: Record<SportId, string> = { football: 'Fútbol', basketball: 'Baloncesto', baseball: 'Béisbol', nfl: 'NFL', nhl: 'NHL', ufc: 'UFC', tennis: 'Tenis' };
       const f = FUENTES.find((x) => x.deporte === DEPORTE[s]);
       if (!f) return reply.code(404).send({ error: 'deporte desconocido' });
-      const marcador: Record<SportId, [string, string] | null> = { football: ['home_goals', 'away_goals'], basketball: ['home_pts', 'away_pts'], baseball: ['home_runs', 'away_runs'], nfl: ['home_points', 'away_points'], tennis: null };
+      const marcador: Record<SportId, [string, string] | null> = { football: ['home_goals', 'away_goals'], basketball: ['home_pts', 'away_pts'], baseball: ['home_runs', 'away_runs'], nfl: ['home_points', 'away_points'], nhl: ['home_goals', 'away_goals'], ufc: ['home_score', 'away_score'], tennis: null };
       const m = marcador[s];
-      const extra = m ? `, ${m[0]} AS g1, ${m[1]} AS g2` : ', winner_id AS ganador, p1_id AS p1';
+      // La UFC: el «marcador» 1-0 solo dice quién ganó; lo que se enseña es el método (o empate / sin resultado).
+      const extra = (m ? `, ${m[0]} AS g1, ${m[1]} AS g2` : ', winner_id AS ganador, p1_id AS p1') + (s === 'ufc' ? ', outcome AS oc, metodo AS met' : '');
       let fila: Record<string, unknown> | undefined;
       try {
         fila = getDb().prepare(`SELECT ${f.casa} AS casa, ${f.fuera} AS fuera, ${probSql(f)} AS p ${f.empate ? `, ${empateSql(f)} AS pe` : ''}, ${f.resuelto} AS resuelto, commence_time AS cuando ${extra} FROM ${f.log} WHERE ${f.clave} = ? ORDER BY rowid DESC LIMIT 1`).get(req.params.key) as Record<string, unknown> | undefined;
@@ -132,14 +136,16 @@ export async function registerAnaliticaRoutes(app: FastifyInstance): Promise<voi
           const g1 = Number(fila.g1);
           const g2 = Number(fila.g2);
           resultado = g1 > g2 ? 'casa' : g1 === g2 ? 'empate' : 'fuera';
-          marcadorTxt = `${g1}–${g2}`;
+          marcadorTxt = s === 'ufc' ? (fila.oc === 'EMPATE' ? 'empate' : fila.oc === 'NC' ? 'sin resultado' : ((fila.met as string | null) ?? null)) : `${g1}–${g2}`;
         } else resultado = fila.ganador === fila.p1 ? 'casa' : 'fuera';
       }
       const p = Number(fila.p);
       const pe = fila.pe == null ? null : Number(fila.pe);
       const probs = pe == null ? [p, 1 - p] : [p, pe, 1 - p - pe];
       const favorito = probs.indexOf(Math.max(...probs));
-      const indice = resultado == null ? null : resultado === 'casa' ? 0 : resultado === 'empate' ? 1 : probs.length - 1;
+      // Con dos resultados, un empate (la NFL; la UFC con empate o sin resultado) no es acierto ni fallo:
+      // la apuesta se devuelve. Antes caía en el índice 1, que con dos salidas es el visitante.
+      const indice = resultado == null ? null : resultado === 'casa' ? 0 : resultado === 'empate' ? (probs.length === 3 ? 1 : null) : probs.length - 1;
       return {
         sport: s,
         matchKey: req.params.key,

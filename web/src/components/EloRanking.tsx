@@ -30,6 +30,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { spreadOf, winProbability } from '../lib/elo';
 import { conNodos, useI18n } from '../i18n';
+import { pct as pctF } from '../lib/formato';
 
 export interface EloRow {
   id: string;
@@ -157,7 +158,7 @@ export default function EloRanking({
               {conNodos(t('elo.primeroUltimo'), {
                 pct: (
                   <strong className="font-semibold text-(--ink-strong)">
-                    {(spread.topBeatsBottom * 100).toFixed(0)} %
+                    {pctF(spread.topBeatsBottom, 0)}
                   </strong>
                 ),
               })}{' '}
@@ -177,7 +178,7 @@ export default function EloRanking({
             />
           )}
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0}>
             <table className="w-full min-w-[34rem] text-left text-[14px] tabular-nums">
               <thead className="text-(--ink-muted)">
                 <tr>
@@ -248,7 +249,7 @@ export default function EloRanking({
                           </span>
                         </span>
                       </td>
-                      <td className="py-1 pr-3 text-(--ink-soft)">{(p * 100).toFixed(0)} %</td>
+                      <td className="py-1 pr-3 text-(--ink-soft)">{pctF(p, 0)}</td>
                       {(r.extra ?? []).map((x, i) => (
                         <td key={i} className="py-1 pr-2" title={x.title}>
                           {x.value}

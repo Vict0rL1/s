@@ -64,6 +64,26 @@ export const webhook: Canal = {
   },
 };
 
+/**
+ * Las opciones del transporte SMTP (D17 de la revisión del 8 de octubre de 2026).
+ *
+ * 465 es TLS desde el primer byte (`secure`). En cualquier otro puerto se EXIGE STARTTLS
+ * (`requireTLS`): antes era opcional, y si el servidor no lo ofrecía —o alguien en medio lo
+ * quitaba— usuario y contraseña viajaban en claro. Para un relé local sin TLS (el 25 de la
+ * propia máquina) hay que decirlo: SMTP_TLS=off.
+ */
+export function opcionesSmtp(e: Record<string, string | undefined>) {
+  const port = Number(e.SMTP_PORT) || 587;
+  const sinTls = e.SMTP_TLS?.trim().toLowerCase() === 'off';
+  return {
+    host: e.SMTP_HOST,
+    port,
+    secure: port === 465,
+    requireTLS: port !== 465 && !sinTls,
+    auth: e.SMTP_USER ? { user: e.SMTP_USER, pass: e.SMTP_PASS ?? '' } : undefined,
+  };
+}
+
 export const email: Canal = {
   nombre: 'email',
   descripcion: 'Correo por SMTP (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_TO).',
@@ -71,13 +91,7 @@ export const email: Canal = {
   enviar: async (m, e) => {
     try {
       const { default: nodemailer } = await import('nodemailer');
-      const port = Number(e.SMTP_PORT) || 587;
-      const transporte = nodemailer.createTransport({
-        host: e.SMTP_HOST,
-        port,
-        secure: port === 465,
-        auth: e.SMTP_USER ? { user: e.SMTP_USER, pass: e.SMTP_PASS ?? '' } : undefined,
-      });
+      const transporte = nodemailer.createTransport(opcionesSmtp(e));
       await transporte.sendMail({ from: e.SMTP_FROM, to: e.SMTP_TO, subject: m.titulo, text: m.cuerpo + (m.url ? `\n\n${m.url}` : '') });
       return { ok: true, error: null };
     } catch (err) {

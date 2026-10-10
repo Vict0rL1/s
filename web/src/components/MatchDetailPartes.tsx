@@ -1,6 +1,7 @@
 // Piezas de MatchDetail.tsx (partido en la Fase 5: ningún fichero de la interfaz pasa de ~400 líneas).
 import { type FitnessSignals, type Prediction, type ServeStats } from '../lib/api';
 import { pct } from '../lib/format';
+import { num } from '../lib/formato';
 import { P1_COLOR, P2_COLOR } from './ProbabilityBars';
 import { conNodos, useI18n, type Clave } from '../i18n';
 
@@ -16,8 +17,8 @@ export function Last5({ results, color }: { results: boolean[]; color: string })
           className="inline-flex h-4 w-4 items-center justify-center rounded text-[11px] font-bold"
           style={{
             backgroundColor: w ? color : 'transparent',
-            color: w ? '#0a0f1e' : '#f87171',
-            border: w ? 'none' : '1px solid #f87171',
+            color: w ? '#0a0f1e' : 'var(--status-critical)',
+            border: w ? 'none' : '1px solid var(--status-critical)',
           }}
         >
           {w ? t('det.v') : t('det.d')}
@@ -62,7 +63,7 @@ export function ReliabilityBlock({ prediction }: { prediction: Prediction }) {
           nivel: <strong className="capitalize">{rel.label}</strong>,
           lo: <strong className="tabular-nums">{pct(lo, 1)}</strong>,
           hi: <strong className="tabular-nums">{pct(hi, 1)}</strong>,
-          margen: <span className="text-(--ink-soft)">(±{rel.marginPp} pp)</span>,
+          margen: <span className="text-(--ink-soft)">(±{num(rel.marginPp, 1)} pp)</span>,
         })}
       </p>
       <div className="mt-2 grid grid-cols-2 gap-2 text-[14px]">
@@ -206,7 +207,7 @@ export function ServeCompare({
 }) {
   const { t } = useI18n();
   if (s1.matches === 0 && s2.matches === 0) return null;
-  const fmt = (v: number | null, suf: string) => (v == null ? '—' : `${v}${suf}`);
+  const fmt = (v: number | null, suf: string) => (v == null ? '—' : `${num(v, 1)}${suf ? `\u00a0${suf}` : ''}`);
   return (
     <div className="rounded-lg bg-(--raised) p-3">
       <div className="mb-2 text-[14px] uppercase tracking-wide text-(--ink-muted)">
@@ -221,14 +222,14 @@ export function ServeCompare({
             <div key={row.key} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 text-[14px]">
               <span
                 className="w-16 text-right tabular-nums"
-                style={{ color: better === 1 ? P1_COLOR : '#cbd5e1', fontWeight: better === 1 ? 600 : 400 }}
+                style={{ color: better === 1 ? P1_COLOR : 'var(--ink-body)', fontWeight: better === 1 ? 600 : 400 }}
               >
                 {fmt(v1 as number | null, row.suffix)}
               </span>
               <span className="text-center text-(--ink-muted)">{t(row.label)}</span>
               <span
                 className="w-16 tabular-nums"
-                style={{ color: better === 2 ? P2_COLOR : '#cbd5e1', fontWeight: better === 2 ? 600 : 400 }}
+                style={{ color: better === 2 ? P2_COLOR : 'var(--ink-body)', fontWeight: better === 2 ? 600 : 400 }}
               >
                 {fmt(v2 as number | null, row.suffix)}
               </span>

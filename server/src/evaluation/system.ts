@@ -14,7 +14,7 @@ import { leerWalkForward } from './walkforward.ts';
 import { UMBRALES_MUESTRA } from './sample.ts';
 import { SPORT_IDS } from '../sports.ts';
 
-const NOMBRE: Record<string, string> = { tennis: 'tenis', football: 'fútbol', basketball: 'NBA', baseball: 'MLB', nfl: 'NFL' };
+const NOMBRE: Record<string, string> = { tennis: 'tenis', football: 'fútbol', basketball: 'NBA', baseball: 'MLB', nfl: 'NFL', nhl: 'NHL', ufc: 'UFC' };
 const LOGS = ['prediction_log', 'fb_prediction_log', 'bb_prediction_log', 'bsb_prediction_log', 'naf_prediction_log'];
 
 export interface ConfianzaSistema {

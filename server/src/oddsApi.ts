@@ -40,10 +40,10 @@ export type OddsApiFailure =
 
 /** Qué hacer con cada fallo, en una frase. La leen el doctor y la pantalla. */
 export const ACCION_POR_FALLO: Record<OddsApiFailure, string> = {
-  sin_clave: 'Añade ODDS_API_KEY=tu-clave al archivo .env de la raíz y reinicia el servidor.',
+  sin_clave: 'Pon tu clave con `npm run clave` (o añade ODDS_API_KEY=tu-clave al .env de la raíz) y reinicia el servidor.',
   clave_invalida:
-    'La clave no es válida para The Odds API. Cópiala otra vez desde el correo de ' +
-    'the-odds-api.com (32 caracteres, sin espacios ni comillas) y reinicia.',
+    'La clave no es válida para The Odds API. Cópiala otra vez desde tu cuenta de ' +
+    'the-odds-api.com, ponla con `npm run clave` (32 caracteres) y reinicia.',
   sin_creditos:
     'Tu plan se quedó sin créditos este mes. Espera al reinicio mensual, cambia de plan, ' +
     'o baja el gasto con `npm run ahorro`.',

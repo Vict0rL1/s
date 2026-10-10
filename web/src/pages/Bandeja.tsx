@@ -23,7 +23,7 @@ interface Aviso {
 }
 interface Respuesta { avisos: Aviso[]; noLeidas: number; tipos: { tipo: string; n: number }[]; hayMas: boolean }
 
-const DEPORTES = ['football', 'basketball', 'baseball', 'nfl', 'tennis'];
+const DEPORTES = ['football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'tennis'];
 const COLOR: Record<Aviso['severidad'], string | undefined> = { importante: STATUS.critical, aviso: STATUS.warning, info: undefined };
 
 export default function Bandeja() {
@@ -55,7 +55,7 @@ export default function Bandeja() {
     <div>
       <h2 className="mb-1 text-[20px] font-semibold text-(--ink-strong)">{t('nav.bandeja')}</h2>
       <p className="mb-4 max-w-3xl text-[14px] leading-relaxed text-(--ink-soft)">{t('bandeja.intro')}</p>
-      {error && <p className="text-[14px] text-(--ink-soft)">{error}</p>}
+      {error && <p role="alert" className="text-[14px] text-(--ink-soft)">{error}</p>}
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         <button className={pillClass(!soloNoLeidas)} onClick={() => setSoloNoLeidas(false)}>{t('bandeja.todas')}</button>
         <button className={pillClass(soloNoLeidas)} onClick={() => setSoloNoLeidas(true)}>

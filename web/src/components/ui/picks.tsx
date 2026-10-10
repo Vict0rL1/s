@@ -1,9 +1,10 @@
 // Piezas compartidas de la interfaz: picks. Partido de ui/index.tsx en la Fase 5 (ningún import cambia: index.tsx reexporta).
 import { useState } from 'react';
-import { INK, LOSS_COLOR, PROFIT_COLOR } from '../../lib/theme';
+import { INK, PROFIT_TEXT, LOSS_TEXT } from '../../lib/theme';
 import { relativeTime, shortTime } from '../../lib/format';
 import { StatusMark } from '../icons';
 import { conNodos, localeDe, useI18n, type Clave, type Traducir } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 // Los nombres de mercado y selección son también claves de lib/picks (tasas base, orden): se
 // traducen al pintarlos, no en los datos.
@@ -162,7 +163,7 @@ export function PicksPanel({
     );
   }
 
-  const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
+  const pct = (p: number) => `${pctF(p, 1)}`;
 
   return (
     <section className="mb-6 overflow-hidden rounded-xl border border-(--line) bg-(--tint)">
@@ -194,7 +195,7 @@ export function PicksPanel({
 
           {/* Horizontal scroll on the table only, never the page — a wide row must
               not be able to push the whole layout sideways on a phone. */}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0}>
             <table className="w-full min-w-[46rem] border-collapse text-[14px]">
               <thead>
                 <tr className="border-y border-(--line) text-left text-[12px] uppercase tracking-[0.05em] text-(--ink-muted)">
@@ -245,18 +246,18 @@ export function PicksPanel({
                             : Math.abs(p.edge) < 0.005
                               ? INK.muted
                               : p.edge > 0
-                                ? PROFIT_COLOR
-                                : LOSS_COLOR,
+                                ? PROFIT_TEXT
+                                : LOSS_TEXT,
                       }}
                     >
                       {p.edge == null
                         ? '—'
                         : Math.abs(p.edge) < 0.005
                           ? '0,0 pp'
-                          : `${p.edge > 0 ? '+' : ''}${(p.edge * 100).toFixed(1)} pp`}
+                          : `${p.edge > 0 ? '+' : ''}${numF(p.edge * 100, 1)} pp`}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-(--ink-body)">
-                      {p.fairOdds.toFixed(2)}
+                      {numF(p.fairOdds, 2)}
                       {p.odds != null && (
                         <span
                           className="ml-1.5 text-[12px]"
@@ -265,11 +266,11 @@ export function PicksPanel({
                           // model — that comparison is circular, so the colour is
                           // withheld rather than flattering our own arithmetic.
                           style={{
-                            color: !demoOdds && p.odds > p.fairOdds ? PROFIT_COLOR : INK.muted,
+                            color: !demoOdds && p.odds > p.fairOdds ? PROFIT_TEXT : INK.muted,
                           }}
-                          title={t('discrepancias.cuotaOfrecida', { c: p.odds.toFixed(2) })}
+                          title={t('discrepancias.cuotaOfrecida', { c: numF(p.odds, 2) })}
                         >
-                          ({p.odds.toFixed(2)})
+                          ({numF(p.odds, 2)})
                         </span>
                       )}
                     </td>
@@ -281,7 +282,7 @@ export function PicksPanel({
                     <td className="px-4 py-2.5 text-right tabular-nums text-(--ink-body)">
                       {p.odds == null ? (
                         <span className="text-[13px] text-(--ink-muted)">
-                          {t('discrepancias.busca', { c: p.fairOdds.toFixed(2) })}
+                          {t('discrepancias.busca', { c: numF(p.fairOdds, 2) })}
                         </span>
                       ) : (
                         (stake * p.odds).toLocaleString(localeDe(idioma), { maximumFractionDigits: 0 })

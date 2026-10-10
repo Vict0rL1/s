@@ -28,6 +28,7 @@ import type { EventoConfianza } from './types.ts';
 import type { Incertidumbre, Estabilidad, Desacuerdo } from './perturbation.ts';
 import type { CalidadDatos } from './dataQuality.ts';
 import type { CalidadMercado } from './market.ts';
+import { num, pct as pctEs } from '../numeros.ts';
 
 export const ABSTENCION = {
   calidadDatosMin: 60,
@@ -122,7 +123,7 @@ export interface Contexto {
   now?: Date;
 }
 
-const pct = (x: number) => `${(x * 100).toFixed(1).replace('.', ',')} %`;
+const pct = (x: number) => pctEs(x);
 
 export function confianza(c: Omit<Contexto, 'desapareceDe'>): Confianza {
   const s: Senal[] = [];
@@ -131,14 +132,14 @@ export function confianza(c: Omit<Contexto, 'desapareceDe'>): Confianza {
     u.sesgoCalibracionPp == null
       ? { ok: false, texto: 'tramo de probabilidad sin calibración histórica medida' }
       : Math.abs(u.sesgoCalibracionPp) <= 2
-        ? { ok: true, texto: `tramo histórico bien calibrado (sesgo ${u.sesgoCalibracionPp} pp, n ${u.nTramo})` }
-        : { ok: false, texto: `tramo histórico descalibrado (${u.sesgoCalibracionPp} pp, n ${u.nTramo})` },
+        ? { ok: true, texto: `tramo histórico bien calibrado (sesgo ${num(u.sesgoCalibracionPp)} pp, n ${u.nTramo})` }
+        : { ok: false, texto: `tramo histórico descalibrado (${num(u.sesgoCalibracionPp)} pp, n ${u.nTramo})` },
   );
-  s.push(u.ruidoRatingPp <= 4 ? { ok: true, texto: `incertidumbre de rating baja (±${u.ruidoRatingPp} pp)` } : { ok: false, texto: `incertidumbre de rating alta (±${u.ruidoRatingPp} pp)` });
+  s.push(u.ruidoRatingPp <= 4 ? { ok: true, texto: `incertidumbre de rating baja (±${num(u.ruidoRatingPp)} pp)` } : { ok: false, texto: `incertidumbre de rating alta (±${num(u.ruidoRatingPp)} pp)` });
   s.push(c.calidad.puntuacion >= 80 ? { ok: true, texto: `calidad de datos alta (${c.calidad.puntuacion}/100)` } : { ok: false, texto: `calidad de datos ${c.calidad.puntuacion}/100` });
-  s.push(c.estabilidad.nivel === 'ALTA' ? { ok: true, texto: 'predicción estable ante sus supuestos' } : { ok: false, texto: `estabilidad ${c.estabilidad.nivel} (P10–P90: ${c.estabilidad.anchoPp} pp)` });
+  s.push(c.estabilidad.nivel === 'ALTA' ? { ok: true, texto: 'predicción estable ante sus supuestos' } : { ok: false, texto: `estabilidad ${c.estabilidad.nivel} (P10–P90: ${num(c.estabilidad.anchoPp)} pp)` });
   if (c.desacuerdo.nivel !== 'SIN COMPONENTES') {
-    s.push(c.desacuerdo.nivel === 'BAJO' ? { ok: true, texto: 'los componentes del modelo coinciden' } : { ok: false, texto: `desacuerdo ${c.desacuerdo.nivel} entre componentes (${c.desacuerdo.rangoPp} pp)` });
+    s.push(c.desacuerdo.nivel === 'BAJO' ? { ok: true, texto: 'los componentes del modelo coinciden' } : { ok: false, texto: `desacuerdo ${c.desacuerdo.nivel} entre componentes (${num(c.desacuerdo.rangoPp)} pp)` });
   }
   if (c.evento.ood.length) for (const o of c.evento.ood) s.push({ ok: false, texto: o.texto });
   else s.push({ ok: true, texto: 'sin señales de fuera de distribución' });
@@ -175,12 +176,12 @@ export function decidir(c: Contexto): Decision {
 
   if (edge < minEdge) {
     razones.push(`ventaja ${pct(edge)} por debajo del mínimo de la política (${pct(minEdge)})`);
-    falta.push(`cuota ≥ ${((1 + minEdge) / p).toFixed(2)} (hoy ${odds.toFixed(2)}) o probabilidad ≥ ${pct((1 + minEdge) / odds)}`);
+    falta.push(`cuota ≥ ${num((1 + minEdge) / p, 2)} (hoy ${num(odds, 2)}) o probabilidad ≥ ${pct((1 + minEdge) / odds)}`);
   }
   const edgeBajo = (p - u) * odds - 1;
   if (edge >= minEdge && edgeBajo < 0) {
-    razones.push(`la ventaja no sobrevive a la incertidumbre: con ${pct(p - u)} (−${(u * 100).toFixed(1)} pp) la apuesta pierde`);
-    falta.push(`cuota ≥ ${(1 / (p - u)).toFixed(2)} o incertidumbre ≤ ±${((p - 1 / odds) * 100).toFixed(1)} pp`);
+    razones.push(`la ventaja no sobrevive a la incertidumbre: con ${pct(p - u)} (−${num(u * 100, 1)} pp) la apuesta pierde`);
+    falta.push(`cuota ≥ ${num(1 / (p - u), 2)} o incertidumbre ≤ ±${num((p - 1 / odds) * 100, 1)} pp`);
   }
   const desaparece = edge >= minEdge ? c.desapareceDe(indice, odds) : null;
   if (desaparece != null && desaparece > politica().abstencion.desapareceMax) {
@@ -194,7 +195,7 @@ export function decidir(c: Contexto): Decision {
   for (const o of e.ood.filter((x) => x.grave)) razones.push(`fuera de distribución: ${o.texto}`);
   if (c.estabilidad.nivel === 'BAJA') {
     razones.push(`predicción inestable: entre ${pct(c.estabilidad.p10)} y ${pct(c.estabilidad.p90)} según los supuestos`);
-    falta.push(`estabilidad MEDIA o ALTA (P10–P90 < ${8} pp; hoy ${c.estabilidad.anchoPp} pp)`);
+    falta.push(`estabilidad MEDIA o ALTA (P10–P90 < ${8} pp; hoy ${num(c.estabilidad.anchoPp)} pp)`);
   }
   if (c.desacuerdo.nivel === 'ALTO') {
     const niega = e.componentes.filter((k) => k.probs[indice] * odds - 1 < 0);
@@ -235,9 +236,9 @@ export function decidir(c: Contexto): Decision {
     factorStake: factor,
     recortes,
     contrafactual: [
-      `la cuota cae por debajo de ${cuotaMin.toFixed(2)} (hoy ${odds.toFixed(2)})`,
+      `la cuota cae por debajo de ${num(cuotaMin, 2)} (hoy ${num(odds, 2)})`,
       `la probabilidad del modelo cae por debajo de ${pct(pMin)} (hoy ${pct(p)})`,
-      `la incertidumbre sube por encima de ±${((p - 1 / odds) * 100).toFixed(1)} pp (hoy ±${(u * 100).toFixed(1)} pp)`,
+      `la incertidumbre sube por encima de ±${num((p - 1 / odds) * 100, 1)} pp (hoy ±${num(u * 100, 1)} pp)`,
       `la ventaja desaparece en más del ${politica().abstencion.desapareceMax * 100} % de las simulaciones (hoy ${Math.round((desaparece ?? 0) * 100)} %)`,
       `la calidad de datos baja de ${politica().abstencion.calidadDatosMin} (hoy ${c.calidad.puntuacion})`,
       'la estabilidad pasa a BAJA, o el precio queda más de 6 h sin observarse',

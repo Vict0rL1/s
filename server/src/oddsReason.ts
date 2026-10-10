@@ -42,7 +42,7 @@ export type OddsReason =
   | null;
 
 /** Los prefijos de meta de cada deporte. El tenis no lleva, por ser el primero. */
-export type SportPrefix = '' | 'fb_' | 'bb_' | 'bsb_' | 'naf_';
+export type SportPrefix = '' | 'fb_' | 'bb_' | 'bsb_' | 'naf_' | 'nhl_' | 'ufc_';
 
 const KEY = (p: SportPrefix): string => `${p}odds_fallback_reason`;
 const DETAIL = (p: SportPrefix): string => `${p}odds_fallback_detail`;

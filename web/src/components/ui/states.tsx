@@ -1,6 +1,7 @@
 // Piezas compartidas de la interfaz: states. Partido de ui/index.tsx en la Fase 5 (ningún import cambia: index.tsx reexporta).
 import { useState, type ReactNode } from 'react';
 import { RELIABILITY_STYLE } from '../../lib/theme';
+import { num } from '../../lib/formato';
 import { StatusMark } from '../icons';
 import { Card } from './cards';
 import { conNodos, localeDe, useI18n } from '../../i18n';
@@ -40,7 +41,7 @@ export function ReliabilityChip({
       className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[13px] font-medium ring-1 ring-inset ${RELIABILITY_STYLE[level]}`}
     >
       <span aria-hidden>{level === 'high' ? '●' : level === 'medium' ? '◐' : '○'}</span>
-      {label} · ±{marginPp} pp
+      {label} · ±{num(marginPp, 1)} pp
     </span>
   );
 }

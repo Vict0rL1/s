@@ -22,6 +22,12 @@ export const LAYOUT: Layout = layoutDesdeEntorno();
 export const LEGACY_DB_PATH = DB_PATH;
 export const HISTORY_DB_PATH = path.join(DATA_DIR, 'history.db');
 export const LEDGER_DB_PATH = path.join(DATA_DIR, 'ledger.db');
+/**
+ * La marca de que aquí HUBO un libro mayor (lote B, B4). La escribe la app al crearlo y la
+ * partición al partir. Si está y `ledger.db` no, el servidor no arranca con uno vacío: alguien
+ * perdió o movió las apuestas y el registro, y eso se dice en vez de taparlo.
+ */
+export const LEDGER_MARCA_PATH = `${LEDGER_DB_PATH}.existe`;
 
 /** Nombre del esquema SQLite del libro mayor: `ledger` en split, `main` en single. */
 export const LEDGER_SCHEMA = LAYOUT === 'split' ? 'ledger' : 'main';

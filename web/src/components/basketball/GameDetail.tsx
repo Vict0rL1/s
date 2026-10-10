@@ -2,6 +2,7 @@ import type { BbPrediction, BbTeamSide } from '../../lib/basketball';
 import { formatDate } from '../../lib/format';
 import { AWAY_COLOR, HOME_COLOR } from '../../lib/theme';
 import { conNodos, useI18n, type Traducir } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
 function Num({ value, plus = false }: { value: number; plus?: boolean }) {
   const sign = plus && value > 0 ? '+' : '';
@@ -62,8 +63,8 @@ function LastGames({ side, color }: { side: BbTeamSide; color: string }) {
           className="inline-flex h-4 w-4 items-center justify-center rounded text-[11px] font-bold"
           style={{
             backgroundColor: g.won ? color : 'transparent',
-            color: g.won ? '#0a0f1e' : '#f87171',
-            border: g.won ? 'none' : '1px solid #f87171',
+            color: g.won ? '#0a0f1e' : 'var(--status-critical)',
+            border: g.won ? 'none' : '1px solid var(--status-critical)',
           }}
         >
           {g.won ? t('bkd.v') : t('bkd.d')}
@@ -102,8 +103,8 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
     },
     {
       label: t('det.probModelo'),
-      home: <strong>{(prediction.model.probHome * 100).toFixed(1)}%</strong>,
-      away: <strong>{(prediction.model.probAway * 100).toFixed(1)}%</strong>,
+      home: <strong>{pctF(prediction.model.probHome, 1)}</strong>,
+      away: <strong>{pctF(prediction.model.probAway, 1)}</strong>,
     },
   ];
 
@@ -282,9 +283,9 @@ export default function GameDetail({ prediction }: { prediction: BbPrediction })
                 visitante: away.name,
                 o1: market.market.odds1,
                 local: home.name,
-                p2: (market.market.implied2 * 100).toFixed(1),
-                p1: (market.market.implied1 * 100).toFixed(1),
-                m: ((market.market.overround - 1) * 100).toFixed(1),
+                p2: numF(market.market.implied2 * 100, 1),
+                p1: numF(market.market.implied1 * 100, 1),
+                m: numF((market.market.overround - 1) * 100, 1),
               })}
             </p>
             {market.edge1 != null && (
@@ -331,10 +332,10 @@ function ReliabilityBlock({ prediction }: { prediction: BbPrediction }) {
       <p className="text-(--ink-body)">
         <strong className="capitalize">{rel.label}</strong>{' '}
         {conNodos(t('bkd.entre', { equipo: favName }), {
-          lo: <strong className="tabular-nums">{(lo * 100).toFixed(1)}%</strong>,
-          hi: <strong className="tabular-nums">{(hi * 100).toFixed(1)}%</strong>,
+          lo: <strong className="tabular-nums">{pctF(lo, 1)}</strong>,
+          hi: <strong className="tabular-nums">{pctF(hi, 1)}</strong>,
         })}{' '}
-        <span className="text-(--ink-soft)">(±{rel.marginPp} pp)</span>
+        <span className="text-(--ink-soft)">(±{numF(rel.marginPp, 1)} pp)</span>
       </p>
       <div className="mt-2 grid grid-cols-2 gap-2 text-[14px]">
         <div className="min-w-0">

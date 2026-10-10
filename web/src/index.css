@@ -15,8 +15,20 @@
   --ink-strong: #e8eaed;
   --ink-body: #c3c9d1;
   --ink-soft: #9aa1ac;
-  --ink-muted: #7b828d;
-  --ink-faint: #5c636c;
+  --ink-muted: #8b929d;
+  /* ≥ 4,5:1 sobre página, tarjeta y relleno (E2 de la revisión del 8 de octubre: era #5c636c, 3:1). */
+  --ink-faint: #7f8691;
+  /* Estados como TEXTO: con su fondo teñido al 12–14 % pasan de 4,5:1 sobre tarjeta, página,
+     carril y relleno (G6: con el tinte sobre un fondo elevado no llegaban; lib/tokens.test.ts). */
+  --status-good: #22b07f;
+  --status-warning: #cc8c0f;
+  --status-critical: #e97676;
+  --status-neutral: #8e9bad;
+  /* Beneficio y pérdida como TEXTO (las marcas siguen con los hex de theme.ts). */
+  --profit-text: #22b07f;
+  --loss-text: #e2703f;
+  /* El ámbar de «Mi selección» como texto e icono. */
+  --seleccion: #f5b544;
   /* Rellenos y bordes que en oscuro eran blanco translúcido. */
   --tint: rgba(255, 255, 255, 0.02);
   --raised: rgba(255, 255, 255, 0.045);
@@ -35,8 +47,15 @@
   --ink-strong: #14161b;
   --ink-body: #2b3038;
   --ink-soft: #4b525c;
-  --ink-muted: #626875;
-  --ink-faint: #9aa1ac;
+  --ink-muted: #565c68;
+  --ink-faint: #636975;
+  --status-good: #0a6747;
+  --status-warning: #7c5200;
+  --status-critical: #a23434;
+  --status-neutral: #525c6a;
+  --profit-text: #0b6e4c;
+  --loss-text: #a8401a;
+  --seleccion: #8a5b00;
   --tint: rgba(20, 22, 27, 0.025);
   --raised: rgba(20, 22, 27, 0.05);
   --raised-2: rgba(20, 22, 27, 0.09);
@@ -56,8 +75,15 @@
     --ink-strong: #14161b;
     --ink-body: #2b3038;
     --ink-soft: #4b525c;
-    --ink-muted: #626875;
-    --ink-faint: #9aa1ac;
+    --ink-muted: #565c68;
+    --ink-faint: #636975;
+    --status-good: #0a6747;
+    --status-warning: #7c5200;
+    --status-critical: #a23434;
+    --status-neutral: #525c6a;
+    --profit-text: #0b6e4c;
+    --loss-text: #a8401a;
+    --seleccion: #8a5b00;
     --tint: rgba(20, 22, 27, 0.025);
     --raised: rgba(20, 22, 27, 0.05);
     --raised-2: rgba(20, 22, 27, 0.09);
@@ -80,11 +106,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Foco visible (Fase 5.24): el mismo anillo en todo lo que se puede enfocar con el teclado. */
+/* Foco visible (Fase 5.24): el mismo anillo en todo lo que se puede enfocar con el teclado.
+   Sin border-radius propio (D14): el contorno ya sigue la forma del elemento, y forzar 4 px
+   cuadraba los botones redondos y redondeaba las fichas cuadradas al enfocarlas. */
 :focus-visible {
   outline: 2px solid #3987e5;
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
 /* Movimiento reducido: sin transiciones ni animaciones para quien lo pide. */

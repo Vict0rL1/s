@@ -166,14 +166,29 @@ export function getTeamInfo(league: LeagueId, id: string): FbTeamInfo | null {
   };
 }
 
-/** Teams ordered by Elo — the league's power ranking. */
+/**
+ * Teams ordered by Elo — the league's power ranking.
+ *
+ * Only the teams that play the league NOW (D14 of the 8 Oct 2026 review): the ones in its
+ * latest season in the archive, plus any with an upcoming fixture (a newly promoted side has
+ * no match this season yet). Before, every team that ever had a rating was listed, so a side
+ * relegated years ago still sat in the middle of the table.
+ */
 export function getPowerRanking(league: LeagueId, limit = 40) {
   return getDb()
     .prepare(
-      `SELECT r.team_id AS id, t.name, r.elo, r.matches_played AS matches, r.gf, r.ga
+      `WITH ultima AS (SELECT MAX(season) AS s FROM fb_matches WHERE league = ?1),
+            activos AS (
+              SELECT home_id AS id FROM fb_matches WHERE league = ?1 AND season = (SELECT s FROM ultima)
+              UNION SELECT away_id FROM fb_matches WHERE league = ?1 AND season = (SELECT s FROM ultima)
+              UNION SELECT home_id FROM fb_upcoming WHERE league = ?1 AND home_id IS NOT NULL
+              UNION SELECT away_id FROM fb_upcoming WHERE league = ?1 AND away_id IS NOT NULL
+            )
+       SELECT r.team_id AS id, t.name, r.elo, r.matches_played AS matches, r.gf, r.ga
        FROM fb_team_ratings r
        JOIN fb_teams t ON t.league = r.league AND t.id = r.team_id
-       WHERE r.league = ? ORDER BY r.elo DESC LIMIT ?`,
+       WHERE r.league = ?1 AND r.team_id IN (SELECT id FROM activos)
+       ORDER BY r.elo DESC LIMIT ?2`,
     )
     .all(league, limit) as unknown as {
     id: string; name: string; elo: number; matches: number; gf: number | null; ga: number | null;

@@ -18,7 +18,9 @@ import Buscador from './components/busqueda/Buscador';
 import Campana from './components/bandeja/Campana';
 import Recorrido from './components/Recorrido';
 import { SeguimientoProvider } from './components/seguimiento';
-import { ultimaRed, useEnLinea } from './lib/sinConexion';
+import { ESCRITORIO, useMediaQuery } from './lib/useMediaQuery';
+import ErrorBoundary from './components/ErrorBoundary';
+import { registrarServiceWorker, ultimaRed, useEnLinea, useDesdeCache } from './lib/sinConexion';
 
 // Cada pantalla en su propio trozo (Fase 5 / 7): la primera carga solo trae el armazón y la
 // pestaña que se abre.
@@ -27,6 +29,8 @@ const BasketballDashboard = lazy(() => import('./components/basketball/Basketbal
 const FootballDashboard = lazy(() => import('./components/football/FootballDashboard'));
 const BaseballDashboard = lazy(() => import('./components/baseball/BaseballDashboard'));
 const NflDashboard = lazy(() => import('./components/nfl/NflDashboard'));
+const NhlDashboard = lazy(() => import('./components/nhl/NhlDashboard'));
+const UfcDashboard = lazy(() => import('./components/ufc/UfcDashboard'));
 const BetsDashboard = lazy(() => import('./components/bets/BetsDashboard'));
 const SystemTrust = lazy(() => import('./components/trust/SystemTrust'));
 const TopPicks = lazy(() => import('./components/picks/TopPicks'));
@@ -36,6 +40,7 @@ const Glosario = lazy(() => import('./pages/Glosario'));
 const Partido = lazy(() => import('./pages/Partido'));
 const Equipo = lazy(() => import('./pages/Equipo'));
 const Jugador = lazy(() => import('./pages/Jugador'));
+const Luchador = lazy(() => import('./pages/Luchador'));
 const Liga = lazy(() => import('./pages/Liga'));
 const Muestras = lazy(() => import('./pages/Muestras'));
 const Laboratorio = lazy(() => import('./pages/Laboratorio'));
@@ -46,6 +51,7 @@ const Lineas = lazy(() => import('./pages/Lineas'));
 const Archivo = lazy(() => import('./pages/Archivo'));
 import { I18nProvider, idiomaGuardado, localeDe, useI18n, type Clave } from './i18n';
 import { aplicarTema, temaGuardado, type Tema } from './lib/tema';
+import { atajoPermitido } from './lib/dialogo';
 
 /**
  * Ancho máximo del armazón: 80rem (1280px), con las listas de tarjetas a dos columnas en
@@ -64,9 +70,7 @@ interface AjustesUsuario {
 export default function App() {
   return (
     <I18nProvider>
-      <SeguimientoProvider>
-        <Armazon />
-      </SeguimientoProvider>
+      <Armazon />
     </I18nProvider>
   );
 }
@@ -76,6 +80,8 @@ function Armazon() {
   const navigate = useNavigate();
   const { t, setIdioma } = useI18n();
   const pestana = pestanaDeRuta(pathname);
+  // Una sola píldora, campana y buscador: los de la disposición que se ve (D12).
+  const escritorio = useMediaQuery(ESCRITORIO);
   // La puerta: si el servidor pide contraseña y no hay sesión, se enseña la entrada y nada más.
   const [auth, setAuth] = useState<EstadoAuth | null>(null);
   const [ajustes, setAjustes] = useState<AjustesUsuario | null>(null);
@@ -90,6 +96,11 @@ function Armazon() {
       window.removeEventListener(EVENTO_AUTH, alPedir);
     };
   }, []);
+  // El service worker, una vez dentro (G10): registrarlo pide /api/features, que necesita sesión.
+  useEffect(() => {
+    if (!auth || (auth.auth && !auth.dentro) || auth.sinRed) return;
+    if (import.meta.env.PROD) void registrarServiceWorker();
+  }, [auth]);
   // Los ajustes de la persona (tema, idioma, deportes visibles) una vez dentro.
   useEffect(() => {
     if (!auth || (auth.auth && !auth.dentro)) return;
@@ -126,12 +137,12 @@ function Armazon() {
     if (pestana) recordarPestana(pestana);
   }, [pestana]);
 
-  // Atajos (Fase 5.17): 1–8 cambian de pestaña fuera de un campo de texto.
+  // Atajos (Fase 5.17): 1–9 y 0 (la décima) cambian de pestaña fuera de un campo de texto (tantas como pestañas).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (e.metaKey || e.ctrlKey || e.altKey || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement | null)?.isContentEditable) return;
-      const n = Number(e.key);
+      // Ni en un campo ni con un diálogo abierto (D10): el 2 no cambia de pestaña por debajo.
+      if (!atajoPermitido(e, document)) return;
+      const n = e.key === '0' ? 10 : Number(e.key);
       if (n >= 1 && n <= PESTANAS.length) navigate(RUTA_DE_PESTANA[PESTANAS[n - 1]]);
     };
     window.addEventListener('keydown', onKey);
@@ -147,10 +158,15 @@ function Armazon() {
   const conHoy = pestana === 'picks' || (pestana != null && DEPORTES.includes(pestana) && !pathname.startsWith('/partido') && !pathname.startsWith('/equipo') && !pathname.startsWith('/liga') && !pathname.startsWith('/jugador'));
 
   return (
+    // Dentro de la puerta (G10): la lista de seguidos pide /api/watchlist, que necesita sesión; antes
+    // se pedía también en la pantalla de entrada y dejaba un 401 en consola.
+    <SeguimientoProvider>
     <div className="min-h-screen lg:flex">
       {/* La barra lateral desde 1024 px; debajo, la barra inferior (MobileNav). */}
       <aside className="hidden shrink-0 border-r border-(--line) bg-(--surface-rail) lg:block lg:w-[15rem]">
-        <div className="sticky top-0 flex h-screen flex-col pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]">
+        {/* overflow-y-auto (G7): con «Cuenta» abierta y varias sesiones, el contenido pasa de la altura
+            de la pantalla, y una barra fija sin desplazamiento dejaba «Salir» fuera para siempre. */}
+        <div className="sticky top-0 flex h-screen flex-col overflow-y-auto overscroll-contain pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]">
           <div className="flex items-center gap-2.5 px-4 pb-3 pt-5">
             <AppMark size={34} className="shrink-0" />
             <div className="min-w-0">
@@ -159,9 +175,13 @@ function Armazon() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
-            <StatusPill />
-            <Buscador />
-            <Campana />
+            {escritorio && (
+              <>
+                <StatusPill />
+                <Buscador />
+                <Campana />
+              </>
+            )}
           </div>
           <SportNav pestana={pestana} ocultos={ocultos} vertical />
           <div className="mt-auto px-2 pb-3">
@@ -179,11 +199,13 @@ function Armazon() {
               <AppMark size={30} className="shrink-0" />
               <h1 className="text-[16px] font-semibold leading-tight text-(--ink-strong)">{t('app.nombre')}</h1>
             </div>
-            <span className="flex items-center gap-2">
-              <Buscador />
-              <Campana />
-              <StatusPill compacto />
-            </span>
+            {!escritorio && (
+              <span className="flex items-center gap-2">
+                <Buscador />
+                <Campana />
+                <StatusPill compacto />
+              </span>
+            )}
           </div>
           {pestana != null && DEPORTES.includes(pestana) && <SportNav pestana={pestana} ocultos={ocultos} soloDeportes />}
         </header>
@@ -192,7 +214,8 @@ function Armazon() {
             (cada pantalla se carga aparte). Medido con Lighthouse: era el mayor desplazamiento. */}
         <main className={`mx-auto ${SHELL_WIDTH} min-h-[100svh] px-4 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-5 lg:pb-16`}>
           <BannerSinConexion />
-          {conHoy && <TodayPanel />}
+          {conHoy && <TodayPanel pestana={pestana} />}
+          <ErrorBoundary clave={pathname}>
           <Suspense fallback={<p className="text-[13px] text-(--ink-muted)">{t('comun.cargando')}</p>}>
           <Routes>
             <Route path="/" element={<Navigate to={RUTA_DE_PESTANA[ultimaPestana()]} replace />} />
@@ -201,6 +224,8 @@ function Armazon() {
             <Route path="/baloncesto/:league?" element={<BasketballDashboard />} />
             <Route path="/beisbol/:league?" element={<BaseballDashboard />} />
             <Route path="/nfl/:league?" element={<NflDashboard />} />
+            <Route path="/nhl" element={<NhlDashboard />} />
+            <Route path="/ufc" element={<UfcDashboard />} />
             <Route path="/tenis/:league?" element={<TennisDashboard />} />
             <Route path="/apuestas" element={<BetsDashboard />} />
             <Route path="/apuestas/laboratorio" element={<Laboratorio />} />
@@ -216,11 +241,13 @@ function Armazon() {
             <Route path="/partido/:sport/:id" element={<Partido />} />
             <Route path="/equipo/:sport/:league/:id" element={<Equipo />} />
             <Route path="/jugador/:tour/:id" element={<Jugador />} />
+            <Route path="/luchador/:id" element={<Luchador />} />
             <Route path="/liga/:sport/:league" element={<Liga />} />
             <Route path="/_muestras" element={<Muestras />} />
             <Route path="*" element={<NoEncontrada />} />
           </Routes>
           </Suspense>
+          </ErrorBoundary>
         </main>
 
         <footer className={`mx-auto ${SHELL_WIDTH} px-4 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-[max(2.5rem,env(safe-area-inset-bottom))]`}>
@@ -240,14 +267,16 @@ function Armazon() {
       <MobileNav ocultos={ocultos} />
       <Recorrido vistoEnServidor={ajustes ? (ajustes.recorridoVisto ?? false) : null} onVisto={() => void fetch('/api/ajustes', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ recorridoVisto: true }) }).catch(() => undefined)} />
     </div>
+    </SeguimientoProvider>
   );
 }
 
 /** «Sin conexión: datos de HH:MM» (Fase 5.26). */
 function BannerSinConexion() {
   const enLinea = useEnLinea();
+  const desdeCache = useDesdeCache();
   const { t, idioma } = useI18n();
-  if (enLinea) return null;
+  if (enLinea && !desdeCache) return null;
   const u = ultimaRed();
   const hora = u ? new Date(u).toLocaleString(localeDe(idioma), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
   return (

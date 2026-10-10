@@ -14,6 +14,8 @@ export interface ConfigEstrategia {
   deportes: string[];
   mercados: string[];
   staking: Staking;
+  /** Topes de grupo congelados al crear (las estrategias anteriores no lo tienen). */
+  grupos?: { maxSameTeamExposure: number; maxSamePlayerExposure: number };
   confianza: boolean;
   calibracion: boolean;
 }

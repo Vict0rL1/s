@@ -42,7 +42,8 @@ test('sin clave: error con la acción exacta', () => {
   const hs = comprobarConfiguracion({ ...base, envCrudo: '', valoresFichero: {}, valoresProceso: {}, clave: { value: '', name: null } });
   const e = buscar(hs, /ODDS_API_KEY no encontrada/);
   assert.equal(e?.nivel, 'error');
-  assert.match(e!.accion!.join(' '), /ODDS_API_KEY=/);
+  // El camino que no se rompe: `npm run clave` (una sola línea, sin eco, comprobada).
+  assert.match(e!.accion![0]!, /^npm run clave/);
 });
 
 test('el alias THE_ODDS_API_KEY se reconoce y se dice de dónde salió', () => {
@@ -137,6 +138,9 @@ test('base de datos: totales, demo y sin cuotas', () => {
   assert.ok(buscar(hs, /59 próximos eventos/));
   assert.ok(buscar(hs, /53 con cuotas reales/));
   assert.equal(buscar(hs, /6 sin cuotas/)?.nivel, 'aviso');
+  // Sin clave, un calendario sin precio (la NFL y la NHL sin cuotas) es lo esperado: información.
+  const sinClave = comprobarBaseDeDatos('/x.db', true, [{ nombre: 'NHL', total: 209, reales: 0, demo: 0, sinCuotas: 209 }], false);
+  assert.equal(buscar(sinClave, /209 sin cuotas/)?.nivel, 'info');
   assert.equal(comprobarBaseDeDatos('/x.db', false, [], true)[0].nivel, 'error');
 });
 
@@ -350,19 +354,21 @@ test('producto: líneas sin cuotas recientes y archivo son información, nunca a
 test('ampliaciones: apagadas son información; encendidas sin lo que necesitan avisan', async () => {
   const { comprobarProducto } = await import('./checks.ts');
   const base = { estrategias: { activas: 0, archivadas: 0, apuestas: 0, pendientes: 0, ultimaApuesta: null, laboratorio: true }, historicos: [], hayCuotasReales: false };
-  const apagadas = { nhl: { on: false, partidos: 0, ultimo: null }, telegram: { on: false, token: false, chats: 0, offset: null }, enVivo: false, propsNba: false };
+  const apagadas = { telegram: { on: false, token: false, chats: 0, offset: null }, enVivo: false, propsNba: false };
   const a = comprobarProducto({ ...base, ampliaciones: apagadas }, new Date());
-  for (const prefijo of ['NHL en sombra', 'Asistente por Telegram', 'Tenis en vivo']) assert.equal(a.find((x) => x.texto.startsWith(prefijo))?.nivel, 'info', prefijo);
+  for (const prefijo of ['Asistente por Telegram', 'Tenis en vivo']) assert.equal(a.find((x) => x.texto.startsWith(prefijo))?.nivel, 'info', prefijo);
   assert.ok(!a.some((x) => x.texto.startsWith('Props')), 'los props apagados no dicen nada');
 
-  const sinNada = comprobarProducto({ ...base, ampliaciones: { nhl: { on: true, partidos: 0, ultimo: null }, telegram: { on: true, token: false, chats: 1, offset: null }, enVivo: true, propsNba: true } }, new Date());
-  assert.equal(sinNada.find((x) => x.texto.startsWith('NHL'))?.nivel, 'aviso');
+  const sinNada = comprobarProducto({ ...base, ampliaciones: { telegram: { on: true, token: false, chats: 1, offset: null }, enVivo: true, propsNba: true } }, new Date());
   assert.match(sinNada.find((x) => x.texto.startsWith('Asistente'))!.texto, /sin TELEGRAM_BOT_TOKEN/);
   assert.equal(sinNada.find((x) => x.texto.startsWith('Props'))?.nivel, 'aviso');
 
-  const bien = comprobarProducto({ ...base, ampliaciones: { nhl: { on: true, partidos: 13_120, ultimo: '2025-04-17' }, telegram: { on: true, token: true, chats: 2, offset: 501 }, enVivo: true, propsNba: false } }, new Date());
-  assert.equal(bien.find((x) => x.texto.startsWith('NHL'))?.nivel, 'ok');
+  const bien = comprobarProducto({ ...base, ampliaciones: { telegram: { on: true, token: true, chats: 2, offset: 501 }, enVivo: true, propsNba: false } }, new Date());
+  assert.ok(!bien.some((x) => x.texto.startsWith('NHL')), 'la NHL ya no es una ampliación');
   assert.match(bien.find((x) => x.texto.startsWith('Asistente'))!.texto, /2 chat\(s\).*la 500/);
+
+  // La UFC tampoco: se publicó y va con los demás deportes.
+  assert.ok(!bien.some((x) => x.texto.startsWith('UFC')), 'la UFC ya no es una ampliación');
 });
 
 // ---- OPERACIÓN (Fase 9) ----
@@ -371,6 +377,10 @@ test('operación: temporada de cada deporte, también la que cruza el año', asy
   assert.equal(diasDeTemporada('NFL', new Date('2026-10-07T12:00:00Z')), 32);
   assert.equal(diasDeTemporada('NFL', new Date('2027-01-20T12:00:00Z')), 137, 'enero sigue siendo la temporada que empezó en septiembre');
   assert.equal(diasDeTemporada('NFL', new Date('2026-06-01T12:00:00Z')), null);
+  assert.equal(diasDeTemporada('NHL', new Date('2026-10-08T12:00:00Z')), 7, 'la NHL juega en octubre');
+  assert.notEqual(diasDeTemporada('UFC', new Date('2026-07-15T12:00:00Z')), null, 'la UFC pelea todo el año');
+  assert.equal(diasDeTemporada('NHL', new Date('2027-05-15T12:00:00Z')) != null, true, 'y los playoffs de mayo');
+  assert.equal(diasDeTemporada('NHL', new Date('2026-08-01T12:00:00Z')), null);
   assert.equal(diasDeTemporada('Baloncesto', new Date('2026-10-07T12:00:00Z')), null, 'la NBA empieza el 20 de octubre');
   assert.equal(diasDeTemporada('Tenis', new Date('2026-12-15T12:00:00Z')), null);
   assert.equal(diasDeTemporada('Curling', new Date()), null);

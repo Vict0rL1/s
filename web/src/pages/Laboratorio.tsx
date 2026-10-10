@@ -22,7 +22,7 @@ export default function Laboratorio() {
       <SubNav etiqueta={t('nav.subApuestas')} enlaces={subnav} />
       <h2 className="mb-1 text-[20px] font-semibold text-(--ink-strong)">{t('lab.titulo')}</h2>
       <p className="mb-4 max-w-3xl text-[14px] leading-relaxed text-(--ink-soft)">{t('lab.intro')}</p>
-      {error && <p className="text-[14px] text-(--ink-soft)">{error}</p>}
+      {error && <p role="alert" className="text-[14px] text-(--ink-soft)">{error}</p>}
       {!datos && !error && <p className="text-[13px] text-(--ink-muted)">{t('comun.cargando')}</p>}
       {datos && (
         <>
@@ -94,7 +94,7 @@ function TarjetaFila({ fila, onArchivada }: { fila: FilaComparacion; onArchivada
         </div>
       )}
       {!fila.comparable && <p className="mt-2 text-[12px] text-(--ink-soft)">{t('lab.noComparable')}</p>}
-      {error && <p className="mt-2 text-[12px]" style={{ color: COLOR_PERDIDA }}>{error}</p>}
+      {error && <p role="alert" className="mt-2 text-[12px]" style={{ color: COLOR_PERDIDA }}>{error}</p>}
     </article>
   );
 }

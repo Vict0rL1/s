@@ -22,4 +22,7 @@ paths = [
 regexes = [
   '''clave-de-test-0{20,}''',
   '''0123456789abcdef0123456789abcdef''',
+  # La contraseña del servidor de e2e con la puerta activa (scripts/e2e-server.mjs y
+  # web/e2e/auth.spec.ts): de pruebas y pública a propósito.
+  '''contrasena-de-pruebas-e2e''',
 ]

@@ -1,10 +1,11 @@
 // Presentation helpers. El texto sale del catálogo (i18n) y las fechas, del locale del idioma;
 // sin idioma, español (la fuente de verdad), así que lo que no lo pasa sigue como estaba.
 import { localeDe, tr, type Clave, type Idioma } from '../i18n';
+import { pct as pctFormato } from './formato';
 
 export function pct(p: number | null | undefined, digits = 0): string {
   if (p == null) return '—';
-  return `${(p * 100).toFixed(digits)}%`;
+  return pctFormato(p, digits);
 }
 
 export function surfaceLabelEs(surface: string | null, idioma: Idioma = 'es'): string {

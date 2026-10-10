@@ -136,6 +136,12 @@ console.log('\nRequisitos:');
 console.log(`   ${webId(webUp)} la app está corriendo   ${webUp ? '' : '→ arranca "npm run dev"'}`);
 console.log(`   ${webId(apiUp)} la API está corriendo   ${apiUp ? '' : '→ va dentro de "npm run dev"'}`);
 console.log('   ·  el teléfono tiene que estar en la MISMA red Wi-Fi');
+// Desde la revisión del 8 de octubre (D15), `npm run dev` sin contraseña escucha solo en este
+// ordenador: para el móvil hay que pedirlo (DEV_LAN=on) o ponerle contraseña (APP_AUTH=on).
+if (guardados.lan === false) {
+  console.log('   ❌ la app escucha solo en este ordenador → arranca con "DEV_LAN=on npm run dev"');
+  console.log('      (o con APP_AUTH=on y APP_PASSWORD, para que pida contraseña en la red)');
+}
 
 console.log(
   '\nSi la dirección no carga en el teléfono pero sí en el ordenador, casi siempre\n' +

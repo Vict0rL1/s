@@ -241,15 +241,27 @@ export function loadGames(league: LeagueId, fromSeason = 0): ReplayGame[] {
     .all(league, fromSeason) as unknown as ReplayGame[];
 }
 
+export interface OpcionesRecalculo {
+  /** Solo estas ligas (por defecto, todas las que tienen partidos). */
+  leagues?: string[];
+  /**
+   * Quien llama ya abrió una transacción (actualizar.ts: borrar + insertar + recalcular de
+   * una liga de una vez, lote A, A5): no se abre otra, SQLite no las anida.
+   */
+  enTransaccion?: boolean;
+}
+
 /**
  * Recompute and persist ratings for every league that has games.
  * Scoring averages use only recent seasons — see ReplayOptions.scoringFromSeason.
  */
-export function recomputeBasketballRatings(): Record<string, number> {
+export function recomputeBasketballRatings(opts: OpcionesRecalculo = {}): Record<string, number> {
   const db = getDb();
   const leagues = (
     db.prepare('SELECT DISTINCT league AS l FROM bb_games').all() as unknown as { l: string }[]
-  ).map((r) => r.l);
+  )
+    .map((r) => r.l)
+    .filter((l) => !opts.leagues || opts.leagues.includes(l));
 
   const insert = db.prepare(
     `INSERT INTO bb_team_ratings (team_id, league, elo, games_played, last_date, ppg, papg)
@@ -271,7 +283,7 @@ export function recomputeBasketballRatings(): Record<string, number> {
       onEnd: ({ homeAdvantage }) => (homeAdv = homeAdvantage),
     });
 
-    db.exec('BEGIN');
+    if (!opts.enTransaccion) db.exec('BEGIN');
     try {
       for (const [id, s] of states) {
         insert.run(
@@ -284,9 +296,9 @@ export function recomputeBasketballRatings(): Record<string, number> {
           s.scoringGames > 0 ? round1(s.ptsAgainst / s.scoringGames) : null,
         );
       }
-      db.exec('COMMIT');
+      if (!opts.enTransaccion) db.exec('COMMIT');
     } catch (e) {
-      db.exec('ROLLBACK');
+      if (!opts.enTransaccion) db.exec('ROLLBACK');
       throw e;
     }
     // Measured alongside the ratings, from the same model's own errors — see

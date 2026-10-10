@@ -22,6 +22,8 @@ import { rutaEquipo } from '../../rutas';
 import { useLigaEnRuta, ligaRecordada, useFiltroQuery } from '../../lib/rutas';
 import { TrackRecordPanel } from './FootballDashboardPartes';
 import { conNodos, localeDe, useI18n } from '../../i18n';
+import { num as numF } from '../../lib/formato';
+import { conservarDia, contadorDePeticiones, filasDeLaLiga } from '../../lib/carga';
 
 /**
  * The ⚽ tab.
@@ -38,9 +40,13 @@ export default function FootballDashboard() {
   const [meta, setMeta] = useState<FbMeta | null>(null);
   const [leagues, setLeagues] = useState<FbLeague[]>([]);
   const [league, setLeague] = useLigaEnRuta('/futbol', STORAGE_KEY);
-  const [fixtures, setFixtures] = useState<FbFixtureWithPrediction[]>([]);
+  const [fixturesTodas, setFixtures] = useState<FbFixtureWithPrediction[]>([]);
+  // Solo las filas de la liga elegida (G3): al cambiar de liga, las de la anterior siguen en el
+  // estado hasta que llega la respuesta, y se veían bajo la liga nueva.
+  const fixtures = useMemo(() => filasDeLaLiga(fixturesTodas, (f) => f.fixture.league, league), [fixturesTodas, league]);
   const [power, setPower] = useState<FbPowerTeam[]>([]);
   const [loading, setLoading] = useState(false);
+  const [peticiones] = useState(contadorDePeticiones);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   // Un equipo abre su página (Fase 5.12): una URL, no un modal.
@@ -87,9 +93,12 @@ export default function FootballDashboard() {
 
   useEffect(() => {
     if (!league) return;
+    // D8: cambiar dos veces de liga no deja los partidos de la que contestó tarde.
+    const n = peticiones.nueva();
     setLoading(true);
     Promise.all([fbApi.upcoming(league), fbApi.power(league, 40)])
       .then(([f, p]) => {
+        if (!peticiones.esUltima(n)) return;
         // La etapa «cliente» empieza AQUÍ: la respuesta ya está parseada y lo que queda
         // por medir es lo único que el servidor no puede ver — React montando las
         // tarjetas y el navegador pintándolas.
@@ -97,8 +106,8 @@ export default function FootballDashboard() {
         setFixtures(f);
         setPower(p.teams);
       })
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+      .catch((e) => peticiones.esUltima(n) && setError(String(e)))
+      .finally(() => peticiones.esUltima(n) && setLoading(false));
   }, [league]);
 
   /**
@@ -163,9 +172,11 @@ export default function FootballDashboard() {
   const demoOdds = fixtures.length > 0 && fixtures.every((r) => r.fixture.source === 'fixture');
   // A day that no longer exists after switching league would filter everything
   // away and look like "no fixtures", so the choice is dropped rather than kept.
+  // D8: mientras carga no hay días (o son los de la liga anterior): el ?dia= del enlace se conserva.
   useEffect(() => {
-    if (day && !dayGroups.some((d) => d.key === day)) setDay(null);
-  }, [dayGroups, day]);
+    const sigue = conservarDia(day, dayGroups.map((d) => d.key), loading);
+    if (sigue !== day) setDay(sigue);
+  }, [dayGroups, day, loading]);
 
   const active = leagues.find((l) => l.id === league) ?? null;
   const activeMeta = meta?.leagues.find((l) => l.id === league) ?? null;
@@ -228,7 +239,7 @@ export default function FootballDashboard() {
               >
                 <LeagueFlag country={l.country} className="mr-1.5" />
               {l.name}
-                {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
+                {l.upcomingCount > 0 && <span className="ml-1.5 text-(--ink-soft)">{l.upcomingCount}</span>}
                 {!l.hasModel && (
                   <span className="ml-1.5 text-amber-400" title={tr('fb.sinModeloMercado')}>
                     ◦
@@ -271,7 +282,7 @@ export default function FootballDashboard() {
         <VacioPorqueNoHayCuotas
           reason={meta?.oddsFallbackReason}
           detail={meta?.oddsFallbackDetail}
-          hasKey={meta?.hasOddsKey ?? false}
+          hasKey={meta ? meta.hasOddsKey : null}
           demoFixtures={meta?.demoFixtures ?? true}
         />
       )}
@@ -323,13 +334,13 @@ export default function FootballDashboard() {
           badge: <TeamCrest league={league!} name={t.name} code={t.id} size={16} />,
           onOpen: () => setTeam({ league: league!, id: t.id }),
           extra: [
-            { label: tr('fb.gf'), value: t.gf?.toFixed(2) ?? '—', title: tr('fb.gfTitulo') },
-            { label: tr('fb.gc'), value: t.ga?.toFixed(2) ?? '—', title: tr('fb.gcTitulo') },
+            { label: tr('fb.gf'), value: (t.gf == null ? undefined : numF(t.gf, 2)) ?? '—', title: tr('fb.gfTitulo') },
+            { label: tr('fb.gc'), value: (t.ga == null ? undefined : numF(t.ga, 2)) ?? '—', title: tr('fb.gcTitulo') },
             {
               label: tr('eq.dif'),
               value:
                 t.gf != null && t.ga != null
-                  ? `${t.gf - t.ga > 0 ? '+' : ''}${(t.gf - t.ga).toFixed(2)}`
+                  ? `${t.gf - t.ga > 0 ? '+' : ''}${numF((t.gf - t.ga), 2)}`
                   : '—',
               title: tr('fb.difTitulo'),
             },

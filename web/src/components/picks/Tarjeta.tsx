@@ -1,5 +1,5 @@
 // La tarjeta de un partido en Destacados, el chip de filtro y la barra de probabilidad.
-import { AWAY_COLOR, DRAW_COLOR, HOME_COLOR, PROFIT_COLOR, LOSS_COLOR, SPORT_THEMES } from '../../lib/theme';
+import { AWAY_COLOR, DRAW_COLOR, HOME_COLOR, PROFIT_COLOR, SPORT_THEMES, PROFIT_TEXT, LOSS_TEXT } from '../../lib/theme';
 import { DeporteIcono, StarIcon, StatusMark } from '../icons';
 import { TeamCrest, EnlacePartido } from '../ui';
 import { ConfianzaBadge } from '../trust/ConfianzaBadge';
@@ -45,7 +45,7 @@ export function Tarjeta({ p, puesto, elegido, onElegir }: { p: Pick; puesto: num
     { nombre: p.casa, id: p.casaId, rol: 'local' },
     { nombre: p.fuera, id: p.fueraId, rol: 'visitante' },
   ];
-  if (p.sport === 'nfl') lados.reverse();
+  if (p.sport === 'nfl' || p.sport === 'nhl') lados.reverse();
   const fecha = new Date(p.cuando);
   const conValor = p.ventaja != null && p.ventaja > 0;
   return (
@@ -55,10 +55,12 @@ export function Tarjeta({ p, puesto, elegido, onElegir }: { p: Pick; puesto: num
       }`}
     >
       {/* Cabecera: puesto, deporte, liga, hora y nivel de confianza */}
-      <header className="flex items-center gap-2.5">
+      {/* Con dos insignias («Confianza media», «Sin mercado») en una tarjeta estrecha, el título se quedaba en
+          una columna de dos letras («N / HL»): ahora tiene un mínimo y la insignia baja de línea. */}
+      <header className="flex flex-wrap items-center gap-2.5">
         <span className="w-6 shrink-0 text-center text-[13px] font-semibold tabular-nums text-(--ink-muted)">#{puesto}</span>
         <DeporteIcono nombre={p.sport} size={28} tile />
-        <div className="min-w-0 flex-1 leading-tight">
+        <div className="min-w-[7.5rem] flex-1 leading-tight">
           <div className="break-words text-[13px] text-(--ink-body)">
             {deporteDe(t, p.sport)}
             {p.liga && p.liga.toLowerCase() !== SPORT_THEMES[p.sport].label.toLowerCase() && <span className="text-(--ink-muted)"> · {p.liga.toUpperCase()}</span>}
@@ -82,7 +84,7 @@ export function Tarjeta({ p, puesto, elegido, onElegir }: { p: Pick; puesto: num
               <div key={i} className="flex min-w-0 items-center gap-2">
                 <TeamCrest league={p.liga ?? ''} name={l.nombre} code={l.id} size={24} />
                 <span className={`min-w-0 break-words text-[15px] leading-snug ${fav ? 'font-semibold text-(--ink-strong)' : 'text-(--ink-soft)'}`}>{l.nombre}</span>
-                {p.sport === 'nfl' && i === 0 && <span className="-ml-1 text-[12px] text-(--ink-faint)">@</span>}
+                {(p.sport === 'nfl' || p.sport === 'nhl') && i === 0 && <span className="-ml-1 text-[12px] text-(--ink-faint)">@</span>}
               </div>
             );
           })}
@@ -95,7 +97,7 @@ export function Tarjeta({ p, puesto, elegido, onElegir }: { p: Pick; puesto: num
           </div>
         </div>
       </div>
-      <Barra opciones={p.opciones} invertir={p.sport === 'nfl'} />
+      <Barra opciones={p.opciones} invertir={p.sport === 'nfl' || p.sport === 'nhl'} />
 
       {/* Lo que hace falta para no engañarse */}
       <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-[12.5px] sm:grid-cols-2">
@@ -122,7 +124,7 @@ export function Tarjeta({ p, puesto, elegido, onElegir }: { p: Pick; puesto: num
                 {conNodos(t('tj.lineaCuota', { justa: num(p.cuotaJusta) }), {
                   cuota: <span className="font-semibold text-(--ink-strong)">{num(p.cuota)}</span>,
                   valor: (
-                    <span style={{ color: conValor ? PROFIT_COLOR : LOSS_COLOR }}>
+                    <span style={{ color: conValor ? PROFIT_TEXT : LOSS_TEXT }}>
                       {t(conValor ? 'tj.deValor' : 'tj.sinValor', { p: `${p.ventaja! >= 0 ? '+' : '−'}${pct(Math.abs(p.ventaja!), 1)}` })}
                     </span>
                   ),
@@ -133,31 +135,34 @@ export function Tarjeta({ p, puesto, elegido, onElegir }: { p: Pick; puesto: num
             )}
           </dd>
         </div>
-        {p.confianza && (
-          <div className="sm:col-span-2">
-            <dt className="text-[11px] uppercase tracking-wide text-(--ink-muted)">{t('tj.porQueConfianza')}</dt>
-            <dd className="text-(--ink-soft)">
-              {t('tj.datos', {
-                c: p.confianza.calidadDatos,
-                e: codigo(t, p.confianza.estabilidad).toLowerCase(),
-                i: num(p.confianza.incertidumbrePp, 1),
-              })}
-              {p.confianza.desacuerdo !== 'SIN COMPONENTES' && t('tj.desacuerdo', { d: codigo(t, p.confianza.desacuerdo).toLowerCase() })}
-              {p.confianza.decision === 'BET' ? (
-                <span className="block" style={{ color: PROFIT_COLOR }}>
-                  <StatusMark estado="ok" color={PROFIT_COLOR} size={13} />
-                  {t('tj.apostaria')}
-                </span>
-              ) : p.confianza.motivo ? (
-                <span className="block text-(--ink-muted)">
-                  <StatusMark estado="aviso" color={AMBAR} size={13} />
-                  {t('tj.noApostaria', { motivo: p.confianza.motivo })}
-                </span>
-              ) : null}
-            </dd>
-          </div>
-        )}
       </dl>
+
+      {/* El porqué de la confianza, plegado (D13): la tarjeta enseña lo que hace falta para
+          decidir (probabilidad, histórico, cuota) y el detalle está a un clic. */}
+      {p.confianza && (
+        <details className="group text-[12.5px]">
+          <summary className="cursor-pointer select-none text-[11px] uppercase tracking-wide text-(--ink-muted) hover:text-(--ink-body)">{t('tj.porQueConfianza')}</summary>
+          <p className="mt-1 text-(--ink-soft)">
+            {t('tj.datos', {
+              c: p.confianza.calidadDatos,
+              e: codigo(t, p.confianza.estabilidad).toLowerCase(),
+              i: num(p.confianza.incertidumbrePp, 1),
+            })}
+            {p.confianza.desacuerdo !== 'SIN COMPONENTES' && t('tj.desacuerdo', { d: codigo(t, p.confianza.desacuerdo).toLowerCase() })}
+            {p.confianza.decision === 'BET' ? (
+              <span className="block" style={{ color: PROFIT_TEXT }}>
+                <StatusMark estado="ok" color={PROFIT_COLOR} size={13} />
+                {t('tj.apostaria')}
+              </span>
+            ) : p.confianza.motivo ? (
+              <span className="block text-(--ink-muted)">
+                <StatusMark estado="aviso" color={AMBAR} size={13} />
+                {t('tj.noApostaria', { motivo: p.confianza.motivo })}
+              </span>
+            ) : null}
+          </p>
+        </details>
+      )}
 
       <div className="flex items-center justify-between gap-2">
         <EnlacePartido sport={p.sport} id={p.eventoId} clave={p.matchKey} />
@@ -168,7 +173,7 @@ export function Tarjeta({ p, puesto, elegido, onElegir }: { p: Pick; puesto: num
         onClick={onElegir}
         aria-pressed={elegido}
         className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium transition ${
-          elegido ? 'bg-[#f5b544]/15 text-[#f5b544] hover:bg-[#f5b544]/20' : 'bg-(--raised) text-(--ink-body) hover:bg-(--raised-2)'
+          elegido ? 'bg-[#f5b544]/15 text-(--seleccion) hover:bg-[#f5b544]/20' : 'bg-(--raised) text-(--ink-body) hover:bg-(--raised-2)'
         }`}
       >
         <StarIcon size={15} filled={elegido} />

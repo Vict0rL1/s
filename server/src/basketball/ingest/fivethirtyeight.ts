@@ -135,17 +135,38 @@ export function parseFiveThirtyEight(csv: string): HistoricalGame[] {
   return out;
 }
 
-/** Download (once), parse and store into bb_teams / bb_games under league "nba". */
-export async function ingestFiveThirtyEight(opts: { fromSeason?: number } = {}): Promise<{
+export interface ResultadoFiveThirtyEight {
   games: number;
   teams: number;
   from: string;
   to: string;
-}> {
+}
+
+/** Download (once) and parse, A MEMORIA. No toca la base. */
+export async function cargarFiveThirtyEight(opts: { fromSeason?: number } = {}): Promise<HistoricalGame[]> {
   const file = await ensureFile();
   let games = parseFiveThirtyEight(fs.readFileSync(file, 'utf8'));
   if (opts.fromSeason) games = games.filter((g) => g.season >= opts.fromSeason!);
+  return games;
+}
 
+/** Download (once), parse and store into bb_teams / bb_games under league "nba", in its own transaction. */
+export async function ingestFiveThirtyEight(opts: { fromSeason?: number } = {}): Promise<ResultadoFiveThirtyEight> {
+  const games = await cargarFiveThirtyEight(opts);
+  const db = getDb();
+  db.exec('BEGIN');
+  try {
+    const r = guardarFiveThirtyEight(games);
+    db.exec('COMMIT');
+    return r;
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+}
+
+/** Store parsed games. SIN transacción propia: quien llama la abre (actualizar.ts). */
+export function guardarFiveThirtyEight(games: HistoricalGame[]): ResultadoFiveThirtyEight {
   const db = getDb();
   const insertTeam = db.prepare(
     `INSERT INTO bb_teams (id, league, name, abbreviation, location, conference, division, logo)
@@ -165,25 +186,18 @@ export async function ingestFiveThirtyEight(opts: { fromSeason?: number } = {}):
     teams.set(g.awayId, g.awayName);
   }
 
-  db.exec('BEGIN');
-  try {
-    for (const [id, name] of teams) insertTeam.run(id, name);
-    for (const g of games) {
-      insertGame.run(
-        g.season,
-        g.date,
-        g.homeId,
-        g.awayId,
-        g.homePts,
-        g.awayPts,
-        g.neutral ? 1 : 0,
-        g.isPlayoff ? 1 : 0,
-      );
-    }
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
+  for (const [id, name] of teams) insertTeam.run(id, name);
+  for (const g of games) {
+    insertGame.run(
+      g.season,
+      g.date,
+      g.homeId,
+      g.awayId,
+      g.homePts,
+      g.awayPts,
+      g.neutral ? 1 : 0,
+      g.isPlayoff ? 1 : 0,
+    );
   }
 
   return {

@@ -15,6 +15,7 @@ import { accuracy, brier, logLoss } from './metrics.ts';
 import { bandaDe } from './walkforward.ts';
 import { UMBRALES_MUESTRA } from './sample.ts';
 import type { SportId } from '../sports.ts';
+import { roiDe } from './roi.ts';
 
 export const MIN_CELDA_PREDICCIONES = UMBRALES_MUESTRA.predicciones.insuficiente;
 export const MIN_CELDA_APUESTAS = UMBRALES_MUESTRA.apuestas.insuficiente;
@@ -59,14 +60,20 @@ function diaDe(iso: string | null): string | undefined {
   return Number.isFinite(t) ? DIAS[new Date(t).getUTCDay()] : undefined;
 }
 
-/** Las dimensiones de una predicción en vivo. El tenis no tiene local: «primero/segundo». */
+/**
+ * Las dimensiones de una predicción en vivo. El tenis no tiene local: «primero/segundo».
+ * Todas se saben ANTES del partido (lote C, C9): segmentar por el desenlace («ganó el
+ * visitante») describía lo que pasó y no seleccionaba nada; `lado` es el lado que favoreció el
+ * modelo, con la misma forma que en las apuestas.
+ */
 export function dimensionesPrediccion(deporte: SportId, x: PrediccionEnVivo): Record<string, string | undefined> {
   const lados = deporte === 'tennis' ? ['el primero', 'el segundo'] : x.p.length === 3 ? ['el local', 'empate', 'el visitante'] : ['el local', 'el visitante'];
+  const aLados = deporte === 'tennis' ? ['al primero', 'al segundo'] : x.p.length === 3 ? ['al local', 'al empate', 'al visitante'] : ['al local', 'al visitante'];
   const fav = x.p.indexOf(Math.max(...x.p));
   return {
     liga: x.liga ?? undefined,
     favorito: fav === 1 && x.p.length === 3 ? 'empate favorito' : `${lados[fav]} favorito`,
-    resultado: x.y === 1 && x.p.length === 3 ? 'empate' : `ganó ${lados[x.y]}`,
+    lado: aLados[fav],
     'banda de probabilidad': bandaDe(x.p),
     mes: mesDe(x.cuando),
     'día de la semana': diaDe(x.cuando),
@@ -88,10 +95,11 @@ interface ApuestaFila {
 
 /** Las dimensiones de una apuesta de papel. Local/visitante sale de la etiqueta del partido. */
 export function dimensionesApuesta(deporte: SportId, a: ApuestaFila): Record<string, string | undefined> {
-  const sep = deporte === 'nfl' ? ' @ ' : ' vs ';
+  const arroba = deporte === 'nfl' || deporte === 'nhl';
+  const sep = arroba ? ' @ ' : ' vs ';
   const partes = a.label.split(sep);
-  const local = partes.length === 2 ? (deporte === 'nfl' ? partes[1] : partes[0]) : null;
-  const visitante = partes.length === 2 ? (deporte === 'nfl' ? partes[0] : partes[1]) : null;
+  const local = partes.length === 2 ? (arroba ? partes[1] : partes[0]) : null;
+  const visitante = partes.length === 2 ? (arroba ? partes[0] : partes[1]) : null;
   const lado =
     deporte === 'tennis'
       ? a.selection === partes[0] ? 'al primero' : a.selection === partes[1] ? 'al segundo' : undefined
@@ -139,7 +147,7 @@ export function celdaApuestas(xs: ApuestaFila[]): CeldaApuestas {
     n: xs.length,
     conCierre: conClv.length,
     clvMedio: publicada ? conClv.reduce((s, a) => s + (a.clv as number), 0) / conClv.length : null,
-    roi: liquidadas.length >= MIN_CELDA_APUESTAS && stake > 0 ? liquidadas.reduce((s, a) => s + (a.profit as number), 0) / stake : null,
+    roi: liquidadas.length >= MIN_CELDA_APUESTAS ? roiDe(liquidadas.reduce((s, a) => s + (a.profit as number), 0), stake) : null,
     publicada,
   };
 }

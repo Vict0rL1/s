@@ -21,7 +21,7 @@ carga trae el armazón y la pestaña que se abre.
 Desde 1024 px, barra lateral con la píldora de estado, la búsqueda, las pestañas (con flechas,
 Inicio y Fin) y los enlaces a Ajustes, Diagnóstico y Glosario. Por debajo, la cabecera lleva la
 marca, la búsqueda y la píldora, y una barra inferior da cuatro destinos: Destacados, Deportes
-(abre una hoja con los cinco), Apuestas y Confianza. Las teclas 1–8 cambian de pestaña y
+(abre una hoja con los siete), Apuestas y Confianza. Las teclas 1–9 y 0 (la décima) cambian de pestaña y
 Ctrl/Cmd+K abre la búsqueda (`GET /api/buscar`: equipos, jugadores, partidos, ligas y páginas).
 
 ## Píldora de estado

@@ -17,13 +17,10 @@
 //                    2015, so ratings will not describe today's teams. Useful for
 //                    `npm run backtest:bb` and on networks that block ESPN.
 
-import { getDb, setMeta } from '../../db.ts';
+import { setMeta } from '../../db.ts';
 import { basketballConfig } from '../../config.ts';
-import { ingestEspnLeague } from '../ingest/espn.ts';
-import { ingestFiveThirtyEight } from '../ingest/fivethirtyeight.ts';
-import { ingestHoopr } from '../ingest/hoopr.ts';
 import { refreshBasketballOdds } from '../ingest/odds.ts';
-import { recomputeBasketballRatings } from '../ratings.ts';
+import { actualizarHistoriaBaloncesto, type FuenteHistoria } from './actualizar.ts';
 import { countGames, countTeams, getLeagueLatestDate } from '../repo.ts';
 import { getBasketballTrackRecord, resolveGamePredictions } from '../trackRecord.ts';
 import { conRegistro } from '../../ingest/runs.ts';
@@ -73,7 +70,6 @@ async function main() {
     throw new Error(`--source desconocido: ${source} (usa auto, espn o 538)`);
   }
 
-  const db = getDb();
   const leagues = basketballConfig.leagues.filter((l) => !onlyLeague || l.id === onlyLeague);
   if (leagues.length === 0) throw new Error(`Liga desconocida: ${onlyLeague}`);
 
@@ -83,95 +79,11 @@ async function main() {
       `${onlyLeague ? ` (${onlyLeague})` : ''} · fuente: ${source}`,
   );
 
-  // Full rebuild of games/teams keeps ratings correct and avoids duplicates. The
-  // prediction log and the tennis tables are deliberately untouched.
-  db.exec('BEGIN');
-  try {
-    for (const l of leagues) {
-      db.prepare('DELETE FROM bb_games WHERE league = ?').run(l.id);
-      db.prepare('DELETE FROM bb_teams WHERE league = ?').run(l.id);
-      db.prepare('DELETE FROM bb_team_ratings WHERE league = ?').run(l.id);
-    }
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
-  }
-
-  const failed: string[] = [];
-  let total = 0;
-
-  for (const league of leagues) {
-    console.log(`\n▸ ${league.label}`);
-    if (!league.espn) {
-      console.log(
-        `  sin fuente de resultados disponible: se mostrarán los partidos y las cuotas del\n` +
-          `  mercado, pero no habrá modelo Elo. La app lo indica en la interfaz.`,
-      );
-      continue;
-    }
-    if (source === '538') {
-      if (league.id !== 'nba') {
-        console.log('  --source 538 solo cubre la NBA; se omite.');
-        continue;
-      }
-    } else {
-      try {
-        const res = await ingestEspnLeague(league, seasons);
-        console.log(`  equipos: ${res.teams}, partidos: ${res.games}`);
-        total += res.games;
-        continue;
-      } catch (e) {
-        console.warn(`  ⚠️  ESPN falló para ${league.id}: ${(e as Error).message}`);
-        if (source === 'espn') {
-          failed.push(league.id);
-          continue;
-        }
-      }
-    }
-
-    // Fallbacks, in the order that leaves the ratings least stale.
-    if (league.id === 'nba') {
-      let got = 0;
-      // FiveThirtyEight FIRST, and the order is load-bearing. It carries the deep
-      // history the model was fitted on (1946-2015) AND it establishes the canonical
-      // team ids — hoopR then resolves its own spellings into them rather than
-      // creating a second copy of every franchise. Reversing these two split the NBA
-      // into 98 teams; see basketball/ingest/teamNames.ts.
-      try {
-        const res = await ingestFiveThirtyEight();
-        console.log(
-          `  FiveThirtyEight: ${res.games} partidos reales (${res.from}–${res.to}), ${res.teams} franquicias`,
-        );
-        got += res.games;
-      } catch (e) {
-        console.warn(`  ⚠️  ${(e as Error).message}`);
-      }
-      // Then hoopR, which is ESPN's own schedule mirrored into GitHub — so it reaches
-      // the CURRENT season on a network that blocks ESPN itself. Before this existed,
-      // a blocked ESPN dropped the tab all the way back to 2015.
-      if (source !== '538') {
-        try {
-          const res = await ingestHoopr({ fromSeason: 2003 });
-          if (res.games > 0) {
-            console.log(
-              `  hoopR (GitHub, fuente ESPN): ${res.games} partidos, ` +
-                `temporadas ${res.seasons[0]}–${res.seasons[res.seasons.length - 1]}` +
-                ` — hasta ${res.through}` +
-                (res.unmatched > 0 ? `  ⚠️  ${res.unmatched} sin emparejar` : ''),
-            );
-            got += res.games;
-          }
-        } catch (e) {
-          console.warn(`  ⚠️  hoopR falló: ${(e as Error).message}`);
-        }
-      }
-      if (got === 0) failed.push(league.id);
-      total += got;
-    } else {
-      failed.push(league.id);
-    }
-  }
+  // Descargar todo primero y, por liga, borrar + insertar + recalcular en UNA transacción
+  // (ver actualizar.ts): la base nunca se ve vacía mientras se descarga. El registro de
+  // predicciones y las tablas de los otros deportes no se tocan.
+  const historia = await actualizarHistoriaBaloncesto({ leagues, seasons, source: source as FuenteHistoria });
+  const { total, fallidas: failed } = historia;
 
   if (total === 0 && countGames() === 0) {
     throw new Error(
@@ -183,8 +95,7 @@ async function main() {
     console.warn(`\n⚠️  Ligas sin datos: ${failed.join(', ')}. El resto funciona con normalidad.`);
   }
 
-  console.log('\n▸ Calculando Elo…');
-  console.log(`  equipos con rating: ${JSON.stringify(recomputeBasketballRatings())}`);
+  console.log(`\n▸ Elo recalculado · equipos con rating: ${JSON.stringify(historia.ratings)}`);
 
   // Warn loudly when the newest game is old — stale ratings do not describe the
   // teams playing tonight, and that is the failure mode users cannot see.

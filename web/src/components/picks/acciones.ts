@@ -4,6 +4,7 @@
 
 import type { Combinada, Pick } from './tipos';
 import { localeDe, tr, type Idioma } from '../../i18n';
+import { num as numF, pct as pctF } from '../../lib/formato';
 
 export const CLAVE_BORRADOR = 'predictor.borradorApuesta';
 
@@ -24,7 +25,7 @@ export const patasDe = (xs: Pick[]): Pata[] =>
 
 // El texto que sale de la app (portapapeles, calendario, notas) va en el idioma de la pantalla;
 // en español con la coma decimal, como estaba.
-const pctTxt = (x: number, idioma: Idioma = 'es') => `${idioma === 'es' ? (x * 100).toFixed(1).replace('.', ',') : (x * 100).toFixed(1)} %`;
+const pctTxt = (x: number, idioma: Idioma = 'es') => pctF(x, 1, idioma);
 
 /** El borrador de apuesta personal: una pata, su mercado; varias, una combinada. */
 export function borradorDe(xs: Pick[], c: Combinada | null, idioma: Idioma = 'es'): Record<string, unknown> {
@@ -46,11 +47,11 @@ export function borradorDe(xs: Pick[], c: Combinada | null, idioma: Idioma = 'es
 }
 
 export function comoTexto(xs: Pick[], c: Combinada | null, idioma: Idioma = 'es'): string {
-  const lineas = xs.map((p) => `• ${p.partido} — ${p.favorito} ${pctTxt(p.probabilidad, idioma)}${p.cuota ? ` @ ${p.cuota.toFixed(2)}` : ''} (${new Date(p.cuando).toLocaleString(localeDe(idioma), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})`);
+  const lineas = xs.map((p) => `• ${p.partido} — ${p.favorito} ${pctTxt(p.probabilidad, idioma)}${p.cuota ? ` @ ${numF(p.cuota, 2, idioma)}` : ''} (${new Date(p.cuando).toLocaleString(localeDe(idioma), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})`);
   const pie = c
     ? `${tr(idioma, 'exp.acertarTodos', { p: pctTxt(c.conjunta, idioma) })}${
         c.cuotaCombinada != null
-          ? `${tr(idioma, 'exp.cuotaCombinada', { c: c.cuotaCombinada.toFixed(2) })}${c.ventaja != null ? tr(idioma, 'exp.ventaja', { v: `${c.ventaja >= 0 ? '+' : '−'}${pctTxt(Math.abs(c.ventaja), idioma)}` }) : ''}`
+          ? `${tr(idioma, 'exp.cuotaCombinada', { c: numF(c.cuotaCombinada, 2, idioma) })}${c.ventaja != null ? tr(idioma, 'exp.ventaja', { v: `${c.ventaja >= 0 ? '+' : '−'}${pctTxt(Math.abs(c.ventaja), idioma)}` }) : ''}`
           : ''
       }`
     : '';
@@ -88,7 +89,7 @@ export function comoIcs(xs: Pick[], ahora = new Date(), idioma: Idioma = 'es'): 
       `DTSTART:${ini}`,
       `DTEND:${fin}`,
       `SUMMARY:${escIcs(p.partido)}`,
-      `DESCRIPTION:${escIcs(tr(idioma, 'exp.ics', { fav: p.favorito, p: pctTxt(p.probabilidad, idioma), cuota: p.cuota ? tr(idioma, 'exp.icsCuota', { c: p.cuota.toFixed(2) }) : '' }))}`,
+      `DESCRIPTION:${escIcs(tr(idioma, 'exp.ics', { fav: p.favorito, p: pctTxt(p.probabilidad, idioma), cuota: p.cuota ? tr(idioma, 'exp.icsCuota', { c: numF(p.cuota, 2, idioma) }) : '' }))}`,
       'END:VEVENT',
     ].map(plegar).join('\r\n');
   });

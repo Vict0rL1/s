@@ -25,7 +25,7 @@ export interface Exportacion {
 
 const fechaIso = (s?: string) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null);
 
-/** Los cinco registros de predicciones, con las mismas columnas. */
+/** Los siete registros de predicciones, con las mismas columnas. */
 function predicciones(f: Filtros): Exportacion {
   const db = getDb();
   const fuentes: { sport: string; tabla: string; sql: string }[] = [
@@ -34,6 +34,17 @@ function predicciones(f: Filtros): Exportacion {
     { sport: 'basketball', tabla: 'bb_prediction_log', sql: "SELECT 'basketball' AS sport, match_key, predicted_at, commence_time, prob_home AS prob_a, 1 - prob_home AS prob_b, NULL AS prob_draw, outcome, model_version FROM bb_prediction_log" },
     { sport: 'baseball', tabla: 'bsb_prediction_log', sql: "SELECT 'baseball' AS sport, match_key, predicted_at, commence_time, prob_home AS prob_a, 1 - prob_home AS prob_b, NULL AS prob_draw, outcome, model_version FROM bsb_prediction_log" },
     { sport: 'nfl', tabla: 'naf_prediction_log', sql: "SELECT 'nfl' AS sport, match_key, predicted_at, commence_time, prob_home AS prob_a, prob_away AS prob_b, NULL AS prob_draw, outcome, model_version FROM naf_prediction_log" },
+    {
+      sport: 'nhl',
+      tabla: 'nhl_prediction_log',
+      sql: "SELECT 'nhl' AS sport, match_key, predicted_at, commence_time, COALESCE(shown_home, prob_home) AS prob_a, 1 - COALESCE(shown_home, prob_home) AS prob_b, NULL AS prob_draw, CASE WHEN home_goals IS NULL THEN NULL WHEN home_goals > away_goals THEN 'home' ELSE 'away' END AS outcome, model_version FROM nhl_prediction_log",
+    },
+    {
+      sport: 'ufc',
+      tabla: 'ufc_prediction_log',
+      // a = el luchador A (home_*), b = el B; empate y «sin resultado» se exportan como tales.
+      sql: "SELECT 'ufc' AS sport, match_key, predicted_at, commence_time, COALESCE(shown_home, prob_home) AS prob_a, 1 - COALESCE(shown_home, prob_home) AS prob_b, NULL AS prob_draw, CASE outcome WHEN 'A' THEN 'home' WHEN 'B' THEN 'away' WHEN 'EMPATE' THEN 'draw' WHEN 'NC' THEN 'no_contest' ELSE NULL END AS outcome, model_version FROM ufc_prediction_log",
+    },
   ];
   const datos: Record<string, unknown>[] = [];
   for (const x of fuentes) {

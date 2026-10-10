@@ -35,10 +35,11 @@ import {
 import { Panel, SectionTitle, Disclosure } from './ui';
 import { AlertIcon, CheckIcon } from './icons';
 import { localeDe, useI18n, type Clave } from '../i18n';
+import { num as numF } from '../lib/formato';
 
 function fmt(ms: number): string {
-  if (ms >= 60_000) return `${(ms / 60_000).toFixed(1)} min`;
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`;
+  if (ms >= 60_000) return `${numF((ms / 60_000), 1)} min`;
+  if (ms >= 1000) return `${numF((ms / 1000), 2)} s`;
   return `${Math.round(ms)} ms`;
 }
 

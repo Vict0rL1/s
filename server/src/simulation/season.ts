@@ -19,7 +19,7 @@ import path from 'node:path';
 import { CONFIG_DIR, footballLeagueById, leagueById as basketballLeagueById, baseballLeagueById, nflLeagueById } from '../config.ts';
 import { getDb } from '../db.ts';
 import { rng, elegir } from './rng.ts';
-import { calendarioGuardado, reconstruirDobleVuelta, type Fixture, type Calendario } from './calendario.ts';
+import { calendarioGuardado, reconstruirDobleVuelta, type Fixture, type Calendario, pendientesDe } from './calendario.ts';
 import { SPORT_IDS, type SportId } from '../sports.ts';
 
 // ---------------------------------------------------------------------------
@@ -202,7 +202,17 @@ export function simularTemporada(entrada: EntradaSimulacion): EquipoSimulado[] {
 // ---------------------------------------------------------------------------
 // Las entradas reales: clasificación, calendario y probabilidades por deporte
 // ---------------------------------------------------------------------------
-const TABLAS: Record<Exclude<SportId, 'tennis'>, { partidos: string; equipos: string; fecha: string; marcador: [string, string]; filtro: string; neutral: string }> = {
+/**
+ * Los deportes con simulación de temporada. La NHL no está: su calendario se guarda solo para las
+ * próximas semanas (no la temporada entera) y la clasificación de la NHL reparte puntos por la
+ * derrota en la prórroga, que el archivo no dice (la fuente no trae cómo acabó cada partido).
+ */
+export type DeporteSimulable = Exclude<SportId, 'tennis' | 'nhl' | 'ufc'>;
+
+/** Los deportes con simulación de temporada (la web solo pide estos: web/src/lib/simulacion.ts). */
+export const DEPORTES_SIMULABLES: DeporteSimulable[] = ['football', 'basketball', 'baseball', 'nfl'];
+
+const TABLAS: Record<DeporteSimulable, { partidos: string; equipos: string; fecha: string; marcador: [string, string]; filtro: string; neutral: string }> = {
   football: { partidos: 'fb_matches', equipos: 'fb_teams', fecha: 'match_date', marcador: ['home_goals', 'away_goals'], filtro: '1 = 1', neutral: '0' },
   basketball: { partidos: 'bb_games', equipos: 'bb_teams', fecha: 'game_date', marcador: ['home_pts', 'away_pts'], filtro: 'COALESCE(is_playoff, 0) = 0', neutral: 'COALESCE(neutral, 0)' },
   baseball: { partidos: 'bsb_games', equipos: 'bsb_teams', fecha: 'game_date', marcador: ['home_runs', 'away_runs'], filtro: '1 = 1', neutral: '0' },
@@ -215,7 +225,7 @@ export interface TemporadaActual {
   jugados: { homeId: string; awayId: string; hg: number; ag: number }[];
 }
 
-export function temporadaActual(sport: Exclude<SportId, 'tennis'>, league: string): TemporadaActual {
+export function temporadaActual(sport: DeporteSimulable, league: string): TemporadaActual {
   const t = TABLAS[sport];
   const db = getDb();
   const s = db.prepare(`SELECT MAX(season) AS season FROM ${t.partidos} WHERE league = ?`).get(league) as { season: number | null };
@@ -252,7 +262,7 @@ export function clasificacionDe(jugados: TemporadaActual['jugados'], reglas: Pic
   return out;
 }
 
-function equiposDe(sport: Exclude<SportId, 'tennis'>, league: string, ids: Set<string>): EquipoEntrada[] {
+function equiposDe(sport: DeporteSimulable, league: string, ids: Set<string>): EquipoEntrada[] {
   const t = TABLAS[sport];
   const db = getDb();
   const cols = (db.prepare(`PRAGMA table_info(${t.equipos})`).all() as unknown as { name: string }[]).map((c) => c.name);
@@ -263,7 +273,7 @@ function equiposDe(sport: Exclude<SportId, 'tennis'>, league: string, ids: Set<s
 }
 
 /** La probabilidad publicada por el núcleo del deporte, sin lo que no se sabe con antelación. */
-export async function probabilidadPartido(sport: Exclude<SportId, 'tennis'>, league: string, f: Fixture): Promise<number[] | null> {
+export async function probabilidadPartido(sport: DeporteSimulable, league: string, f: Fixture): Promise<number[] | null> {
   try {
     switch (sport) {
       case 'football': {
@@ -317,7 +327,7 @@ export interface ResultadoSimulacion {
 
 export const ETIQUETA = 'Simulación con las probabilidades de hoy; no es una predicción publicada ni entra en el libro mayor.';
 
-export async function simulacionTemporada(sport: Exclude<SportId, 'tennis'>, league: string, ahora = new Date()): Promise<ResultadoSimulacion> {
+export async function simulacionTemporada(sport: DeporteSimulable, league: string, ahora = new Date()): Promise<ResultadoSimulacion> {
   const cfg = configSimulacion();
   const reglas = reglasDe(sport, league);
   const vacio = (motivo: string, extra: Partial<ResultadoSimulacion> = {}): ResultadoSimulacion => ({
@@ -329,8 +339,10 @@ export async function simulacionTemporada(sport: Exclude<SportId, 'tennis'>, lea
   if (!liga) return vacio('liga desconocida');
   const temp = temporadaActual(sport, league);
   if (temp.season == null) return vacio('sin partidos en la base');
-  const hoy = ahora.toISOString().slice(0, 10).replace(/-/g, '');
-  let cal = calendarioGuardado(sport, league, temp.season, hoy);
+  // El calendario ENTERO y, pendiente, lo que no tiene resultado emparejado (lote C, C6): ni se
+  // simula lo ya jugado aunque su fecha sea de hoy, ni se olvida lo aplazado.
+  let cal = calendarioGuardado(sport, league, temp.season);
+  if (cal.origen === 'fuente') cal = { ...cal, partidos: pendientesDe(cal.partidos, temp.jugados) };
   const ids = new Set<string>();
   for (const j of temp.jugados) {
     ids.add(j.homeId);
@@ -384,7 +396,7 @@ export function simulacionGuardada(sport: SportId, league: string, dia: string):
   return r ? (JSON.parse(r.result) as ResultadoSimulacion) : null;
 }
 
-export async function simulacionDelDia(sport: Exclude<SportId, 'tennis'>, league: string, ahora = new Date()): Promise<ResultadoSimulacion> {
+export async function simulacionDelDia(sport: DeporteSimulable, league: string, ahora = new Date()): Promise<ResultadoSimulacion> {
   const dia = ahora.toISOString().slice(0, 10);
   const cache = simulacionGuardada(sport, league, dia);
   if (cache) return cache;
@@ -394,7 +406,7 @@ export async function simulacionDelDia(sport: Exclude<SportId, 'tennis'>, league
 }
 
 /** Ligas con partidos en la base, por deporte. */
-export function ligasConDatos(sport: Exclude<SportId, 'tennis'>): string[] {
+export function ligasConDatos(sport: DeporteSimulable): string[] {
   try {
     return (getDb().prepare(`SELECT DISTINCT league FROM ${TABLAS[sport].partidos} ORDER BY league`).all() as { league: string }[]).map((r) => r.league);
   } catch {
@@ -406,7 +418,7 @@ export async function cicloSimulacion(log: (m: string) => void = () => {}, ahora
   let ligas = 0;
   let simuladas = 0;
   for (const s of SPORT_IDS) {
-    if (s === 'tennis') continue;
+    if (s === 'tennis' || s === 'nhl' || s === 'ufc') continue;
     for (const l of ligasConDatos(s)) {
       ligas++;
       try {

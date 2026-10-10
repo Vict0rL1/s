@@ -53,11 +53,6 @@ export function gruposDe(sport: string, eventId: string, participantes: string[]
   return [`evento:${sport}:${eventId}`, ...participantes.filter(Boolean).map((p) => `${tipo}:${sport}:${p}`)];
 }
 
-/** Los límites por grupo de un banco con su propio tope por partido (una estrategia). */
-export function limitesConTopePorPartido(maxPorPartido: number): (grupo: string) => number {
-  return (grupo) => (grupo.startsWith('evento:') ? maxPorPartido : limiteDe(grupo));
-}
-
 const limiteDe = (grupo: string) => {
   const L = limitesVigentes();
   return grupo.startsWith('evento:') ? L.max_same_event_exposure : grupo.startsWith('jugador:') ? L.max_same_player_exposure : L.max_same_team_exposure;

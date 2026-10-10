@@ -218,3 +218,29 @@ export function nflSlate(
   }
   return out;
 }
+
+/** UFC: A vs B (sin local), con las cuotas de la casa si las hay. */
+export function ufcSlate(
+  rows: {
+    fight: { id: string; commence_time: string; home_name: string; away_name: string; odds_home: number | null; odds_away: number | null; source?: string };
+    prediction: { final: { home: number; away: number } } | null;
+  }[],
+): SlateRow[] {
+  const out: SlateRow[] = [];
+  for (const r of rows) {
+    if (!r.prediction) continue;
+    const g = r.fight;
+    const has = realMarket(g.source) && g.odds_home != null && g.odds_away != null;
+    const [ma, mb] = has ? devig2(g.odds_home!, g.odds_away!) : [null, null];
+    out.push({
+      id: g.id,
+      when: g.commence_time,
+      match: `${g.home_name} vs ${g.away_name}`,
+      ...mejor(
+        { name: g.home_name, p: r.prediction.final.home, mp: ma, odds: has ? g.odds_home : null },
+        { name: g.away_name, p: r.prediction.final.away, mp: mb, odds: has ? g.odds_away : null },
+      ),
+    });
+  }
+  return out;
+}

@@ -141,16 +141,35 @@ const LOGS: { tabla: string; congeladas: string[]; unaVez: string[] }[] = [
   { tabla: 'naf_prediction_log', congeladas: ['match_key', 'home_id', 'away_id', 'prob_home', 'market_prob_home', 'predicted_at'], unaVez: ['shown_home', ...VERSIONES] },
 ];
 
-export const PREDICTION_LOG_TRIGGERS = LOGS.map(
-  (l) => `
+function triggersDeRegistro(l: { tabla: string; congeladas: string[]; unaVez: string[] }): string {
+  return `
   CREATE TRIGGER IF NOT EXISTS ${l.tabla}_no_delete
     BEFORE DELETE ON ${l.tabla}
     BEGIN SELECT RAISE(ABORT, '${l.tabla}: una predicción registrada no se borra'); END;
   CREATE TRIGGER IF NOT EXISTS ${l.tabla}_congelada
     BEFORE UPDATE ON ${l.tabla}
     WHEN ${distinto(l.congeladas)}${l.unaVez.length ? ` OR ${l.unaVez.map((c) => `(OLD.${c} IS NOT NULL AND NEW.${c} IS NOT OLD.${c})`).join(' OR ')}` : ''}
-    BEGIN SELECT RAISE(ABORT, '${l.tabla}: lo que el modelo dijo no se reescribe'); END;`,
-).join('\n');
+    BEGIN SELECT RAISE(ABORT, '${l.tabla}: lo que el modelo dijo no se reescribe'); END;`;
+}
+
+export const PREDICTION_LOG_TRIGGERS = LOGS.map(triggersDeRegistro).join('\n');
+
+/**
+ * El registro de la NHL, aparte: su tabla la crea una migración posterior (16) y los triggers no se
+ * pueden crear antes que ella (la migración 1 corre los de arriba en una base nueva).
+ */
+export const NHL_LOG_TRIGGERS = triggersDeRegistro({
+  tabla: 'nhl_prediction_log',
+  congeladas: ['match_key', 'home_id', 'away_id', 'prob_home', 'prob_draw60', 'market_prob_home', 'total_line', 'prob_over', 'predicted_at'],
+  unaVez: ['shown_home', ...VERSIONES],
+});
+
+/** El de la UFC, igual que el de la NHL: su tabla la crea una migración posterior (19). */
+export const UFC_LOG_TRIGGERS = triggersDeRegistro({
+  tabla: 'ufc_prediction_log',
+  congeladas: ['match_key', 'home_id', 'away_id', 'prob_home', 'market_prob_home', 'rasgos', 'predicted_at'],
+  unaVez: ['shown_home', ...VERSIONES],
+});
 
 // ===========================================================================
 // LAS SEÑALES: CADA VEZ QUE EL MODELO MIRÓ UN PARTIDO CON PRECIO REAL

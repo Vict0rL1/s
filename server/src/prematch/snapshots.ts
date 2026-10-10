@@ -209,23 +209,35 @@ export interface Horizonte {
   fila: FilaInstantanea | null;
   /** Cuánto antes de la marca se capturó la fila usada (null sin fila). */
   minutosAntesDeLaMarca: number | null;
+  /**
+   * Con fila, `ok`; sin ella, `pendiente` si la marca aún no ha llegado y `sin_observacion` si
+   * llegó sin nada anterior. Lo decide el mismo reloj que decide la fila (G1b): la web lo volvía
+   * a deducir con el suyo, y un segundo de desfase cambiaba un estado por el otro.
+   */
+  estado: 'ok' | 'pendiente' | 'sin_observacion';
 }
 
 /** T-24h, T-6h, T-1h y la final pre-partido, cada una «a fecha» de su marca. */
-export function horizontes(sport: string, matchKey: string, commence: string): Horizonte[] {
+export function horizontes(sport: string, matchKey: string, commence: string, ahora: Date = new Date()): Horizonte[] {
   const inicio = Date.parse(commence);
+  // Una marca que aún no ha llegado está PENDIENTE (G1, lote G): la última instantánea anterior a
+  // una marca futura es la de hoy, no la de T-1h, y enseñarla como T-1h era decir algo falso.
+  const llegada = (marca: number) => marca <= ahora.getTime();
   const out: Horizonte[] = MARCAS.map((m) => {
     const marca = new Date(inicio - m.horas * H).toISOString();
-    const fila = aFecha(sport, matchKey, marca);
-    return { etiqueta: m.etiqueta, marca, fila, minutosAntesDeLaMarca: fila ? Math.round((Date.parse(marca) - Date.parse(fila.captured_at)) / 60_000) : null };
+    const llego = llegada(inicio - m.horas * H);
+    const fila = llego ? aFecha(sport, matchKey, marca) : null;
+    return { etiqueta: m.etiqueta, marca, fila, minutosAntesDeLaMarca: fila ? Math.round((Date.parse(marca) - Date.parse(fila.captured_at)) / 60_000) : null, estado: fila ? 'ok' : llego ? 'sin_observacion' : 'pendiente' };
   });
   // La final: lo último ANTES del inicio (la base ya impide que haya algo después).
-  const ultima = aFecha(sport, matchKey, new Date(inicio - 1).toISOString());
+  const empezo = llegada(inicio);
+  const ultima = empezo ? aFecha(sport, matchKey, new Date(inicio - 1).toISOString()) : null;
   out.push({
     etiqueta: 'Final pre-partido',
     marca: commence,
     fila: ultima,
     minutosAntesDeLaMarca: ultima ? Math.round((inicio - Date.parse(ultima.captured_at)) / 60_000) : null,
+    estado: ultima ? 'ok' : empezo ? 'sin_observacion' : 'pendiente',
   });
   return out;
 }
@@ -246,6 +258,16 @@ const LOGS: { sport: SportId; tabla: string; clave: string; outcomes: string; pr
   { sport: 'baseball', tabla: 'bsb_prediction_log', clave: 'match_key', outcomes: 'json_array(home_name, away_name)', probs: 'json_array(prob_home, 1 - prob_home)', mercado: 'CASE WHEN market_prob_home IS NULL THEN NULL ELSE json_array(market_prob_home, 1 - market_prob_home) END' },
   {
     sport: 'nfl', tabla: 'naf_prediction_log', clave: 'match_key', outcomes: 'json_array(home_name, away_name)',
+    probs: 'json_array(COALESCE(shown_home, prob_home), 1 - COALESCE(shown_home, prob_home))',
+    mercado: 'CASE WHEN market_prob_home IS NULL THEN NULL ELSE json_array(market_prob_home, 1 - market_prob_home) END',
+  },
+  {
+    sport: 'nhl', tabla: 'nhl_prediction_log', clave: 'match_key', outcomes: 'json_array(home_name, away_name)',
+    probs: 'json_array(COALESCE(shown_home, prob_home), 1 - COALESCE(shown_home, prob_home))',
+    mercado: 'CASE WHEN market_prob_home IS NULL THEN NULL ELSE json_array(market_prob_home, 1 - market_prob_home) END',
+  },
+  {
+    sport: 'ufc', tabla: 'ufc_prediction_log', clave: 'match_key', outcomes: 'json_array(home_name, away_name)',
     probs: 'json_array(COALESCE(shown_home, prob_home), 1 - COALESCE(shown_home, prob_home))',
     mercado: 'CASE WHEN market_prob_home IS NULL THEN NULL ELSE json_array(market_prob_home, 1 - market_prob_home) END',
   },

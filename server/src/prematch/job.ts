@@ -8,13 +8,15 @@ import { predecirProximosFutbol } from '../routes/football.ts';
 import { predecirProximosBaloncesto } from '../routes/basketball.ts';
 import { predecirProximosBeisbol } from '../routes/baseball.ts';
 import { predecirProximosNfl } from '../routes/nfl.ts';
+import { predecirProximosNhl } from '../routes/nhl.ts';
+import { predecirProximasUfc } from '../routes/ufc.ts';
 import { freezeFinals, META_CICLO } from './snapshots.ts';
 import { setMeta } from '../db.ts';
 
 export function cicloPrePartido(log: (m: string) => void = () => {}): { congeladas: number } {
   for (const [nombre, f] of [
     ['tenis', predecirProximosTenis], ['fútbol', predecirProximosFutbol], ['baloncesto', predecirProximosBaloncesto],
-    ['béisbol', predecirProximosBeisbol], ['NFL', predecirProximosNfl],
+    ['béisbol', predecirProximosBeisbol], ['NFL', predecirProximosNfl], ['NHL', predecirProximosNhl], ['UFC', predecirProximasUfc],
   ] as const) {
     try {
       f();

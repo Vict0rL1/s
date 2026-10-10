@@ -19,7 +19,14 @@ export function leerCookies(cabecera: string | undefined): Record<string, string
     if (i <= 0) continue;
     const k = parte.slice(0, i).trim();
     const v = parte.slice(i + 1).trim();
-    if (k && !(k in out)) out[k] = decodeURIComponent(v);
+    if (!k || k in out) continue;
+    // Una cookie que no se deja descifrar (`%E0%A4%A`) se ignora: antes `decodeURIComponent`
+    // lanzaba dentro del hook de la puerta y la respuesta era un 500 (lote B, B6).
+    try {
+      out[k] = decodeURIComponent(v);
+    } catch {
+      // Indescifrable: como si no viniera.
+    }
   }
   return out;
 }

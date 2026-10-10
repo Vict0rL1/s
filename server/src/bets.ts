@@ -36,7 +36,7 @@ export const BET_STATUSES: BetStatus[] = [
 
 /** Markets a bet can be on. `other` exists so nothing is unloggable. */
 export const BET_MARKETS = ['moneyline', 'spread', 'total', 'btts', 'score', 'other'] as const;
-export const BET_SPORTS = ['football', 'basketball', 'baseball', 'nfl', 'tennis', 'other'] as const;
+export const BET_SPORTS = ['football', 'basketball', 'baseball', 'nfl', 'nhl', 'ufc', 'tennis', 'other'] as const;
 
 export interface BetRow {
   id: number;

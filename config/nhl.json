@@ -1,0 +1,14 @@
+{
+  "$comment": "La NHL. Una liga, sin lista de competiciones: el archivo y el calendario salen de sportsdataverse (GitHub), las cuotas de The Odds API. Los parámetros del modelo están en server/src/nhl/model.ts y solo cambian por el registro de experimentos.",
+  "history": {
+    "$comment_source": "Un CSV por temporada (por el año en que acaba): partidos terminados con marcador y, de la temporada en curso, los que faltan con su hora en UTC. Nueve temporadas traen marcadores de relleno y se arreglan con las «team box» de la misma fuente (docs/NHL.md).",
+    "schedulesUrl": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/nhl_schedules",
+    "teamBoxUrl": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/nhl_team_boxscores",
+    "fromSeason": 2010
+  },
+  "odds": {
+    "$comment": "h2h (ganador con prórroga y tanda, el moneyline de la NHL) y totals: dos créditos por región y ciclo, solo en temporada (el listado de /sports, gratis, lo decide).",
+    "sportKey": "icehockey_nhl",
+    "markets": "h2h,totals"
+  }
+}

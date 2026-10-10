@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { recogerErrores } from './util';
 
 // Las capturas de referencia se hicieron con un Chromium concreto (su versión, en
 // rutas.spec.ts-snapshots/chromium.txt). Otro build —el que baja `playwright install` en CI— pinta
@@ -23,15 +24,10 @@ test.beforeEach(async ({ page }) => {
 // la barra inferior enseña los cuatro destinos en el móvil; los enlaces profundos restauran
 // el estado; axe pasa en claro y en oscuro.
 
-const RUTAS = ['/destacados', '/futbol', '/baloncesto', '/beisbol', '/nfl', '/tenis', '/apuestas', '/apuestas/laboratorio', '/apuestas/lineas', '/bandeja', '/informes', '/confianza', '/confianza/archivo', '/confianza/diagnostico', '/ajustes', '/glosario', '/no-existe'];
+const RUTAS = ['/destacados', '/futbol', '/baloncesto', '/beisbol', '/nfl', '/nhl', '/ufc', '/tenis', '/apuestas', '/apuestas/laboratorio', '/apuestas/lineas', '/bandeja', '/informes', '/confianza', '/confianza/archivo', '/confianza/diagnostico', '/ajustes', '/glosario', '/no-existe'];
 
 async function sinErroresNiDesbordamiento(page: Page, ruta: string) {
-  const errores: string[] = [];
-  page.on('console', (m) => {
-    // Un recurso que no existe en la base de demostración (404 de la API) no es un error de la página.
-    if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errores.push(m.text());
-  });
-  page.on('pageerror', (e) => errores.push(e.message));
+  const errores = recogerErrores(page);
   await page.goto(ruta);
   await page.waitForLoadState('networkidle');
   const ancho = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, cliente: document.documentElement.clientWidth }));
@@ -97,20 +93,42 @@ test('la píldora de estado está una vez y dice el modo', async ({ page, browse
   if (comparaPixeles(browser)) await expect(pildora).toHaveScreenshot('pildora-estado.png', { maxDiffPixelRatio: 0.05 });
 });
 
+// E2 (revisión del 8 de octubre): axe en TODAS las rutas, en los dos temas, a 1280 y a 390 px.
+// El contraste cuenta desde `serious` (antes solo `critical`, y axe califica el contraste como
+// `serious`: la comprobación no podía fallar nunca).
+async function axeLimpio(page: Page, donde: string) {
+  const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).disableRules(['color-contrast']).analyze();
+  expect(r.violations.map((v) => `${v.id}: ${v.nodes.length} nodo(s) — ${v.help}`), donde).toEqual([]);
+  const contraste = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze();
+  expect(contraste.violations.flatMap((v) => v.nodes.filter((n) => n.impact === 'critical' || n.impact === 'serious').map((n) => `${n.html} — ${n.any[0]?.message ?? ''}`)), `${donde}: contraste`).toEqual([]);
+}
+
 for (const tema of ['oscuro', 'claro'] as const) {
-  test(`axe en tema ${tema} (Destacados y Ajustes)`, async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+  for (const ancho of [1280, 390]) {
+    test(`axe en tema ${tema} a ${ancho} px (todas las rutas)`, async ({ page }) => {
+      test.setTimeout(180_000);
+      await page.setViewportSize({ width: ancho, height: 844 });
+      await page.addInitScript((t) => localStorage.setItem('predictor.tema', t), tema);
+      for (const ruta of RUTAS) {
+        await page.goto(ruta);
+        await page.waitForLoadState('networkidle');
+        expect(await page.evaluate(() => document.documentElement.getAttribute('data-theme'))).toBe(tema);
+        await axeLimpio(page, `${ruta} en ${tema} a ${ancho} px`);
+      }
+    });
+  }
+  test(`axe en tema ${tema} con una hoja abierta (deportes y filtros, 390 px)`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.addInitScript((t) => localStorage.setItem('predictor.tema', t), tema);
-    for (const ruta of ['/destacados', '/ajustes']) {
-      await page.goto(ruta);
-      await page.waitForLoadState('networkidle');
-      expect(await page.evaluate(() => document.documentElement.getAttribute('data-theme'))).toBe(tema);
-      const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).disableRules(['color-contrast']).analyze();
-      expect(r.violations.map((v) => `${v.id}: ${v.nodes.length} nodo(s) — ${v.help}`), `${ruta} en ${tema}`).toEqual([]);
-      // El contraste se mide aparte y solo como «serio o crítico»: lo menor se anota, no bloquea.
-      const contraste = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze();
-      expect(contraste.violations.flatMap((v) => v.nodes.filter((n) => n.impact === 'critical').map((n) => n.html)), `${ruta} en ${tema}: contraste crítico`).toEqual([]);
-    }
+    await page.goto('/destacados');
+    await page.waitForLoadState('networkidle');
+    await page.getByTestId('barra-inferior').getByRole('button', { name: 'Deportes' }).click();
+    await expect(page.getByRole('dialog', { name: 'Deportes' })).toBeVisible();
+    await axeLimpio(page, `hoja de deportes en ${tema}`);
+    await page.keyboard.press('Escape');
+    await page.getByTestId('filtros-movil').click();
+    await expect(page.getByRole('dialog', { name: 'Filtros' })).toBeVisible();
+    await axeLimpio(page, `hoja de filtros en ${tema}`);
   });
 }
 
@@ -193,4 +211,13 @@ test('Ctrl+K abre la búsqueda y Escape la cierra', async ({ page }) => {
   await expect(d.getByRole('option').first()).toContainText('Ajustes');
   await page.keyboard.press('Escape');
   await expect(d).toBeHidden();
+});
+
+test('las teclas numéricas cambian de pestaña: 7 es la UFC y 0 la décima (Confianza)', async ({ page }) => {
+  await page.goto('/destacados');
+  await page.waitForLoadState('networkidle');
+  await page.keyboard.press('7');
+  await expect(page).toHaveURL(/\/ufc$/);
+  await page.keyboard.press('0');
+  await expect(page).toHaveURL(/\/confianza$/);
 });

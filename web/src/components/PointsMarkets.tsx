@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Panel, SectionTitle, Disclosure } from './ui';
 import { conNodos, localeDe, useI18n } from '../i18n';
+import { pct as pctF, num as numF } from '../lib/formato';
 
 interface PointsResponse {
   points: { p1: number; p2: number };
@@ -44,8 +45,8 @@ interface PointsResponse {
   };
 }
 
-const pct = (x: number): string => `${(x * 100).toFixed(1)} %`;
-const conSigno = (x: number): string => `${x >= 0 ? '+' : ''}${x.toFixed(3)}`;
+const pct = (x: number): string => `${pctF(x, 1)}`;
+const conSigno = (x: number): string => `${x >= 0 ? '+' : ''}${numF(x, 3)}`;
 
 export default function PointsMarkets({
   tour,
@@ -104,7 +105,7 @@ export default function PointsMarkets({
 
   return (
     <Panel className="mb-4">
-      <SectionTitle right={t('pm.esperados', { n: data.expectedGames.toFixed(1) })}>
+      <SectionTitle right={t('pm.esperados', { n: numF(data.expectedGames, 1) })}>
         {t('pm.titulo')}
       </SectionTitle>
 
@@ -153,7 +154,7 @@ export default function PointsMarkets({
       {/* --- Hándicaps --- */}
       <div className="mt-3">
         <SectionTitle>{t('pm.handicapJuegos')}</SectionTitle>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0}>
           <table className="w-full min-w-[22rem] text-left text-[13px] tabular-nums">
             <thead className="text-[11px] uppercase tracking-[0.06em] text-(--ink-muted)">
               <tr>
@@ -190,7 +191,7 @@ export default function PointsMarkets({
             <p>{conNodos(t('pm.estimados'), { aLaVez: <strong>{t('pm.aLaVez')}</strong> })}</p>
             <ul className="space-y-0.5 tabular-nums">
               <li>
-                {t('pm.media', { pct: `${(1 / (1 + Math.exp(-data.detail.mu)) * 100).toFixed(1)} %` })}
+                {t('pm.media', { pct: `${pctF(1 / (1 + Math.exp(-data.detail.mu)), 1)}` })}
               </li>
               <li>
                 {t('pm.perfil', { nombre: names[0], saque: conSigno(data.detail.serve1), resto: conSigno(data.detail.return1), delta: conSigno(data.detail.surfaceDelta1) })}

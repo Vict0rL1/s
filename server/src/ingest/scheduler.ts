@@ -16,12 +16,15 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { conRegistro } from './runs.ts';
+import { horasDesdeEntorno as horasAcotadas } from '../scheduler/horas.ts';
 
 export const PASOS_RESULTADOS = [
   { nombre: 'fútbol', script: 'update-data:fb' },
   { nombre: 'baloncesto', script: 'update-data:bb' },
   { nombre: 'béisbol', script: 'update-data:bsb' },
   { nombre: 'NFL', script: 'update-data:naf' },
+  { nombre: 'NHL', script: 'update-data:nhl' },
+  { nombre: 'UFC', script: 'update-data:ufc' },
 ] as const;
 
 export const PRIMERA_PASADA_MIN = 5;
@@ -30,10 +33,7 @@ export const HORAS_POR_DEFECTO = 6;
 export const TIEMPO_MAX_MIN = 25;
 
 export function horasDesdeEntorno(entorno: NodeJS.ProcessEnv = process.env): number {
-  const v = entorno.RESULTS_REFRESH_HOURS?.trim();
-  if (!v) return HORAS_POR_DEFECTO;
-  const n = Number(v);
-  return Number.isFinite(n) && n >= 0 ? n : HORAS_POR_DEFECTO;
+  return horasAcotadas(entorno, 'RESULTS_REFRESH_HOURS', HORAS_POR_DEFECTO);
 }
 
 export interface ResultadoPaso {
@@ -71,7 +71,7 @@ export const lanzarNpm: Lanzador = (script) =>
     });
   });
 
-/** Un ciclo: los cuatro deportes en orden, uno a uno. Nunca lanza: devuelve qué pasó. */
+/** Un ciclo: los cinco deportes de equipo en orden, uno a uno. Nunca lanza: devuelve qué pasó. */
 export async function cicloResultados(lanzar: Lanzador = lanzarNpm, log: (m: string) => void = () => {}): Promise<ResultadoPaso[]> {
   const out: ResultadoPaso[] = [];
   await conRegistro('results:ciclo', async () => {
@@ -85,7 +85,7 @@ export async function cicloResultados(lanzar: Lanzador = lanzarNpm, log: (m: str
     }
     const fallidos = out.filter((x) => !x.ok);
     if (fallidos.length === out.length) throw new Error(`fallaron los ${out.length} deportes: ${fallidos.map((f) => f.cola).join(' / ')}`);
-    return { rowsUpdated: out.length - fallidos.length, detail: fallidos.length ? `fallaron: ${fallidos.map((f) => f.nombre).join(', ')}` : 'los cuatro deportes al día' };
+    return { rowsUpdated: out.length - fallidos.length, detail: fallidos.length ? `fallaron: ${fallidos.map((f) => f.nombre).join(', ')}` : 'los cinco deportes al día' };
   }).catch(() => {
     // Ya quedó en ingestion_runs como error; el ciclo no puede tumbar el servidor.
   });

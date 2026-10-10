@@ -30,6 +30,21 @@
 //     Sin él, al reconstruir el mercado esa cuota vieja seguiría «viva» para siempre.
 //   · Si el EVENTO entero desaparece de la descarga (empezó, terminó, se canceló), no se
 //     escribe nada: el mercado cerró, y su último estado es el de cierre.
+/** El último estado de cada cuota (lote B, B2: en el libro mayor, como los snapshots a los que apunta). */
+export const QUOTE_STATE_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS odds_quote_state (
+    event_id     TEXT NOT NULL,
+    market       TEXT NOT NULL,
+    selection    TEXT NOT NULL,
+    bookmaker    TEXT NOT NULL,
+    odds_decimal REAL,
+    line         REAL,
+    withdrawn    INTEGER NOT NULL DEFAULT 0,
+    snapshot_id  INTEGER NOT NULL,
+    PRIMARY KEY (event_id, market, selection, bookmaker)
+  );
+`;
+
 export const ODDS_SNAPSHOT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS odds_snapshots (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,15 +94,5 @@ export const ODDS_SNAPSHOT_SCHEMA = `
     BEFORE DELETE ON odds_event_observations
     BEGIN SELECT RAISE(ABORT, 'odds_event_observations es append-only: no se borra'); END;
 
-  CREATE TABLE IF NOT EXISTS odds_quote_state (
-    event_id     TEXT NOT NULL,
-    market       TEXT NOT NULL,
-    selection    TEXT NOT NULL,
-    bookmaker    TEXT NOT NULL,
-    odds_decimal REAL,
-    line         REAL,
-    withdrawn    INTEGER NOT NULL DEFAULT 0,
-    snapshot_id  INTEGER NOT NULL,
-    PRIMARY KEY (event_id, market, selection, bookmaker)
-  );
-`;
+` + QUOTE_STATE_SCHEMA;
+

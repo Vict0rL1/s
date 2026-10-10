@@ -1,6 +1,7 @@
 // ¿Se puede publicar esta base sin filtrar nada de nadie?
 //
-// CLI: `node scripts/check-publishable.mjs`
+// CLI: `npm run check-publishable [-- <fichero>]`  (corre con tsx: importa la lista de tablas del
+// libro mayor del servidor, server/src/db/tables.ts, en vez de llevar una copia a mano; lote B, B5)
 //
 // ===========================================================================
 // POR QUÉ ESTO EXISTE
@@ -30,17 +31,12 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TABLAS_LEDGER } from '../server/src/db/tables.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Desde la Fase 2 la base publicable es history.db (o la exportación limpia que produce
 // `npm run db:export-history`). El libro mayor (ledger.db) NUNCA se publica.
 const DB_PATH = process.argv[2] && !process.argv[2].startsWith('--') ? path.resolve(process.argv[2]) : path.join(HERE, '..', 'data', 'history.db');
-const TABLAS_LEDGER = [
-  'prediction_log', 'fb_prediction_log', 'bb_prediction_log', 'bsb_prediction_log', 'naf_prediction_log',
-  'paper_bets', 'edge_signals', 'bets', 'odds_snapshots', 'odds_event_observations', 'prediction_snapshots',
-  'prematch_final', 'prediction_assessments', 'shadow_predictions', 'alerts', 'sessions', 'error_log',
-  'ingestion_runs', 'settings', 'weather_observations', 'policy_versions',
-];
 
 /**
  * Lo que no debe salir, y el motivo de cada cosa — que NO es el mismo.
@@ -63,7 +59,7 @@ const FORBIDDEN = [
       'es el registro de apuestas de una persona (importes y beneficios). Esta base NO ' +
       'puede publicarse en un repositorio público.',
   },
-  ...['prediction_log', 'fb_prediction_log', 'bb_prediction_log', 'bsb_prediction_log', 'naf_prediction_log'].map(
+  ...['prediction_log', 'fb_prediction_log', 'bb_prediction_log', 'bsb_prediction_log', 'naf_prediction_log', 'nhl_prediction_log', 'ufc_prediction_log'].map(
     (table) => ({
       table,
       why: 'integridad',

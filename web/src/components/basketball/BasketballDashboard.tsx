@@ -15,6 +15,8 @@ import GameCard from './GameCard';
 import EloRanking from '../EloRanking';
 import { DataLine, BbTrackRecordPanel } from './BasketballDashboardPartes';
 import { conNodos, localeDe, useI18n } from '../../i18n';
+import { num as numF } from '../../lib/formato';
+import { conservarDia, contadorDePeticiones } from '../../lib/carga';
 
 /**
  * The whole basketball tab. Holds its own state and talks only to
@@ -29,6 +31,7 @@ export default function BasketballDashboard() {
   const [games, setGames] = useState<BbGameWithPrediction[]>([]);
   const [power, setPower] = useState<BbPowerTeam[]>([]);
   const [loading, setLoading] = useState(false);
+  const [peticiones] = useState(contadorDePeticiones);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   // Un equipo abre su página (Fase 5.12): una URL, no un modal.
@@ -74,14 +77,17 @@ export default function BasketballDashboard() {
       setPower([]);
       return;
     }
+    // D8: cambiar dos veces de liga no deja los partidos de la que contestó tarde.
+    const n = peticiones.nueva();
     setLoading(true);
     Promise.all([bbApi.upcoming(league), bbApi.power(league, 40)])
       .then(([g, p]) => {
+        if (!peticiones.esUltima(n)) return;
         setGames(g);
         setPower(p.teams);
       })
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+      .catch((e) => peticiones.esUltima(n) && setError(String(e)))
+      .finally(() => peticiones.esUltima(n) && setLoading(false));
   }, [league]);
 
   async function handleRefresh() {
@@ -121,9 +127,11 @@ export default function BasketballDashboard() {
   const demoOdds = games.length > 0 && games.every((r) => r.game.source === 'fixture');
   // A day that no longer exists after switching league would filter everything
   // away and look like "no games", so the choice is dropped rather than kept.
+  // D8: mientras carga no hay días (o son los de la liga anterior): el ?dia= del enlace se conserva.
   useEffect(() => {
-    if (day && !dayGroups.some((d) => d.key === day)) setDay(null);
-  }, [dayGroups, day]);
+    const sigue = conservarDia(day, dayGroups.map((d) => d.key), loading);
+    if (sigue !== day) setDay(sigue);
+  }, [dayGroups, day, loading]);
 
   const activeLeague = leagues.find((l) => l.id === league) ?? null;
   const leagueMeta = meta?.leagues.find((l) => l.id === league) ?? null;
@@ -163,7 +171,7 @@ export default function BasketballDashboard() {
         <VacioPorqueNoHayCuotas
           reason={meta?.oddsFallbackReason}
           detail={meta?.oddsFallbackDetail}
-          hasKey={meta?.hasOddsKey ?? false}
+          hasKey={meta ? meta.hasOddsKey : null}
           demoFixtures={meta?.demoFixtures ?? true}
         />
       )}
@@ -186,7 +194,7 @@ export default function BasketballDashboard() {
             >
                 <LeagueFlag country={l.country} className="mr-1.5" />
               {l.name}
-              {l.upcomingCount > 0 && <span className="ml-1.5 opacity-60">{l.upcomingCount}</span>}
+              {l.upcomingCount > 0 && <span className="ml-1.5 text-(--ink-soft)">{l.upcomingCount}</span>}
               {!l.hasModel && <span className="ml-1.5 text-amber-400" title={tr('eq.sinModeloElo')}>◦</span>}
             </button>
           ))}
@@ -251,13 +259,13 @@ export default function BasketballDashboard() {
           badge: <TeamCrest league={league!} name={t.name} code={t.id} size={16} />,
           onOpen: () => setTeam({ league: league!, id: t.id }),
           extra: [
-            { label: tr('eq.anota'), value: t.ppg?.toFixed(1) ?? '—', title: tr('eq.anotaTitulo') },
-            { label: tr('eq.recibe'), value: t.papg?.toFixed(1) ?? '—', title: tr('eq.recibeTitulo') },
+            { label: tr('eq.anota'), value: (t.ppg == null ? undefined : numF(t.ppg, 1)) ?? '—', title: tr('eq.anotaTitulo') },
+            { label: tr('eq.recibe'), value: (t.papg == null ? undefined : numF(t.papg, 1)) ?? '—', title: tr('eq.recibeTitulo') },
             {
               label: tr('eq.dif'),
               value:
                 t.ppg != null && t.papg != null
-                  ? `${t.ppg - t.papg > 0 ? '+' : ''}${(t.ppg - t.papg).toFixed(1)}`
+                  ? `${t.ppg - t.papg > 0 ? '+' : ''}${numF((t.ppg - t.papg), 1)}`
                   : '—',
               title: tr('eq.difPuntosTitulo'),
             },

@@ -23,7 +23,7 @@ const int: Esquema = { type: 'integer' };
 export const ESQUEMA_ERROR = o({ error: str });
 export const ESQUEMA_HEALTH = o({ ok: bool });
 export const ESQUEMA_READY = o({ ok: bool, migraciones: str, trabajos: str, detalle: { type: 'array', items: str } });
-export const ESQUEMA_FEATURE = o({ on: bool, activa: bool, descripcion: str, falta: nullable('string'), anulada: bool });
+export const ESQUEMA_FEATURE = o({ on: bool, activa: bool, descripcion: str, falta: nullable('string'), anulada: bool, soloArranque: bool });
 export const ESQUEMA_FEATURES = o({ features: { type: 'object', additionalProperties: ESQUEMA_FEATURE } });
 export const ESQUEMA_ESTADO = o({
   generado: str,
@@ -105,7 +105,7 @@ const EVENTO_MERCADO = { eventId: str, sport: str, league: str, market: str, par
 export const ESQUEMA_INTEL = o({
   generado: str, ventanaHoras: int, eventos: int,
   steam: { type: 'array', items: o({ ...EVENTO_MERCADO, seleccion: str, desde: num, hasta: num, movimientoPp: num, minutos: int, casas: int, observadoEn: str }) },
-  surebets: { type: 'array', items: o({ ...EVENTO_MERCADO, suma: num, margenPct: num, patas: { type: 'array', items: o({ seleccion: str, cuota: num, casa: str }) } }) },
+  surebets: { type: 'array', items: o({ ...EVENTO_MERCADO, suma: num, margenPct: num, patas: { type: 'array', items: o({ seleccion: str, cuota: num, casa: str }) }, linea: nullable('number') }) },
   referencia: { type: 'array', items: o({ ...EVENTO_MERCADO, casa: str, selecciones: { type: 'array', items: o({ seleccion: str, referencia: num, consenso: num, desviacionPp: num }) }, observadoEn: str }) },
   etiqueta: str,
 });
@@ -217,7 +217,7 @@ export const ESQUEMA_ARCHIVO = o({
 });
 
 // --- Fase 7: rendimiento ---
-export const ESQUEMA_NHL_SOMBRA = o({
+export const ESQUEMA_NHL_BACKTEST = o({
   partidos: int,
   puntuados: int,
   holdoutExcluido: int,
@@ -228,6 +228,38 @@ export const ESQUEMA_NHL_SOMBRA = o({
   aviso: ESQUEMA_AVISO_MUESTRA,
   nota: str,
   parametros: o({ k: num, campo: num, golesLiga: num, fuerzaProrroga: num }),
+});
+
+const ESQUEMA_REF_UFC = o({ clave: str, nombre: str, logLoss: num, mean: num, lo: num, hi: num, p: num });
+const ESQUEMA_CONTRA_UFC = o({ ll: num, mean: num, lo: num, hi: num, p: num });
+export const ESQUEMA_UFC_BACKTEST = o({
+  peleas: int,
+  puntuadas: int,
+  holdoutExcluido: int,
+  sinAtribuir: int,
+  sinGanador: int,
+  ultimo: nullable('string'),
+  modelo: { ...o({ n: int, logLoss: nullable('number'), brier: nullable('number'), accuracy: nullable('number'), ece: nullable('number') }), nullable: true },
+  eloSolo: nullable('number'),
+  referencias: { type: 'array', items: o({ clave: str, nombre: str, logLoss: nullable('number') }) },
+  porAnio: { type: 'array', items: o({ anio: int, n: int, logLoss: nullable('number') }) },
+  prueba: {
+    ...o({
+      validacion: int,
+      eleccion: { type: 'array', items: o({ candidato: str, rasgos: { type: 'array', items: str }, llEntrenamiento: num }) },
+      elegido: str,
+      todo: o({ n: int, modelo: num, referencias: { type: 'array', items: ESQUEMA_REF_UFC }, contraElo: ESQUEMA_CONTRA_UFC }),
+      enValidacion: o({ n: int, modelo: num, referencias: { type: 'array', items: ESQUEMA_REF_UFC }, contraElo: ESQUEMA_CONTRA_UFC }),
+      pasa: bool,
+      mejoraAlElo: bool,
+    }),
+    nullable: true,
+  },
+  pesos: { type: 'object', additionalProperties: num },
+  ajustadaCon: int,
+  holdoutDesde: int,
+  aviso: ESQUEMA_AVISO_MUESTRA,
+  nota: str,
 });
 
 export const ESQUEMA_RENDIMIENTO = o({

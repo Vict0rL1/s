@@ -90,3 +90,21 @@ test('aplicar: sin --confirmar nada cambia; con él, el archivo contiene exactam
   // Segunda pasada: ya no hay nada que borrar.
   assert.equal(planificar(30, ahora).borrar.length, 0);
 });
+
+test('B5: un partido aplazado se ancla en su ÚLTIMA hora de inicio, no en la primera', () => {
+  const viejo = INICIO - 48 * 3_600_000;
+  const hv = (horasAntes: number) => new Date(viejo - horasAntes * 3_600_000).toISOString();
+  const filas = [
+    { id: 1, event_id: 'ap', market: 'h2h', selection: 'Casa', bookmaker: 'bet365', commence_time: new Date(viejo).toISOString(), observed_at: hv(30) },
+    { id: 2, event_id: 'ap', market: 'h2h', selection: 'Casa', bookmaker: 'bet365', commence_time: new Date(viejo).toISOString(), observed_at: hv(20) },
+    // Aplazado 48 h: las observaciones nuevas traen la hora nueva.
+    { id: 3, event_id: 'ap', market: 'h2h', selection: 'Casa', bookmaker: 'bet365', commence_time: new Date(INICIO).toISOString(), observed_at: h(25) },
+    { id: 4, event_id: 'ap', market: 'h2h', selection: 'Casa', bookmaker: 'bet365', commence_time: new Date(INICIO).toISOString(), observed_at: h(7) },
+    { id: 5, event_id: 'ap', market: 'h2h', selection: 'Casa', bookmaker: 'bet365', commence_time: new Date(INICIO).toISOString(), observed_at: h(2) },
+    { id: 6, event_id: 'ap', market: 'h2h', selection: 'Casa', bookmaker: 'bet365', commence_time: new Date(INICIO).toISOString(), observed_at: h(0.5) },
+    { id: 7, event_id: 'ap', market: 'h2h', selection: 'Casa', bookmaker: 'bet365', commence_time: new Date(INICIO).toISOString(), observed_at: h(-1) },
+  ];
+  const { conservar, borrar } = decidir(filas);
+  assert.deepEqual(conservar, [1, 3, 4, 5, 6, 7], `apertura, T-24h, T-6h, T-1h y cierre respecto a la hora NUEVA, y la última; se va: ${borrar}`);
+  assert.deepEqual(borrar, [2]);
+});

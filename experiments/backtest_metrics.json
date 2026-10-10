@@ -66,6 +66,22 @@
     "model_version": "nfl-01c4731bbc1a",
     "data_version": "20260920·7306"
   },
+  "nhl": {
+    "origen": "backtest",
+    "deporte": "nhl",
+    "n": 20214,
+    "logLoss": 0.6731056678385994,
+    "brier": 0.24017050870718465,
+    "accuracy": 0.5783120609478579,
+    "ece": 0.014517742313993505,
+    "mercado": null,
+    "logLossUniforme": 0.6931471805599453,
+    "brierUniforme": 0.25,
+    "medidoEn": "2026-10-08T02:19:15.233Z",
+    "model_version": "nhl-46a885f71679",
+    "data_version": "20261006·21960",
+    "mercadoFuente": null
+  },
   "tennis": {
     "origen": "backtest",
     "deporte": "tennis",
@@ -80,5 +96,21 @@
     "medidoEn": "2026-10-05T05:06:19.421Z",
     "model_version": "tennis-849b50464243",
     "data_version": "20260117·30853"
+  },
+  "ufc": {
+    "origen": "backtest",
+    "deporte": "ufc",
+    "n": 7799,
+    "logLoss": 0.6662276414185152,
+    "brier": 0.23673778797691586,
+    "accuracy": 0.5953327349660212,
+    "ece": 0.004811766659924042,
+    "mercado": null,
+    "logLossUniforme": 0.6931471805599453,
+    "brierUniforme": 0.25,
+    "medidoEn": "2026-10-08T03:58:11.959Z",
+    "model_version": "ufc-7f7694adae76",
+    "data_version": "20261003·8923",
+    "mercadoFuente": null
   }
 }

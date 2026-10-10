@@ -6,21 +6,22 @@
 // papel.
 
 import { useEffect, useState } from 'react';
-import { LOSS_COLOR, PROFIT_COLOR } from '../../lib/theme';
+import { LOSS_COLOR, PROFIT_COLOR, PROFIT_TEXT, LOSS_TEXT } from '../../lib/theme';
 import { StatusMark } from '../icons';
-import type { EvaluacionConfianza, PrePartido, PrePartidoRef } from '../../lib/trust';
+import { etiquetaHorizonte, nombreDelPrePartido, type EvaluacionConfianza, type PrePartido, type PrePartidoRef } from '../../lib/trust';
 import { ConfianzaBadge } from './ConfianzaBadge';
 import { codigo, useI18n } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
 
-const pct = (p: number) => `${(p * 100).toFixed(1).replace('.', ',')} %`;
-const pp = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1).replace('.', ',')} pp`;
-const AMBAR = '#d9a441';
+const pct = (p: number) => `${pctF(p, 1)}`;
+const pp = (x: number) => `${x >= 0 ? '+' : '−'}${numF(Math.abs(x), 1)} pp`;
+const AMBAR = 'var(--status-warning)';
 const GRIS = 'var(--ink-muted)';
 
 const COLOR: Record<string, string> = {
-  ALTA: PROFIT_COLOR, BAJO: PROFIT_COLOR, BET: PROFIT_COLOR,
+  ALTA: PROFIT_TEXT, BAJO: PROFIT_TEXT, BET: PROFIT_TEXT,
   MEDIA: AMBAR, MEDIO: AMBAR,
-  BAJA: LOSS_COLOR, ALTO: LOSS_COLOR, 'NO BET': LOSS_COLOR,
+  BAJA: LOSS_TEXT, ALTO: LOSS_TEXT, 'NO BET': LOSS_TEXT,
   'SIN MERCADO': GRIS, 'SIN DATOS': GRIS, 'SIN COMPONENTES': GRIS,
 };
 
@@ -83,7 +84,7 @@ function QueSi({ c }: { c: EvaluacionConfianza }) {
           <label key={f.clave} className="block">
             <span className="flex items-center justify-between gap-2">
               <span className="text-(--ink-body)">{f.etiqueta}</span>
-              <span className="tabular-nums">{(f.puntos * m).toFixed(1).replace('.', ',')} <span className="text-(--ink-faint)">(×{m.toFixed(2).replace('.', ',')})</span></span>
+              <span className="tabular-nums">{numF((f.puntos * m), 1)} <span className="text-(--ink-faint)">(×{numF(m, 2)})</span></span>
             </span>
             <input type="range" min={lo} max={hi} step={0.05} value={m} onChange={(e) => setMult((s) => ({ ...s, [f.clave]: Number(e.target.value) }))} className="mt-1 w-full accent-[#c3c9d1]" aria-label={t('fiarse.queSiAria', { factor: f.etiqueta })} />
             <span className="text-(--ink-faint)">{f.porQue}</span>
@@ -118,7 +119,7 @@ function HistorialPrePartido({ refP }: { refP: PrePartidoRef }) {
   if (error) return <p>{t('fiarse.errorHistorial')}</p>;
   if (!d) return <p>{t('comun.cargando')}</p>;
   if (!d.instantaneas) return <p>{t('fiarse.sinInstantaneas')}</p>;
-  const nombre = d.horizontes.find((h) => h.fila)?.fila?.outcomes[0] ?? '';
+  const nombre = nombreDelPrePartido(d);
   return (
     <>
       <p>{t('fiarse.probabilidadDe', { nombre })}</p>
@@ -126,7 +127,7 @@ function HistorialPrePartido({ refP }: { refP: PrePartidoRef }) {
         {d.horizontes.map((h) => (
           <li key={h.etiqueta}>
             <span className="text-(--ink-body)">{h.etiqueta}:</span>{' '}
-            {h.fila ? `${pct(h.fila.probs[0])}${h.minutosAntesDeLaMarca && h.minutosAntesDeLaMarca > 90 ? t('fiarse.capturada', { h: Math.round(h.minutosAntesDeLaMarca / 60) }) : ''}` : t('fiarse.sinObservacion')}
+            {h.fila ? `${pct(h.fila.probs[0])}${h.minutosAntesDeLaMarca && h.minutosAntesDeLaMarca > 90 ? t('fiarse.capturada', { h: Math.round(h.minutosAntesDeLaMarca / 60) }) : ''}` : t(etiquetaHorizonte(h) ?? 'fiarse.sinObservacion')}
           </li>
         ))}
       </ul>
@@ -196,14 +197,14 @@ export default function EventTrustPanel({ confianza, prePartido }: { confianza?:
           </p>
           {c.decision.seleccion && (
             <p className="text-[12px] text-(--ink-soft)">
-              {t('fiarse.mejorSeleccion', { nombre: c.decision.seleccion.nombre, cuota: c.decision.seleccion.cuota.toFixed(2), ventaja: pct(c.decision.seleccion.edge) })}
+              {t('fiarse.mejorSeleccion', { nombre: c.decision.seleccion.nombre, cuota: numF(c.decision.seleccion.cuota, 2), ventaja: pct(c.decision.seleccion.edge) })}
               {c.decision.desaparece != null && t('fiarse.desaparece', { n: Math.round(c.decision.desaparece * 100) })}
             </p>
           )}
           <div className="mt-1 text-[12px] leading-relaxed">
             {c.decision.decision === 'NO BET' && (
               <>
-                <p style={{ color: LOSS_COLOR }}>{t('fiarse.noBetRazones')}</p>
+                <p style={{ color: LOSS_TEXT }}>{t('fiarse.noBetRazones')}</p>
                 <ul className="text-(--ink-soft)">{c.decision.razones.map((r) => <li key={r}>– {r}</li>)}</ul>
                 <p className="mt-1 text-(--ink-soft)">{t('fiarse.haceFalta', { cosas: c.decision.contrafactual.join('; ') })}</p>
               </>
@@ -233,7 +234,7 @@ export default function EventTrustPanel({ confianza, prePartido }: { confianza?:
               ))}
               <p className="text-(--ink-faint)">{c.calidadDatos.explicacion}</p>
             </Fila>
-            <Fila titulo={t('fiarse.incertidumbre')} valor={`±${c.incertidumbre.totalPp.toFixed(1).replace('.', ',')} pp`}>
+            <Fila titulo={t('fiarse.incertidumbre')} valor={`±${numF(c.incertidumbre.totalPp, 1)} pp`}>
               <p>{t('fiarse.ruido', { pp: c.incertidumbre.ruidoRatingPp })}</p>
               <p>{c.incertidumbre.sesgoCalibracionPp == null ? t('fiarse.sinCalibracion') : t('fiarse.sesgo', { pp: pp(c.incertidumbre.sesgoCalibracionPp), n: c.incertidumbre.nTramo ?? '—' })}</p>
               <p className="text-(--ink-faint)">{c.incertidumbre.significado}</p>
@@ -269,12 +270,12 @@ export default function EventTrustPanel({ confianza, prePartido }: { confianza?:
                   <p key={l.seleccion}>
                     {t('fiarse.linea', {
                       seleccion: l.seleccion,
-                      mejor: l.mejor.toFixed(2),
+                      mejor: numF(l.mejor, 2),
                       casa: l.mejorCasa,
                       evMejor: ev(l.mejor),
-                      mediana: l.mediana.toFixed(2),
+                      mediana: numF(l.mediana, 2),
                       evMediana: ev(l.mediana),
-                      peor: l.peor.toFixed(2),
+                      peor: numF(l.peor, 2),
                       evPeor: ev(l.peor),
                       casas: l.casas,
                       disp: l.dispersionPp,

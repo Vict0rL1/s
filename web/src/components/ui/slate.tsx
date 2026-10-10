@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import type { SlateRow } from '../../lib/slate';
 import { conNodos, localeDe, useI18n, type Traducir } from '../../i18n';
+import { pct as pctF, num as numF } from '../../lib/formato';
+import { motivoVacio } from '../../lib/vacio';
 /**
  * LA TABLA DE PARTIDOS: qué se juega y qué dice el modelo, haya precios o no.
  * ===========================================================================
@@ -96,7 +98,7 @@ export function SlateTable({
     .filter((r) => r.pickProb >= umbral)
     .sort((a, b) => a.when.localeCompare(b.when));
   const vistas = todas ? orden : orden.slice(0, maxRows);
-  const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
+  const pct = (p: number) => `${pctF(p, 1)}`;
   // Un mercado inventado por la app NO es un mercado. Se trata igual que no tener
   // ninguno en vez de enseñar un número que solo puede confundir.
   const hayMercado = !demoOdds && orden.some((r) => r.marketProb != null);
@@ -120,7 +122,7 @@ export function SlateTable({
             {hayMercado && edad && (
               <>
                 {' · '}
-                <span style={edad.viejo ? { color: '#d9a441' } : undefined}>
+                <span style={edad.viejo ? { color: 'var(--status-warning)' } : undefined}>
                   {t('tabla.precios', { edad: edad.texto })}
                   {edad.viejo ? t('tabla.yaNoValgan') : ''}
                 </span>
@@ -135,7 +137,7 @@ export function SlateTable({
         <div className="border-t border-(--line)">
           {/* El scroll horizontal vive en la tabla, nunca en la página: una fila ancha no
               puede empujar el resto de la pantalla de lado en un móvil. */}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0}>
             <table className="w-full min-w-[520px] border-collapse text-[14px]">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-(--ink-muted)">
@@ -175,14 +177,14 @@ export function SlateTable({
                             {dif != null && Math.abs(dif) >= 0.04 && (
                               <span className="block text-[12px] text-(--ink-muted)">
                                 {dif > 0 ? '+' : ''}
-                                {(dif * 100).toFixed(1)} pp
+                                {numF(dif * 100, 1)} pp
                               </span>
                             )}
                           </>
                         )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-right text-(--ink-soft)">
-                        {r.odds == null ? <span className="text-(--ink-faint)">—</span> : r.odds.toFixed(2)}
+                        {r.odds == null ? <span className="text-(--ink-faint)">—</span> : numF(r.odds, 2)}
                       </td>
                     </tr>
                   );
@@ -202,7 +204,7 @@ export function SlateTable({
                   umbral === u ? 'bg-(--raised-2) text-(--ink-strong)' : 'text-(--ink-soft) hover:bg-(--raised)'
                 }`}
               >
-                {u === 0 ? t('tabla.todos') : `${u * 100}%+`}
+                {u === 0 ? t('tabla.todos') : `${pctF(u, 0)}+`}
               </button>
             ))}
             {umbral > 0 && (
@@ -212,7 +214,7 @@ export function SlateTable({
                     sin referente, y de las que se leen como si prometieran algo. */}
                 {orden.length === 0 ? t('tabla.ninguno', { n: rows.length }) : t('tabla.deN', { a: orden.length, n: rows.length })}
                 {banda
-                  ? t(orden.length === 0 ? 'tabla.cuandoLosHay' : 'tabla.aciertaEstos', { p: (banda.acierto * 100).toFixed(0), n: banda.n.toLocaleString(loc) })
+                  ? t(orden.length === 0 ? 'tabla.cuandoLosHay' : 'tabla.aciertaEstos', { p: numF(banda.acierto * 100, 0), n: banda.n.toLocaleString(loc) })
                   : bands?.length
                     ? t('tabla.casiNunca')
                     : t('tabla.sinBanda')}
@@ -261,7 +263,8 @@ export function VacioPorqueNoHayCuotas({
 }: {
   reason: string | null | undefined;
   detail?: string | null;
-  hasKey: boolean;
+  /** null mientras no se sabe (el estado de las cuotas no ha llegado o falló). */
+  hasKey: boolean | null;
   demoFixtures: boolean;
 }) {
   // Con la demostración encendida, un vacío significa otra cosa (no hay datos del
@@ -276,17 +279,7 @@ export function VacioPorqueNoHayCuotas({
       </p>
       <p>
         {conNodos(t('vacio.aProposito'), { aProposito: <strong className="text-(--ink-body)">{t('vacio.aPropositoPalabra')}</strong> })}{' '}
-        {reason === 'sin_eventos'
-          ? t('vacio.sinEventos')
-          : reason === 'sin_ligas'
-            ? t('vacio.sinLigas')
-            : reason === 'presupuesto'
-              ? t('vacio.presupuesto')
-              : reason === 'fuente_falla'
-                ? t('vacio.fuenteFalla')
-                : reason === 'sin_clave' || !hasKey
-                  ? t('vacio.sinClave')
-                  : t('vacio.sinCausa')}
+        {t(motivoVacio(reason, hasKey))}
       </p>
       {detail && (
         <p className="mt-2 text-[13px] opacity-70">

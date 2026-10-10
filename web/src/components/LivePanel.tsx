@@ -23,6 +23,7 @@ import { Panel, SectionTitle, Disclosure } from './ui';
 import LivePuntoAPunto, { type UltimoJuego } from './LivePuntoAPunto';
 import { useFeature } from '../lib/features';
 import { conNodos, useI18n } from '../i18n';
+import { pct as pctF, num as numF } from '../lib/formato';
 
 interface Situation {
   kind: string;
@@ -145,7 +146,7 @@ export default function LivePanel({
 
   useEffect(load, [load]);
 
-  const pct = (x: number): string => `${(x * 100).toFixed(1)} %`;
+  const pct = (x: number): string => `${pctF(x, 1)}`;
 
   return (
     <Panel className="mb-4">
@@ -213,19 +214,19 @@ export default function LivePanel({
               hint={
                 Math.abs(data.live - data.base) < 0.005
                   ? t('vivo.sinMovimiento')
-                  : t('vivo.porSaqueHoy', { dif: `${data.live > data.base ? '+' : ''}${((data.live - data.base) * 100).toFixed(1)}` })
+                  : t('vivo.porSaqueHoy', { dif: `${data.live > data.base ? '+' : ''}${numF((data.live - data.base) * 100, 1)}` })
               }
             />
             <Figure
               label={t('vivo.valePunto')}
-              value={`${data.leverage.swingPp.toFixed(1)} pp`}
+              value={`${numF(data.leverage.swingPp, 1)} pp`}
               hint={t('vivo.siLoGana', { si: pct(data.leverage.ifWins1), no: pct(data.leverage.ifWins2) })}
             />
             {data.market ? (
               <Figure
                 label={t('vivo.mercado')}
                 value={pct(data.market.fair[0])}
-                hint={t('vivo.modeloDif', { dif: `${data.market.edgePp > 0 ? '+' : ''}${data.market.edgePp.toFixed(1)}` })}
+                hint={t('vivo.modeloDif', { dif: `${data.market.edgePp > 0 ? '+' : ''}${numF(data.market.edgePp, 1)}` })}
               />
             ) : (
               <Figure label={t('vivo.mercado')} value="—" hint={t('vivo.ponCuotas')} />
@@ -301,7 +302,7 @@ export default function LivePanel({
                     <span className="text-(--ink-strong)">
                       {pct((i === 0 ? data.serve.update1 : data.serve.update2).posterior)}
                     </span>{' '}
-                    {t('vivo.pesoHoy', { peso: ((i === 0 ? data.serve.update1 : data.serve.update2).weight * 100).toFixed(0) })}
+                    {t('vivo.pesoHoy', { peso: numF((i === 0 ? data.serve.update1 : data.serve.update2).weight * 100, 0) })}
                   </span>
                 )}
               </div>

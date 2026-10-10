@@ -226,10 +226,11 @@ export function NflNoLineNote({
 }: {
   reason: string | null | undefined;
   detail?: string | null;
-  hasKey: boolean;
+  /** null mientras no se sabe (D14: no se culpa a la clave sin saberlo). */
+  hasKey: boolean | null;
 }) {
   const { t } = useI18n();
-  if (reason == null && hasKey) return null;
+  if (reason == null && hasKey !== false) return null;
   const cuerpo =
     reason === 'sin_ligas' ? (
       t('nflLinea.sinLigas')
@@ -240,7 +241,7 @@ export function NflNoLineNote({
         {conNodos(t('nflLinea.fuenteFalla'), CODIGOS)}
         {detail ? <span className="block opacity-70">{t('demo.ultimoError', { e: detail })}</span> : null}
       </>
-    ) : reason === 'sin_clave' || !hasKey ? (
+    ) : reason === 'sin_clave' || hasKey === false ? (
       conNodos(t('nflLinea.sinClave'), CODIGOS)
     ) : (
       t('nflLinea.sinPublicar')

@@ -7,7 +7,7 @@ import type { Combinada, Pata } from './parlay.ts';
 const esc = (s: string) => s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[c] as string);
 const pct = (p: number, d = 0) => `${(p * 100).toFixed(d).replace('.', ',')} %`;
 const num = (x: number, d = 2) => x.toFixed(d).replace('.', ',');
-const NOMBRE: Record<string, string> = { tennis: 'Tenis', football: 'Fútbol', basketball: 'Baloncesto', baseball: 'Béisbol', nfl: 'NFL' };
+const NOMBRE: Record<string, string> = { tennis: 'Tenis', football: 'Fútbol', basketball: 'Baloncesto', baseball: 'Béisbol', nfl: 'NFL', nhl: 'NHL', ufc: 'UFC' };
 
 export function tarjetaSvg(patas: Pata[], c: Combinada, generado = new Date()): string {
   const ancho = 720;

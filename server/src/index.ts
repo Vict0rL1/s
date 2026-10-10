@@ -16,6 +16,8 @@ import { refreshOdds } from './ingest/odds.ts';
 import { conRegistro, marcarMuertas } from './ingest/runs.ts';
 import { horasDesdeEntorno, cicloResultados, PRIMERA_PASADA_MIN } from './ingest/scheduler.ts';
 import { registrar, arrancar } from './scheduler/registry.ts';
+import { horasDesdeEntorno as horasDeCadencia } from './scheduler/horas.ts';
+import { instalarApagado } from './apagado.ts';
 import { cicloClima } from './weather/openMeteo.ts';
 import { cicloMonitorizacion } from './monitoring/series.ts';
 import { cicloSimulacion } from './simulation/season.ts';
@@ -26,6 +28,8 @@ import { refreshBasketballOdds } from './basketball/ingest/odds.ts';
 import { refreshFootballOdds } from './football/ingest/odds.ts';
 import { refreshBaseballOdds } from './baseball/ingest/odds.ts';
 import { refreshOdds as refreshNflOdds } from './nfl/ingest/odds.ts';
+import { refrescarCuotas as refreshNhlOdds } from './nhl/proximos.ts';
+import { refrescarCuotas as refreshUfcOdds } from './ufc/proximos.ts';
 import {
   getQuota,
   lastCycleCredits,
@@ -43,6 +47,9 @@ import { resolveGamePredictions } from './basketball/trackRecord.ts';
 import { resolveFootballPredictions } from './football/trackRecord.ts';
 import { resolveBaseballPredictions } from './baseball/trackRecord.ts';
 import { resolveNflPredictions } from './nfl/trackRecord.ts';
+import { resolveNhlPredictions } from './nhl/trackRecord.ts';
+import { resolveUfcPredictions } from './ufc/trackRecord.ts';
+import { hostDeEscucha } from './auth/mode.ts';
 
 /**
  * Keep the schedule current on its own: refresh once at startup and then on an
@@ -138,11 +145,10 @@ function avisoDeCuotas(estado: { nombre: string; vivo: boolean; prefijo: SportPr
           L.push('    Y después:   npm run odds');
           break;
         }
-        L.push('    Falta ODDS_API_KEY. Tiene que estar en el .env de la RAÍZ del proyecto:');
-        L.push(`      ${ENV_PATH}`);
-        L.push('    Con una línea así dentro:   ODDS_API_KEY=tu-clave');
-        L.push('    OJO con `>` y `>>`: `>` BORRA el fichero y escribe encima, `>>` añade.');
-        L.push('    Y después, en otra terminal y dentro de la carpeta:   npm run odds');
+        L.push('    Falta ODDS_API_KEY. Lo más fácil, en otra terminal y dentro de la carpeta:');
+        L.push('      npm run clave   (la pide sin enseñarla, la escribe en el .env y la comprueba)');
+        L.push(`    A mano: una línea ODDS_API_KEY=tu-clave en ${ENV_PATH}`);
+        L.push('    Y después: reinicia esto (Ctrl+C y npm run dev) y, si quieres cuotas ya, npm run odds');
         break;
       }
       case 'fuente_falla':
@@ -284,6 +290,30 @@ function startAutoRefresh(log: (msg: string) => void): void {
         log(`NFL odds refreshed: ${n} games.`);
       } catch (e) {
         log(`NFL odds refresh failed: ${(e as Error).message}`);
+      }
+    }
+    // La NHL: fuera de temporada no gasta (el listado de /sports, gratis, lo decide).
+    if (countRows('nhl_games') > 0) {
+      try {
+        const { n } = await conRegistro('odds:nhl', async () => {
+          const x = await refreshNhlOdds();
+          return { n: x, rowsAdded: x };
+        });
+        log(`NHL odds refreshed: ${n} games.`);
+      } catch (e) {
+        log(`NHL odds refresh failed: ${(e as Error).message}`);
+      }
+    }
+    // La UFC: solo con el archivo (sin él no se sabe quién es quién ni qué cartelera es de la UFC).
+    if (countRows('ufc_fights') > 0) {
+      try {
+        const { n } = await conRegistro('odds:ufc', async () => {
+          const x = await refreshUfcOdds();
+          return { n: x, rowsAdded: x };
+        });
+        log(`UFC odds refreshed: ${n} fights.`);
+      } catch (e) {
+        log(`UFC odds refresh failed: ${(e as Error).message}`);
       }
     }
     // Say where the quota stands after every cycle. The whole reason the free
@@ -437,6 +467,8 @@ function resolveAllPredictions(log?: (msg: string) => void): void {
     ['football', resolveFootballPredictions],
     ['baseball', resolveBaseballPredictions],
     ['nfl', resolveNflPredictions],
+    ['nhl', resolveNhlPredictions],
+    ['ufc', resolveUfcPredictions],
   ];
   const done: string[] = [];
   for (const [name, run] of jobs) {
@@ -462,7 +494,8 @@ async function main() {
   const app = await buildApp({ auth, servirWeb: true });
 
   try {
-    await app.listen({ port: env.port, host: '0.0.0.0' });
+    // 127.0.0.1 en el portátil sin contraseña; toda la red solo con ella o en producción (D15).
+    await app.listen({ port: env.port, host: hostDeEscucha() });
     app.log.info(`Tennis Predictor API listening on http://localhost:${env.port}`);
     startAutoRefresh((msg) => app.log.info(msg));
 
@@ -478,7 +511,8 @@ async function main() {
     // (scheduler/registry.ts): cadencia, primera pasada, última ejecución, duración, estado y
     // un interruptor por trabajo que se puede apagar desde la API sin reiniciar. Todos locales
     // y sin cuota salvo el cierre de cuotas, que solo se registra con clave.
-    const backupHoras = process.env.BACKUP_HOURS?.trim() ? Number(process.env.BACKUP_HOURS) || 0 : 24;
+    // Acotadas a 7 días (lote B, B5): un setTimeout por encima de 24,8 días dispara en el acto.
+    const backupHoras = horasDeCadencia(process.env, 'BACKUP_HOURS', 24);
     const horasResultados = horasDesdeEntorno();
 
     // Puntuar el registro en vivo con los resultados que lleguen (y al arrancar, lo atrasado).
@@ -509,10 +543,10 @@ async function main() {
           return { rowsAdded: 1, detail: c.fichero };
         }),
     });
-    // Resultados de los cuatro deportes de equipo, en procesos hijo (ver ingest/scheduler.ts).
+    // Resultados de los deportes con archivo propio, en procesos hijo (ver ingest/scheduler.ts).
     registrar({
       nombre: 'resultados',
-      descripcion: 'update-results: resultados de fútbol, baloncesto, béisbol y NFL en procesos hijo, sin cuota',
+      descripcion: 'update-results: resultados de fútbol, baloncesto, béisbol, NFL, NHL y UFC en procesos hijo, sin cuota',
       cadenciaMin: horasResultados * 60,
       primeraEnMin: PRIMERA_PASADA_MIN,
       cuando: () => featureEncendida('datos.resultadosProgramados') && horasResultados > 0,
@@ -601,6 +635,9 @@ async function main() {
 
     if (featureEncendida('operacion.registroTrabajos')) arrancar(resolveLog);
     else resolveLog('Registro de trabajos apagado (features.json: operacion.registroTrabajos): nada programado salvo el refresco de cuotas.');
+
+    // Parar bien: SIGINT/SIGTERM cierran los trabajos, el servidor y la base (ver apagado.ts).
+    instalarApagado(() => app.close(), resolveLog);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

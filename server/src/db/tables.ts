@@ -14,13 +14,16 @@ export const TABLAS_LEDGER: readonly string[] = [
   'bb_prediction_log',
   'bsb_prediction_log',
   'naf_prediction_log',
+  'nhl_prediction_log',
+  'ufc_prediction_log',
   // Dinero: el banco de papel, las señales y tus apuestas.
   'paper_bets',
   'edge_signals',
   'bets',
-  // Cada precio que se vio.
+  // Cada precio que se vio, y el último estado de cada cuota (apunta a odds_snapshots; lote B, B2).
   'odds_snapshots',
   'odds_event_observations',
+  'odds_quote_state',
   // Capa de confianza y pre-partido.
   'prediction_snapshots',
   'prematch_final',
